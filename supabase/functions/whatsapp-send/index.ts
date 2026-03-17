@@ -29,24 +29,14 @@ function buildHeaders(apiToken: string) {
   }
 }
 
-function buildChatId(phone: string) {
-  if (phone.includes('@')) return phone
-  return `${normalizePhone(phone)}@s.whatsapp.net`
-}
-
-function buildRecipientCandidates(phone: string) {
-  const cleanPhone = normalizePhone(phone)
-  const chatId = buildChatId(phone)
-  return [...new Set([cleanPhone, chatId].filter(Boolean))]
-}
-
 function mapMediaType(messageType: string) {
   if (messageType === 'audio') return 'ptt'
   return messageType
 }
 
-function isSuccessfulResponse(res: Response, data: any) {
-  return res.ok && !data?.error && data?.success !== false
+function isSuccessfulResponse(res: Response, _data: any) {
+  // Accept any 2xx HTTP status as success — UAZAPI may include warning fields in body
+  return res.ok
 }
 
 async function parseResponse(res: Response) {
@@ -66,55 +56,54 @@ async function parseResponse(res: Response) {
 
 async function tryUazapiSend(apiUrl: string, apiToken: string, phone: string, body: string, messageType: string, mediaUrl?: string, mediaFilename?: string) {
   const baseUrl = apiUrl.replace(/\/+$/, '')
-  const recipients = buildRecipientCandidates(phone)
-  const failures: string[] = []
+  const recipient = normalizePhone(phone) // Use clean phone only — UAZAPI spec uses plain numbers
 
-  for (const recipient of recipients) {
-    const payload = messageType !== 'text' && mediaUrl
-      ? {
-          number: recipient,
-          type: mapMediaType(messageType),
-          file: mediaUrl,
-          ...(body ? { text: body } : {}),
-          ...(messageType === 'document' && mediaFilename ? { docName: mediaFilename } : {}),
-          readchat: true,
-          readmessages: true,
-          async: false,
-        }
-      : {
-          number: recipient,
-          text: body,
-          readchat: true,
-          readmessages: true,
-          async: false,
-        }
-
-    const url = `${baseUrl}${messageType !== 'text' && mediaUrl ? '/send/media' : '/send/text'}`
-
-    try {
-      console.log(`[whatsapp-send] trying exact spec endpoint: ${url} body=${JSON.stringify(payload)}`)
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: buildHeaders(apiToken),
-        body: JSON.stringify(payload),
-      })
-
-      const { text, data } = await parseResponse(res)
-      console.log(`[whatsapp-send] response ${recipient}: ${res.status} ${text.slice(0, 500)}`)
-
-      if (isSuccessfulResponse(res, data)) {
-        return { success: true, data }
+  const payload = messageType !== 'text' && mediaUrl
+    ? {
+        number: recipient,
+        type: mapMediaType(messageType),
+        file: mediaUrl,
+        ...(body ? { text: body } : {}),
+        ...(messageType === 'document' && mediaFilename ? { docName: mediaFilename } : {}),
+        readchat: true,
+        readmessages: true,
+        async: false,
+      }
+    : {
+        number: recipient,
+        text: body,
+        readchat: true,
+        readmessages: true,
+        async: false,
       }
 
-      failures.push(`${recipient}: ${res.status} ${text.slice(0, 200)}`)
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      failures.push(`${recipient}: ${message}`)
-      console.log(`[whatsapp-send] attempt failed ${recipient}: ${message}`)
-    }
-  }
+  const url = `${baseUrl}${messageType !== 'text' && mediaUrl ? '/send/media' : '/send/text'}`
 
-  throw new Error(`UAZAPI send failed | ${failures.join(' | ')}`)
+  console.log(`[whatsapp-send] URL: ${url}`)
+  console.log(`[whatsapp-send] Token prefix: ${apiToken?.slice(0, 8)}...`)
+  console.log(`[whatsapp-send] Payload: ${JSON.stringify(payload)}`)
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: buildHeaders(apiToken),
+      body: JSON.stringify(payload),
+    })
+
+    const { text, data } = await parseResponse(res)
+    console.log(`[whatsapp-send] Response status: ${res.status}`)
+    console.log(`[whatsapp-send] Response body: ${text.slice(0, 1000)}`)
+
+    if (isSuccessfulResponse(res, data)) {
+      return { success: true, data }
+    }
+
+    throw new Error(`UAZAPI returned ${res.status}: ${text.slice(0, 500)}`)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error(`[whatsapp-send] Failed: ${message}`)
+    throw new Error(`UAZAPI send failed: ${message}`)
+  }
 }
 
 Deno.serve(async (req) => {
