@@ -83,15 +83,25 @@ Deno.serve(async (req) => {
         const res = await fetch(`${apiUrl}/instance/status`, { headers: uazHeaders })
         result = await res.json()
         
-        // Update local DB with fresh status
-        const newStatus = result?.instance?.status || result?.status?.connected ? 'connected' : 'disconnected'
-        const profileName = result?.instance?.profileName || null
+        // Detect real status - UAZAPI can return various formats
+        let newStatus = 'disconnected'
+        if (result?.instance?.status === 'connected' || result?.instance?.state === 'open') {
+          newStatus = 'connected'
+        } else if (result?.status?.connected === true) {
+          newStatus = 'connected'
+        } else if (result?.instance?.status) {
+          newStatus = result.instance.status
+        }
+        
+        const profileName = result?.instance?.profileName || result?.instance?.pushName || null
         const profilePicUrl = result?.instance?.profilePicUrl || null
+        const phoneNumber = result?.instance?.phone || instance.phone_number
         
         await supabase.from('whatsapp_instances').update({
-          status: typeof newStatus === 'string' ? newStatus : instance.status,
+          status: newStatus,
           display_name: profileName || instance.display_name,
           profile_pic_url: profilePicUrl || instance.profile_pic_url,
+          phone_number: phoneNumber || instance.phone_number,
           updated_at: new Date().toISOString(),
         }).eq('id', instanceId)
         
