@@ -1,32 +1,32 @@
 
 
-## Diagnóstico
+## Configuração automática de webhook ao conectar instância
 
-As Edge Functions estão funcionando (todas retornando 200). O problema agora e diferente: **a lista de chats está vazia** porque não existem mensagens na tabela `whatsapp_messages`.
+### Problema atual
+O webhook precisa ser configurado manualmente no painel da UAZAPI para cada instância. O usuário precisa copiar a URL e configurar eventos — processo propenso a erros.
 
-Para mensagens inbound (recebidas) aparecerem na plataforma, a UAZAPI precisa enviar um webhook para a edge function `uazapi-webhook` toda vez que chega uma mensagem. A função já existe e está correta no código.
+### Solução
+Configurar o webhook automaticamente via API da UAZAPI quando a instância é conectada (action `connect`) ou adicionada. A UAZAPI tem endpoint `POST /webhook/set` que aceita URL e eventos.
 
-## O que falta configurar
+### O que será feito
 
-Você precisa configurar a **URL do webhook na UAZAPI** para cada instância. A URL é:
+**1. Edge Function `whatsapp-instance` — nova action `set_webhook`**
+- Adicionar case `set_webhook` que chama `POST {apiUrl}/webhook/set` com:
+  - `url`: `https://emfbocpmphtftqcezaib.supabase.co/functions/v1/uazapi-webhook`
+  - `enabled`: true
+  - `events`: `["messages.upsert", "messages.update", "connection.update"]`
 
-```
-https://emfbocpmphtftqcezaib.supabase.co/functions/v1/uazapi-webhook
-```
+**2. Chamar `set_webhook` automaticamente após `connect`**
+- No case `connect`, após conectar com sucesso, fazer a chamada de configuração do webhook automaticamente dentro da mesma execução.
 
-### Passo a passo
+**3. Chamar `set_webhook` ao adicionar instância**
+- No `AddInstanceDialog` (em `WhatsAppChat.tsx`), após inserir a instância no banco, chamar a action `set_webhook` para já deixar configurado.
 
-1. Acesse o painel da UAZAPI (tracker1.uazapi.com)
-2. Para cada instância (matheus-colombo-teste, soulnaturi), configure o webhook URL acima
-3. O evento que deve estar habilitado é `messages.upsert` (mensagens recebidas) e `messages.update` (status de leitura/entrega)
-4. Envie uma mensagem de teste para o número conectado (soulnaturi - 554891575679)
-5. A mensagem deve aparecer automaticamente na plataforma via Supabase Realtime
+**4. Botão manual na tela de gerenciamento**
+- Adicionar no `InstanceManagement.tsx` um botão "Configurar Webhook" como fallback, mostrando a URL configurada e permitindo reconfigurar se necessário.
 
-### Verificação
-
-Após configurar o webhook na UAZAPI, se ainda não funcionar:
-- Verifique nos logs da edge function `uazapi-webhook` no Dashboard do Supabase se o payload está chegando
-- A instância `soulnaturi` está connected, então use ela para testar
-
-Nenhuma alteração de código e necessária. O problema e de configuração na UAZAPI.
+### Resultado
+- Ao adicionar ou conectar uma instância, o webhook é configurado automaticamente
+- Nenhuma ação manual no painel da UAZAPI é necessária
+- Botão de fallback disponível para reconfigurar se algo der errado
 
