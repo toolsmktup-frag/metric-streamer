@@ -52,5 +52,6 @@ export function useFunnelLeadCounts(funnelId: string | null) {
       return counts;
     },
     enabled: !!funnelId,
+    refetchInterval: 30000,
   });
 }
