@@ -167,8 +167,6 @@ Deno.serve(async (req) => {
       let responseMessages = messageList
 
       if (unreadInbound.length > 0) {
-        const latestUnread = unreadInbound[unreadInbound.length - 1]
-
         const { error: updateErr } = await adminClient
           .from('whatsapp_messages')
           .update({ status: 'read', updated_at: new Date().toISOString() })
@@ -186,7 +184,7 @@ Deno.serve(async (req) => {
           )
         }
 
-        await tryMarkChatAsRead(instance.api_url, instance.api_token, cleanPhone, latestUnread.message_id_external)
+        await tryMarkChatAsRead(instance.api_url, instance.api_token, cleanPhone)
       }
 
       return new Response(JSON.stringify(responseMessages), {

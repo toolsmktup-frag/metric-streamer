@@ -220,7 +220,6 @@ Deno.serve(async (req) => {
 
     console.log('[whatsapp-send] sending via UAZAPI', {
       api_url: instance.api_url,
-      instance_name: instance.instance_name,
       phone: normalizePhone(phone),
       message_type,
     })
@@ -228,11 +227,11 @@ Deno.serve(async (req) => {
     const result = await tryUazapiSend(
       instance.api_url,
       instance.api_token,
-      instance.instance_name,
       phone,
       body || '',
       message_type,
-      media_url
+      media_url,
+      media_filename
     )
 
     const messageRecord: Record<string, unknown> = {
