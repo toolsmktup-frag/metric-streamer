@@ -116,6 +116,8 @@ export default function WhatsAppChat() {
   const [instanceMgmtOpen, setInstanceMgmtOpen] = useState(false);
   // Auto-select first instance
   const activeInstance = selectedInstanceId || instances[0]?.id || null;
+  const activeInstanceData = instances.find(i => i.id === activeInstance);
+  const isDisconnected = activeInstanceData?.status !== 'connected';
 
   const { chats, loading: loadingChats, refetch: refetchChats } = useWhatsAppChats(activeInstance);
   const { messages, loading: loadingMessages } = useWhatsAppMessages(activeInstance, selectedPhone);
