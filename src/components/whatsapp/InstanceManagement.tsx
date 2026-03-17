@@ -136,7 +136,7 @@ export default function InstanceManagement({
 
   if (!instance) return null;
 
-  const instanceStatus = statusData?.instance?.status || instance.status;
+  const instanceStatus = statusData?.processed?.status || instance.status;
   const isConnected = instanceStatus === 'connected';
   const isConnecting = instanceStatus === 'connecting';
 
