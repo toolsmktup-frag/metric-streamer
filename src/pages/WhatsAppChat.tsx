@@ -145,6 +145,11 @@ export default function WhatsAppChat() {
     [chats, selectedPhone]
   );
 
+  useEffect(() => {
+    if (!selectedPhone || loadingMessages) return;
+    refetchChats();
+  }, [selectedPhone, loadingMessages, refetchChats]);
+
   const wrapWithSidebar = (content: React.ReactNode) => (
     <div className="flex min-h-screen w-full bg-background">
       <AppSidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} />

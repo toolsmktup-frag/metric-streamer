@@ -221,7 +221,7 @@ Deno.serve(async (req) => {
       status: 'sent',
       media_url,
       media_filename,
-      message_id_external: result.data?.key?.id || result.data?.messageId || null,
+      message_id_external: result.data?.keyId || result.data?.key?.id || result.data?.messageId || result.data?.id || null,
       payload_raw: result.data,
     }
 

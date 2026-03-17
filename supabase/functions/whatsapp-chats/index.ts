@@ -1,9 +1,65 @@
-// v1.0.1 - force redeploy with verify_jwt=false
+// v1.0.2 - mark inbound messages as read when opening the chat
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
+}
+
+async function tryMarkChatAsRead(apiUrl: string, apiToken: string, phone: string, messageId?: string | null) {
+  const baseUrl = apiUrl.replace(/\/+$/, '')
+  const chatId = phone.includes('@') ? phone : `${phone}@s.whatsapp.net`
+  const attempts = [
+    {
+      url: `${baseUrl}/chat/read`,
+      body: { phone },
+    },
+    {
+      url: `${baseUrl}/chat/read`,
+      body: { phone: chatId },
+    },
+    {
+      url: `${baseUrl}/chat/read`,
+      body: { phoneNumber: phone },
+    },
+    ...(messageId
+      ? [
+          {
+            url: `${baseUrl}/chat/read`,
+            body: { phone, messageId },
+          },
+          {
+            url: `${baseUrl}/chat/read`,
+            body: { phoneNumber: phone, messageId },
+          },
+          {
+            url: `${baseUrl}/message/read`,
+            body: { phoneNumber: phone, messageId },
+          },
+        ]
+      : []),
+  ]
+
+  for (const attempt of attempts) {
+    try {
+      const res = await fetch(attempt.url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'token': apiToken,
+        },
+        body: JSON.stringify(attempt.body),
+      })
+
+      const text = await res.text()
+      console.log(`Mark read ${attempt.url}: ${res.status} - ${text.slice(0, 300)}`)
+      if (res.ok) return true
+    } catch (err) {
+      console.log('Mark read attempt failed:', err.message)
+    }
+  }
+
+  return false
 }
 
 Deno.serve(async (req) => {
@@ -47,7 +103,6 @@ Deno.serve(async (req) => {
     }
 
     if (action === 'list_chats') {
-      // Get last message per phone, grouped
       const { data, error } = await supabase.rpc('get_user_org_id')
       if (error || !data) {
         return new Response(JSON.stringify({ error: 'Org not found' }), {
@@ -64,9 +119,7 @@ Deno.serve(async (req) => {
 
       if (chatsErr) throw chatsErr
 
-      // Group by phone, get last message
       const chatMap = new Map<string, any>()
-      const unreadCount = new Map<string, number>()
 
       for (const msg of chats || []) {
         if (!chatMap.has(msg.phone)) {
@@ -113,7 +166,42 @@ Deno.serve(async (req) => {
 
       if (msgErr) throw msgErr
 
-      return new Response(JSON.stringify(messages || []), {
+      const messageList = messages || []
+      const unreadInbound = messageList.filter(msg => msg.direction === 'inbound' && msg.status !== 'read' && !msg.is_deleted)
+      const unreadIds = new Set(unreadInbound.map(msg => msg.id))
+      let responseMessages = messageList
+
+      if (unreadInbound.length > 0) {
+        const latestUnread = unreadInbound[unreadInbound.length - 1]
+
+        const { error: updateErr } = await supabase
+          .from('whatsapp_messages')
+          .update({ status: 'read', updated_at: new Date().toISOString() })
+          .eq('instance_id', instanceId)
+          .eq('phone', phone)
+          .eq('direction', 'inbound')
+          .neq('status', 'read')
+
+        if (updateErr) {
+          console.error('Failed to mark messages as read locally:', updateErr)
+        } else {
+          responseMessages = messageList.map(msg =>
+            unreadIds.has(msg.id) ? { ...msg, status: 'read' } : msg
+          )
+        }
+
+        const { data: instance } = await supabase
+          .from('whatsapp_instances')
+          .select('api_url, api_token')
+          .eq('id', instanceId)
+          .maybeSingle()
+
+        if (instance) {
+          await tryMarkChatAsRead(instance.api_url, instance.api_token, phone, latestUnread.message_id_external)
+        }
+      }
+
+      return new Response(JSON.stringify(responseMessages), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
