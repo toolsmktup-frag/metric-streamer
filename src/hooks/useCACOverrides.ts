@@ -14,7 +14,7 @@ export function useCACOverrides() {
   return useQuery({
     queryKey: QUERY_KEY,
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('cac_campaign_overrides')
         .select('id, campaign_id, campaign_name, product_key')
         .order('campaign_name');
