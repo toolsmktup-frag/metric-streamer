@@ -149,6 +149,28 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
 
+    // Lookup instance by name to get orgId and instanceId
+    const instanceName = payload.instanceName || payload.instance || ''
+    console.log('Looking up instance by name:', instanceName)
+
+    const { data: instanceData, error: instanceError } = await supabaseAdmin
+      .from('whatsapp_instances')
+      .select('id, organization_id')
+      .eq('instance_name', instanceName)
+      .maybeSingle()
+
+    if (instanceError || !instanceData) {
+      console.error('Instance not found for name:', instanceName, instanceError)
+      return new Response(JSON.stringify({ error: 'Instance not found', instanceName }), {
+        status: 404,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    const instanceId = instanceData.id
+    const orgId = instanceData.organization_id
+    console.log('Instance found - id:', instanceId, 'orgId:', orgId)
+
     // UAZAPI v2 payload structure:
     // { EventType: "messages", instanceName: "xxx", chat: {...}, message: { text, content, fromMe, chatid, senderName, id, ... } }
     // Legacy baileys: { event: "messages.upsert", data: { key: { remoteJid, fromMe, id }, message: { conversation }, pushName } }
