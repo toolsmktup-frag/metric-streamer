@@ -1,83 +1,29 @@
 
-Objetivo: criar manualmente no Supabase apenas o que está faltando para o módulo de WhatsApp funcionar, já que no print as funções `whatsapp-*` não existem no projeto publicado.
 
-O que você precisa criar no Supabase Dashboard:
+## Diagnóstico
 
-1. `whatsapp-instance`
-2. `whatsapp-chats`
-3. `whatsapp-send`
-4. `whatsapp-presence`
-5. `whatsapp-contact-info`
+O problema é claro: o **gateway do Supabase** continua rejeitando as requisições com `{"code":401,"message":"Invalid JWT"}` **antes** do código da função executar. Isso significa que o `verify_jwt = false` do `config.toml` não foi aplicado nas funções que você criou manualmente pelo Dashboard.
 
-O que cada uma faz:
-- `whatsapp-instance`: essencial para gerar QR Code, conectar, desconectar e consultar status da instância.
-- `whatsapp-chats`: lista conversas e mensagens.
-- `whatsapp-send`: envia, edita e apaga mensagens.
-- `whatsapp-presence`: envia presença “digitando”.
-- `whatsapp-contact-info`: busca nome/foto do contato.
+O `config.toml` só funciona quando as funções são deployadas via CLI ou pelo Lovable — criar manualmente pelo Dashboard ignora esse arquivo.
 
-Mínimo para o QR Code funcionar:
-- Se você quer só destravar o botão “Gerar QR Code”, a função crítica é `whatsapp-instance`.
-- Para a tela completa de WhatsApp funcionar sem quebrar depois, crie as 5.
+## Evidência
 
-Como criar cada uma no Dashboard:
-1. Supabase Dashboard → Edge Functions → New Function
-2. Nome exato da função:
-   - `whatsapp-instance`
-   - `whatsapp-chats`
-   - `whatsapp-send`
-   - `whatsapp-presence`
-   - `whatsapp-contact-info`
-3. Em cada função, cole o conteúdo do arquivo correspondente do projeto:
-   - `supabase/functions/whatsapp-instance/index.ts`
-   - `supabase/functions/whatsapp-chats/index.ts`
-   - `supabase/functions/whatsapp-send/index.ts`
-   - `supabase/functions/whatsapp-presence/index.ts`
-   - `supabase/functions/whatsapp-contact-info/index.ts`
-4. Deploy da função
-5. Depois de criada, abra as configurações da função e deixe `Verify JWT` desativado
+- A instância está "connected" na tabela do Supabase (sua imagem mostra isso)
+- Mas o app mostra "Desconectado" porque a chamada à edge function `whatsapp-instance` (action: status) retorna 401
+- Todas as 5 funções retornam o mesmo 401 do gateway
 
-Configuração importante para todas:
-```text
-Verify JWT = OFF
-```
+## Solução
 
-Confirmação no código do projeto:
-- O frontend chama exatamente essas funções:
-  - `whatsapp-instance` via `supabase.functions.invoke(...)`
-  - `whatsapp-send` via `supabase.functions.invoke(...)`
-  - `whatsapp-presence` via `supabase.functions.invoke(...)`
-  - `whatsapp-chats` por URL `/functions/v1/whatsapp-chats?...`
-  - `whatsapp-contact-info` por URL `/functions/v1/whatsapp-contact-info?...`
+Forçar o redeploy das edge functions pelo Lovable, fazendo uma pequena alteração nos arquivos. Quando o Lovable deploya, ele usa o `config.toml` que já tem `verify_jwt = false` para todas as 5 funções.
 
-O que não precisa configurar manualmente nessas 5:
-- `SUPABASE_URL` e `SUPABASE_ANON_KEY`: o ambiente do Edge Functions já fornece
-- `UAZAPI_BASE_URL` e `UAZAPI_TOKEN`: não são usados nessas 5 funções; elas leem `api_url` e `api_token` da tabela `whatsapp_instances`
+### O que será feito
 
-Ordem recomendada:
-1. Criar `whatsapp-instance`
-2. Testar gerar QR Code
-3. Criar as outras 4
-4. Testar tela inteira do WhatsApp
+1. Adicionar um comentário de versão em cada uma das 5 edge functions (`whatsapp-instance`, `whatsapp-chats`, `whatsapp-send`, `whatsapp-presence`, `whatsapp-contact-info`) para forçar o redeploy pelo pipeline do Lovable
+2. O `config.toml` já está correto com `verify_jwt = false` — o deploy vai aplicar essa configuração automaticamente
 
-Checklist final de execução:
-- [ ] Criar `whatsapp-instance`
-- [ ] Colar código de `supabase/functions/whatsapp-instance/index.ts`
-- [ ] Deploy
-- [ ] Desativar `Verify JWT`
-- [ ] Repetir para as outras 4 funções
-- [ ] Voltar ao app e testar “Gerar QR Code”
+### Resultado esperado
 
-Se aparecer erro mesmo depois disso, a próxima checagem deve ser:
-- a linha da instância na tabela `whatsapp_instances` precisa ter `api_url` e `api_token` válidos
-- a UAZAPI precisa responder ao endpoint `/instance/connect`
+- O gateway para de rejeitar as requisições com 401
+- O app consegue chamar `whatsapp-instance` (action: status) e mostra o status real "Conectado"
+- A lista de chats carrega normalmente
 
-Detalhe técnico:
-```text
-Frontend -> whatsapp-instance -> UAZAPI /instance/connect
-                           -> depois polling em /instance/status
-```
-
-Resultado esperado após criar tudo:
-- o clique em “Gerar QR Code” deixa de falhar por função inexistente
-- a conexão passa a depender apenas da resposta da UAZAPI e dos dados salvos da instância
