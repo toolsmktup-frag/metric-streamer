@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useLeadFunnel, useUpsertStages, useUpsertTransitionRules } from '@/hooks/useLeadFunnels';
+import { useLeadFunnel, useUpsertStages, useUpsertTransitionRules, useFunnelSourceNodes, useFunnelEdges } from '@/hooks/useLeadFunnels';
 import { useLeadsByFunnel, useFunnelLeadCounts } from '@/hooks/useLeads';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -20,6 +20,8 @@ const LeadFunnelDetail: React.FC = () => {
   const { data: funnel, isLoading } = useLeadFunnel(id ?? null);
   const { data: positions = [] } = useLeadsByFunnel(id ?? null);
   const { data: leadCounts = {} } = useFunnelLeadCounts(id ?? null);
+  const { data: sourceNodes = [] } = useFunnelSourceNodes(id ?? null);
+  const { data: funnelEdges = [] } = useFunnelEdges(id ?? null);
   const upsertStages = useUpsertStages();
   const upsertRules = useUpsertTransitionRules();
 
@@ -90,9 +92,13 @@ const LeadFunnelDetail: React.FC = () => {
         <TabsContent value="flow" className="mt-4">
           <FunnelFlowEditor
             stages={stages}
-            sourceNodes={[]}
+            sourceNodes={sourceNodes}
             leadCounts={leadCounts}
-            edges={[]}
+            edges={funnelEdges.map(e => ({
+              source_node_id: e.source_node_id,
+              target_node_id: e.target_node_id,
+              source_type: e.source_type,
+            }))}
           />
         </TabsContent>
 

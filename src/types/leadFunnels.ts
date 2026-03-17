@@ -24,12 +24,15 @@ export interface LeadFunnel {
   stage_transition_rules?: StageTransitionRule[];
 }
 
+export type PageType = 'capture' | 'sales' | 'checkout' | 'thankyou' | 'upsell' | 'downsell' | 'content';
+
 export interface LeadFunnelStage {
   id: string;
   funnel_id: string;
   name: string;
   color: string;
   sort_order: number;
+  page_type: PageType | null;
   page_url: string | null;
   thumbnail_url: string | null;
   position_x: number;
