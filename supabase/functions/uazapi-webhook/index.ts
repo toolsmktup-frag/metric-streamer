@@ -81,31 +81,34 @@ Deno.serve(async (req) => {
     const payload = await req.json()
     console.log('Webhook received:', JSON.stringify(payload).slice(0, 500))
 
-    // UAZAPI sends different event types
+    // UAZAPI v2 sends event types: 'message', 'messages_update', 'connection'
+    // Legacy: 'messages.upsert', 'messages.update', 'connection.update'
     const eventType = payload.event || payload.type || ''
 
-    // Only process actual messages (not status updates, etc.)
-    const isMessage = ['messages.upsert', 'message', 'message.new'].includes(eventType)
+    // Only process actual messages
+    const isMessage = ['messages.upsert', 'message', 'message.new', 'messages'].includes(eventType)
       || payload.message
       || payload.messages
+      || payload.data?.key // UAZAPI v2 sends message data in payload.data
 
     if (!isMessage) {
-      // Handle status updates
-      if (eventType === 'messages.update' || eventType === 'message.update') {
+      // Handle status updates (v2: 'messages_update', legacy: 'messages.update')
+      if (['messages.update', 'message.update', 'messages_update', 'status'].includes(eventType)) {
         const supabaseAdmin = createClient(
           Deno.env.get('SUPABASE_URL')!,
           Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
         )
 
         const updates = payload.messages || payload.data || [payload]
-        for (const upd of updates) {
+        const updatesArr = Array.isArray(updates) ? updates : [updates]
+        for (const upd of updatesArr) {
           const externalId = upd.key?.id || upd.messageId
           if (!externalId) continue
 
           let newStatus = 'sent'
-          if (upd.update?.status === 3 || upd.status === 'DELIVERY_ACK') newStatus = 'delivered'
-          if (upd.update?.status === 4 || upd.status === 'READ') newStatus = 'read'
-          if (upd.update?.status === 5 || upd.status === 'PLAYED') newStatus = 'read'
+          if (upd.update?.status === 3 || upd.status === 'DELIVERY_ACK' || upd.status === 3) newStatus = 'delivered'
+          if (upd.update?.status === 4 || upd.status === 'READ' || upd.status === 4) newStatus = 'read'
+          if (upd.update?.status === 5 || upd.status === 'PLAYED' || upd.status === 5) newStatus = 'read'
 
           await supabaseAdmin
             .from('whatsapp_messages')
@@ -128,8 +131,8 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
 
-    // Extract message data - UAZAPI can send in different formats
-    const msg = payload.messages?.[0] || payload.message || payload.data || payload
+    // Extract message data - UAZAPI v2 uses payload.data, legacy uses payload.message
+    const msg = payload.data || payload.messages?.[0] || payload.message || payload
     const key = msg.key || {}
     const isFromMe = key.fromMe || false
     const remoteJid = key.remoteJid || msg.from || msg.phone || ''
