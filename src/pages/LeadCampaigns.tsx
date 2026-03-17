@@ -50,8 +50,8 @@ const LeadCampaignsPage: React.FC = () => {
       setShowNewFunnel(false);
       setNewName('');
       navigate(`/lead-funnels/${funnel.id}`);
-    } catch {
-      toast.error('Erro ao criar funil');
+    } catch (err: any) {
+      toast.error(err?.message || 'Erro ao criar funil');
     }
   };
 
