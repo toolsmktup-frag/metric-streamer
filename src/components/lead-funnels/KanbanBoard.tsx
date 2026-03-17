@@ -4,18 +4,54 @@ import LeadCard from './LeadCard';
 import { Search, ArrowUpDown } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import {
+  DndContext,
+  DragOverlay,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  useDroppable,
+  type DragStartEvent,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import { useMoveLeadStage } from '@/hooks/useMoveLeadStage';
 
 interface KanbanBoardProps {
   stages: LeadFunnelStage[];
   positions: (LeadStagePosition & { lead: Lead })[];
   onLeadClick?: (leadId: string) => void;
+  funnelId: string;
 }
 
 type SortMode = 'recent' | 'value';
 
-const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClick }) => {
+/* Droppable column wrapper */
+const DroppableColumn: React.FC<{ id: string; isOver: boolean; children: React.ReactNode }> = ({ id, isOver, children }) => {
+  const { setNodeRef } = useDroppable({ id });
+  return (
+    <div
+      ref={setNodeRef}
+      className={`p-2 space-y-2 min-h-[200px] max-h-[60vh] overflow-y-auto transition-colors ${
+        isOver ? 'bg-primary/5 ring-2 ring-primary/30 rounded-lg' : ''
+      }`}
+    >
+      {children}
+    </div>
+  );
+};
+
+const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClick, funnelId }) => {
   const [search, setSearch] = useState('');
   const [sortMode, setSortMode] = useState<SortMode>('recent');
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [overId, setOverId] = useState<string | null>(null);
+
+  const moveLeadStage = useMoveLeadStage();
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
+  );
 
   const sortedStages = [...stages].sort((a, b) => a.sort_order - b.sort_order);
 
@@ -38,6 +74,41 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
       return stageLeads.sort((a, b) => new Date(b.entered_at).getTime() - new Date(a.entered_at).getTime());
     }
     return stageLeads;
+  };
+
+  const activePosition = activeId ? positions.find(p => p.id === activeId) : null;
+
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveId(event.active.id as string);
+  };
+
+  const handleDragOver = (event: any) => {
+    setOverId(event.over?.id as string | null);
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    setActiveId(null);
+    setOverId(null);
+
+    const { active, over } = event;
+    if (!over) return;
+
+    const positionId = active.id as string;
+    const toStageId = over.id as string;
+
+    const position = positions.find(p => p.id === positionId);
+    if (!position || position.stage_id === toStageId) return;
+
+    const toStage = stages.find(s => s.id === toStageId);
+
+    moveLeadStage.mutate({
+      positionId,
+      leadId: position.lead_id,
+      funnelId,
+      fromStageId: position.stage_id,
+      toStageId,
+      toStageName: toStage?.name,
+    });
   };
 
   const totalFiltered = filteredPositions.length;
@@ -73,52 +144,69 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
       </div>
 
       {/* Kanban Columns */}
-      <div className="flex gap-4 overflow-x-auto pb-4">
-        {sortedStages.map(stage => {
-          const stageLeads = getLeadsForStage(stage.id);
-          return (
-            <div
-              key={stage.id}
-              className="flex-shrink-0 w-72 bg-muted/50 rounded-xl border border-border"
-            >
-              <div className="p-3 border-b border-border flex items-center gap-2">
-                <span
-                  className="h-3 w-3 rounded-full shrink-0"
-                  style={{ backgroundColor: stage.color }}
-                />
-                <h3 className="font-semibold text-sm text-foreground flex-1 truncate">
-                  {stage.name}
-                </h3>
-                <span className="text-xs text-muted-foreground bg-background rounded-full px-2 py-0.5">
-                  {stageLeads.length}
-                </span>
-              </div>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
+        onDragEnd={handleDragEnd}
+      >
+        <div className="flex gap-4 overflow-x-auto pb-4">
+          {sortedStages.map(stage => {
+            const stageLeads = getLeadsForStage(stage.id);
+            return (
+              <div
+                key={stage.id}
+                className="flex-shrink-0 w-72 bg-muted/50 rounded-xl border border-border"
+              >
+                <div className="p-3 border-b border-border flex items-center gap-2">
+                  <span
+                    className="h-3 w-3 rounded-full shrink-0"
+                    style={{ backgroundColor: stage.color }}
+                  />
+                  <h3 className="font-semibold text-sm text-foreground flex-1 truncate">
+                    {stage.name}
+                  </h3>
+                  <span className="text-xs text-muted-foreground bg-background rounded-full px-2 py-0.5">
+                    {stageLeads.length}
+                  </span>
+                </div>
 
-              <div className="p-2 space-y-2 min-h-[200px] max-h-[60vh] overflow-y-auto">
-                {stageLeads.length === 0 ? (
-                  <p className="text-xs text-muted-foreground text-center py-8">
-                    {search ? 'Nenhum resultado' : 'Nenhum lead nesta etapa'}
-                  </p>
-                ) : (
-                  stageLeads.map(pos => (
-                    <LeadCard
-                      key={pos.id}
-                      position={pos}
-                      onClick={() => onLeadClick?.(pos.lead_id)}
-                    />
-                  ))
-                )}
+                <DroppableColumn id={stage.id} isOver={overId === stage.id}>
+                  {stageLeads.length === 0 ? (
+                    <p className="text-xs text-muted-foreground text-center py-8">
+                      {search ? 'Nenhum resultado' : 'Nenhum lead nesta etapa'}
+                    </p>
+                  ) : (
+                    stageLeads.map(pos => (
+                      <LeadCard
+                        key={pos.id}
+                        position={pos}
+                        isDragging={activeId === pos.id}
+                        onClick={() => onLeadClick?.(pos.lead_id)}
+                      />
+                    ))
+                  )}
+                </DroppableColumn>
               </div>
+            );
+          })}
+
+          {sortedStages.length === 0 && (
+            <div className="flex-1 flex items-center justify-center py-20 text-muted-foreground">
+              <p>Adicione etapas na aba Configuração para ver o Kanban</p>
             </div>
-          );
-        })}
+          )}
+        </div>
 
-        {sortedStages.length === 0 && (
-          <div className="flex-1 flex items-center justify-center py-20 text-muted-foreground">
-            <p>Adicione etapas na aba Configuração para ver o Kanban</p>
-          </div>
-        )}
-      </div>
+        <DragOverlay>
+          {activePosition && (
+            <div className="opacity-90 rotate-2 scale-105">
+              <LeadCard position={activePosition} />
+            </div>
+          )}
+        </DragOverlay>
+      </DndContext>
     </div>
   );
 };
