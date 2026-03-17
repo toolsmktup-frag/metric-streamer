@@ -17,6 +17,7 @@ import {
   ChevronDown,
   ChevronUp,
   Bot,
+  MessageCircle,
   Upload,
   TrendingUp,
   Settings,
