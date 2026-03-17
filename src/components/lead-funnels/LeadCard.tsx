@@ -1,17 +1,26 @@
 import React from 'react';
 import { Lead, LeadStagePosition } from '@/types/leadFunnels';
-import { Mail, Phone, Clock, DollarSign } from 'lucide-react';
+import { Mail, Phone, Clock, DollarSign, GripVertical } from 'lucide-react';
 import { format } from 'date-fns';
 import { useLeadPurchases } from '@/hooks/useLeadPurchases';
+import { useDraggable } from '@dnd-kit/core';
 
 interface LeadCardProps {
   position: LeadStagePosition & { lead: Lead };
   onClick?: () => void;
+  isDragging?: boolean;
 }
 
-const LeadCard: React.FC<LeadCardProps> = ({ position, onClick }) => {
+const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, isDragging }) => {
   const lead = position.lead;
   const { data: purchaseData } = useLeadPurchases(lead.email, lead.phone);
+  const { attributes, listeners, setNodeRef, transform } = useDraggable({
+    id: position.id,
+  });
+
+  const style = transform
+    ? { transform: `translate(${transform.x}px, ${transform.y}px)` }
+    : undefined;
 
   const initials = (lead.name || lead.email || '?')
     .split(' ')
@@ -21,10 +30,24 @@ const LeadCard: React.FC<LeadCardProps> = ({ position, onClick }) => {
 
   return (
     <div
+      ref={setNodeRef}
+      style={style}
+      className={`bg-card border border-border rounded-lg p-3 cursor-pointer hover:shadow-md transition-all ${
+        isDragging ? 'opacity-30 shadow-none' : ''
+      }`}
       onClick={onClick}
-      className="bg-card border border-border rounded-lg p-3 cursor-pointer hover:shadow-md transition-shadow"
     >
       <div className="flex items-start gap-2.5">
+        {/* Drag handle */}
+        <button
+          {...attributes}
+          {...listeners}
+          className="mt-0.5 text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing touch-none"
+          onClick={e => e.stopPropagation()}
+        >
+          <GripVertical className="h-4 w-4" />
+        </button>
+
         {/* Avatar */}
         <div className="h-8 w-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold shrink-0">
           {initials}
