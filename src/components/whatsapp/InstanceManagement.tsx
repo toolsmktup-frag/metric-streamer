@@ -74,11 +74,13 @@ export default function InstanceManagement({
     try {
       const data = await callInstanceAPI(instance.id, 'status');
       setStatusData(data);
-      if (data?.instance?.profileName) {
-        setProfileName(data.instance.profileName);
+      if (data?.processed?.display_name) {
+        setProfileName(data.processed.display_name);
       }
     } catch (err: any) {
       console.error('Status fetch error:', err);
+      // On failure, show as disconnected
+      setStatusData({ processed: { status: 'disconnected' } });
     } finally {
       setLoading(false);
     }
