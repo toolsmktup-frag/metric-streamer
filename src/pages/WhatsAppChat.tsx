@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { MessageCircle, Settings, Plus, Wifi, WifiOff } from 'lucide-react';
 import { useWhatsAppInstances, useWhatsAppChats, useWhatsAppMessages } from '@/hooks/useWhatsApp';
 import InstanceManagement from '@/components/whatsapp/InstanceManagement';

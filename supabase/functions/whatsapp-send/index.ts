@@ -18,58 +18,68 @@ interface SendRequest {
 }
 
 async function tryUazapiSend(apiUrl: string, apiToken: string, instanceName: string, phone: string, body: string, messageType: string, mediaUrl?: string) {
-  const chatId = phone.includes('@') ? phone : `${phone}@s.whatsapp.net`
-
-  // UAZAPI v2 uses query string auth: ?token=xxx
-  const authQuery = `?token=${apiToken}`
-  
-  // Normalize base URL (remove trailing slash)
   const baseUrl = apiUrl.replace(/\/+$/, '')
-
-  // Try multiple endpoint patterns for UAZAPI compatibility
-  // Pattern 1: UAZAPI v2 with instance in path: /instance/{name}/send/text?token=xxx
-  // Pattern 2: Direct path (if api_url already includes instance): /send/text?token=xxx
-  const attempts = []
-
-  if (messageType !== 'text' && mediaUrl) {
-    attempts.push(
-      {
-        url: `${baseUrl}/instance/${instanceName}/send/media${authQuery}`,
-        body: { phone: chatId, url: mediaUrl, caption: body || '', type: messageType },
-        headers: { 'Content-Type': 'application/json' },
-      },
-      {
-        url: `${baseUrl}/send/media${authQuery}`,
-        body: { phone: chatId, url: mediaUrl, caption: body || '', type: messageType },
-        headers: { 'Content-Type': 'application/json' },
-      },
-    )
-  } else {
-    attempts.push(
-      // UAZAPI v2: instance in path
-      {
-        url: `${baseUrl}/instance/${instanceName}/send/text${authQuery}`,
-        body: { phone: chatId, message: body },
-        headers: { 'Content-Type': 'application/json' },
-      },
-      // Direct path (api_url may already include instance)
-      {
-        url: `${baseUrl}/send/text${authQuery}`,
-        body: { phone: chatId, message: body },
-        headers: { 'Content-Type': 'application/json' },
-      },
-      // Legacy pattern
-      {
-        url: `${baseUrl}/message/text${authQuery}`,
-        body: { phone: chatId, message: body },
-        headers: { 'Content-Type': 'application/json' },
-      },
-    )
+  const chatId = phone.includes('@') ? phone : `${phone}@s.whatsapp.net`
+  const defaultHeaders = {
+    'Content-Type': 'application/json',
+    'token': apiToken,
   }
+
+  const attempts = messageType !== 'text' && mediaUrl
+    ? [
+        {
+          url: `${baseUrl}/send/media`,
+          headers: defaultHeaders,
+          body: { phone, url: mediaUrl, caption: body || '', type: messageType },
+        },
+        {
+          url: `${baseUrl}/send/media`,
+          headers: defaultHeaders,
+          body: { phone: chatId, url: mediaUrl, caption: body || '', type: messageType },
+        },
+        {
+          url: `${baseUrl}/message/sendMedia/${instanceName}`,
+          headers: defaultHeaders,
+          body: { number: phone, mediaUrl, caption: body || '', mediaType: messageType },
+        },
+      ]
+    : [
+        {
+          url: `${baseUrl}/send/text`,
+          headers: defaultHeaders,
+          body: { phone, message: body },
+        },
+        {
+          url: `${baseUrl}/send/text`,
+          headers: defaultHeaders,
+          body: { phone: chatId, message: body },
+        },
+        {
+          url: `${baseUrl}/send/text`,
+          headers: defaultHeaders,
+          body: { phoneNumber: phone, text: body },
+        },
+        {
+          url: `${baseUrl}/message/sendText/${instanceName}`,
+          headers: defaultHeaders,
+          body: { number: phone, text: body },
+        },
+        {
+          url: `${baseUrl}/message/sendText/${instanceName}`,
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Authorization': `Bearer ${apiToken}`,
+          },
+          body: { number: phone, text: body },
+        },
+      ]
+
+  let lastError = ''
 
   for (const attempt of attempts) {
     try {
-      console.log(`Trying UAZAPI: ${attempt.url}`)
+      console.log(`Trying UAZAPI: ${attempt.url} with body ${JSON.stringify(attempt.body)}`)
       const res = await fetch(attempt.url, {
         method: 'POST',
         headers: attempt.headers,
@@ -81,18 +91,20 @@ async function tryUazapiSend(apiUrl: string, apiToken: string, instanceName: str
 
       if (res.ok) {
         try {
-          const data = JSON.parse(responseText)
-          return { success: true, data }
+          return { success: true, data: JSON.parse(responseText) }
         } catch {
           return { success: true, data: { raw: responseText } }
         }
       }
+
+      lastError = `${res.status} ${responseText.slice(0, 200)}`
     } catch (e) {
+      lastError = e.message
       console.log(`Attempt ${attempt.url} error:`, e.message)
     }
   }
 
-  throw new Error('All UAZAPI send attempts failed')
+  throw new Error(`All UAZAPI send attempts failed${lastError ? `: ${lastError}` : ''}`)
 }
 
 Deno.serve(async (req) => {
