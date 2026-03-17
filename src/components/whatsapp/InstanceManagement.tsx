@@ -116,18 +116,18 @@ export default function InstanceManagement({
       try {
         const data = await callInstanceAPI(instance.id, 'status');
         setStatusData(data);
-        if (data?.instance?.status === 'connected' || data?.status?.connected) {
+        if (data?.processed?.status === 'connected') {
           setConnecting(false);
           setPairCode(null);
           setQrCode(null);
           toast.success('WhatsApp conectado!');
         }
-        // Update QR code if still connecting
-        if (data?.instance?.qrcode) {
-          setQrCode(data.instance.qrcode);
+        // Update QR code if still connecting (from raw response)
+        if (data?.raw?.instance?.qrcode) {
+          setQrCode(data.raw.instance.qrcode);
         }
-        if (data?.instance?.paircode) {
-          setPairCode(data.instance.paircode);
+        if (data?.raw?.instance?.paircode) {
+          setPairCode(data.raw.instance.paircode);
         }
       } catch {}
     }, 3000);
