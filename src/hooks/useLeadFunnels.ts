@@ -41,10 +41,15 @@ export function useCreateLeadFunnel() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (funnel: Partial<LeadFunnel>) => {
-      const { data: profile } = await supabase.from('user_profiles').select('organization_id').single();
+      const { data: org } = await (supabase as any)
+        .from('organizations')
+        .select('id')
+        .limit(1)
+        .single();
+      const orgId = org?.id || '00000000-0000-0000-0000-000000000001';
       const { data, error } = await (supabase as any)
         .from('lead_funnels')
-        .insert({ ...funnel, organization_id: profile?.organization_id })
+        .insert({ ...funnel, organization_id: orgId })
         .select()
         .single();
       if (error) throw error;
