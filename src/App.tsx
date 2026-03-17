@@ -27,6 +27,7 @@ import FunisConfigurar from "./pages/FunisConfigurar";
 import Ecommerce from "./pages/Ecommerce";
 import LeadCampaigns from "./pages/LeadCampaigns";
 import LeadFunnelDetail from "./pages/LeadFunnelDetail";
+import WhatsAppChat from "./pages/WhatsAppChat";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -40,6 +41,13 @@ const queryClient = new QueryClient({
 const Protected = ({ children }: { children: React.ReactNode }) => (
   <ProtectedRoute>
     <AppLayout>{children}</AppLayout>
+  </ProtectedRoute>
+);
+
+// WhatsApp uses its own layout with sidebar but no DateRangePicker header
+const ProtectedFullscreen = ({ children }: { children: React.ReactNode }) => (
+  <ProtectedRoute>
+    {children}
   </ProtectedRoute>
 );
 
@@ -74,6 +82,8 @@ const App = () => (
           {/* Funis de Leads */}
           <Route path="/lead-campaigns" element={<Protected><LeadCampaigns /></Protected>} />
           <Route path="/lead-funnels/:id" element={<Protected><LeadFunnelDetail /></Protected>} />
+          {/* WhatsApp Chat - fullscreen layout */}
+          <Route path="/whatsapp" element={<ProtectedFullscreen><WhatsAppChat /></ProtectedFullscreen>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

@@ -17,6 +17,7 @@ import {
   ChevronDown,
   ChevronUp,
   Bot,
+  MessageCircle,
   Upload,
   TrendingUp,
   Settings,
@@ -43,6 +44,7 @@ const GENERAL_ITEMS = [
 ];
 
 const TOOL_ITEMS = [
+  { path: '/whatsapp',    label: 'WhatsApp',     icon: MessageCircle },
   { path: '/agente-ia',   label: 'Agente IA',    icon: Bot },
   { path: '/integracoes', label: 'Integrações',  icon: Link2 },
   { path: '/importar',    label: 'Importar',     icon: Upload },
