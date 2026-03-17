@@ -140,6 +140,23 @@ Deno.serve(async (req) => {
           status: 'connecting',
           updated_at: new Date().toISOString(),
         }).eq('id', instanceId)
+
+        // Auto-configure webhook after connect
+        const webhookUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/uazapi-webhook`
+        try {
+          await fetch(`${apiUrl}/webhook/set`, {
+            method: 'POST',
+            headers: uazHeaders,
+            body: JSON.stringify({
+              url: webhookUrl,
+              enabled: true,
+              events: ['messages.upsert', 'messages.update', 'connection.update'],
+            }),
+          })
+          console.log('Webhook auto-configured:', webhookUrl)
+        } catch (e) {
+          console.error('Failed to auto-configure webhook:', e.message)
+        }
         
         break
       }
