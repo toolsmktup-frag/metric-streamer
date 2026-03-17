@@ -1,0 +1,1 @@
+DELETE FROM ticto_transactions WHERE transaction_hash IN ('TEST-TX-001', 'TXTEST123');

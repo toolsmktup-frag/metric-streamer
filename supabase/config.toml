@@ -1,0 +1,10 @@
+project_id = "emfbocpmphtftqcezaib"
+
+[functions.sync-meta]
+verify_jwt = false
+
+[functions.ticto-webhook]
+verify_jwt = false
+
+[functions.ai-agent]
+verify_jwt = false

@@ -1,0 +1,1 @@
+DELETE FROM public.ticto_transactions WHERE order_date >= '2026-03-01T00:00:00+00:00' AND order_date < '2026-03-10T00:00:00+00:00';

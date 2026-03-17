@@ -1,0 +1,153 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 210 20% 98%;
+    --foreground: 220 20% 10%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 20% 10%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 20% 10%;
+
+    --primary: 152 60% 42%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 210 20% 96%;
+    --secondary-foreground: 220 20% 10%;
+
+    --muted: 210 15% 94%;
+    --muted-foreground: 215 15% 50%;
+
+    --accent: 210 20% 96%;
+    --accent-foreground: 220 20% 10%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 214 20% 90%;
+    --input: 214 20% 90%;
+    --ring: 152 60% 42%;
+
+    --radius: 0.625rem;
+
+    /* Custom tokens */
+    --sidebar-bg: 152 55% 45%;
+    --sidebar-fg: 0 0% 100%;
+    --sidebar-hover: 152 55% 38%;
+    --sidebar-active: 152 55% 35%;
+
+    --kpi-positive: 152 60% 42%;
+    --kpi-negative: 0 72% 51%;
+    --kpi-warning: 38 92% 50%;
+    --kpi-neutral: 215 15% 50%;
+
+    --roas-good: 152 60% 42%;
+    --roas-mid: 38 92% 50%;
+    --roas-bad: 0 72% 51%;
+
+    --table-header: 210 20% 96%;
+    --table-row-hover: 210 20% 98%;
+    --table-border: 214 20% 92%;
+    --table-selected: 152 60% 95%;
+
+    --skeleton-from: 210 15% 92%;
+    --skeleton-to: 210 15% 96%;
+
+    --sidebar-background: 152 55% 45%;
+    --sidebar-foreground: 0 0% 100%;
+    --sidebar-primary: 0 0% 100%;
+    --sidebar-primary-foreground: 152 55% 45%;
+    --sidebar-accent: 152 55% 38%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 152 55% 38%;
+    --sidebar-ring: 152 60% 42%;
+
+    --font-mono: 'JetBrains Mono', monospace;
+    --font-sans: 'Inter', system-ui, sans-serif;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-sans);
+  }
+}
+
+@layer utilities {
+  .font-mono-value {
+    font-family: var(--font-mono);
+  }
+
+  .text-kpi-positive {
+    color: hsl(var(--kpi-positive));
+  }
+  .text-kpi-negative {
+    color: hsl(var(--kpi-negative));
+  }
+  .text-kpi-warning {
+    color: hsl(var(--kpi-warning));
+  }
+  .text-kpi-neutral {
+    color: hsl(var(--kpi-neutral));
+  }
+
+  .text-roas-good {
+    color: hsl(var(--roas-good));
+  }
+  .text-roas-mid {
+    color: hsl(var(--roas-mid));
+  }
+  .text-roas-bad {
+    color: hsl(var(--roas-bad));
+  }
+
+  .bg-sidebar-theme {
+    background-color: hsl(var(--sidebar-bg));
+  }
+  .text-sidebar-theme {
+    color: hsl(var(--sidebar-fg));
+  }
+  .bg-sidebar-hover {
+    background-color: hsl(var(--sidebar-hover));
+  }
+  .bg-sidebar-active {
+    background-color: hsl(var(--sidebar-active));
+  }
+
+  .bg-table-header {
+    background-color: hsl(var(--table-header));
+  }
+  .bg-table-hover {
+    background-color: hsl(var(--table-row-hover));
+  }
+  .bg-table-selected {
+    background-color: hsl(var(--table-selected));
+  }
+
+  @keyframes skeleton-pulse {
+    0%, 100% { background-color: hsl(var(--skeleton-from)); }
+    50% { background-color: hsl(var(--skeleton-to)); }
+  }
+  .animate-skeleton {
+    animation: skeleton-pulse 1.5s ease-in-out infinite;
+  }
+
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+  .animate-pulse-dot {
+    animation: pulse-dot 2s ease-in-out infinite;
+  }
+}

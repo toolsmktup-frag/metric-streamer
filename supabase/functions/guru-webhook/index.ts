@@ -1,0 +1,179 @@
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
+};
+
+function jsonResponse(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
+/** Normaliza valor monetário: aceita centavos (int) ou reais (float) */
+function parseAmount(value: unknown): number {
+  if (!value) return 0;
+  const n = Number(value);
+  // Guru envia em centavos quando value > 1000 e parece inteiro
+  return n > 1000 && Number.isInteger(n) ? n / 100 : n;
+}
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  if (req.method !== "POST") {
+    return jsonResponse({ error: "Method not allowed" }, 405);
+  }
+
+  try {
+    const payload = await req.json();
+
+    // Se não tem os campos mínimos, provavelmente é um ping/teste da plataforma — retorna 200
+    const hasSale    = payload.sale    || payload.order;
+    const hasProduct = payload.product || payload.item || payload.product_name;
+    const hasEvent   = payload.event   || payload.status;
+    if (!hasSale && !hasProduct && !hasEvent) {
+      console.log("Ping or test payload received, ignoring:", JSON.stringify(payload).slice(0, 200));
+      return jsonResponse({ success: true, message: "ping ok" });
+    }
+
+    // Guru envia diferentes formatos — normalizar aqui
+    // Estrutura comum: { event, sale, product, customer, tracking }
+    const sale     = payload.sale     || payload.order    || {};
+    const product  = payload.product  || payload.item     || {};
+    const customer = payload.customer || payload.buyer    || {};
+    const tracking = payload.tracking || payload.utm_data || {};
+
+    const productName = product.name || product.product_name || payload.product_name || "";
+    const status      = payload.event || payload.status || sale.status || "authorized";
+
+    // Normalizar status Guru → padrão interno
+    const statusMap: Record<string, string> = {
+      sale_approved:   "authorized",
+      sale_completed:  "authorized",
+      sale_refused:    "refused",
+      sale_refunded:   "refunded",
+      sale_chargeback: "chargeback",
+      approved:        "authorized",
+      paid:            "authorized",
+    };
+    const normalizedStatus = statusMap[status] || status;
+
+    // UTMs
+    const utmSource   = tracking.utm_source   || null;
+    const utmMedium   = tracking.utm_medium   || null;
+    const utmCampaign = tracking.utm_campaign || null;
+    const utmContent  = tracking.utm_content  || null;
+    const utmTerm     = tracking.utm_term     || null;
+
+    // Meta Ads IDs — Guru pode enviar diretamente ou via UTM "Name|id"
+    function parseUtmPair(value: string | null): { name: string | null; id: string | null } {
+      if (!value) return { name: null, id: null };
+      const parts = value.split("|");
+      if (parts.length === 2) {
+        let id = parts[1].trim();
+        const colonIdx = id.indexOf("::");
+        if (colonIdx > 0) id = id.substring(0, colonIdx);
+        return { name: parts[0].trim(), id };
+      }
+      return { name: value, id: null };
+    }
+
+    const campaignParsed = parseUtmPair(utmCampaign);
+    const adsetParsed    = parseUtmPair(utmMedium);
+    const adParsed       = parseUtmPair(utmContent);
+
+    const metaCampaignId = sale.meta_campaign_id || campaignParsed.id || null;
+    const metaAdsetId    = sale.meta_adset_id    || adsetParsed.id    || null;
+    const metaAdId       = sale.meta_ad_id       || adParsed.id       || null;
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase    = createClient(supabaseUrl, supabaseKey);
+
+    // Resolve funnel_id: primeiro por token na URL, depois por product name ILIKE
+    const urlToken = new URL(req.url).searchParams.get("token");
+    let funnelId: string | null = null;
+
+    if (urlToken) {
+      const { data: funnelByToken } = await supabase
+        .from("funnels")
+        .select("id")
+        .eq("webhook_token", urlToken)
+        .single();
+      funnelId = funnelByToken?.id ?? null;
+    }
+
+    if (!funnelId && productName) {
+      const { data } = await supabase.rpc("resolve_funnel_id", { p_product_name: productName });
+      funnelId = data || null;
+    }
+
+    // Resolve or create unified customer
+    let unifiedCustomerId: string | null = null;
+    if (customer.email || customer.cpf || customer.phone) {
+      const { data } = await supabase.rpc("resolve_or_create_customer", {
+        p_org_id: "00000000-0000-0000-0000-000000000001",
+        p_email:  customer.email  || null,
+        p_cpf:    customer.cpf    || customer.document || null,
+        p_phone:  customer.phone  || customer.telephone || null,
+        p_name:   customer.name   || customer.full_name || null,
+      });
+      unifiedCustomerId = data || null;
+    }
+
+    const transactionId = sale.transaction_id || sale.id || sale.order_id || null;
+    const purchasedAt   = sale.approved_date  || sale.created_at || payload.created_at || new Date().toISOString();
+
+    const record = {
+      organization_id:        "00000000-0000-0000-0000-000000000001",
+      unified_customer_id:    unifiedCustomerId,
+      platform:               "guru",
+      platform_transaction_id: String(transactionId || ""),
+      platform_order_id:      String(sale.order_id || sale.id || ""),
+      product_name:           productName,
+      product_id:             String(product.id || product.product_id || ""),
+      offer_name:             product.offer_name || product.plan_name || null,
+      offer_id:               String(product.offer_id || product.plan_id || ""),
+      product_type:           "digital",
+      gross_amount:           parseAmount(sale.amount || sale.paid_amount || sale.value),
+      net_amount:             parseAmount(sale.net_amount || sale.commission || null),
+      payment_method:         sale.payment_method || payload.payment_method || null,
+      installments:           Number(sale.installments || 1),
+      status:                 normalizedStatus,
+      purchased_at:           new Date(purchasedAt).toISOString(),
+      utm_source:             utmSource,
+      utm_medium:             utmMedium,
+      utm_campaign:           utmCampaign,
+      utm_content:            utmContent,
+      utm_term:               utmTerm,
+      meta_campaign_id:       metaCampaignId,
+      meta_adset_id:          metaAdsetId,
+      meta_ad_id:             metaAdId,
+      funnel_id:              funnelId,
+      imported_from:          "webhook",
+      raw_data:               payload,
+    };
+
+    const { error } = await supabase
+      .from("customer_purchases")
+      .upsert(record, { onConflict: "platform,platform_transaction_id" });
+
+    if (error) {
+      console.error("DB error:", error);
+      return jsonResponse({ error: "Failed to save transaction", detail: error.message }, 500);
+    }
+
+    console.log(`Guru webhook processed: ${normalizedStatus} - product "${productName}" - funnel_id: ${funnelId}`);
+
+    return jsonResponse({ success: true });
+  } catch (err) {
+    console.error("Webhook error:", err);
+    return jsonResponse({ error: "Internal server error", detail: String(err) }, 500);
+  }
+});

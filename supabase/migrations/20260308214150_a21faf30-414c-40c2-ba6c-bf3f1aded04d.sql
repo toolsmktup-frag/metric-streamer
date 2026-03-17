@@ -1,0 +1,1 @@
+UPDATE meta_sync_log SET status = 'failed', error = 'stuck', finished_at = now() WHERE status = 'running';
