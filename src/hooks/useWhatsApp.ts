@@ -245,16 +245,10 @@ export async function sendPresence(instanceId: string, phone: string) {
 
 export async function fetchContactInfo(instanceId: string, phone: string) {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
+    const headers = await getAuthHeaders();
     const res = await fetch(
-      `${(supabase as any).supabaseUrl}/functions/v1/whatsapp-contact-info?instance_id=${instanceId}&phone=${encodeURIComponent(phone)}`,
-      {
-        headers: {
-          'Authorization': `Bearer ${session?.access_token}`,
-          'apikey': (supabase as any).supabaseKey,
-          'Content-Type': 'application/json',
-        },
-      }
+      `${SUPABASE_URL}/functions/v1/whatsapp-contact-info?instance_id=${instanceId}&phone=${encodeURIComponent(phone)}`,
+      { headers }
     );
     if (!res.ok) return { name: null, picture: null };
     return res.json();
