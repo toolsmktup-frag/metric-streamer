@@ -122,6 +122,21 @@ function FlowCanvas({
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [flowEdges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
+  // Sync leadCounts into nodes when polling updates
+  useEffect(() => {
+    setNodes((nds) =>
+      nds.map((n) => {
+        if (n.type === 'page' && n.data.stageId) {
+          const newCount = leadCounts[n.data.stageId as string] || 0;
+          if (n.data.count !== newCount) {
+            return { ...n, data: { ...n.data, count: newCount } };
+          }
+        }
+        return n;
+      })
+    );
+  }, [leadCounts, setNodes]);
+
   // Refs for debounced saves
   const nodesRef = useRef(nodes);
   const edgesRef = useRef(flowEdges);
