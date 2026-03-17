@@ -154,7 +154,7 @@ export default function WhatsAppChat() {
             Adicione uma instância UAZAPI para começar a usar o chat.
           </p>
         </div>
-        <AddInstanceDialog onCreated={() => window.location.reload()} />
+        <AddInstanceDialog onCreated={() => refetchInstances()} />
       </div>
     );
   }
