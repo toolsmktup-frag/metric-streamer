@@ -3,6 +3,7 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   Megaphone,
+  Target,
   Layers,
   FileImage,
   ShoppingCart,
@@ -45,6 +46,10 @@ const TOOL_ITEMS = [
   { path: '/agente-ia',   label: 'Agente IA',    icon: Bot },
   { path: '/integracoes', label: 'Integrações',  icon: Link2 },
   { path: '/importar',    label: 'Importar',     icon: Upload },
+];
+
+const LEAD_FUNNEL_ITEMS = [
+  { path: '/lead-campaigns', label: 'Funis de Leads', icon: Target },
 ];
 
 const AppSidebar = React.memo(function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
@@ -241,6 +246,10 @@ const AppSidebar = React.memo(function AppSidebar({ collapsed, onToggle }: AppSi
         {/* Seção Análises */}
         {sectionLabel('Análises')}
         {GENERAL_ITEMS.map(item => navLink(item.path, item.label, item.icon))}
+
+        {/* Seção Funis de Leads */}
+        {sectionLabel('Funis de Leads')}
+        {LEAD_FUNNEL_ITEMS.map(item => navLink(item.path, item.label, item.icon))}
 
         {/* Seção Ferramentas */}
         {sectionLabel('Ferramentas')}

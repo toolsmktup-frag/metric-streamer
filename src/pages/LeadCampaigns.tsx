@@ -1,0 +1,223 @@
+import React, { useState } from 'react';
+import { useLeadCampaigns, useCreateLeadCampaign, useDeleteLeadCampaign } from '@/hooks/useLeadCampaigns';
+import { useLeadFunnels, useCreateLeadFunnel, useDeleteLeadFunnel } from '@/hooks/useLeadFunnels';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Plus, Trash2, ChevronRight, Layers } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
+
+const LeadCampaignsPage: React.FC = () => {
+  const navigate = useNavigate();
+  const { data: campaigns = [], isLoading } = useLeadCampaigns();
+  const { data: allFunnels = [] } = useLeadFunnels();
+  const createCampaign = useCreateLeadCampaign();
+  const deleteCampaign = useDeleteLeadCampaign();
+  const createFunnel = useCreateLeadFunnel();
+  const deleteFunnel = useDeleteLeadFunnel();
+
+  const [showNewCampaign, setShowNewCampaign] = useState(false);
+  const [showNewFunnel, setShowNewFunnel] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newColor, setNewColor] = useState('#6366f1');
+  const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
+
+  // Funnels without campaign
+  const orphanFunnels = allFunnels.filter(f => !f.campaign_id);
+
+  const handleCreateCampaign = async () => {
+    if (!newName.trim()) return;
+    try {
+      await createCampaign.mutateAsync({ name: newName, color: newColor });
+      toast.success('Campanha criada!');
+      setShowNewCampaign(false);
+      setNewName('');
+    } catch {
+      toast.error('Erro ao criar campanha');
+    }
+  };
+
+  const handleCreateFunnel = async () => {
+    if (!newName.trim()) return;
+    try {
+      const funnel = await createFunnel.mutateAsync({
+        name: newName,
+        color: newColor,
+        campaign_id: selectedCampaignId,
+      });
+      toast.success('Funil criado!');
+      setShowNewFunnel(false);
+      setNewName('');
+      navigate(`/lead-funnels/${funnel.id}`);
+    } catch {
+      toast.error('Erro ao criar funil');
+    }
+  };
+
+  if (isLoading) {
+    return <div className="p-6 text-muted-foreground">Carregando...</div>;
+  }
+
+  return (
+    <div className="p-6 space-y-8">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Funis de Leads</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Gerencie campanhas e funis de rastreamento de leads
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Dialog open={showNewCampaign} onOpenChange={setShowNewCampaign}>
+            <DialogTrigger asChild>
+              <Button variant="outline" onClick={() => { setNewName(''); setNewColor('#6366f1'); }}>
+                <Plus className="h-4 w-4 mr-1" /> Campanha
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Nova Campanha</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 pt-2">
+                <Input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Nome da campanha" />
+                <div className="flex items-center gap-2">
+                  <label className="text-sm text-muted-foreground">Cor:</label>
+                  <input type="color" value={newColor} onChange={e => setNewColor(e.target.value)} className="w-10 h-8 rounded" />
+                </div>
+                <Button onClick={handleCreateCampaign} className="w-full" disabled={createCampaign.isPending}>
+                  Criar Campanha
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={showNewFunnel} onOpenChange={setShowNewFunnel}>
+            <DialogTrigger asChild>
+              <Button onClick={() => { setNewName(''); setNewColor('#10b981'); setSelectedCampaignId(null); }}>
+                <Plus className="h-4 w-4 mr-1" /> Novo Funil
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Novo Funil</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 pt-2">
+                <Input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Nome do funil" />
+                <div className="flex items-center gap-2">
+                  <label className="text-sm text-muted-foreground">Cor:</label>
+                  <input type="color" value={newColor} onChange={e => setNewColor(e.target.value)} className="w-10 h-8 rounded" />
+                </div>
+                <select
+                  value={selectedCampaignId || ''}
+                  onChange={e => setSelectedCampaignId(e.target.value || null)}
+                  className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background"
+                >
+                  <option value="">Sem campanha</option>
+                  {campaigns.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+                <Button onClick={handleCreateFunnel} className="w-full" disabled={createFunnel.isPending}>
+                  Criar Funil
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
+      </div>
+
+      {/* Campaigns with funnels */}
+      {campaigns.map(campaign => {
+        const funnels = allFunnels.filter(f => f.campaign_id === campaign.id);
+        return (
+          <div key={campaign.id} className="border border-border rounded-xl overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3 bg-muted/30">
+              <div className="flex items-center gap-2">
+                <span className="h-3 w-3 rounded-full" style={{ backgroundColor: campaign.color }} />
+                <h2 className="font-semibold text-foreground">{campaign.name}</h2>
+                <span className="text-xs text-muted-foreground">({funnels.length} funis)</span>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  if (confirm('Excluir campanha?')) deleteCampaign.mutate(campaign.id);
+                }}
+              >
+                <Trash2 className="h-4 w-4 text-destructive" />
+              </Button>
+            </div>
+            <div className="divide-y divide-border">
+              {funnels.map(funnel => (
+                <div
+                  key={funnel.id}
+                  onClick={() => navigate(`/lead-funnels/${funnel.id}`)}
+                  className="flex items-center justify-between px-4 py-3 hover:bg-muted/20 cursor-pointer transition-colors"
+                >
+                  <div className="flex items-center gap-2">
+                    <Layers className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm font-medium text-foreground">{funnel.name}</span>
+                    {!funnel.is_active && (
+                      <span className="text-xs bg-destructive/10 text-destructive px-1.5 py-0.5 rounded">inativo</span>
+                    )}
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                </div>
+              ))}
+              {funnels.length === 0 && (
+                <p className="px-4 py-6 text-sm text-muted-foreground text-center">Nenhum funil nesta campanha</p>
+              )}
+            </div>
+          </div>
+        );
+      })}
+
+      {/* Funnels without campaign */}
+      {orphanFunnels.length > 0 && (
+        <div className="border border-border rounded-xl overflow-hidden">
+          <div className="px-4 py-3 bg-muted/30">
+            <h2 className="font-semibold text-foreground">Funis sem campanha</h2>
+          </div>
+          <div className="divide-y divide-border">
+            {orphanFunnels.map(funnel => (
+              <div
+                key={funnel.id}
+                onClick={() => navigate(`/lead-funnels/${funnel.id}`)}
+                className="flex items-center justify-between px-4 py-3 hover:bg-muted/20 cursor-pointer transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <Layers className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-medium text-foreground">{funnel.name}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={e => {
+                      e.stopPropagation();
+                      if (confirm('Excluir funil?')) deleteFunnel.mutate(funnel.id);
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {campaigns.length === 0 && orphanFunnels.length === 0 && (
+        <div className="text-center py-20 text-muted-foreground">
+          <Layers className="h-12 w-12 mx-auto mb-4 opacity-40" />
+          <p className="text-lg font-medium">Nenhum funil de leads ainda</p>
+          <p className="text-sm mt-1">Crie uma campanha ou funil para começar a rastrear leads</p>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default LeadCampaignsPage;
