@@ -1,4 +1,4 @@
-// v1.0.1 - force redeploy with verify_jwt=false
+// v1.0.2 - simplify UAZAPI send flow and use admin client for writes
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
@@ -14,97 +14,138 @@ interface SendRequest {
   media_url?: string
   media_filename?: string
   action?: 'send' | 'edit' | 'delete'
-  message_id?: string // for edit/delete
+  message_id?: string
+}
+
+function normalizePhone(phone: string) {
+  return phone.replace(/\D/g, '')
+}
+
+function buildHeaders(apiToken: string, bearerMode = false) {
+  return bearerMode
+    ? {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        Authorization: `Bearer ${apiToken}`,
+      }
+    : {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        token: apiToken,
+      }
+}
+
+function isSuccessfulResponse(res: Response, data: any) {
+  return res.ok && !data?.error && data?.success !== false
+}
+
+async function parseResponse(res: Response) {
+  const responseText = await res.text()
+  try {
+    return {
+      text: responseText,
+      data: responseText ? JSON.parse(responseText) : null,
+    }
+  } catch {
+    return {
+      text: responseText,
+      data: responseText ? { raw: responseText } : null,
+    }
+  }
 }
 
 async function tryUazapiSend(apiUrl: string, apiToken: string, instanceName: string, phone: string, body: string, messageType: string, mediaUrl?: string) {
   const baseUrl = apiUrl.replace(/\/+$/, '')
-  const chatId = phone.includes('@') ? phone : `${phone}@s.whatsapp.net`
-  const defaultHeaders = {
-    'Content-Type': 'application/json',
-    'token': apiToken,
-  }
+  const cleanPhone = normalizePhone(phone)
+  const chatId = phone.includes('@') ? phone : `${cleanPhone}@s.whatsapp.net`
 
   const attempts = messageType !== 'text' && mediaUrl
     ? [
         {
+          label: 'send/media number',
           url: `${baseUrl}/send/media`,
-          headers: defaultHeaders,
-          body: { phone, url: mediaUrl, caption: body || '', type: messageType },
+          headers: buildHeaders(apiToken),
+          body: { number: cleanPhone, url: mediaUrl, caption: body || '', type: messageType, readchat: true, readmessages: true },
         },
         {
+          label: 'send/media phone',
           url: `${baseUrl}/send/media`,
-          headers: defaultHeaders,
-          body: { phone: chatId, url: mediaUrl, caption: body || '', type: messageType },
+          headers: buildHeaders(apiToken),
+          body: { phone: cleanPhone, url: mediaUrl, caption: body || '', type: messageType, readchat: true, readmessages: true },
         },
         {
+          label: 'send/media chatId',
+          url: `${baseUrl}/send/media`,
+          headers: buildHeaders(apiToken),
+          body: { phone: chatId, url: mediaUrl, caption: body || '', type: messageType, readchat: true, readmessages: true },
+        },
+        {
+          label: 'legacy sendMedia instance',
           url: `${baseUrl}/message/sendMedia/${instanceName}`,
-          headers: defaultHeaders,
-          body: { number: phone, mediaUrl, caption: body || '', mediaType: messageType },
+          headers: buildHeaders(apiToken),
+          body: { number: cleanPhone, mediaUrl, caption: body || '', mediaType: messageType, readchat: true, readmessages: true },
         },
       ]
     : [
         {
+          label: 'send/text number',
           url: `${baseUrl}/send/text`,
-          headers: defaultHeaders,
-          body: { phone, message: body },
+          headers: buildHeaders(apiToken),
+          body: { number: cleanPhone, text: body, readchat: true, readmessages: true },
         },
         {
+          label: 'send/text phone',
           url: `${baseUrl}/send/text`,
-          headers: defaultHeaders,
-          body: { phone: chatId, message: body },
+          headers: buildHeaders(apiToken),
+          body: { phone: cleanPhone, message: body, readchat: true, readmessages: true },
         },
         {
+          label: 'send/text chatId',
           url: `${baseUrl}/send/text`,
-          headers: defaultHeaders,
-          body: { phoneNumber: phone, text: body },
+          headers: buildHeaders(apiToken),
+          body: { phone: chatId, message: body, readchat: true, readmessages: true },
         },
         {
+          label: 'legacy sendText instance token-header',
           url: `${baseUrl}/message/sendText/${instanceName}`,
-          headers: defaultHeaders,
-          body: { number: phone, text: body },
+          headers: buildHeaders(apiToken),
+          body: { number: cleanPhone, text: body, readchat: true, readmessages: true },
         },
         {
+          label: 'legacy sendText instance bearer',
           url: `${baseUrl}/message/sendText/${instanceName}`,
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'Authorization': `Bearer ${apiToken}`,
-          },
-          body: { number: phone, text: body },
+          headers: buildHeaders(apiToken, true),
+          body: { number: cleanPhone, text: body, readchat: true, readmessages: true },
         },
       ]
 
-  let lastError = ''
+  const failures: string[] = []
 
   for (const attempt of attempts) {
     try {
-      console.log(`Trying UAZAPI: ${attempt.url} with body ${JSON.stringify(attempt.body)}`)
+      console.log(`[whatsapp-send] trying ${attempt.label}: ${attempt.url} body=${JSON.stringify(attempt.body)}`)
       const res = await fetch(attempt.url, {
         method: 'POST',
         headers: attempt.headers,
         body: JSON.stringify(attempt.body),
       })
 
-      const responseText = await res.text()
-      console.log(`UAZAPI response ${attempt.url}: ${res.status} - ${responseText.slice(0, 500)}`)
+      const { text, data } = await parseResponse(res)
+      console.log(`[whatsapp-send] response ${attempt.label}: ${res.status} ${text.slice(0, 500)}`)
 
-      if (res.ok) {
-        try {
-          return { success: true, data: JSON.parse(responseText) }
-        } catch {
-          return { success: true, data: { raw: responseText } }
-        }
+      if (isSuccessfulResponse(res, data)) {
+        return { success: true, data }
       }
 
-      lastError = `${res.status} ${responseText.slice(0, 200)}`
-    } catch (e) {
-      lastError = e.message
-      console.log(`Attempt ${attempt.url} error:`, e.message)
+      failures.push(`${attempt.label}: ${res.status} ${text.slice(0, 160)}`)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      failures.push(`${attempt.label}: ${message}`)
+      console.log(`[whatsapp-send] attempt failed ${attempt.label}: ${message}`)
     }
   }
 
-  throw new Error(`All UAZAPI send attempts failed${lastError ? `: ${lastError}` : ''}`)
+  throw new Error(`All UAZAPI send attempts failed | ${failures.join(' | ')}`)
 }
 
 Deno.serve(async (req) => {
@@ -128,14 +169,18 @@ Deno.serve(async (req) => {
       })
     }
 
-    const token = authHeader.replace('Bearer ', '')
-    const supabase = createClient(
+    const userClient = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_ANON_KEY')!,
       { global: { headers: { Authorization: authHeader } } }
     )
 
-    const { data: userData, error: userErr } = await supabase.auth.getUser()
+    const adminClient = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    )
+
+    const { data: userData, error: userErr } = await userClient.auth.getUser()
     if (userErr || !userData?.user) {
       console.error('Auth error:', userErr)
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
@@ -154,11 +199,19 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Get instance
-    const { data: instance, error: instErr } = await supabase
+    const { data: orgId, error: orgErr } = await userClient.rpc('get_user_org_id')
+    if (orgErr || !orgId) {
+      return new Response(JSON.stringify({ error: 'Org not found' }), {
+        status: 403,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    const { data: instance, error: instErr } = await userClient
       .from('whatsapp_instances')
       .select('*')
       .eq('id', instance_id)
+      .eq('organization_id', orgId)
       .single()
 
     if (instErr || !instance) {
@@ -168,12 +221,12 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Handle soft delete
     if (action === 'delete' && message_id) {
-      const { error: delErr } = await supabase
+      const { error: delErr } = await adminClient
         .from('whatsapp_messages')
         .update({ is_deleted: true, body: '🚫 Mensagem apagada', updated_at: new Date().toISOString() })
         .eq('id', message_id)
+        .eq('organization_id', orgId)
 
       if (delErr) throw delErr
 
@@ -182,12 +235,12 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Handle edit
     if (action === 'edit' && message_id && body) {
-      const { error: editErr } = await supabase
+      const { error: editErr } = await adminClient
         .from('whatsapp_messages')
         .update({ body, updated_at: new Date().toISOString() })
         .eq('id', message_id)
+        .eq('organization_id', orgId)
 
       if (editErr) throw editErr
 
@@ -196,8 +249,13 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Send via UAZAPI
-    console.log('Sending via UAZAPI - api_url:', instance.api_url, 'instance_name:', instance.instance_name, 'phone:', phone)
+    console.log('[whatsapp-send] sending via UAZAPI', {
+      api_url: instance.api_url,
+      instance_name: instance.instance_name,
+      phone: normalizePhone(phone),
+      message_type,
+    })
+
     const result = await tryUazapiSend(
       instance.api_url,
       instance.api_token,
@@ -208,13 +266,10 @@ Deno.serve(async (req) => {
       media_url
     )
 
-    // Save outbound message
-    const { data: orgId } = await supabase.rpc('get_user_org_id')
-
-    const messageRecord: any = {
+    const messageRecord: Record<string, unknown> = {
       organization_id: orgId,
       instance_id,
-      phone,
+      phone: normalizePhone(phone),
       body: body || '',
       message_type,
       direction: 'outbound',
@@ -225,7 +280,7 @@ Deno.serve(async (req) => {
       payload_raw: result.data,
     }
 
-    const { data: savedMsg, error: saveErr } = await supabase
+    const { data: savedMsg, error: saveErr } = await adminClient
       .from('whatsapp_messages')
       .insert(messageRecord)
       .select()
@@ -239,8 +294,9 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   } catch (err) {
-    console.error('whatsapp-send error:', err)
-    return new Response(JSON.stringify({ error: err.message }), {
+    const message = err instanceof Error ? err.message : String(err)
+    console.error('whatsapp-send error:', message)
+    return new Response(JSON.stringify({ error: message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
