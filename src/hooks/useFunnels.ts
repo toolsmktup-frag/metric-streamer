@@ -114,9 +114,9 @@ export function useUpsertFunnelProducts() {
   return useMutation({
     mutationFn: async ({ funnelId, products }: { funnelId: string; products: Omit<FunnelProduct, 'id' | 'funnel_id'>[] }) => {
       // Delete existing and re-insert (simpler than diff)
-      await supabase.from('funnel_products').delete().eq('funnel_id', funnelId);
+      await (supabase as any).from('funnel_products').delete().eq('funnel_id', funnelId);
       if (products.length === 0) return [];
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('funnel_products')
         .insert(products.map(p => ({ ...p, funnel_id: funnelId })))
         .select();
