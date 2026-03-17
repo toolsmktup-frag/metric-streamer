@@ -20,21 +20,22 @@ Deno.serve(async (req) => {
 
   try {
     const authHeader = req.headers.get('Authorization')
-    if (!authHeader) {
+    if (!authHeader?.startsWith('Bearer ')) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
 
+    const token = authHeader.replace('Bearer ', '')
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_ANON_KEY')!,
       { global: { headers: { Authorization: authHeader } } }
     )
 
-    const { data: { user }, error: userErr } = await supabase.auth.getUser()
-    if (userErr || !user) {
+    const { data: claimsData, error: claimsErr } = await supabase.auth.getClaims(token)
+    if (claimsErr || !claimsData?.claims?.sub) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
