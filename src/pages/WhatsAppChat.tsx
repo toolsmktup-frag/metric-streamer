@@ -56,6 +56,24 @@ function AddInstanceDialog({ onCreated }: { onCreated: () => void }) {
 
       if (error) throw error;
 
+      // Auto-configure webhook for the new instance
+      const { data: instances } = await (supabase as any)
+        .from('whatsapp_instances')
+        .select('id')
+        .eq('organization_id', orgId)
+        .eq('instance_name', name)
+        .single();
+
+      if (instances?.id) {
+        try {
+          await supabase.functions.invoke('whatsapp-instance', {
+            body: { instance_id: instances.id, action: 'set_webhook' },
+          });
+        } catch (e) {
+          console.error('Auto webhook config failed:', e);
+        }
+      }
+
       toast.success('Instância adicionada!');
       setOpen(false);
       setName('');
