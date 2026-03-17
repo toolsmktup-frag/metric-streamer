@@ -111,6 +111,7 @@ export default function WhatsAppChat() {
   const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null);
   const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
   const [showPanel, setShowPanel] = useState(true);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   // Auto-select first instance
   const activeInstance = selectedInstanceId || instances[0]?.id || null;
