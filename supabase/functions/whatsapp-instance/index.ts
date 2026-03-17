@@ -151,7 +151,6 @@ Deno.serve(async (req) => {
               url: webhookUrl,
               enabled: true,
               events: ['messages', 'messages_update', 'connection'],
-              excludeMessages: ['wasSentByApi'],
             }),
           })
           console.log('Webhook auto-configured:', webhookUrl)
