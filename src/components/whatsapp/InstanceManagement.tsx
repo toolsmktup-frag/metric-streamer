@@ -32,40 +32,15 @@ import {
   Check,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 import type { WhatsAppInstance } from '@/hooks/useWhatsApp';
 
-const PROJECT_ID = 'emfbocpmphtftqcezaib';
-const FUNCTIONS_URL = `https://${PROJECT_ID}.supabase.co/functions/v1`;
-
-interface InstanceManagementProps {
-  instance: WhatsAppInstance | null;
-  open: boolean;
-  onClose: () => void;
-  onInstanceDeleted?: () => void;
-}
-
-async function getAuthHeaders() {
-  const { supabase } = await import('@/integrations/supabase/client');
-  const { data: { session } } = await supabase.auth.getSession();
-  return {
-    'Authorization': `Bearer ${session?.access_token}`,
-    'Content-Type': 'application/json',
-    'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVtZmJvY3BtcGh0ZnRxY2V6YWliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI5ODc4ODAsImV4cCI6MjA4ODU2Mzg4MH0.EpE1RwQhmk4C9YFdVjnJXp__cI8LPiic5dMqIMP1g8M',
-  };
-}
-
 async function callInstanceAPI(instanceId: string, action: string, body: any = {}) {
-  const headers = await getAuthHeaders();
-  const res = await fetch(`${FUNCTIONS_URL}/whatsapp-instance`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ instance_id: instanceId, action, ...body }),
+  const { data, error } = await supabase.functions.invoke('whatsapp-instance', {
+    body: { instance_id: instanceId, action, ...body },
   });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || `API error ${res.status}`);
-  }
-  return res.json();
+  if (error) throw new Error(error.message || `API error`);
+  return data;
 }
 
 export default function InstanceManagement({
