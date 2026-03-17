@@ -97,13 +97,27 @@ Deno.serve(async (req) => {
         const profilePicUrl = result?.instance?.profilePicUrl || null
         const phoneNumber = result?.instance?.phone || instance.phone_number
         
+        const finalDisplayName = profileName || instance.display_name
+        const finalProfilePic = profilePicUrl || instance.profile_pic_url
+        const finalPhone = phoneNumber || instance.phone_number
+
         await supabase.from('whatsapp_instances').update({
           status: newStatus,
-          display_name: profileName || instance.display_name,
-          profile_pic_url: profilePicUrl || instance.profile_pic_url,
-          phone_number: phoneNumber || instance.phone_number,
+          display_name: finalDisplayName,
+          profile_pic_url: finalProfilePic,
+          phone_number: finalPhone,
           updated_at: new Date().toISOString(),
         }).eq('id', instanceId)
+        
+        result = {
+          raw: result,
+          processed: {
+            status: newStatus,
+            display_name: finalDisplayName,
+            profile_pic_url: finalProfilePic,
+            phone_number: finalPhone,
+          }
+        }
         
         break
       }
