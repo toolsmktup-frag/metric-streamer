@@ -27,6 +27,7 @@ import FunisConfigurar from "./pages/FunisConfigurar";
 import Ecommerce from "./pages/Ecommerce";
 import LeadCampaigns from "./pages/LeadCampaigns";
 import LeadFunnelDetail from "./pages/LeadFunnelDetail";
+import WhatsAppChat from "./pages/WhatsAppChat";
 
 const queryClient = new QueryClient({
   defaultOptions: {
