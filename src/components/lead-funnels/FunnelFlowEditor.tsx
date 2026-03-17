@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState, useRef } from 'react';
+import React, { useCallback, useMemo, useState, useRef, useEffect } from 'react';
 import {
   ReactFlow,
   Background,
@@ -12,6 +12,8 @@ import {
   Edge,
   ReactFlowProvider,
   useReactFlow,
+  NodeChange,
+  EdgeChange,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { LeadFunnelStage, FunnelSourceNode as SourceNodeType } from '@/types/leadFunnels';
@@ -21,6 +23,7 @@ import ActionNode from './flow/ActionNode';
 import ConversionEdge from './flow/ConversionEdge';
 import FlowToolbar, { DragNodeData } from './flow/FlowToolbar';
 import NodeConfigPanel from './flow/NodeConfigPanel';
+import { toast } from 'sonner';
 
 const nodeTypes = {
   page: PageNode,
@@ -37,8 +40,28 @@ interface FunnelFlowEditorProps {
   sourceNodes: SourceNodeType[];
   leadCounts: Record<string, number>;
   edges: { source_node_id: string; target_node_id: string; source_type: string }[];
-  onSaveNodes?: (nodes: Node[]) => void;
-  onSaveEdges?: (edges: Edge[]) => void;
+  funnelId: string;
+  onAutoSaveNodes?: (nodes: Node[]) => Promise<void>;
+  onAutoSaveEdges?: (edges: Edge[]) => Promise<void>;
+}
+
+function useDebounce(callback: () => void, delay: number) {
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const callbackRef = useRef(callback);
+  callbackRef.current = callback;
+
+  const trigger = useCallback(() => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => callbackRef.current(), delay);
+  }, [delay]);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
+
+  return trigger;
 }
 
 function FlowCanvas({
@@ -46,13 +69,15 @@ function FlowCanvas({
   sourceNodes,
   leadCounts,
   edges: savedEdges,
-  onSaveNodes,
-  onSaveEdges,
+  funnelId,
+  onAutoSaveNodes,
+  onAutoSaveEdges,
 }: FunnelFlowEditorProps) {
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const { screenToFlowPosition } = useReactFlow();
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [configOpen, setConfigOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const initialNodes: Node[] = useMemo(() => {
     const stageNodes: Node[] = stages
@@ -76,7 +101,7 @@ function FlowCanvas({
       id: `source-${sn.id}`,
       type: 'trafficSource',
       position: { x: sn.position_x || 0, y: sn.position_y || i * 120 },
-      data: { label: sn.label, sourceType: sn.source_type },
+      data: { label: sn.label, sourceType: sn.source_type, sourceId: sn.id },
     }));
 
     return [...srcNodes, ...stageNodes];
@@ -97,17 +122,51 @@ function FlowCanvas({
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [flowEdges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
+  // Refs for debounced saves
+  const nodesRef = useRef(nodes);
+  const edgesRef = useRef(flowEdges);
+  nodesRef.current = nodes;
+  edgesRef.current = flowEdges;
+
+  const saveNodes = useCallback(async () => {
+    if (!onAutoSaveNodes) return;
+    setSaving(true);
+    try {
+      await onAutoSaveNodes(nodesRef.current);
+    } catch {
+      toast.error('Erro ao salvar posições');
+    } finally {
+      setSaving(false);
+    }
+  }, [onAutoSaveNodes]);
+
+  const saveEdges = useCallback(async () => {
+    if (!onAutoSaveEdges) return;
+    setSaving(true);
+    try {
+      await onAutoSaveEdges(edgesRef.current);
+    } catch {
+      toast.error('Erro ao salvar conexões');
+    } finally {
+      setSaving(false);
+    }
+  }, [onAutoSaveEdges]);
+
+  const debouncedSaveNodes = useDebounce(saveNodes, 1500);
+  const debouncedSaveEdges = useDebounce(saveEdges, 1500);
+
   const onConnect = useCallback(
     (params: Connection) => {
       setEdges((eds) => addEdge({ ...params, type: 'conversion', animated: true, data: { count: 0 } }, eds));
+      debouncedSaveEdges();
     },
-    [setEdges]
+    [setEdges, debouncedSaveEdges]
   );
 
   // Auto-save on node drag stop
   const onNodeDragStop = useCallback(() => {
-    onSaveNodes?.(nodes);
-  }, [nodes, onSaveNodes]);
+    debouncedSaveNodes();
+  }, [debouncedSaveNodes]);
 
   // Handle node click → open config
   const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
@@ -162,7 +221,8 @@ function FlowCanvas({
     }
 
     setNodes((nds) => [...nds, newNode]);
-  }, [screenToFlowPosition, setNodes]);
+    debouncedSaveNodes();
+  }, [screenToFlowPosition, setNodes, debouncedSaveNodes]);
 
   // Update node data from config panel
   const handleUpdateNode = useCallback((nodeId: string, newData: Record<string, unknown>) => {
@@ -170,16 +230,34 @@ function FlowCanvas({
       nds.map((n) => (n.id === nodeId ? { ...n, data: newData } : n))
     );
     setSelectedNode((prev) => prev && prev.id === nodeId ? { ...prev, data: newData } : prev);
-  }, [setNodes]);
+    debouncedSaveNodes();
+  }, [setNodes, debouncedSaveNodes]);
 
   // Delete node
   const handleDeleteNode = useCallback((nodeId: string) => {
     setNodes((nds) => nds.filter((n) => n.id !== nodeId));
     setEdges((eds) => eds.filter((e) => e.source !== nodeId && e.target !== nodeId));
-  }, [setNodes, setEdges]);
+    debouncedSaveNodes();
+    debouncedSaveEdges();
+  }, [setNodes, setEdges, debouncedSaveNodes, debouncedSaveEdges]);
+
+  // Handle edge deletion
+  const handleEdgesChange = useCallback((changes: EdgeChange[]) => {
+    onEdgesChange(changes);
+    const hasRemoval = changes.some((c) => c.type === 'remove');
+    if (hasRemoval) debouncedSaveEdges();
+  }, [onEdgesChange, debouncedSaveEdges]);
 
   return (
-    <div className="flex h-[600px] border border-border rounded-xl overflow-hidden bg-background">
+    <div className="flex h-[600px] border border-border rounded-xl overflow-hidden bg-background relative">
+      {/* Saving indicator */}
+      {saving && (
+        <div className="absolute top-2 right-2 z-50 bg-card border border-border rounded-full px-3 py-1 flex items-center gap-2 shadow-sm">
+          <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
+          <span className="text-xs text-muted-foreground">Salvando...</span>
+        </div>
+      )}
+
       <FlowToolbar />
 
       <div className="flex-1" ref={reactFlowWrapper}>
@@ -187,7 +265,7 @@ function FlowCanvas({
           nodes={nodes}
           edges={flowEdges}
           onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
+          onEdgesChange={handleEdgesChange}
           onConnect={onConnect}
           onNodeClick={onNodeClick}
           onNodeDragStop={onNodeDragStop}
