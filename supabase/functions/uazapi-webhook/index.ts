@@ -237,7 +237,7 @@ Deno.serve(async (req) => {
         organization_id: orgId,
         instance_id: instanceId,
         phone,
-        body,
+        body: messageBody,
         message_type: messageType,
         direction,
         status,
