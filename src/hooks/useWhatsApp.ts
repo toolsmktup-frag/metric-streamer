@@ -12,6 +12,9 @@ async function getAuthHeaders() {
     'apikey': SUPABASE_ANON_KEY,
   };
 }
+
+export interface WhatsAppInstance {
+  id: string;
   organization_id: string;
   instance_name: string;
   phone_number: string | null;
