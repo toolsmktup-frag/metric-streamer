@@ -29,7 +29,7 @@ export function useUpsertCACOverride() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (override: { campaign_id: string; campaign_name: string; product_key: string }) => {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('cac_campaign_overrides')
         .upsert(override, { onConflict: 'campaign_id' });
       if (error) throw error;
