@@ -42,7 +42,7 @@ export function useDeleteCACOverride() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (campaign_id: string) => {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('cac_campaign_overrides')
         .delete()
         .eq('campaign_id', campaign_id);

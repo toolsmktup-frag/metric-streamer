@@ -89,7 +89,7 @@ async function fetchAllPurchases(): Promise<NormalizedRow[]> {
   const pageSize = 1000;
 
   while (true) {
-    const { data, error } = await supabase
+    const { data, error } = await (supabase as any)
       .rpc('fn_customer_journeys')
       .range(from, from + pageSize - 1);
     if (error || !data || data.length === 0) break;

@@ -154,7 +154,7 @@ export function usePrevPeriodAllSales(funnelId?: string | null) {
   return useQuery({
     queryKey: ['all-sales-prev', dateFrom, dateTo, funnelId ?? 'all'],
     queryFn: async () => {
-      let query = supabase
+      let query = (supabase as any)
         .from('v_all_sales')
         .select('*')
         .gte('purchased_at', `${dateFrom}T00:00:00`)
