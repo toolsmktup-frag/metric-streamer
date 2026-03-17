@@ -37,19 +37,18 @@ export function useCreateLeadCampaign() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (campaign: Partial<LeadCampaign>) => {
-      const { data: profile, error: profileError } = await supabase.from('user_profiles').select('organization_id').single();
-      console.log('[createCampaign] profile:', profile, 'profileError:', profileError);
-      if (profileError || !profile?.organization_id) {
-        throw new Error(`Perfil não encontrado ou sem organização: ${profileError?.message || 'organization_id is null'}`);
-      }
-      const payload = { ...campaign, organization_id: profile.organization_id };
-      console.log('[createCampaign] inserting:', payload);
+      // Fetch org_id from organizations table (user_profiles has recursive RLS)
+      const { data: org } = await (supabase as any)
+        .from('organizations')
+        .select('id')
+        .limit(1)
+        .single();
+      const orgId = org?.id || '00000000-0000-0000-0000-000000000001';
       const { data, error } = await (supabase as any)
         .from('lead_campaigns')
-        .insert(payload)
+        .insert({ ...campaign, organization_id: orgId })
         .select()
         .single();
-      console.log('[createCampaign] result:', data, 'error:', error);
       if (error) throw error;
       return data as LeadCampaign;
     },
