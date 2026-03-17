@@ -4,13 +4,14 @@ import { useLeadFunnel, useUpsertStages, useUpsertTransitionRules, useFunnelSour
 import { useLeadsByFunnel, useFunnelLeadCounts } from '@/hooks/useLeads';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Upload } from 'lucide-react';
 import KanbanBoard from '@/components/lead-funnels/KanbanBoard';
 import FunnelVisual from '@/components/lead-funnels/FunnelVisual';
 import FunnelConfigTab from '@/components/lead-funnels/FunnelConfigTab';
 import WebhookConfig from '@/components/lead-funnels/WebhookConfig';
 import FunnelFlowEditor from '@/components/lead-funnels/FunnelFlowEditor';
 import LeadTimeline from '@/components/lead-funnels/LeadTimeline';
+import ImportLeadsDialog from '@/components/lead-funnels/ImportLeadsDialog';
 import { Lead } from '@/types/leadFunnels';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -31,6 +32,7 @@ const LeadFunnelDetail: React.FC = () => {
 
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [timelineOpen, setTimelineOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   const handleLeadClick = (leadId: string) => {
     const pos = positions.find(p => p.lead_id === leadId);
@@ -113,6 +115,12 @@ const LeadFunnelDetail: React.FC = () => {
         {!funnel.is_active && (
           <span className="text-xs bg-destructive/10 text-destructive px-2 py-1 rounded">Inativo</span>
         )}
+        <div className="ml-auto">
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setImportOpen(true)}>
+            <Upload className="h-4 w-4" />
+            Importar Leads
+          </Button>
+        </div>
       </div>
 
       {funnel.description && (
@@ -190,6 +198,14 @@ const LeadFunnelDetail: React.FC = () => {
         lead={selectedLead}
         open={timelineOpen}
         onClose={() => setTimelineOpen(false)}
+      />
+
+      <ImportLeadsDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        stages={stages}
+        funnelId={funnel.id}
+        organizationId={funnel.organization_id}
       />
     </div>
   );
