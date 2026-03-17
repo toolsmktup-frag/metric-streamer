@@ -1,11 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import type { LeadFunnel, LeadFunnelStage, StageTransitionRule } from '@/types/leadFunnels';
+import type { LeadFunnel, LeadFunnelStage, StageTransitionRule, FunnelSourceNode, FunnelEdge } from '@/types/leadFunnels';
 
 async function fetchOrgId(): Promise<string> {
   const { data, error } = await (supabase as any).rpc('get_user_org_id');
   if (error) throw new Error(`Falha ao obter organização: ${error.message}`);
-  if (!data) throw new Error('Seu perfil não está vinculado a uma organização. Peça ao administrador para vincular seu usuário.');
+  if (!data) throw new Error('Seu perfil não está vinculado a uma organização.');
   return data as string;
 }
 
@@ -17,9 +17,7 @@ export function useLeadFunnels(campaignId?: string | null) {
         .from('lead_funnels')
         .select('*, lead_funnel_stages(*), stage_transition_rules(*)')
         .order('sort_order', { ascending: true });
-
       if (campaignId) query = query.eq('campaign_id', campaignId);
-
       const { data, error } = await query;
       if (error) throw error;
       return (data || []) as LeadFunnel[];
@@ -132,6 +130,78 @@ export function useUpsertTransitionRules() {
     },
     onSuccess: (_, { funnelId }) => {
       qc.invalidateQueries({ queryKey: ['lead-funnel', funnelId] });
+    },
+  });
+}
+
+// Source Nodes
+export function useFunnelSourceNodes(funnelId: string | null) {
+  return useQuery({
+    queryKey: ['funnel-source-nodes', funnelId],
+    queryFn: async () => {
+      if (!funnelId) return [];
+      const { data, error } = await (supabase as any)
+        .from('funnel_source_nodes')
+        .select('*')
+        .eq('funnel_id', funnelId);
+      if (error) throw error;
+      return (data || []) as FunnelSourceNode[];
+    },
+    enabled: !!funnelId,
+  });
+}
+
+export function useSaveFunnelSourceNodes() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ funnelId, nodes }: { funnelId: string; nodes: Partial<FunnelSourceNode>[] }) => {
+      await (supabase as any).from('funnel_source_nodes').delete().eq('funnel_id', funnelId);
+      if (nodes.length === 0) return [];
+      const { data, error } = await (supabase as any)
+        .from('funnel_source_nodes')
+        .insert(nodes.map(n => ({ ...n, funnel_id: funnelId })))
+        .select();
+      if (error) throw error;
+      return data as FunnelSourceNode[];
+    },
+    onSuccess: (_, { funnelId }) => {
+      qc.invalidateQueries({ queryKey: ['funnel-source-nodes', funnelId] });
+    },
+  });
+}
+
+// Funnel Edges
+export function useFunnelEdges(funnelId: string | null) {
+  return useQuery({
+    queryKey: ['funnel-edges', funnelId],
+    queryFn: async () => {
+      if (!funnelId) return [];
+      const { data, error } = await (supabase as any)
+        .from('funnel_edges')
+        .select('*')
+        .eq('funnel_id', funnelId);
+      if (error) throw error;
+      return (data || []) as FunnelEdge[];
+    },
+    enabled: !!funnelId,
+  });
+}
+
+export function useSaveFunnelEdges() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ funnelId, edges }: { funnelId: string; edges: Partial<FunnelEdge>[] }) => {
+      await (supabase as any).from('funnel_edges').delete().eq('funnel_id', funnelId);
+      if (edges.length === 0) return [];
+      const { data, error } = await (supabase as any)
+        .from('funnel_edges')
+        .insert(edges.map(e => ({ ...e, funnel_id: funnelId })))
+        .select();
+      if (error) throw error;
+      return data as FunnelEdge[];
+    },
+    onSuccess: (_, { funnelId }) => {
+      qc.invalidateQueries({ queryKey: ['funnel-edges', funnelId] });
     },
   });
 }

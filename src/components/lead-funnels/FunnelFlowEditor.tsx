@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo, useState, useRef } from 'react';
 import {
   ReactFlow,
   Background,
@@ -10,57 +10,26 @@ import {
   Connection,
   Node,
   Edge,
-  Handle,
-  Position,
+  ReactFlowProvider,
+  useReactFlow,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { LeadFunnelStage, FunnelSourceNode as SourceNodeType } from '@/types/leadFunnels';
-
-// Custom Stage Node
-function StageNode({ data }: { data: { label: string; color: string; count: number } }) {
-  return (
-    <div
-      className="rounded-lg border-2 bg-card px-4 py-3 min-w-[160px] shadow-sm"
-      style={{ borderColor: data.color }}
-    >
-      <Handle type="target" position={Position.Left} className="!bg-primary" />
-      <div className="flex items-center gap-2">
-        <span className="h-3 w-3 rounded-full" style={{ backgroundColor: data.color }} />
-        <span className="text-sm font-medium text-foreground">{data.label}</span>
-      </div>
-      <p className="text-lg font-bold text-foreground mt-1">{data.count}</p>
-      <Handle type="source" position={Position.Right} className="!bg-primary" />
-    </div>
-  );
-}
-
-// Custom Traffic Source Node
-function TrafficSourceNode({ data }: { data: { label: string; sourceType: string } }) {
-  const icons: Record<string, string> = {
-    instagram: '📸',
-    facebook: '👤',
-    google: '🔍',
-    whatsapp: '💬',
-    youtube: '▶️',
-    tiktok: '🎵',
-    email: '📧',
-    other: '🌐',
-  };
-
-  return (
-    <div className="rounded-lg border border-border bg-accent/50 px-4 py-3 min-w-[140px] shadow-sm">
-      <div className="flex items-center gap-2">
-        <span className="text-lg">{icons[data.sourceType] || icons.other}</span>
-        <span className="text-sm font-medium text-foreground">{data.label}</span>
-      </div>
-      <Handle type="source" position={Position.Right} className="!bg-primary" />
-    </div>
-  );
-}
+import PageNode from './flow/PageNode';
+import SourceNode from './flow/SourceNode';
+import ActionNode from './flow/ActionNode';
+import ConversionEdge from './flow/ConversionEdge';
+import FlowToolbar, { DragNodeData } from './flow/FlowToolbar';
+import NodeConfigPanel from './flow/NodeConfigPanel';
 
 const nodeTypes = {
-  stage: StageNode,
-  trafficSource: TrafficSourceNode,
+  page: PageNode,
+  trafficSource: SourceNode,
+  action: ActionNode,
+};
+
+const edgeTypes = {
+  conversion: ConversionEdge,
 };
 
 interface FunnelFlowEditorProps {
@@ -68,29 +37,45 @@ interface FunnelFlowEditorProps {
   sourceNodes: SourceNodeType[];
   leadCounts: Record<string, number>;
   edges: { source_node_id: string; target_node_id: string; source_type: string }[];
-  onSave?: (nodes: { id: string; x: number; y: number }[], edges: { source: string; target: string }[]) => void;
+  onSaveNodes?: (nodes: Node[]) => void;
+  onSaveEdges?: (edges: Edge[]) => void;
 }
 
-const FunnelFlowEditor: React.FC<FunnelFlowEditorProps> = ({
+function FlowCanvas({
   stages,
   sourceNodes,
   leadCounts,
   edges: savedEdges,
-}) => {
+  onSaveNodes,
+  onSaveEdges,
+}: FunnelFlowEditorProps) {
+  const reactFlowWrapper = useRef<HTMLDivElement>(null);
+  const { screenToFlowPosition } = useReactFlow();
+  const [selectedNode, setSelectedNode] = useState<Node | null>(null);
+  const [configOpen, setConfigOpen] = useState(false);
+
   const initialNodes: Node[] = useMemo(() => {
     const stageNodes: Node[] = stages
       .sort((a, b) => a.sort_order - b.sort_order)
       .map((s, i) => ({
         id: `stage-${s.id}`,
-        type: 'stage',
-        position: { x: s.position_x || 300, y: s.position_y || i * 120 },
-        data: { label: s.name, color: s.color, count: leadCounts[s.id] || 0 },
+        type: 'page',
+        position: { x: s.position_x || 350, y: s.position_y || i * 160 },
+        data: {
+          label: s.name,
+          color: s.color,
+          count: leadCounts[s.id] || 0,
+          pageType: (s as any).page_type || 'content',
+          pageUrl: s.page_url || '',
+          thumbnailUrl: s.thumbnail_url || '',
+          stageId: s.id,
+        },
       }));
 
     const srcNodes: Node[] = sourceNodes.map((sn, i) => ({
       id: `source-${sn.id}`,
       type: 'trafficSource',
-      position: { x: sn.position_x || 0, y: sn.position_y || i * 100 },
+      position: { x: sn.position_x || 0, y: sn.position_y || i * 120 },
       data: { label: sn.label, sourceType: sn.source_type },
     }));
 
@@ -102,40 +87,148 @@ const FunnelFlowEditor: React.FC<FunnelFlowEditorProps> = ({
       id: `edge-${i}`,
       source: e.source_type === 'source' ? `source-${e.source_node_id}` : `stage-${e.source_node_id}`,
       target: `stage-${e.target_node_id}`,
+      type: 'conversion',
       animated: true,
-      style: { stroke: 'hsl(var(--primary))' },
+      data: { count: 0 },
     })),
     [savedEdges]
   );
 
-  const [nodes, , onNodesChange] = useNodesState(initialNodes);
+  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [flowEdges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
   const onConnect = useCallback(
-    (params: Connection) => setEdges((eds) => addEdge({ ...params, animated: true, style: { stroke: 'hsl(var(--primary))' } }, eds)),
+    (params: Connection) => {
+      setEdges((eds) => addEdge({ ...params, type: 'conversion', animated: true, data: { count: 0 } }, eds));
+    },
     [setEdges]
   );
 
+  // Auto-save on node drag stop
+  const onNodeDragStop = useCallback(() => {
+    onSaveNodes?.(nodes);
+  }, [nodes, onSaveNodes]);
+
+  // Handle node click → open config
+  const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
+    setSelectedNode(node);
+    setConfigOpen(true);
+  }, []);
+
+  // Drop from toolbar
+  const onDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  }, []);
+
+  const onDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    const raw = e.dataTransfer.getData('application/reactflow');
+    if (!raw) return;
+
+    const dragData: DragNodeData = JSON.parse(raw);
+    const position = screenToFlowPosition({ x: e.clientX, y: e.clientY });
+    const newId = `${dragData.nodeType}-${Date.now()}`;
+
+    let newNode: Node;
+
+    if (dragData.nodeType === 'source') {
+      newNode = {
+        id: newId,
+        type: 'trafficSource',
+        position,
+        data: { label: dragData.label, sourceType: dragData.sourceType || 'other', count: 0 },
+      };
+    } else if (dragData.nodeType === 'page') {
+      newNode = {
+        id: newId,
+        type: 'page',
+        position,
+        data: {
+          label: dragData.label,
+          pageType: dragData.pageType || 'content',
+          color: '#3b82f6',
+          count: 0,
+          pageUrl: '',
+        },
+      };
+    } else {
+      newNode = {
+        id: newId,
+        type: 'action',
+        position,
+        data: { label: dragData.label, actionType: dragData.actionType || 'delay' },
+      };
+    }
+
+    setNodes((nds) => [...nds, newNode]);
+  }, [screenToFlowPosition, setNodes]);
+
+  // Update node data from config panel
+  const handleUpdateNode = useCallback((nodeId: string, newData: Record<string, unknown>) => {
+    setNodes((nds) =>
+      nds.map((n) => (n.id === nodeId ? { ...n, data: newData } : n))
+    );
+    setSelectedNode((prev) => prev && prev.id === nodeId ? { ...prev, data: newData } : prev);
+  }, [setNodes]);
+
+  // Delete node
+  const handleDeleteNode = useCallback((nodeId: string) => {
+    setNodes((nds) => nds.filter((n) => n.id !== nodeId));
+    setEdges((eds) => eds.filter((e) => e.source !== nodeId && e.target !== nodeId));
+  }, [setNodes, setEdges]);
+
   return (
-    <div className="h-[500px] border border-border rounded-xl overflow-hidden bg-background">
-      <ReactFlow
-        nodes={nodes}
-        edges={flowEdges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onConnect={onConnect}
-        nodeTypes={nodeTypes}
-        fitView
-        proOptions={{ hideAttribution: true }}
-      >
-        <Background color="hsl(var(--border))" gap={20} />
-        <Controls className="!bg-card !border-border" />
-        <MiniMap
-          className="!bg-muted"
-          nodeColor={(n) => n.type === 'stage' ? (n.data as any).color : 'hsl(var(--accent))'}
-        />
-      </ReactFlow>
+    <div className="flex h-[600px] border border-border rounded-xl overflow-hidden bg-background">
+      <FlowToolbar />
+
+      <div className="flex-1" ref={reactFlowWrapper}>
+        <ReactFlow
+          nodes={nodes}
+          edges={flowEdges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onConnect={onConnect}
+          onNodeClick={onNodeClick}
+          onNodeDragStop={onNodeDragStop}
+          onDragOver={onDragOver}
+          onDrop={onDrop}
+          nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
+          defaultEdgeOptions={{ type: 'conversion', animated: true }}
+          fitView
+          proOptions={{ hideAttribution: true }}
+          className="bg-background"
+        >
+          <Background color="hsl(var(--border))" gap={20} />
+          <Controls className="!bg-card !border-border [&>button]:!bg-card [&>button]:!border-border [&>button]:!text-foreground" />
+          <MiniMap
+            className="!bg-muted !border-border"
+            nodeColor={(n) => {
+              if (n.type === 'page') return (n.data as any).color || '#3b82f6';
+              if (n.type === 'trafficSource') return '#10b981';
+              return '#6366f1';
+            }}
+          />
+        </ReactFlow>
+      </div>
+
+      <NodeConfigPanel
+        node={selectedNode}
+        open={configOpen}
+        onClose={() => setConfigOpen(false)}
+        onUpdate={handleUpdateNode}
+        onDelete={handleDeleteNode}
+      />
     </div>
+  );
+}
+
+const FunnelFlowEditor: React.FC<FunnelFlowEditorProps> = (props) => {
+  return (
+    <ReactFlowProvider>
+      <FlowCanvas {...props} />
+    </ReactFlowProvider>
   );
 };
 
