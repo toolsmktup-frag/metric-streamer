@@ -1,6 +1,18 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
+const SUPABASE_URL = 'https://emfbocpmphtftqcezaib.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVtZmJvY3BtcGh0ZnRxY2V6YWliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI5ODc4ODAsImV4cCI6MjA4ODU2Mzg4MH0.EpE1RwQhmk4C9YFdVjnJXp__cI8LPiic5dMqIMP1g8M';
+
+async function getAuthHeaders() {
+  const { data: { session } } = await supabase.auth.getSession();
+  return {
+    'Authorization': `Bearer ${session?.access_token}`,
+    'Content-Type': 'application/json',
+    'apikey': SUPABASE_ANON_KEY,
+  };
+}
+
 export interface WhatsAppInstance {
   id: string;
   organization_id: string;
@@ -43,18 +55,6 @@ export interface ChatSummary {
   contact_picture?: string | null;
 }
 
-const PROJECT_ID = 'emfbocpmphtftqcezaib';
-const FUNCTIONS_URL = `https://${PROJECT_ID}.supabase.co/functions/v1`;
-
-async function getAuthHeaders() {
-  const { data: { session } } = await supabase.auth.getSession();
-  return {
-    'Authorization': `Bearer ${session?.access_token}`,
-    'Content-Type': 'application/json',
-    'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVtZmJvY3BtcGh0ZnRxY2V6YWliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI5ODc4ODAsImV4cCI6MjA4ODU2Mzg4MH0.EpE1RwQhmk4C9YFdVjnJXp__cI8LPiic5dMqIMP1g8M',
-  };
-}
-
 export function useWhatsAppInstances() {
   const [instances, setInstances] = useState<WhatsAppInstance[]>([]);
   const [loading, setLoading] = useState(true);
@@ -76,35 +76,42 @@ export function useWhatsAppInstances() {
   useEffect(() => {
     if (instances.length === 0) return;
     const validateStatuses = async () => {
-      const headers = await getAuthHeaders();
       for (const inst of instances) {
         try {
-          const res = await fetch(`${FUNCTIONS_URL}/whatsapp-instance`, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify({ instance_id: inst.id, action: 'status' }),
+          const { data, error } = await supabase.functions.invoke('whatsapp-instance', {
+            body: { instance_id: inst.id, action: 'status' },
           });
-          if (res.ok) {
-            const data = await res.json();
-            const processed = data?.processed;
-            if (processed) {
-              setInstances(prev => prev.map(i => 
-                i.id === inst.id 
-                  ? { 
-                      ...i, 
-                      status: processed.status || i.status,
-                      display_name: processed.display_name || i.display_name,
-                      profile_pic_url: processed.profile_pic_url || i.profile_pic_url,
-                    } 
-                  : i
-              ));
-            }
+          if (error) {
+            console.error('Status validation error for', inst.id, error);
+            // On failure, mark as unverified/disconnected
+            setInstances(prev => prev.map(i =>
+              i.id === inst.id ? { ...i, status: 'disconnected' } : i
+            ));
+            continue;
           }
-        } catch {}
+          const processed = data?.processed;
+          if (processed) {
+            setInstances(prev => prev.map(i =>
+              i.id === inst.id
+                ? {
+                    ...i,
+                    status: processed.status || i.status,
+                    display_name: processed.display_name || i.display_name,
+                    profile_pic_url: processed.profile_pic_url || i.profile_pic_url,
+                  }
+                : i
+            ));
+          }
+        } catch {
+          // On network failure, mark as disconnected
+          setInstances(prev => prev.map(i =>
+            i.id === inst.id ? { ...i, status: 'disconnected' } : i
+          ));
+        }
       }
     };
     validateStatuses();
-  }, [instances.length]); // Only run once when instances first load
+  }, [instances.length]);
 
   return { instances, loading, refetch: fetchInstances };
 }
@@ -121,7 +128,7 @@ export function useWhatsAppChats(instanceId: string | null) {
     try {
       const headers = await getAuthHeaders();
       const res = await fetch(
-        `${FUNCTIONS_URL}/whatsapp-chats?action=list_chats&instance_id=${instanceId}`,
+        `${SUPABASE_URL}/functions/v1/whatsapp-chats?action=list_chats&instance_id=${instanceId}`,
         { headers }
       );
       if (res.ok) {
@@ -154,7 +161,7 @@ export function useWhatsAppMessages(instanceId: string | null, phone: string | n
     try {
       const headers = await getAuthHeaders();
       const res = await fetch(
-        `${FUNCTIONS_URL}/whatsapp-chats?action=messages&instance_id=${instanceId}&phone=${encodeURIComponent(phone)}`,
+        `${SUPABASE_URL}/functions/v1/whatsapp-chats?action=messages&instance_id=${instanceId}&phone=${encodeURIComponent(phone)}`,
         { headers }
       );
       if (res.ok) {
@@ -191,7 +198,6 @@ export function useWhatsAppMessages(instanceId: string | null, phone: string | n
         (payload) => {
           if (payload.eventType === 'INSERT') {
             setMessages(prev => {
-              // Deduplicate
               const exists = prev.some(
                 m => m.id === (payload.new as any).id ||
                   (m.message_id_external && m.message_id_external === (payload.new as any).message_id_external)
@@ -224,34 +230,29 @@ export async function sendWhatsAppMessage(params: {
   action?: 'send' | 'edit' | 'delete';
   message_id?: string;
 }) {
-  const headers = await getAuthHeaders();
-  const res = await fetch(`${FUNCTIONS_URL}/whatsapp-send`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(params),
+  const { data, error } = await supabase.functions.invoke('whatsapp-send', {
+    body: params,
   });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || 'Failed to send');
-  }
-  return res.json();
+  if (error) throw new Error(error.message || 'Failed to send');
+  return data;
 }
 
 export async function sendPresence(instanceId: string, phone: string) {
-  const headers = await getAuthHeaders();
-  await fetch(`${FUNCTIONS_URL}/whatsapp-presence`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ instance_id: instanceId, phone }),
+  await supabase.functions.invoke('whatsapp-presence', {
+    body: { instance_id: instanceId, phone },
   }).catch(() => {}); // Best effort
 }
 
 export async function fetchContactInfo(instanceId: string, phone: string) {
-  const headers = await getAuthHeaders();
-  const res = await fetch(
-    `${FUNCTIONS_URL}/whatsapp-contact-info?instance_id=${instanceId}&phone=${encodeURIComponent(phone)}`,
-    { headers }
-  );
-  if (!res.ok) return { name: null, picture: null };
-  return res.json();
+  try {
+    const headers = await getAuthHeaders();
+    const res = await fetch(
+      `${SUPABASE_URL}/functions/v1/whatsapp-contact-info?instance_id=${instanceId}&phone=${encodeURIComponent(phone)}`,
+      { headers }
+    );
+    if (!res.ok) return { name: null, picture: null };
+    return res.json();
+  } catch {
+    return { name: null, picture: null };
+  }
 }
