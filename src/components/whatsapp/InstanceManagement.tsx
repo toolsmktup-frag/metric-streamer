@@ -147,11 +147,11 @@ export default function InstanceManagement({
       if (connectPhone.trim()) body.phone = connectPhone.trim();
       const data = await callInstanceAPI(instance.id, 'connect', body);
       
-      if (data?.instance?.paircode) {
-        setPairCode(data.instance.paircode);
+      if (data?.raw?.instance?.paircode) {
+        setPairCode(data.raw.instance.paircode);
       }
-      if (data?.instance?.qrcode) {
-        setQrCode(data.instance.qrcode);
+      if (data?.raw?.instance?.qrcode) {
+        setQrCode(data.raw.instance.qrcode);
       }
       setStatusData(data);
       toast.info(connectPhone.trim()
