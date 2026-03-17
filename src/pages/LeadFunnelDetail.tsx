@@ -199,6 +199,14 @@ const LeadFunnelDetail: React.FC = () => {
         open={timelineOpen}
         onClose={() => setTimelineOpen(false)}
       />
+
+      <ImportLeadsDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        stages={stages}
+        funnelId={funnel.id}
+        organizationId={funnel.organization_id}
+      />
     </div>
   );
 };
