@@ -45,7 +45,7 @@ export function useFunnel(id: string | null) {
     queryKey: ['funnel', id],
     queryFn: async () => {
       if (!id) return null;
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('funnels')
         .select('*, funnel_products(*)')
         .eq('id', id)
