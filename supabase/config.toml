@@ -11,3 +11,18 @@ verify_jwt = false
 
 [functions.webhook-lead]
 verify_jwt = false
+
+[functions.whatsapp-chats]
+verify_jwt = false
+
+[functions.whatsapp-send]
+verify_jwt = false
+
+[functions.whatsapp-contact-info]
+verify_jwt = false
+
+[functions.whatsapp-presence]
+verify_jwt = false
+
+[functions.uazapi-webhook]
+verify_jwt = false

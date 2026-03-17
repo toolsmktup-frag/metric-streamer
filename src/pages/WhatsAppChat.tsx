@@ -124,8 +124,17 @@ export default function WhatsAppChat() {
     [chats, selectedPhone]
   );
 
+  const wrapWithSidebar = (content: React.ReactNode) => (
+    <div className="flex min-h-screen w-full bg-background">
+      <AppSidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} />
+      <div className="flex-1 flex flex-col min-w-0 h-screen">
+        {content}
+      </div>
+    </div>
+  );
+
   if (loadingInstances) {
-    return (
+    return wrapWithSidebar(
       <div className="flex items-center justify-center h-full text-muted-foreground">
         Carregando...
       </div>
@@ -133,7 +142,7 @@ export default function WhatsAppChat() {
   }
 
   if (instances.length === 0) {
-    return (
+    return wrapWithSidebar(
       <div className="flex flex-col items-center justify-center h-full gap-4 text-center">
         <MessageCircle className="h-12 w-12 text-muted-foreground" />
         <div>
@@ -147,8 +156,8 @@ export default function WhatsAppChat() {
     );
   }
 
-  return (
-    <div className="flex flex-col h-full">
+  return wrapWithSidebar(
+    <>
       {/* Top bar */}
       <div className="h-12 border-b border-border bg-card flex items-center justify-between px-3 shrink-0">
         <div className="flex items-center gap-2">
@@ -216,6 +225,6 @@ export default function WhatsAppChat() {
           </div>
         )}
       </div>
-    </div>
+    </>
   );
 }
