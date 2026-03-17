@@ -29,24 +29,14 @@ function buildHeaders(apiToken: string) {
   }
 }
 
-function buildChatId(phone: string) {
-  if (phone.includes('@')) return phone
-  return `${normalizePhone(phone)}@s.whatsapp.net`
-}
-
-function buildRecipientCandidates(phone: string) {
-  const cleanPhone = normalizePhone(phone)
-  const chatId = buildChatId(phone)
-  return [...new Set([cleanPhone, chatId].filter(Boolean))]
-}
-
 function mapMediaType(messageType: string) {
   if (messageType === 'audio') return 'ptt'
   return messageType
 }
 
-function isSuccessfulResponse(res: Response, data: any) {
-  return res.ok && !data?.error && data?.success !== false
+function isSuccessfulResponse(res: Response, _data: any) {
+  // Accept any 2xx HTTP status as success — UAZAPI may include warning fields in body
+  return res.ok
 }
 
 async function parseResponse(res: Response) {
