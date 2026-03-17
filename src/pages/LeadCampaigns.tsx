@@ -33,8 +33,8 @@ const LeadCampaignsPage: React.FC = () => {
       toast.success('Campanha criada!');
       setShowNewCampaign(false);
       setNewName('');
-    } catch {
-      toast.error('Erro ao criar campanha');
+    } catch (err: any) {
+      toast.error(err?.message || 'Erro ao criar campanha');
     }
   };
 
@@ -50,8 +50,8 @@ const LeadCampaignsPage: React.FC = () => {
       setShowNewFunnel(false);
       setNewName('');
       navigate(`/lead-funnels/${funnel.id}`);
-    } catch {
-      toast.error('Erro ao criar funil');
+    } catch (err: any) {
+      toast.error(err?.message || 'Erro ao criar funil');
     }
   };
 

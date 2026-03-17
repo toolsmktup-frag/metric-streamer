@@ -2,6 +2,13 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { LeadFunnel, LeadFunnelStage, StageTransitionRule } from '@/types/leadFunnels';
 
+async function fetchOrgId(): Promise<string> {
+  const { data, error } = await (supabase as any).rpc('get_user_org_id');
+  if (error) throw new Error(`Falha ao obter organização: ${error.message}`);
+  if (!data) throw new Error('Usuário não está vinculado a nenhuma organização');
+  return data as string;
+}
+
 export function useLeadFunnels(campaignId?: string | null) {
   return useQuery({
     queryKey: ['lead-funnels', campaignId],
@@ -41,12 +48,7 @@ export function useCreateLeadFunnel() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (funnel: Partial<LeadFunnel>) => {
-      const { data: org } = await (supabase as any)
-        .from('organizations')
-        .select('id')
-        .limit(1)
-        .single();
-      const orgId = org?.id || '00000000-0000-0000-0000-000000000001';
+      const orgId = await fetchOrgId();
       const { data, error } = await (supabase as any)
         .from('lead_funnels')
         .insert({ ...funnel, organization_id: orgId })
@@ -98,7 +100,6 @@ export function useUpsertStages() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ funnelId, stages }: { funnelId: string; stages: Partial<LeadFunnelStage>[] }) => {
-      // Delete old stages and re-insert
       await (supabase as any).from('lead_funnel_stages').delete().eq('funnel_id', funnelId);
       if (stages.length === 0) return [];
       const { data, error } = await (supabase as any)
