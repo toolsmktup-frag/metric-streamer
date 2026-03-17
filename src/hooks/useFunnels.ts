@@ -63,7 +63,7 @@ export function useCreateFunnel() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (funnel: Partial<Funnel>) => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('funnels')
         .insert(funnel)
         .select()
