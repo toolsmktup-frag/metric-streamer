@@ -43,6 +43,13 @@ async function callInstanceAPI(instanceId: string, action: string, body: any = {
   return data;
 }
 
+interface InstanceManagementProps {
+  instance: WhatsAppInstance | null;
+  open: boolean;
+  onClose: () => void;
+  onInstanceDeleted?: () => void;
+}
+
 export default function InstanceManagement({
   instance,
   open,
