@@ -258,7 +258,7 @@ export default function WhatsAppChat() {
         instance={instances.find(i => i.id === activeInstance) || null}
         open={instanceMgmtOpen}
         onClose={() => setInstanceMgmtOpen(false)}
-        onInstanceDeleted={() => window.location.reload()}
+        onInstanceDeleted={() => refetchInstances()}
       />
     </>
   );
