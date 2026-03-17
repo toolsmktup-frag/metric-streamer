@@ -79,7 +79,7 @@ export function useUpdateFunnel() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, ...updates }: Partial<Funnel> & { id: string }) => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('funnels')
         .update({ ...updates, updated_at: new Date().toISOString() })
         .eq('id', id)
