@@ -292,10 +292,9 @@ export default function InstanceManagement({
               </Badge>
             </div>
 
-            {statusData?.instance?.profileName && (
+            {statusData?.processed?.display_name && (
               <p className="text-xs text-muted-foreground">
-                Perfil: {statusData.instance.profileName}
-                {statusData.instance.isBusiness && ' (Business)'}
+                Perfil: {statusData.processed.display_name}
               </p>
             )}
 
