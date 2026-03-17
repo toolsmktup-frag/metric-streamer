@@ -44,12 +44,10 @@ const Protected = ({ children }: { children: React.ReactNode }) => (
   </ProtectedRoute>
 );
 
-// WhatsApp uses fullscreen layout (no DateRangePicker header)
+// WhatsApp uses its own layout with sidebar but no DateRangePicker header
 const ProtectedFullscreen = ({ children }: { children: React.ReactNode }) => (
   <ProtectedRoute>
-    <div className="flex min-h-screen w-full bg-background">
-      {children}
-    </div>
+    {children}
   </ProtectedRoute>
 );
 
