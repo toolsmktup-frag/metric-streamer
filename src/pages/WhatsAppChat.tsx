@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { MessageCircle, Settings, Plus } from 'lucide-react';
 import { useWhatsAppInstances, useWhatsAppChats, useWhatsAppMessages } from '@/hooks/useWhatsApp';
+import InstanceManagement from '@/components/whatsapp/InstanceManagement';
 import ChatList from '@/components/whatsapp/ChatList';
 import ChatThread from '@/components/whatsapp/ChatThread';
 import ChatInput from '@/components/whatsapp/ChatInput';
@@ -112,7 +113,7 @@ export default function WhatsAppChat() {
   const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
   const [showPanel, setShowPanel] = useState(true);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-
+  const [instanceMgmtOpen, setInstanceMgmtOpen] = useState(false);
   // Auto-select first instance
   const activeInstance = selectedInstanceId || instances[0]?.id || null;
 
@@ -184,7 +185,8 @@ export default function WhatsAppChat() {
             variant="ghost"
             size="icon"
             className="h-7 w-7"
-            onClick={() => setShowPanel(!showPanel)}
+            onClick={() => setInstanceMgmtOpen(true)}
+            title="Gerenciar Instância"
           >
             <Settings className="h-3.5 w-3.5" />
           </Button>
@@ -225,6 +227,13 @@ export default function WhatsAppChat() {
           </div>
         )}
       </div>
+
+      <InstanceManagement
+        instance={instances.find(i => i.id === activeInstance) || null}
+        open={instanceMgmtOpen}
+        onClose={() => setInstanceMgmtOpen(false)}
+        onInstanceDeleted={() => window.location.reload()}
+      />
     </>
   );
 }
