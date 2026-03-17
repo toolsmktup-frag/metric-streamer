@@ -27,7 +27,7 @@ export function useFunnels() {
   return useQuery({
     queryKey: ['funnels'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('funnels')
         .select('*, funnel_products(*)')
         .eq('is_active', true)
