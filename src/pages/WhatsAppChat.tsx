@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { MessageCircle, Settings, Plus } from 'lucide-react';
 import { useWhatsAppInstances, useWhatsAppChats, useWhatsAppMessages } from '@/hooks/useWhatsApp';
+import InstanceManagement from '@/components/whatsapp/InstanceManagement';
 import ChatList from '@/components/whatsapp/ChatList';
 import ChatThread from '@/components/whatsapp/ChatThread';
 import ChatInput from '@/components/whatsapp/ChatInput';
