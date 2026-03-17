@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { MessageCircle, Settings, Plus } from 'lucide-react';
+import { MessageCircle, Settings, Plus, Wifi, WifiOff } from 'lucide-react';
 import { useWhatsAppInstances, useWhatsAppChats, useWhatsAppMessages } from '@/hooks/useWhatsApp';
 import InstanceManagement from '@/components/whatsapp/InstanceManagement';
 import ChatList from '@/components/whatsapp/ChatList';
@@ -108,7 +108,7 @@ function AddInstanceDialog({ onCreated }: { onCreated: () => void }) {
 }
 
 export default function WhatsAppChat() {
-  const { instances, loading: loadingInstances } = useWhatsAppInstances();
+  const { instances, loading: loadingInstances, refetch: refetchInstances } = useWhatsAppInstances();
   const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null);
   const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
   const [showPanel, setShowPanel] = useState(true);
@@ -116,6 +116,8 @@ export default function WhatsAppChat() {
   const [instanceMgmtOpen, setInstanceMgmtOpen] = useState(false);
   // Auto-select first instance
   const activeInstance = selectedInstanceId || instances[0]?.id || null;
+  const activeInstanceData = instances.find(i => i.id === activeInstance);
+  const isDisconnected = activeInstanceData?.status !== 'connected';
 
   const { chats, loading: loadingChats, refetch: refetchChats } = useWhatsAppChats(activeInstance);
   const { messages, loading: loadingMessages } = useWhatsAppMessages(activeInstance, selectedPhone);
@@ -152,7 +154,7 @@ export default function WhatsAppChat() {
             Adicione uma instância UAZAPI para começar a usar o chat.
           </p>
         </div>
-        <AddInstanceDialog onCreated={() => window.location.reload()} />
+        <AddInstanceDialog onCreated={() => refetchInstances()} />
       </div>
     );
   }
@@ -178,9 +180,33 @@ export default function WhatsAppChat() {
               </SelectContent>
             </Select>
           )}
+          {/* Status indicator */}
+          {activeInstanceData && (
+            <div className="flex items-center gap-1.5 ml-2">
+              {activeInstanceData.profile_pic_url && (
+                <img src={activeInstanceData.profile_pic_url} alt="" className="h-5 w-5 rounded-full object-cover" />
+              )}
+              {isDisconnected ? (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="h-6 gap-1 text-xs px-2"
+                  onClick={() => setInstanceMgmtOpen(true)}
+                >
+                  <WifiOff className="h-3 w-3" />
+                  Desconectado — Reconectar
+                </Button>
+              ) : (
+                <span className="flex items-center gap-1 text-xs text-emerald-500">
+                  <Wifi className="h-3 w-3" />
+                  {activeInstanceData.display_name || ''}
+                </span>
+              )}
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-2">
-          <AddInstanceDialog onCreated={() => window.location.reload()} />
+          <AddInstanceDialog onCreated={() => { refetchInstances(); }} />
           <Button
             variant="ghost"
             size="icon"
@@ -232,7 +258,7 @@ export default function WhatsAppChat() {
         instance={instances.find(i => i.id === activeInstance) || null}
         open={instanceMgmtOpen}
         onClose={() => setInstanceMgmtOpen(false)}
-        onInstanceDeleted={() => window.location.reload()}
+        onInstanceDeleted={() => refetchInstances()}
       />
     </>
   );
