@@ -2,6 +2,13 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { LeadCampaign } from '@/types/leadFunnels';
 
+async function fetchOrgId(): Promise<string> {
+  const { data, error } = await (supabase as any).rpc('get_user_org_id');
+  if (error) throw new Error(`Falha ao obter organização: ${error.message}`);
+  if (!data) throw new Error('Usuário não está vinculado a nenhuma organização');
+  return data as string;
+}
+
 export function useLeadCampaigns() {
   return useQuery({
     queryKey: ['lead-campaigns'],
@@ -37,13 +44,7 @@ export function useCreateLeadCampaign() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (campaign: Partial<LeadCampaign>) => {
-      // Fetch org_id from organizations table (user_profiles has recursive RLS)
-      const { data: org } = await (supabase as any)
-        .from('organizations')
-        .select('id')
-        .limit(1)
-        .single();
-      const orgId = org?.id || '00000000-0000-0000-0000-000000000001';
+      const orgId = await fetchOrgId();
       const { data, error } = await (supabase as any)
         .from('lead_campaigns')
         .insert({ ...campaign, organization_id: orgId })
