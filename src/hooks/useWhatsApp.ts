@@ -59,19 +59,56 @@ export function useWhatsAppInstances() {
   const [instances, setInstances] = useState<WhatsAppInstance[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    async function fetch() {
-      const { data, error } = await (supabase as any)
-        .from('whatsapp_instances')
-        .select('*')
-        .order('created_at', { ascending: true });
-      if (!error && data) setInstances(data as any);
-      setLoading(false);
-    }
-    fetch();
+  const fetchInstances = useCallback(async () => {
+    const { data, error } = await (supabase as any)
+      .from('whatsapp_instances')
+      .select('*')
+      .order('created_at', { ascending: true });
+    if (!error && data) setInstances(data as any);
+    setLoading(false);
   }, []);
 
-  return { instances, loading };
+  useEffect(() => {
+    fetchInstances();
+  }, [fetchInstances]);
+
+  // Validate real status from UAZAPI on mount
+  useEffect(() => {
+    if (instances.length === 0) return;
+    const validateStatuses = async () => {
+      const headers = await getAuthHeaders();
+      for (const inst of instances) {
+        try {
+          const res = await fetch(`${FUNCTIONS_URL}/whatsapp-instance`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ instance_id: inst.id, action: 'status' }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            const realStatus = data?.instance?.status || (data?.status?.connected ? 'connected' : 'disconnected');
+            const profileName = data?.instance?.profileName || null;
+            const profilePicUrl = data?.instance?.profilePicUrl || null;
+            if (realStatus !== inst.status || profileName || profilePicUrl) {
+              setInstances(prev => prev.map(i => 
+                i.id === inst.id 
+                  ? { 
+                      ...i, 
+                      status: typeof realStatus === 'string' ? realStatus : i.status,
+                      display_name: profileName || i.display_name,
+                      profile_pic_url: profilePicUrl || i.profile_pic_url,
+                    } 
+                  : i
+              ));
+            }
+          }
+        } catch {}
+      }
+    };
+    validateStatuses();
+  }, [instances.length]); // Only run once when instances first load
+
+  return { instances, loading, refetch: fetchInstances };
 }
 
 export function useWhatsAppChats(instanceId: string | null) {
