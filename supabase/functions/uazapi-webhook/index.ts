@@ -149,19 +149,71 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
 
-    // Lookup instance by name to get orgId and instanceId
+    // Lookup instance: try BaseUrl -> api_url match first, then instanceName fallback
+    const baseUrl = (payload.BaseUrl || payload.baseUrl || '').replace(/\/+$/, '')
     const instanceName = payload.instanceName || payload.instance || ''
-    console.log('Looking up instance by name:', instanceName)
+    console.log('Looking up instance - BaseUrl:', baseUrl, 'instanceName:', instanceName)
 
-    const { data: instanceData, error: instanceError } = await supabaseAdmin
-      .from('whatsapp_instances')
-      .select('id, organization_id')
-      .eq('instance_name', instanceName)
-      .maybeSingle()
+    let instanceData: any = null
+    let instanceError: any = null
 
-    if (instanceError || !instanceData) {
-      console.error('Instance not found for name:', instanceName, instanceError)
-      return new Response(JSON.stringify({ error: 'Instance not found', instanceName }), {
+    // Strategy 1: Match by api_url (most reliable)
+    if (baseUrl) {
+      const { data, error } = await supabaseAdmin
+        .from('whatsapp_instances')
+        .select('id, organization_id')
+        .eq('api_url', baseUrl)
+        .maybeSingle()
+      if (data) {
+        instanceData = data
+        console.log('Instance found by api_url match:', baseUrl)
+      } else {
+        console.log('No instance found by api_url:', baseUrl, error)
+        // Try with trailing slash variants
+        const { data: d2 } = await supabaseAdmin
+          .from('whatsapp_instances')
+          .select('id, organization_id')
+          .ilike('api_url', `${baseUrl}%`)
+          .maybeSingle()
+        if (d2) {
+          instanceData = d2
+          console.log('Instance found by api_url ilike match')
+        }
+      }
+    }
+
+    // Strategy 2: Match by instance_name
+    if (!instanceData && instanceName) {
+      const { data, error } = await supabaseAdmin
+        .from('whatsapp_instances')
+        .select('id, organization_id')
+        .eq('instance_name', instanceName)
+        .maybeSingle()
+      if (data) {
+        instanceData = data
+        console.log('Instance found by instance_name:', instanceName)
+      } else {
+        instanceError = error
+      }
+    }
+
+    // Strategy 3: Match by token if present in payload
+    const payloadToken = payload.token || ''
+    if (!instanceData && payloadToken) {
+      const { data } = await supabaseAdmin
+        .from('whatsapp_instances')
+        .select('id, organization_id')
+        .eq('api_token', payloadToken)
+        .maybeSingle()
+      if (data) {
+        instanceData = data
+        console.log('Instance found by api_token match')
+      }
+    }
+
+    if (!instanceData) {
+      console.error('Instance not found by any method. BaseUrl:', baseUrl, 'instanceName:', instanceName, 'token prefix:', payloadToken?.slice(0, 8))
+      return new Response(JSON.stringify({ error: 'Instance not found', baseUrl, instanceName }), {
         status: 404,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
