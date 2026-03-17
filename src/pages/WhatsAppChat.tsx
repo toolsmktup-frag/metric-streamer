@@ -6,9 +6,6 @@ import ChatThread from '@/components/whatsapp/ChatThread';
 import ChatInput from '@/components/whatsapp/ChatInput';
 import ContactPanel from '@/components/whatsapp/ContactPanel';
 import AppSidebar from '@/components/layout/AppSidebar';
-import ChatThread from '@/components/whatsapp/ChatThread';
-import ChatInput from '@/components/whatsapp/ChatInput';
-import ContactPanel from '@/components/whatsapp/ContactPanel';
 import {
   Select,
   SelectContent,
