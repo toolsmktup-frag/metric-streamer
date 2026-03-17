@@ -79,20 +79,21 @@ Deno.serve(async (req) => {
 
   try {
     const payload = await req.json()
-    console.log('Webhook received:', JSON.stringify(payload).slice(0, 500))
+    console.log('Webhook received:', JSON.stringify(payload).slice(0, 3000))
 
-    // UAZAPI v2 sends event types: 'message', 'messages_update', 'connection'
-    // Legacy: 'messages.upsert', 'messages.update', 'connection.update'
-    const eventType = payload.event || payload.type || ''
+    // UAZAPI v2 uses PascalCase (EventType), legacy uses lowercase (event)
+    const eventType = payload.EventType || payload.event || payload.type || ''
+    console.log('EventType detected:', eventType)
 
-    // Only process actual messages
+    // Detect messages: v2 sends EventType:"messages" with chat object
     const isMessage = ['messages.upsert', 'message', 'message.new', 'messages'].includes(eventType)
+      || payload.chat
       || payload.message
       || payload.messages
-      || payload.data?.key // UAZAPI v2 sends message data in payload.data
+      || payload.data?.key
 
     if (!isMessage) {
-      // Handle status updates (v2: 'messages_update', legacy: 'messages.update')
+      // Handle status updates
       if (['messages.update', 'message.update', 'messages_update', 'status'].includes(eventType)) {
         const supabaseAdmin = createClient(
           Deno.env.get('SUPABASE_URL')!,
@@ -131,18 +132,30 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
 
-    // Extract message data - UAZAPI v2 uses payload.data, legacy uses payload.message
-    const msg = payload.data || payload.messages?.[0] || payload.message || payload
-    const key = msg.key || {}
-    const isFromMe = key.fromMe || false
-    const remoteJid = key.remoteJid || msg.from || msg.phone || ''
-    const phone = remoteJid.replace('@s.whatsapp.net', '').replace('@c.us', '')
-    const externalId = key.id || msg.messageId || msg.id
-
-    // Outbound messages (fromMe): save them too for complete history
-    // Deduplication by message_id_external will prevent duplicates
+    // UAZAPI v2: data is in payload.chat; legacy: payload.data / payload.message
+    const chat = payload.chat || {}
+    const msg = payload.data || payload.messages?.[0] || payload.message || chat || payload
+    
+    // v2 puts message info inside chat.lastMessage or similar structures
+    const lastMessage = chat.lastMessage || chat.last_message || {}
+    const messageData = msg.message || lastMessage.message || lastMessage || {}
+    
+    const key = msg.key || lastMessage.key || chat.key || {}
+    const isFromMe = key.fromMe ?? lastMessage.fromMe ?? chat.fromMe ?? false
+    
+    // Extract phone from multiple possible locations (v2 and legacy)
+    const remoteJid = key.remoteJid || chat.jid || chat.phone || chat.id || msg.from || msg.phone || ''
+    const phone = remoteJid
+      .replace('@s.whatsapp.net', '')
+      .replace('@c.us', '')
+      .replace(/\D/g, '')
+    
+    const externalId = key.id || lastMessage.id || msg.messageId || msg.id || chat.messageId || ''
+    
+    console.log('Extracted - phone:', phone, 'externalId:', externalId, 'fromMe:', isFromMe, 'remoteJid:', remoteJid)
 
     if (!phone) {
+      console.log('No phone found in payload. chat keys:', Object.keys(chat), 'msg keys:', Object.keys(msg))
       return new Response(JSON.stringify({ ok: true, skipped: 'no_phone' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
@@ -163,9 +176,8 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Find the instance by checking which instance matches the webhook
-    // UAZAPI usually sends instance info in the payload
-    const instanceName = payload.instance || payload.instanceName || ''
+    // Find instance - v2 sends instance in payload.instance or payload.Instance
+    const instanceName = payload.instance || payload.instanceName || payload.Instance || ''
 
     let instanceId: string | null = null
     let orgId: string | null = null
@@ -201,21 +213,27 @@ Deno.serve(async (req) => {
     if (!instanceId || !orgId) {
       console.error('No matching instance found for webhook')
       return new Response(JSON.stringify({ ok: false, error: 'no_instance' }), {
-        status: 200, // Don't retry
+        status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
 
-    const messageType = extractMessageType(msg)
-    const body = extractBody(msg)
-    const mediaUrl = extractMediaUrl(msg)
-    const senderName = msg.pushName || msg.pushname || msg.senderName || null
+    // Extract message content - try v2 chat structure first, then legacy
+    const effectiveMsg = Object.keys(messageData).length > 0 ? { message: messageData } : msg
+    const messageType = extractMessageType(effectiveMsg)
+    const body = extractBody(effectiveMsg) 
+      || chat.lastMessageBody || chat.last_message_body 
+      || lastMessage.body || lastMessage.text
+      || chat.body || ''
+    const mediaUrl = extractMediaUrl(effectiveMsg)
+    const senderName = msg.pushName || msg.pushname || chat.pushName || chat.name || chat.senderName || lastMessage.pushName || null
+
+    console.log('Message - type:', messageType, 'body:', body?.slice(0, 100), 'sender:', senderName)
 
     // Try to find lead by phone
     let leadId: string | null = null
     const variants = phoneVariations(phone)
 
-    // Check unified_customers by phone
     for (const variant of variants) {
       const { data: customer } = await supabaseAdmin
         .from('unified_customers')
@@ -233,7 +251,6 @@ Deno.serve(async (req) => {
     const direction = isFromMe ? 'outbound' : 'inbound'
     const status = isFromMe ? 'sent' : 'delivered'
 
-    // Insert message (inbound or outbound)
     const { error: insertErr } = await supabaseAdmin
       .from('whatsapp_messages')
       .insert({
@@ -246,7 +263,7 @@ Deno.serve(async (req) => {
         status,
         media_url: mediaUrl,
         message_id_external: externalId,
-        payload_raw: msg,
+        payload_raw: payload,
         sender_name: senderName,
         lead_id: leadId,
       })
@@ -256,6 +273,7 @@ Deno.serve(async (req) => {
       throw insertErr
     }
 
+    console.log('Message saved successfully:', direction, phone)
     return new Response(JSON.stringify({ ok: true, type: direction, phone }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
