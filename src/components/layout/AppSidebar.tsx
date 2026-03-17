@@ -3,6 +3,7 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   Megaphone,
+  Target,
   Layers,
   FileImage,
   ShoppingCart,
