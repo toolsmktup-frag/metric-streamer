@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { MessageCircle, Settings, Plus, Wifi, WifiOff } from 'lucide-react';
 import { useWhatsAppInstances, useWhatsAppChats, useWhatsAppMessages } from '@/hooks/useWhatsApp';
 import InstanceManagement from '@/components/whatsapp/InstanceManagement';
@@ -144,6 +144,11 @@ export default function WhatsAppChat() {
     () => chats.find(c => c.phone === selectedPhone),
     [chats, selectedPhone]
   );
+
+  useEffect(() => {
+    if (!selectedPhone || loadingMessages) return;
+    refetchChats();
+  }, [selectedPhone, loadingMessages, refetchChats]);
 
   const wrapWithSidebar = (content: React.ReactNode) => (
     <div className="flex min-h-screen w-full bg-background">
