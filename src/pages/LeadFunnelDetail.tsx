@@ -32,6 +32,7 @@ const LeadFunnelDetail: React.FC = () => {
 
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [timelineOpen, setTimelineOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   const handleLeadClick = (leadId: string) => {
     const pos = positions.find(p => p.lead_id === leadId);
