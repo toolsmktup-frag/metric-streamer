@@ -86,17 +86,15 @@ export function useWhatsAppInstances() {
           });
           if (res.ok) {
             const data = await res.json();
-            const realStatus = data?.instance?.status || (data?.status?.connected ? 'connected' : 'disconnected');
-            const profileName = data?.instance?.profileName || null;
-            const profilePicUrl = data?.instance?.profilePicUrl || null;
-            if (realStatus !== inst.status || profileName || profilePicUrl) {
+            const processed = data?.processed;
+            if (processed) {
               setInstances(prev => prev.map(i => 
                 i.id === inst.id 
                   ? { 
                       ...i, 
-                      status: typeof realStatus === 'string' ? realStatus : i.status,
-                      display_name: profileName || i.display_name,
-                      profile_pic_url: profilePicUrl || i.profile_pic_url,
+                      status: processed.status || i.status,
+                      display_name: processed.display_name || i.display_name,
+                      profile_pic_url: processed.profile_pic_url || i.profile_pic_url,
                     } 
                   : i
               ));

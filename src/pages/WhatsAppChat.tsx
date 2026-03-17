@@ -51,7 +51,7 @@ function AddInstanceDialog({ onCreated }: { onCreated: () => void }) {
         api_url: apiUrl.replace(/\/$/, ''),
         api_token: apiToken,
         phone_number: phone || null,
-        status: 'connected',
+        status: 'disconnected',
       });
 
       if (error) throw error;
