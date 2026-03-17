@@ -61,7 +61,7 @@ export function useWhatsAppInstances() {
 
   useEffect(() => {
     async function fetch() {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('whatsapp_instances')
         .select('*')
         .order('created_at', { ascending: true });

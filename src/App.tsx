@@ -84,6 +84,8 @@ const App = () => (
           {/* Funis de Leads */}
           <Route path="/lead-campaigns" element={<Protected><LeadCampaigns /></Protected>} />
           <Route path="/lead-funnels/:id" element={<Protected><LeadFunnelDetail /></Protected>} />
+          {/* WhatsApp Chat - fullscreen layout */}
+          <Route path="/whatsapp" element={<ProtectedFullscreen><WhatsAppChat /></ProtectedFullscreen>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

@@ -40,17 +40,17 @@ function AddInstanceDialog({ onCreated }: { onCreated: () => void }) {
     }
     setSaving(true);
     try {
-      const { data: orgId } = await supabase.rpc('get_user_org_id');
+      const { data: orgId } = await (supabase as any).rpc('get_user_org_id');
       if (!orgId) throw new Error('Organização não encontrada');
 
-      const { error } = await supabase.from('whatsapp_instances').insert({
+      const { error } = await (supabase as any).from('whatsapp_instances').insert({
         organization_id: orgId,
         instance_name: name,
         api_url: apiUrl.replace(/\/$/, ''),
         api_token: apiToken,
         phone_number: phone || null,
         status: 'connected',
-      } as any);
+      });
 
       if (error) throw error;
 
