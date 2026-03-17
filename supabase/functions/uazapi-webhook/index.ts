@@ -139,19 +139,8 @@ Deno.serve(async (req) => {
     const phone = remoteJid.replace('@s.whatsapp.net', '').replace('@c.us', '')
     const externalId = key.id || msg.messageId || msg.id
 
-    // Skip outbound (we already saved them in whatsapp-send)
-    if (isFromMe) {
-      // But update status if we have it
-      if (externalId) {
-        await supabaseAdmin
-          .from('whatsapp_messages')
-          .update({ status: 'sent', message_id_external: externalId, updated_at: new Date().toISOString() })
-          .eq('message_id_external', externalId)
-      }
-      return new Response(JSON.stringify({ ok: true, type: 'outbound_ack' }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
+    // Outbound messages (fromMe): save them too for complete history
+    // Deduplication by message_id_external will prevent duplicates
 
     if (!phone) {
       return new Response(JSON.stringify({ ok: true, skipped: 'no_phone' }), {

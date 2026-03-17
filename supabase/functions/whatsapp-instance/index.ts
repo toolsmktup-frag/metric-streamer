@@ -309,7 +309,6 @@ Deno.serve(async (req) => {
             url: webhookUrl,
             enabled: true,
             events,
-            excludeMessages: ['wasSentByApi'],
           }),
         })
         result = await res.json()
