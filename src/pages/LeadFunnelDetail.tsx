@@ -115,6 +115,12 @@ const LeadFunnelDetail: React.FC = () => {
         {!funnel.is_active && (
           <span className="text-xs bg-destructive/10 text-destructive px-2 py-1 rounded">Inativo</span>
         )}
+        <div className="ml-auto">
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setImportOpen(true)}>
+            <Upload className="h-4 w-4" />
+            Importar Leads
+          </Button>
+        </div>
       </div>
 
       {funnel.description && (
