@@ -185,9 +185,11 @@ Deno.serve(async (req) => {
     }
 
     // Send via UAZAPI
+    console.log('Sending via UAZAPI - api_url:', instance.api_url, 'instance_name:', instance.instance_name, 'phone:', phone)
     const result = await tryUazapiSend(
       instance.api_url,
       instance.api_token,
+      instance.instance_name,
       phone,
       body || '',
       message_type,
