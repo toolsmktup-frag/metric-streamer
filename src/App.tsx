@@ -25,6 +25,8 @@ import FunilKpi from "./pages/FunilKpi";
 import FunilCampanhas from "./pages/FunilCampanhas";
 import FunisConfigurar from "./pages/FunisConfigurar";
 import Ecommerce from "./pages/Ecommerce";
+import LeadCampaigns from "./pages/LeadCampaigns";
+import LeadFunnelDetail from "./pages/LeadFunnelDetail";
 
 const queryClient = new QueryClient({
   defaultOptions: {
