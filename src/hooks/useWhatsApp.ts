@@ -159,16 +159,10 @@ export function useWhatsAppMessages(instanceId: string | null, phone: string | n
   const fetchMessages = useCallback(async () => {
     if (!instanceId || !phone) return;
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const headers = await getAuthHeaders();
       const res = await fetch(
-        `${(supabase as any).supabaseUrl}/functions/v1/whatsapp-chats?action=messages&instance_id=${instanceId}&phone=${encodeURIComponent(phone)}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${session?.access_token}`,
-            'apikey': (supabase as any).supabaseKey,
-            'Content-Type': 'application/json',
-          },
-        }
+        `${SUPABASE_URL}/functions/v1/whatsapp-chats?action=messages&instance_id=${instanceId}&phone=${encodeURIComponent(phone)}`,
+        { headers }
       );
       if (res.ok) {
         const data = await res.json();
