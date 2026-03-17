@@ -5,7 +5,7 @@ import type { LeadFunnel, LeadFunnelStage, StageTransitionRule } from '@/types/l
 async function fetchOrgId(): Promise<string> {
   const { data, error } = await (supabase as any).rpc('get_user_org_id');
   if (error) throw new Error(`Falha ao obter organização: ${error.message}`);
-  if (!data) throw new Error('Usuário não está vinculado a nenhuma organização');
+  if (!data) throw new Error('Seu perfil não está vinculado a uma organização. Peça ao administrador para vincular seu usuário.');
   return data as string;
 }
 
