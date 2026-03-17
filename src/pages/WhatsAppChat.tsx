@@ -108,7 +108,7 @@ function AddInstanceDialog({ onCreated }: { onCreated: () => void }) {
 }
 
 export default function WhatsAppChat() {
-  const { instances, loading: loadingInstances } = useWhatsAppInstances();
+  const { instances, loading: loadingInstances, refetch: refetchInstances } = useWhatsAppInstances();
   const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null);
   const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
   const [showPanel, setShowPanel] = useState(true);
