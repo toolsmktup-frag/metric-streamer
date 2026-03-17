@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useLeadFunnel, useUpsertStages, useUpsertTransitionRules, useFunnelSourceNodes, useFunnelEdges } from '@/hooks/useLeadFunnels';
+import { useLeadFunnel, useUpsertStages, useUpsertTransitionRules, useFunnelSourceNodes, useFunnelEdges, useSaveFunnelSourceNodes, useSaveFunnelEdges } from '@/hooks/useLeadFunnels';
 import { useLeadsByFunnel, useFunnelLeadCounts } from '@/hooks/useLeads';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -12,7 +12,9 @@ import WebhookConfig from '@/components/lead-funnels/WebhookConfig';
 import FunnelFlowEditor from '@/components/lead-funnels/FunnelFlowEditor';
 import LeadTimeline from '@/components/lead-funnels/LeadTimeline';
 import { Lead } from '@/types/leadFunnels';
+import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import type { Node, Edge } from '@xyflow/react';
 
 const LeadFunnelDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -24,6 +26,8 @@ const LeadFunnelDetail: React.FC = () => {
   const { data: funnelEdges = [] } = useFunnelEdges(id ?? null);
   const upsertStages = useUpsertStages();
   const upsertRules = useUpsertTransitionRules();
+  const saveSourceNodes = useSaveFunnelSourceNodes();
+  const saveFunnelEdges = useSaveFunnelEdges();
 
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [timelineOpen, setTimelineOpen] = useState(false);
@@ -35,6 +39,54 @@ const LeadFunnelDetail: React.FC = () => {
       setTimelineOpen(true);
     }
   };
+
+  // Auto-save nodes: update stage positions + upsert source nodes
+  const handleAutoSaveNodes = useCallback(async (nodes: Node[]) => {
+    if (!id) return;
+
+    // Update stage positions in lead_funnel_stages
+    const stageNodes = nodes.filter(n => n.id.startsWith('stage-'));
+    for (const node of stageNodes) {
+      const stageId = node.id.replace('stage-', '');
+      await (supabase as any)
+        .from('lead_funnel_stages')
+        .update({
+          position_x: node.position.x,
+          position_y: node.position.y,
+          name: (node.data as any).label,
+          color: (node.data as any).color,
+          page_type: (node.data as any).pageType || 'content',
+          page_url: (node.data as any).pageUrl || null,
+        })
+        .eq('id', stageId);
+    }
+
+    // Upsert source nodes
+    const srcNodes = nodes.filter(n => n.type === 'trafficSource');
+    await saveSourceNodes.mutateAsync({
+      funnelId: id,
+      nodes: srcNodes.map(n => ({
+        source_type: (n.data as any).sourceType || 'other',
+        label: (n.data as any).label || 'Fonte',
+        position_x: n.position.x,
+        position_y: n.position.y,
+      })),
+    });
+  }, [id, saveSourceNodes]);
+
+  // Auto-save edges
+  const handleAutoSaveEdges = useCallback(async (edges: Edge[]) => {
+    if (!id) return;
+
+    await saveFunnelEdges.mutateAsync({
+      funnelId: id,
+      edges: edges.map(e => ({
+        source_node_id: e.source.replace('stage-', '').replace('source-', ''),
+        target_node_id: e.target.replace('stage-', ''),
+        source_type: e.source.startsWith('source-') ? 'source' : 'stage',
+      })),
+    });
+  }, [id, saveFunnelEdges]);
 
   if (isLoading) {
     return <div className="p-6 text-muted-foreground">Carregando funil...</div>;
@@ -94,11 +146,14 @@ const LeadFunnelDetail: React.FC = () => {
             stages={stages}
             sourceNodes={sourceNodes}
             leadCounts={leadCounts}
+            funnelId={funnel.id}
             edges={funnelEdges.map(e => ({
               source_node_id: e.source_node_id,
               target_node_id: e.target_node_id,
               source_type: e.source_type,
             }))}
+            onAutoSaveNodes={handleAutoSaveNodes}
+            onAutoSaveEdges={handleAutoSaveEdges}
           />
         </TabsContent>
 
