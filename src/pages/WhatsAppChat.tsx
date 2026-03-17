@@ -180,9 +180,33 @@ export default function WhatsAppChat() {
               </SelectContent>
             </Select>
           )}
+          {/* Status indicator */}
+          {activeInstanceData && (
+            <div className="flex items-center gap-1.5 ml-2">
+              {activeInstanceData.profile_pic_url && (
+                <img src={activeInstanceData.profile_pic_url} alt="" className="h-5 w-5 rounded-full object-cover" />
+              )}
+              {isDisconnected ? (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="h-6 gap-1 text-xs px-2"
+                  onClick={() => setInstanceMgmtOpen(true)}
+                >
+                  <WifiOff className="h-3 w-3" />
+                  Desconectado — Reconectar
+                </Button>
+              ) : (
+                <span className="flex items-center gap-1 text-xs text-emerald-500">
+                  <Wifi className="h-3 w-3" />
+                  {activeInstanceData.display_name || ''}
+                </span>
+              )}
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-2">
-          <AddInstanceDialog onCreated={() => window.location.reload()} />
+          <AddInstanceDialog onCreated={() => { refetchInstances(); }} />
           <Button
             variant="ghost"
             size="icon"
