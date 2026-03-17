@@ -99,7 +99,7 @@ export function useDeleteFunnel() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('funnels')
         .update({ is_active: false, updated_at: new Date().toISOString() })
         .eq('id', id);
