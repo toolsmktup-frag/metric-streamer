@@ -20,31 +20,42 @@ interface SendRequest {
 async function tryUazapiSend(apiUrl: string, apiToken: string, phone: string, body: string, messageType: string, mediaUrl?: string) {
   const chatId = phone.includes('@') ? phone : `${phone}@s.whatsapp.net`
 
+  // UAZAPI v2 uses query string auth: ?token=xxx
+  const authQuery = `?token=${apiToken}`
+
   // Try multiple endpoint patterns for UAZAPI compatibility
   const attempts = [
+    // UAZAPI v2: query string token
+    {
+      url: `${apiUrl}/send/text${authQuery}`,
+      body: { phone: chatId, message: body },
+      headers: { 'Content-Type': 'application/json' },
+    },
+    // Alternative: header-based auth
     {
       url: `${apiUrl}/send/text`,
       body: { phone: chatId, message: body },
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiToken}` },
     },
+    // Legacy pattern
     {
-      url: `${apiUrl}/message/text`,
+      url: `${apiUrl}/message/text${authQuery}`,
       body: { phone: chatId, message: body },
-      headers: { 'Content-Type': 'application/json', 'token': apiToken },
+      headers: { 'Content-Type': 'application/json' },
     },
   ]
 
   if (messageType !== 'text' && mediaUrl) {
     const mediaAttempts = [
       {
+        url: `${apiUrl}/send/media${authQuery}`,
+        body: { phone: chatId, url: mediaUrl, caption: body || '', type: messageType },
+        headers: { 'Content-Type': 'application/json' },
+      },
+      {
         url: `${apiUrl}/send/media`,
         body: { phone: chatId, url: mediaUrl, caption: body || '', type: messageType },
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiToken}` },
-      },
-      {
-        url: `${apiUrl}/message/media`,
-        body: { phone: chatId, url: mediaUrl, caption: body || '', type: messageType },
-        headers: { 'Content-Type': 'application/json', 'token': apiToken },
       },
     ]
     attempts.length = 0
@@ -53,19 +64,24 @@ async function tryUazapiSend(apiUrl: string, apiToken: string, phone: string, bo
 
   for (const attempt of attempts) {
     try {
+      console.log(`Trying UAZAPI: ${attempt.url}`)
       const res = await fetch(attempt.url, {
         method: 'POST',
         headers: attempt.headers,
         body: JSON.stringify(attempt.body),
       })
 
-      if (res.ok) {
-        const data = await res.json()
-        return { success: true, data }
-      }
+      const responseText = await res.text()
+      console.log(`UAZAPI response ${attempt.url}: ${res.status} - ${responseText.slice(0, 500)}`)
 
-      const errText = await res.text()
-      console.log(`Attempt ${attempt.url} failed: ${res.status} - ${errText}`)
+      if (res.ok) {
+        try {
+          const data = JSON.parse(responseText)
+          return { success: true, data }
+        } catch {
+          return { success: true, data: { raw: responseText } }
+        }
+      }
     } catch (e) {
       console.log(`Attempt ${attempt.url} error:`, e.message)
     }

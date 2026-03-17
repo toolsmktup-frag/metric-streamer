@@ -32,6 +32,19 @@ function phoneVariations(phone: string): string[] {
 }
 
 function extractMessageType(payload: any): string {
+  // UAZAPI v2: message.type or message.mediaType
+  const v2Type = payload.type || payload.mediaType || payload.messageType || ''
+  if (v2Type) {
+    const t = v2Type.toLowerCase()
+    if (t.includes('image')) return 'image'
+    if (t.includes('audio') || t.includes('ptt')) return 'audio'
+    if (t.includes('video')) return 'video'
+    if (t.includes('document')) return 'document'
+    if (t.includes('sticker')) return 'sticker'
+    if (t.includes('location')) return 'location'
+    if (t.includes('contact') || t.includes('vcard')) return 'contact'
+  }
+  // Legacy baileys format
   if (payload.message?.imageMessage) return 'image'
   if (payload.message?.audioMessage) return 'audio'
   if (payload.message?.videoMessage) return 'video'
@@ -45,6 +58,10 @@ function extractMessageType(payload: any): string {
 
 function extractBody(payload: any): string {
   return (
+    // UAZAPI v2: text/content fields directly on message
+    payload.text ||
+    payload.content ||
+    // Legacy baileys format
     payload.message?.conversation ||
     payload.message?.extendedTextMessage?.text ||
     payload.message?.imageMessage?.caption ||
