@@ -1,6 +1,6 @@
 import React from 'react';
 import { Handle, Position } from '@xyflow/react';
-import { FileText, Layout, ShoppingCart, Gift, ArrowDownCircle } from 'lucide-react';
+import { FileText, Layout, ShoppingCart, Gift, ArrowDownCircle, StickyNote } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const pageTypeConfig: Record<string, { icon: React.ReactNode; label: string; color: string }> = {
@@ -21,21 +21,30 @@ interface PageNodeData {
   pageUrl?: string;
   thumbnailUrl?: string;
   selected?: boolean;
+  notes?: string;
 }
 
 function PageNode({ data, selected }: { data: PageNodeData; selected?: boolean }) {
   const config = pageTypeConfig[data.pageType] || pageTypeConfig.content;
   const borderColor = data.color || config.color;
+  const hasNotes = !!data.notes?.trim();
 
   return (
     <div
       className={cn(
-        'rounded-xl border-2 bg-card min-w-[180px] shadow-md transition-shadow',
+        'rounded-xl border-2 bg-card min-w-[180px] shadow-md transition-shadow relative',
         selected && 'shadow-lg ring-2 ring-primary/30'
       )}
       style={{ borderColor }}
     >
       <Handle type="target" position={Position.Left} className="!bg-primary !w-3 !h-3" />
+
+      {/* Notes indicator */}
+      {hasNotes && (
+        <div className="absolute -top-2 -right-2 z-10 bg-amber-400 rounded-full p-1 shadow-sm" title={data.notes}>
+          <StickyNote className="h-3 w-3 text-amber-900" />
+        </div>
+      )}
 
       {/* Header with page type badge */}
       <div className="px-3 py-1.5 border-b border-border/50 flex items-center gap-2" style={{ backgroundColor: `${borderColor}15` }}>

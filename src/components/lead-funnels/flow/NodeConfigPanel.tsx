@@ -2,9 +2,10 @@ import React from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { Trash2 } from 'lucide-react';
+import { Trash2, Copy } from 'lucide-react';
 import type { Node } from '@xyflow/react';
 
 const pageTypeOptions = [
@@ -23,9 +24,10 @@ interface NodeConfigPanelProps {
   onClose: () => void;
   onUpdate: (nodeId: string, data: Record<string, unknown>) => void;
   onDelete: (nodeId: string) => void;
+  onDuplicate: (nodeId: string) => void;
 }
 
-const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({ node, open, onClose, onUpdate, onDelete }) => {
+const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({ node, open, onClose, onUpdate, onDelete, onDuplicate }) => {
   if (!node) return null;
 
   const data = node.data as Record<string, any>;
@@ -126,19 +128,43 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({ node, open, onClose, 
             </div>
           )}
 
-          {/* Delete */}
-          <div className="pt-4 border-t border-border">
+          {/* Notes — for all node types */}
+          <div className="space-y-2">
+            <Label>Notas / Anotações</Label>
+            <Textarea
+              value={data.notes || ''}
+              onChange={(e) => update('notes', e.target.value)}
+              placeholder="Adicione notas sobre estratégia, decisões..."
+              rows={3}
+              className="resize-none"
+            />
+          </div>
+
+          {/* Actions */}
+          <div className="pt-4 border-t border-border flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex-1"
+              onClick={() => {
+                onDuplicate(node.id);
+                onClose();
+              }}
+            >
+              <Copy className="h-4 w-4 mr-2" />
+              Duplicar
+            </Button>
             <Button
               variant="destructive"
               size="sm"
-              className="w-full"
+              className="flex-1"
               onClick={() => {
                 onDelete(node.id);
                 onClose();
               }}
             >
               <Trash2 className="h-4 w-4 mr-2" />
-              Remover Elemento
+              Remover
             </Button>
           </div>
         </div>
