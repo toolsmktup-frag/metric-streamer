@@ -17,49 +17,54 @@ interface SendRequest {
   message_id?: string // for edit/delete
 }
 
-async function tryUazapiSend(apiUrl: string, apiToken: string, phone: string, body: string, messageType: string, mediaUrl?: string) {
+async function tryUazapiSend(apiUrl: string, apiToken: string, instanceName: string, phone: string, body: string, messageType: string, mediaUrl?: string) {
   const chatId = phone.includes('@') ? phone : `${phone}@s.whatsapp.net`
 
   // UAZAPI v2 uses query string auth: ?token=xxx
   const authQuery = `?token=${apiToken}`
+  
+  // Normalize base URL (remove trailing slash)
+  const baseUrl = apiUrl.replace(/\/+$/, '')
 
   // Try multiple endpoint patterns for UAZAPI compatibility
-  const attempts = [
-    // UAZAPI v2: query string token
-    {
-      url: `${apiUrl}/send/text${authQuery}`,
-      body: { phone: chatId, message: body },
-      headers: { 'Content-Type': 'application/json' },
-    },
-    // Alternative: header-based auth
-    {
-      url: `${apiUrl}/send/text`,
-      body: { phone: chatId, message: body },
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiToken}` },
-    },
-    // Legacy pattern
-    {
-      url: `${apiUrl}/message/text${authQuery}`,
-      body: { phone: chatId, message: body },
-      headers: { 'Content-Type': 'application/json' },
-    },
-  ]
+  // Pattern 1: UAZAPI v2 with instance in path: /instance/{name}/send/text?token=xxx
+  // Pattern 2: Direct path (if api_url already includes instance): /send/text?token=xxx
+  const attempts = []
 
   if (messageType !== 'text' && mediaUrl) {
-    const mediaAttempts = [
+    attempts.push(
       {
-        url: `${apiUrl}/send/media${authQuery}`,
+        url: `${baseUrl}/instance/${instanceName}/send/media${authQuery}`,
         body: { phone: chatId, url: mediaUrl, caption: body || '', type: messageType },
         headers: { 'Content-Type': 'application/json' },
       },
       {
-        url: `${apiUrl}/send/media`,
+        url: `${baseUrl}/send/media${authQuery}`,
         body: { phone: chatId, url: mediaUrl, caption: body || '', type: messageType },
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiToken}` },
+        headers: { 'Content-Type': 'application/json' },
       },
-    ]
-    attempts.length = 0
-    attempts.push(...mediaAttempts)
+    )
+  } else {
+    attempts.push(
+      // UAZAPI v2: instance in path
+      {
+        url: `${baseUrl}/instance/${instanceName}/send/text${authQuery}`,
+        body: { phone: chatId, message: body },
+        headers: { 'Content-Type': 'application/json' },
+      },
+      // Direct path (api_url may already include instance)
+      {
+        url: `${baseUrl}/send/text${authQuery}`,
+        body: { phone: chatId, message: body },
+        headers: { 'Content-Type': 'application/json' },
+      },
+      // Legacy pattern
+      {
+        url: `${baseUrl}/message/text${authQuery}`,
+        body: { phone: chatId, message: body },
+        headers: { 'Content-Type': 'application/json' },
+      },
+    )
   }
 
   for (const attempt of attempts) {
