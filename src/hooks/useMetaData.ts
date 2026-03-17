@@ -102,7 +102,7 @@ async function fetchCampaignIdsForFunnel(funnelId: string): Promise<string[]> {
 }
 
 async function fetchAdsetIdsForFunnel(funnelId: string): Promise<string[]> {
-  const { data } = await supabase
+  const { data } = await (supabase as any)
     .from('meta_adsets')
     .select('id')
     .eq('funnel_id', funnelId);
