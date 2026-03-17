@@ -533,6 +533,34 @@ export default function InstanceManagement({
 
           <Separator />
 
+          {/* Webhook Section */}
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+              <RefreshCw className="h-3.5 w-3.5" /> Webhook
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              Configura automaticamente o webhook para receber mensagens na plataforma.
+            </p>
+            <Button
+              size="sm"
+              variant="outline"
+              className="w-full gap-1.5"
+              onClick={async () => {
+                try {
+                  await callInstanceAPI(instance.id, 'set_webhook');
+                  toast.success('Webhook configurado com sucesso!');
+                } catch (err: any) {
+                  toast.error('Erro ao configurar webhook: ' + err.message);
+                }
+              }}
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              Configurar Webhook
+            </Button>
+          </div>
+
+          <Separator />
+
           {/* Danger Zone */}
           <div className="space-y-2">
             <h3 className="text-sm font-semibold text-destructive">Zona de Perigo</h3>
