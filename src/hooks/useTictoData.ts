@@ -94,7 +94,7 @@ export function useTictoTransactions(funnelId?: string | null) {
     queryFn: async () => {
       // order_date is stored as local time (BRT) labeled as UTC by the webhook,
       // so we query without timezone offset to match correctly.
-      let query = supabase
+      let query = (supabase as any)
         .from('ticto_transactions')
         .select('*')
         .gte('order_date', `${dateFrom}T00:00:00`)

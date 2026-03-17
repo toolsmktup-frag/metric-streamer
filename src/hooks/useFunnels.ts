@@ -27,7 +27,7 @@ export function useFunnels() {
   return useQuery({
     queryKey: ['funnels'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('funnels')
         .select('*, funnel_products(*)')
         .eq('is_active', true)
@@ -45,7 +45,7 @@ export function useFunnel(id: string | null) {
     queryKey: ['funnel', id],
     queryFn: async () => {
       if (!id) return null;
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('funnels')
         .select('*, funnel_products(*)')
         .eq('id', id)
@@ -63,7 +63,7 @@ export function useCreateFunnel() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (funnel: Partial<Funnel>) => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('funnels')
         .insert(funnel)
         .select()
@@ -79,7 +79,7 @@ export function useUpdateFunnel() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, ...updates }: Partial<Funnel> & { id: string }) => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('funnels')
         .update({ ...updates, updated_at: new Date().toISOString() })
         .eq('id', id)
@@ -99,7 +99,7 @@ export function useDeleteFunnel() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('funnels')
         .update({ is_active: false, updated_at: new Date().toISOString() })
         .eq('id', id);
@@ -114,9 +114,9 @@ export function useUpsertFunnelProducts() {
   return useMutation({
     mutationFn: async ({ funnelId, products }: { funnelId: string; products: Omit<FunnelProduct, 'id' | 'funnel_id'>[] }) => {
       // Delete existing and re-insert (simpler than diff)
-      await supabase.from('funnel_products').delete().eq('funnel_id', funnelId);
+      await (supabase as any).from('funnel_products').delete().eq('funnel_id', funnelId);
       if (products.length === 0) return [];
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('funnel_products')
         .insert(products.map(p => ({ ...p, funnel_id: funnelId })))
         .select();

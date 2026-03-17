@@ -94,7 +94,7 @@ function aggregateInsights(rows: InsightRow[]) {
 // ─── Helpers para isolamento por funil ──────────────────────────────
 /** Retorna IDs das campanhas de um funil para filtrar insights */
 async function fetchCampaignIdsForFunnel(funnelId: string): Promise<string[]> {
-  const { data } = await supabase
+  const { data } = await (supabase as any)
     .from('meta_campaigns')
     .select('id')
     .eq('funnel_id', funnelId);
@@ -102,7 +102,7 @@ async function fetchCampaignIdsForFunnel(funnelId: string): Promise<string[]> {
 }
 
 async function fetchAdsetIdsForFunnel(funnelId: string): Promise<string[]> {
-  const { data } = await supabase
+  const { data } = await (supabase as any)
     .from('meta_adsets')
     .select('id')
     .eq('funnel_id', funnelId);
@@ -110,7 +110,7 @@ async function fetchAdsetIdsForFunnel(funnelId: string): Promise<string[]> {
 }
 
 async function fetchAdIdsForFunnel(funnelId: string): Promise<string[]> {
-  const { data } = await supabase
+  const { data } = await (supabase as any)
     .from('meta_ads')
     .select('id')
     .eq('funnel_id', funnelId);

@@ -27,7 +27,7 @@ export const COHORT_WINDOWS = [
 export type CohortWindowKey = typeof COHORT_WINDOWS[number]['key'];
 
 async function fetchCohortData(): Promise<CohortRow[]> {
-  const { data, error } = await supabase.rpc('fn_cohort_analysis');
+  const { data, error } = await (supabase as any).rpc('fn_cohort_analysis');
   if (error) throw new Error(error.message);
   return (data as CohortRow[]) ?? [];
 }
