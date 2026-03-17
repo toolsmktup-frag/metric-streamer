@@ -297,6 +297,31 @@ Deno.serve(async (req) => {
         break
       }
 
+      // POST /webhook/set - configure webhook URL and events
+      case 'set_webhook': {
+        const webhookUrl = body.url || `${Deno.env.get('SUPABASE_URL')}/functions/v1/uazapi-webhook`
+        const events = body.events || ['messages.upsert', 'messages.update', 'connection.update']
+        
+        const res = await fetch(`${apiUrl}/webhook/set`, {
+          method: 'POST',
+          headers: uazHeaders,
+          body: JSON.stringify({
+            url: webhookUrl,
+            enabled: true,
+            events,
+          }),
+        })
+        result = await res.json()
+        
+        // Save webhook URL locally
+        await supabase.from('whatsapp_instances').update({
+          webhook_url: webhookUrl,
+          updated_at: new Date().toISOString(),
+        }).eq('id', instanceId)
+        
+        break
+      }
+
       default:
         return new Response(JSON.stringify({ error: `Unknown action: ${action}` }), {
           status: 400,
