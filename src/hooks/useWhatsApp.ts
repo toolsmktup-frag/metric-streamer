@@ -123,30 +123,13 @@ export function useWhatsAppChats(instanceId: string | null) {
     if (initialLoad.current) setLoading(true);
 
     try {
-      const { data, error } = await supabase.functions.invoke('whatsapp-chats', {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
-        body: null,
-      } as any);
-      
-      // Fallback: if invoke doesn't support GET with query params, use fetch
-      if (error) {
-        const { data: { session } } = await supabase.auth.getSession();
-        const res = await fetch(
-          `${(supabase as any).supabaseUrl}/functions/v1/whatsapp-chats?action=list_chats&instance_id=${instanceId}`,
-          {
-            headers: {
-              'Authorization': `Bearer ${session?.access_token}`,
-              'apikey': (supabase as any).supabaseKey,
-              'Content-Type': 'application/json',
-            },
-          }
-        );
-        if (res.ok) {
-          const chatData = await res.json();
-          setChats(chatData);
-        }
-      } else if (data) {
+      const headers = await getAuthHeaders();
+      const res = await fetch(
+        `${SUPABASE_URL}/functions/v1/whatsapp-chats?action=list_chats&instance_id=${instanceId}`,
+        { headers }
+      );
+      if (res.ok) {
+        const data = await res.json();
         setChats(data);
       }
     } catch (err) {
