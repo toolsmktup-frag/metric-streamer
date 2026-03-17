@@ -32,6 +32,19 @@ function phoneVariations(phone: string): string[] {
 }
 
 function extractMessageType(payload: any): string {
+  // UAZAPI v2: message.type or message.mediaType
+  const v2Type = payload.type || payload.mediaType || payload.messageType || ''
+  if (v2Type) {
+    const t = v2Type.toLowerCase()
+    if (t.includes('image')) return 'image'
+    if (t.includes('audio') || t.includes('ptt')) return 'audio'
+    if (t.includes('video')) return 'video'
+    if (t.includes('document')) return 'document'
+    if (t.includes('sticker')) return 'sticker'
+    if (t.includes('location')) return 'location'
+    if (t.includes('contact') || t.includes('vcard')) return 'contact'
+  }
+  // Legacy baileys format
   if (payload.message?.imageMessage) return 'image'
   if (payload.message?.audioMessage) return 'audio'
   if (payload.message?.videoMessage) return 'video'
@@ -45,6 +58,10 @@ function extractMessageType(payload: any): string {
 
 function extractBody(payload: any): string {
   return (
+    // UAZAPI v2: text/content fields directly on message
+    payload.text ||
+    payload.content ||
+    // Legacy baileys format
     payload.message?.conversation ||
     payload.message?.extendedTextMessage?.text ||
     payload.message?.imageMessage?.caption ||
@@ -132,103 +149,66 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
 
-    // UAZAPI v2: data is in payload.chat; legacy: payload.data / payload.message
+    // UAZAPI v2 payload structure:
+    // { EventType: "messages", instanceName: "xxx", chat: {...}, message: { text, content, fromMe, chatid, senderName, id, ... } }
+    // Legacy baileys: { event: "messages.upsert", data: { key: { remoteJid, fromMe, id }, message: { conversation }, pushName } }
     const chat = payload.chat || {}
-    const msg = payload.data || payload.messages?.[0] || payload.message || chat || payload
+    const v2Message = payload.message || {}  // v2: flat message object with text/content/fromMe
+    const legacyMsg = payload.data || payload.messages?.[0] || {}  // legacy baileys
     
-    // v2 puts message info inside chat.lastMessage or similar structures
-    const lastMessage = chat.lastMessage || chat.last_message || {}
-    const messageData = msg.message || lastMessage.message || lastMessage || {}
+    // Detect if this is v2 format (message has .text or .content or .chatid)
+    const isV2 = !!(v2Message.chatid || v2Message.text !== undefined || v2Message.content !== undefined || v2Message.messageid)
     
-    const key = msg.key || lastMessage.key || chat.key || {}
-    const isFromMe = key.fromMe ?? lastMessage.fromMe ?? chat.fromMe ?? false
+    let isFromMe: boolean
+    let phone: string
+    let externalId: string
+    let senderName: string | null
+    let messageBody: string
+    let messageType: string
+    let mediaUrl: string | null
     
-    // Extract phone from multiple possible locations (v2 and legacy)
-    const remoteJid = key.remoteJid || chat.jid || chat.phone || chat.id || msg.from || msg.phone || ''
-    const phone = remoteJid
-      .replace('@s.whatsapp.net', '')
-      .replace('@c.us', '')
-      .replace(/\D/g, '')
-    
-    const externalId = key.id || lastMessage.id || msg.messageId || msg.id || chat.messageId || ''
-    
-    console.log('Extracted - phone:', phone, 'externalId:', externalId, 'fromMe:', isFromMe, 'remoteJid:', remoteJid)
-
-    if (!phone) {
-      console.log('No phone found in payload. chat keys:', Object.keys(chat), 'msg keys:', Object.keys(msg))
-      return new Response(JSON.stringify({ ok: true, skipped: 'no_phone' }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+    if (isV2) {
+      // UAZAPI v2 format
+      isFromMe = v2Message.fromMe === true
+      
+      // Phone from message.chatid or chat.wa_chatid or chat.phone
+      const rawJid = v2Message.chatid || chat.wa_chatid || v2Message.sender_pn || chat.phone || ''
+      phone = rawJid
+        .replace('@s.whatsapp.net', '')
+        .replace('@c.us', '')
+        .replace(/\D/g, '')
+      
+      // External ID: UAZAPI v2 uses "owner:messageId" format or just messageid
+      externalId = v2Message.id || `${payload.owner || ''}:${v2Message.messageid || ''}` || ''
+      
+      senderName = v2Message.senderName || chat.name || chat.wa_name || null
+      messageBody = v2Message.text || v2Message.content || v2Message.caption || ''
+      messageType = extractMessageType(v2Message)
+      mediaUrl = v2Message.mediaUrl || v2Message.media_url || null
+      
+      console.log('V2 extracted - phone:', phone, 'body:', messageBody?.slice(0, 50), 'fromMe:', isFromMe, 'sender:', senderName)
+    } else {
+      // Legacy baileys format
+      const msg = legacyMsg.key ? legacyMsg : (v2Message.key ? v2Message : legacyMsg)
+      const key = msg.key || {}
+      isFromMe = key.fromMe || false
+      
+      const remoteJid = key.remoteJid || msg.from || msg.phone || ''
+      phone = remoteJid
+        .replace('@s.whatsapp.net', '')
+        .replace('@c.us', '')
+        .replace(/\D/g, '')
+      
+      externalId = key.id || msg.messageId || msg.id || ''
+      senderName = msg.pushName || msg.pushname || null
+      messageBody = extractBody(msg)
+      messageType = extractMessageType(msg)
+      mediaUrl = extractMediaUrl(msg)
+      
+      console.log('Legacy extracted - phone:', phone, 'body:', messageBody?.slice(0, 50), 'fromMe:', isFromMe)
     }
 
-    // Deduplicate by external ID
-    if (externalId) {
-      const { data: existing } = await supabaseAdmin
-        .from('whatsapp_messages')
-        .select('id')
-        .eq('message_id_external', externalId)
-        .maybeSingle()
-
-      if (existing) {
-        return new Response(JSON.stringify({ ok: true, duplicate: true }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        })
-      }
-    }
-
-    // Find instance - v2 sends instance in payload.instance or payload.Instance
-    const instanceName = payload.instance || payload.instanceName || payload.Instance || ''
-
-    let instanceId: string | null = null
-    let orgId: string | null = null
-
-    if (instanceName) {
-      const { data: inst } = await supabaseAdmin
-        .from('whatsapp_instances')
-        .select('id, organization_id')
-        .eq('instance_name', instanceName)
-        .maybeSingle()
-
-      if (inst) {
-        instanceId = inst.id
-        orgId = inst.organization_id
-      }
-    }
-
-    // Fallback: get the first active instance
-    if (!instanceId) {
-      const { data: inst } = await supabaseAdmin
-        .from('whatsapp_instances')
-        .select('id, organization_id')
-        .eq('status', 'connected')
-        .limit(1)
-        .maybeSingle()
-
-      if (inst) {
-        instanceId = inst.id
-        orgId = inst.organization_id
-      }
-    }
-
-    if (!instanceId || !orgId) {
-      console.error('No matching instance found for webhook')
-      return new Response(JSON.stringify({ ok: false, error: 'no_instance' }), {
-        status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
-
-    // Extract message content - try v2 chat structure first, then legacy
-    const effectiveMsg = Object.keys(messageData).length > 0 ? { message: messageData } : msg
-    const messageType = extractMessageType(effectiveMsg)
-    const body = extractBody(effectiveMsg) 
-      || chat.lastMessageBody || chat.last_message_body 
-      || lastMessage.body || lastMessage.text
-      || chat.body || ''
-    const mediaUrl = extractMediaUrl(effectiveMsg)
-    const senderName = msg.pushName || msg.pushname || chat.pushName || chat.name || chat.senderName || lastMessage.pushName || null
-
-    console.log('Message - type:', messageType, 'body:', body?.slice(0, 100), 'sender:', senderName)
+    console.log('Extracted - phone:', phone, 'externalId:', externalId, 'fromMe:', isFromMe)
 
     // Try to find lead by phone
     let leadId: string | null = null
@@ -257,7 +237,7 @@ Deno.serve(async (req) => {
         organization_id: orgId,
         instance_id: instanceId,
         phone,
-        body,
+        body: messageBody,
         message_type: messageType,
         direction,
         status,
