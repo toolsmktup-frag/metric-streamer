@@ -48,6 +48,10 @@ const TOOL_ITEMS = [
   { path: '/importar',    label: 'Importar',     icon: Upload },
 ];
 
+const LEAD_FUNNEL_ITEMS = [
+  { path: '/lead-campaigns', label: 'Funis de Leads', icon: Target },
+];
+
 const AppSidebar = React.memo(function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
   const location = useLocation();
   const navigate = useNavigate();
