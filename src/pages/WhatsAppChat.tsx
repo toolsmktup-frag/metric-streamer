@@ -227,6 +227,13 @@ export default function WhatsAppChat() {
           </div>
         )}
       </div>
+
+      <InstanceManagement
+        instance={instances.find(i => i.id === activeInstance) || null}
+        open={instanceMgmtOpen}
+        onClose={() => setInstanceMgmtOpen(false)}
+        onInstanceDeleted={() => window.location.reload()}
+      />
     </>
   );
 }
