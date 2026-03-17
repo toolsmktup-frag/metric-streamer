@@ -10,65 +10,30 @@ function normalizePhone(phone: string) {
   return phone.replace(/\D/g, '')
 }
 
-async function tryMarkChatAsRead(apiUrl: string, apiToken: string, phone: string, messageId?: string | null) {
+async function tryMarkChatAsRead(apiUrl: string, apiToken: string, phone: string) {
   const baseUrl = apiUrl.replace(/\/+$/, '')
   const cleanPhone = normalizePhone(phone)
   const chatId = phone.includes('@') ? phone : `${cleanPhone}@s.whatsapp.net`
 
-  const attempts = [
-    {
-      label: 'chat/read number',
-      url: `${baseUrl}/chat/read`,
-      body: { number: cleanPhone },
-    },
-    {
-      label: 'chat/read phone',
-      url: `${baseUrl}/chat/read`,
-      body: { phone: cleanPhone },
-    },
-    {
-      label: 'chat/read chatId',
-      url: `${baseUrl}/chat/read`,
-      body: { phone: chatId },
-    },
-    ...(messageId
-      ? [
-          {
-            label: 'chat/read messageId',
-            url: `${baseUrl}/chat/read`,
-            body: { number: cleanPhone, messageId },
-          },
-          {
-            label: 'message/read legacy',
-            url: `${baseUrl}/message/read`,
-            body: { number: cleanPhone, messageId },
-          },
-        ]
-      : []),
-  ]
+  try {
+    const res = await fetch(`${baseUrl}/chat/read`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        token: apiToken,
+      },
+      body: JSON.stringify({ number: chatId, read: true }),
+    })
 
-  for (const attempt of attempts) {
-    try {
-      const res = await fetch(attempt.url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-          token: apiToken,
-        },
-        body: JSON.stringify(attempt.body),
-      })
-
-      const text = await res.text()
-      console.log(`[whatsapp-chats] mark read ${attempt.label}: ${res.status} - ${text.slice(0, 300)}`)
-      if (res.ok) return true
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      console.log(`[whatsapp-chats] mark read failed ${attempt.label}: ${message}`)
-    }
+    const text = await res.text()
+    console.log(`[whatsapp-chats] mark read exact spec: ${res.status} - ${text.slice(0, 300)}`)
+    return res.ok
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.log(`[whatsapp-chats] mark read failed: ${message}`)
+    return false
   }
-
-  return false
 }
 
 Deno.serve(async (req) => {

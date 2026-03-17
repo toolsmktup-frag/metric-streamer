@@ -21,18 +21,28 @@ function normalizePhone(phone: string) {
   return phone.replace(/\D/g, '')
 }
 
-function buildHeaders(apiToken: string, bearerMode = false) {
-  return bearerMode
-    ? {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-        Authorization: `Bearer ${apiToken}`,
-      }
-    : {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-        token: apiToken,
-      }
+function buildHeaders(apiToken: string) {
+  return {
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+    token: apiToken,
+  }
+}
+
+function buildChatId(phone: string) {
+  if (phone.includes('@')) return phone
+  return `${normalizePhone(phone)}@s.whatsapp.net`
+}
+
+function buildRecipientCandidates(phone: string) {
+  const cleanPhone = normalizePhone(phone)
+  const chatId = buildChatId(phone)
+  return [...new Set([cleanPhone, chatId].filter(Boolean))]
+}
+
+function mapMediaType(messageType: string) {
+  if (messageType === 'audio') return 'ptt'
+  return messageType
 }
 
 function isSuccessfulResponse(res: Response, data: any) {
@@ -54,98 +64,57 @@ async function parseResponse(res: Response) {
   }
 }
 
-async function tryUazapiSend(apiUrl: string, apiToken: string, instanceName: string, phone: string, body: string, messageType: string, mediaUrl?: string) {
+async function tryUazapiSend(apiUrl: string, apiToken: string, phone: string, body: string, messageType: string, mediaUrl?: string, mediaFilename?: string) {
   const baseUrl = apiUrl.replace(/\/+$/, '')
-  const cleanPhone = normalizePhone(phone)
-  const chatId = phone.includes('@') ? phone : `${cleanPhone}@s.whatsapp.net`
-
-  const attempts = messageType !== 'text' && mediaUrl
-    ? [
-        {
-          label: 'send/media number',
-          url: `${baseUrl}/send/media`,
-          headers: buildHeaders(apiToken),
-          body: { number: cleanPhone, url: mediaUrl, caption: body || '', type: messageType, readchat: true, readmessages: true },
-        },
-        {
-          label: 'send/media phone',
-          url: `${baseUrl}/send/media`,
-          headers: buildHeaders(apiToken),
-          body: { phone: cleanPhone, url: mediaUrl, caption: body || '', type: messageType, readchat: true, readmessages: true },
-        },
-        {
-          label: 'send/media chatId',
-          url: `${baseUrl}/send/media`,
-          headers: buildHeaders(apiToken),
-          body: { phone: chatId, url: mediaUrl, caption: body || '', type: messageType, readchat: true, readmessages: true },
-        },
-        {
-          label: 'legacy sendMedia instance',
-          url: `${baseUrl}/message/sendMedia/${instanceName}`,
-          headers: buildHeaders(apiToken),
-          body: { number: cleanPhone, mediaUrl, caption: body || '', mediaType: messageType, readchat: true, readmessages: true },
-        },
-      ]
-    : [
-        {
-          label: 'send/text number',
-          url: `${baseUrl}/send/text`,
-          headers: buildHeaders(apiToken),
-          body: { number: cleanPhone, text: body, readchat: true, readmessages: true },
-        },
-        {
-          label: 'send/text phone',
-          url: `${baseUrl}/send/text`,
-          headers: buildHeaders(apiToken),
-          body: { phone: cleanPhone, message: body, readchat: true, readmessages: true },
-        },
-        {
-          label: 'send/text chatId',
-          url: `${baseUrl}/send/text`,
-          headers: buildHeaders(apiToken),
-          body: { phone: chatId, message: body, readchat: true, readmessages: true },
-        },
-        {
-          label: 'legacy sendText instance token-header',
-          url: `${baseUrl}/message/sendText/${instanceName}`,
-          headers: buildHeaders(apiToken),
-          body: { number: cleanPhone, text: body, readchat: true, readmessages: true },
-        },
-        {
-          label: 'legacy sendText instance bearer',
-          url: `${baseUrl}/message/sendText/${instanceName}`,
-          headers: buildHeaders(apiToken, true),
-          body: { number: cleanPhone, text: body, readchat: true, readmessages: true },
-        },
-      ]
-
+  const recipients = buildRecipientCandidates(phone)
   const failures: string[] = []
 
-  for (const attempt of attempts) {
+  for (const recipient of recipients) {
+    const payload = messageType !== 'text' && mediaUrl
+      ? {
+          number: recipient,
+          type: mapMediaType(messageType),
+          file: mediaUrl,
+          ...(body ? { text: body } : {}),
+          ...(messageType === 'document' && mediaFilename ? { docName: mediaFilename } : {}),
+          readchat: true,
+          readmessages: true,
+          async: false,
+        }
+      : {
+          number: recipient,
+          text: body,
+          readchat: true,
+          readmessages: true,
+          async: false,
+        }
+
+    const url = `${baseUrl}${messageType !== 'text' && mediaUrl ? '/send/media' : '/send/text'}`
+
     try {
-      console.log(`[whatsapp-send] trying ${attempt.label}: ${attempt.url} body=${JSON.stringify(attempt.body)}`)
-      const res = await fetch(attempt.url, {
+      console.log(`[whatsapp-send] trying exact spec endpoint: ${url} body=${JSON.stringify(payload)}`)
+      const res = await fetch(url, {
         method: 'POST',
-        headers: attempt.headers,
-        body: JSON.stringify(attempt.body),
+        headers: buildHeaders(apiToken),
+        body: JSON.stringify(payload),
       })
 
       const { text, data } = await parseResponse(res)
-      console.log(`[whatsapp-send] response ${attempt.label}: ${res.status} ${text.slice(0, 500)}`)
+      console.log(`[whatsapp-send] response ${recipient}: ${res.status} ${text.slice(0, 500)}`)
 
       if (isSuccessfulResponse(res, data)) {
         return { success: true, data }
       }
 
-      failures.push(`${attempt.label}: ${res.status} ${text.slice(0, 160)}`)
+      failures.push(`${recipient}: ${res.status} ${text.slice(0, 200)}`)
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      failures.push(`${attempt.label}: ${message}`)
-      console.log(`[whatsapp-send] attempt failed ${attempt.label}: ${message}`)
+      failures.push(`${recipient}: ${message}`)
+      console.log(`[whatsapp-send] attempt failed ${recipient}: ${message}`)
     }
   }
 
-  throw new Error(`All UAZAPI send attempts failed | ${failures.join(' | ')}`)
+  throw new Error(`UAZAPI send failed | ${failures.join(' | ')}`)
 }
 
 Deno.serve(async (req) => {
