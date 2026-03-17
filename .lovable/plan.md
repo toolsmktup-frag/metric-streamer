@@ -1,56 +1,57 @@
 
 
-## Revisão: Status das Fases
+## Teste End-to-End: Guia Passo a Passo
 
-### Fase 1 — Modelagem e Backend ✅ Completa
+O browser automatizado não compartilha sua sessão de login. Vou preparar um plano para você testar manualmente e, em paralelo, corrigir qualquer problema encontrado.
 
-**Tabelas criadas no Supabase:**
-- `lead_campaigns` — campanhas de agrupamento
-- `lead_funnels` — funis com `webhook_token`, `is_active`, vínculo a campaign
-- `lead_funnel_stages` — etapas do funil com `sort_order`, cor, posição
-- `stage_transition_rules` — regras de transição por evento
-- `leads` — leads com phone, email, name, UTMs, metadata
-- `lead_events` — log de eventos por lead/funil
-- `lead_stage_positions` — posição atual do lead no funil
-- `funnel_source_nodes` / `funnel_edges` — nós do flow editor
+### Passo 1 — Criar Campanha
+1. Na página `/lead-campaigns`, clique em **"+ Campanha"**
+2. Preencha um nome (ex: "Teste E2E") e salve
 
-**Edge Function `webhook-lead`:**
-- Deployada em `https://emfbocpmphtftqcezaib.supabase.co/functions/v1/webhook-lead`
-- `verify_jwt = false` no `config.toml`
-- Valida `X-Funnel-Token`, deduplica lead por phone/email, loga evento, aplica regras de transição
+### Passo 2 — Criar Funil
+1. Clique em **"+ Novo Funil"**
+2. Preencha: nome "Funil Teste", selecione a campanha criada, salve
+3. Clique no funil criado para abrir o detalhe
 
-**Types e Hooks:**
-- `src/types/leadFunnels.ts` — interfaces completas
-- `src/hooks/useLeadFunnels.ts` — CRUD de funis, stages, rules
-- `src/hooks/useLeads.ts` — leads por funil, eventos, contagens
-- `src/hooks/useLeadCampaigns.ts` — CRUD de campanhas
+### Passo 3 — Configurar Stages
+1. Na aba **"Configuração"**, adicione 3 etapas:
+   - "Novo Lead" (sort_order 0)
+   - "Engajado" (sort_order 1)
+   - "Convertido" (sort_order 2)
+2. Adicione uma regra de transição:
+   - Evento: `signup` → Move para "Novo Lead"
+   - Evento: `purchase` → De "Novo Lead" para "Convertido"
+3. Salve
 
-### Fase 2 — Frontend ✅ Completa
+### Passo 4 — Copiar Token e Enviar Webhook
+1. Na aba **"Webhook"**, copie o token e a URL
+2. Execute no terminal:
 
-**Páginas e Componentes:**
-- `LeadCampaigns.tsx` — listagem de campanhas e funis, criação via dialog
-- `LeadFunnelDetail.tsx` — página de detalhe com 5 abas:
-  - **Kanban** — `KanbanBoard.tsx` com colunas por stage e cards de lead
-  - **Funil** — `FunnelVisual.tsx` com visualização de conversão
-  - **Flow Editor** — `FunnelFlowEditor.tsx`
-  - **Configuração** — `FunnelConfigTab.tsx` para stages e rules
-  - **Webhook** — `WebhookConfig.tsx` com URL, token, payload de exemplo, cURL
-- `LeadCard.tsx` — card de lead no kanban
-- `LeadTimeline.tsx` — timeline de eventos do lead (sheet lateral)
+```bash
+curl -X POST "https://emfbocpmphtftqcezaib.supabase.co/functions/v1/webhook-lead" \
+  -H "Content-Type: application/json" \
+  -H "X-Funnel-Token: SEU_TOKEN_AQUI" \
+  -d '{"event":"signup","phone":"+5511999990001","name":"Lead Teste E2E"}'
+```
 
-**Roteamento:** `/lead-campaigns` e `/lead-funnels/:id` configurados no `App.tsx` com `<Protected>`.
-**Sidebar:** Item "Funis de Leads" presente em `AppSidebar.tsx`.
+### Passo 5 — Verificar Kanban
+1. Volte para a aba **"Kanban"**
+2. O lead "Lead Teste E2E" deve aparecer na coluna "Novo Lead"
 
-### Conclusão: Pronto para Fase 3
+### Passo 6 — Testar Transição
+```bash
+curl -X POST "https://emfbocpmphtftqcezaib.supabase.co/functions/v1/webhook-lead" \
+  -H "Content-Type: application/json" \
+  -H "X-Funnel-Token: SEU_TOKEN_AQUI" \
+  -d '{"event":"purchase","phone":"+5511999990001"}'
+```
+Recarregue o Kanban — o lead deve ter movido para "Convertido".
 
-Tudo está implementado e deployado. O sistema tem:
-1. Backend completo (tabelas + edge function deployada)
-2. Frontend completo (listagem, CRUD, kanban, visual, webhook config)
-3. Webhook funcional esperando requests
+### O que vou implementar se algo falhar
 
-**Para iniciar a Fase 3**, o próximo passo lógico seria:
-- Testar o fluxo end-to-end (criar funil → configurar stages → enviar webhook → ver lead no kanban)
-- Ou avançar para funcionalidades adicionais como: drag-and-drop no kanban, filtros de leads, dashboard de métricas, integração com automações externas
-
-Confirme o que a Fase 3 contempla para eu preparar o plano de implementação.
+Se durante o teste você encontrar erros, me avise com o passo específico que falhou e eu corrijo imediatamente. Problemas comuns que posso resolver:
+- **Campanha/Funil não salva** → Verificar hooks e RLS policies
+- **Webhook retorna erro** → Verificar edge function e token
+- **Lead não aparece no Kanban** → Verificar query de `lead_stage_positions`
+- **Transição não funciona** → Verificar `stage_transition_rules` matching
 
