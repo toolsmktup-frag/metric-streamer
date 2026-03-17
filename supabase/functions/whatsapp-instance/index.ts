@@ -141,16 +141,17 @@ Deno.serve(async (req) => {
           updated_at: new Date().toISOString(),
         }).eq('id', instanceId)
 
-        // Auto-configure webhook after connect
+        // Auto-configure webhook after connect (UAZAPI v2)
         const webhookUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/uazapi-webhook`
         try {
-          await fetch(`${apiUrl}/webhook/set`, {
+          await fetch(`${apiUrl}/webhook`, {
             method: 'POST',
             headers: uazHeaders,
             body: JSON.stringify({
               url: webhookUrl,
               enabled: true,
-              events: ['messages.upsert', 'messages.update', 'connection.update'],
+              events: ['messages', 'messages_update', 'connection'],
+              excludeMessages: ['wasSentByApi'],
             }),
           })
           console.log('Webhook auto-configured:', webhookUrl)
@@ -300,15 +301,16 @@ Deno.serve(async (req) => {
       // POST /webhook/set - configure webhook URL and events
       case 'set_webhook': {
         const webhookUrl = body.url || `${Deno.env.get('SUPABASE_URL')}/functions/v1/uazapi-webhook`
-        const events = body.events || ['messages.upsert', 'messages.update', 'connection.update']
+        const events = body.events || ['messages', 'messages_update', 'connection']
         
-        const res = await fetch(`${apiUrl}/webhook/set`, {
+        const res = await fetch(`${apiUrl}/webhook`, {
           method: 'POST',
           headers: uazHeaders,
           body: JSON.stringify({
             url: webhookUrl,
             enabled: true,
             events,
+            excludeMessages: ['wasSentByApi'],
           }),
         })
         result = await res.json()
