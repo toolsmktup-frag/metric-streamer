@@ -12,7 +12,6 @@ import {
   Edge,
   ReactFlowProvider,
   useReactFlow,
-  NodeChange,
   EdgeChange,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
@@ -23,7 +22,10 @@ import ActionNode from './flow/ActionNode';
 import ConversionEdge from './flow/ConversionEdge';
 import FlowToolbar, { DragNodeData } from './flow/FlowToolbar';
 import NodeConfigPanel from './flow/NodeConfigPanel';
+import { useAutoLayout } from './flow/useAutoLayout';
 import { toast } from 'sonner';
+import { LayoutGrid } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 const nodeTypes = {
   page: PageNode,
@@ -94,6 +96,7 @@ function FlowCanvas({
           pageUrl: s.page_url || '',
           thumbnailUrl: s.thumbnail_url || '',
           stageId: s.id,
+          notes: (s as any).notes || '',
         },
       }));
 
@@ -101,7 +104,7 @@ function FlowCanvas({
       id: `source-${sn.id}`,
       type: 'trafficSource',
       position: { x: sn.position_x || 0, y: sn.position_y || i * 120 },
-      data: { label: sn.label, sourceType: sn.source_type, sourceId: sn.id },
+      data: { label: sn.label, sourceType: sn.source_type, sourceId: sn.id, notes: '' },
     }));
 
     return [...srcNodes, ...stageNodes];
@@ -114,7 +117,7 @@ function FlowCanvas({
       target: `stage-${e.target_node_id}`,
       type: 'conversion',
       animated: true,
-      data: { count: 0 },
+      data: { count: 0, label: '' },
     })),
     [savedEdges]
   );
@@ -122,7 +125,7 @@ function FlowCanvas({
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [flowEdges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
-  // Sync leadCounts into nodes when polling updates
+  // Sync leadCounts into nodes + calculate conversion rates on edges
   useEffect(() => {
     setNodes((nds) =>
       nds.map((n) => {
@@ -136,6 +139,37 @@ function FlowCanvas({
       })
     );
   }, [leadCounts, setNodes]);
+
+  // Calculate conversion rates on edges when nodes/edges change
+  useEffect(() => {
+    setEdges((eds) =>
+      eds.map((edge) => {
+        const sourceNode = nodes.find(n => n.id === edge.source);
+        const targetNode = nodes.find(n => n.id === edge.target);
+        const sourceCount = (sourceNode?.data?.count as number) || 0;
+        const targetCount = (targetNode?.data?.count as number) || 0;
+        const conversionRate = sourceCount > 0 ? (targetCount / sourceCount) * 100 : 0;
+        
+        if (edge.data?.count !== targetCount || edge.data?.conversionRate !== conversionRate) {
+          return { ...edge, data: { ...edge.data, count: targetCount, conversionRate } };
+        }
+        return edge;
+      })
+    );
+  }, [nodes, setEdges]);
+
+  // Listen for edge label changes from ConversionEdge
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { edgeId, label } = (e as CustomEvent).detail;
+      setEdges((eds) =>
+        eds.map((edge) => edge.id === edgeId ? { ...edge, data: { ...edge.data, label } } : edge)
+      );
+      debouncedSaveEdges();
+    };
+    window.addEventListener('edge-label-change', handler);
+    return () => window.removeEventListener('edge-label-change', handler);
+  }, []);
 
   // Refs for debounced saves
   const nodesRef = useRef(nodes);
@@ -172,24 +206,21 @@ function FlowCanvas({
 
   const onConnect = useCallback(
     (params: Connection) => {
-      setEdges((eds) => addEdge({ ...params, type: 'conversion', animated: true, data: { count: 0 } }, eds));
+      setEdges((eds) => addEdge({ ...params, type: 'conversion', animated: true, data: { count: 0, label: '' } }, eds));
       debouncedSaveEdges();
     },
     [setEdges, debouncedSaveEdges]
   );
 
-  // Auto-save on node drag stop
   const onNodeDragStop = useCallback(() => {
     debouncedSaveNodes();
   }, [debouncedSaveNodes]);
 
-  // Handle node click → open config
   const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
     setSelectedNode(node);
     setConfigOpen(true);
   }, []);
 
-  // Drop from toolbar
   const onDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
@@ -211,7 +242,7 @@ function FlowCanvas({
         id: newId,
         type: 'trafficSource',
         position,
-        data: { label: dragData.label, sourceType: dragData.sourceType || 'other', count: 0 },
+        data: { label: dragData.label, sourceType: dragData.sourceType || 'other', count: 0, notes: '' },
       };
     } else if (dragData.nodeType === 'page') {
       newNode = {
@@ -224,6 +255,7 @@ function FlowCanvas({
           color: '#3b82f6',
           count: 0,
           pageUrl: '',
+          notes: '',
         },
       };
     } else {
@@ -231,7 +263,7 @@ function FlowCanvas({
         id: newId,
         type: 'action',
         position,
-        data: { label: dragData.label, actionType: dragData.actionType || 'delay' },
+        data: { label: dragData.label, actionType: dragData.actionType || 'delay', notes: '' },
       };
     }
 
@@ -256,6 +288,31 @@ function FlowCanvas({
     debouncedSaveEdges();
   }, [setNodes, setEdges, debouncedSaveNodes, debouncedSaveEdges]);
 
+  // Duplicate node
+  const handleDuplicateNode = useCallback((nodeId: string) => {
+    const original = nodes.find(n => n.id === nodeId);
+    if (!original) return;
+
+    const newNode: Node = {
+      ...original,
+      id: `${original.type}-${Date.now()}`,
+      position: { x: original.position.x + 50, y: original.position.y + 50 },
+      data: { ...original.data, label: `${(original.data as any).label} (cópia)` },
+      selected: false,
+    };
+    setNodes((nds) => [...nds, newNode]);
+    debouncedSaveNodes();
+    toast.success('Node duplicado!');
+  }, [nodes, setNodes, debouncedSaveNodes]);
+
+  // Auto-layout
+  const autoLayout = useAutoLayout(setNodes, flowEdges, debouncedSaveNodes);
+
+  const handleAutoLayout = useCallback(() => {
+    autoLayout(nodes);
+    toast.success('Layout reorganizado!');
+  }, [autoLayout, nodes]);
+
   // Handle edge deletion
   const handleEdgesChange = useCallback((changes: EdgeChange[]) => {
     onEdgesChange(changes);
@@ -265,13 +322,25 @@ function FlowCanvas({
 
   return (
     <div className="flex h-[600px] border border-border rounded-xl overflow-hidden bg-background relative">
-      {/* Saving indicator */}
-      {saving && (
-        <div className="absolute top-2 right-2 z-50 bg-card border border-border rounded-full px-3 py-1 flex items-center gap-2 shadow-sm">
-          <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
-          <span className="text-xs text-muted-foreground">Salvando...</span>
-        </div>
-      )}
+      {/* Top bar */}
+      <div className="absolute top-2 right-2 z-50 flex items-center gap-2">
+        {saving && (
+          <div className="bg-card border border-border rounded-full px-3 py-1 flex items-center gap-2 shadow-sm">
+            <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
+            <span className="text-xs text-muted-foreground">Salvando...</span>
+          </div>
+        )}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleAutoLayout}
+          className="bg-card shadow-sm"
+          title="Organizar automaticamente"
+        >
+          <LayoutGrid className="h-4 w-4 mr-1.5" />
+          Auto Layout
+        </Button>
+      </div>
 
       <FlowToolbar />
 
@@ -312,6 +381,7 @@ function FlowCanvas({
         onClose={() => setConfigOpen(false)}
         onUpdate={handleUpdateNode}
         onDelete={handleDeleteNode}
+        onDuplicate={handleDuplicateNode}
       />
     </div>
   );

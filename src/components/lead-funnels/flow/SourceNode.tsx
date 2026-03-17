@@ -1,6 +1,6 @@
 import React from 'react';
 import { Handle, Position } from '@xyflow/react';
-import { Instagram, Facebook, Search, MessageCircle, Youtube, Music, Mail, Globe } from 'lucide-react';
+import { Instagram, Facebook, Search, MessageCircle, Youtube, Music, Mail, Globe, StickyNote } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const sourceIcons: Record<string, { icon: React.ReactNode; gradient: string }> = {
@@ -18,18 +18,27 @@ interface SourceNodeData {
   label: string;
   sourceType: string;
   count?: number;
+  notes?: string;
 }
 
 function SourceNode({ data, selected }: { data: SourceNodeData; selected?: boolean }) {
   const config = sourceIcons[data.sourceType] || sourceIcons.organic;
+  const hasNotes = !!data.notes?.trim();
 
   return (
     <div
       className={cn(
-        'rounded-xl shadow-md min-w-[150px] overflow-hidden transition-shadow',
+        'rounded-xl shadow-md min-w-[150px] overflow-hidden transition-shadow relative',
         selected && 'shadow-lg ring-2 ring-primary/30'
       )}
     >
+      {/* Notes indicator */}
+      {hasNotes && (
+        <div className="absolute -top-2 -right-2 z-10 bg-amber-400 rounded-full p-1 shadow-sm" title={data.notes}>
+          <StickyNote className="h-3 w-3 text-amber-900" />
+        </div>
+      )}
+
       {/* Gradient header */}
       <div className={cn('bg-gradient-to-r px-3 py-2.5 flex items-center gap-2 text-white', config.gradient)}>
         {config.icon}
