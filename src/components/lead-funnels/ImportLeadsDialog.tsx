@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
@@ -90,12 +90,6 @@ const METADATA_KEY_MAP: Record<string, string> = {
   'código telefone': '_phone_code',
 };
 
-// Status values considered as "buyer"
-const BUYER_STATUSES = new Set([
-  'authorized', 'approved', 'aprovada', 'completed', 'paid',
-  'bank_slip_created', 'pix_created',
-]);
-
 function parseSpreadsheet(file: File): Promise<Record<string, string>[]> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -129,7 +123,6 @@ function mapRow(row: Record<string, string>): ParsedLead {
     if (mapped) {
       (lead as any)[mapped] = val?.toString().trim() || null;
     } else {
-      // Check standardized metadata key map
       const metaKey = METADATA_KEY_MAP[normalizedCol];
       if (metaKey) {
         lead.metadata[metaKey] = val?.toString().trim() || null;
@@ -148,9 +141,8 @@ function mapRow(row: Record<string, string>): ParsedLead {
   return lead;
 }
 
-function isBuyerLead(lead: ParsedLead): boolean {
-  const status = ((lead.metadata.status as string) || '').toLowerCase().trim();
-  return BUYER_STATUSES.has(status);
+function getLeadStatus(lead: ParsedLead): string {
+  return ((lead.metadata.status as string) || '').toLowerCase().trim();
 }
 
 const ImportLeadsDialog: React.FC<ImportLeadsDialogProps> = ({
@@ -159,8 +151,8 @@ const ImportLeadsDialog: React.FC<ImportLeadsDialogProps> = ({
   const [parsedRows, setParsedRows] = useState<ParsedLead[]>([]);
   const [fileName, setFileName] = useState<string | null>(null);
   const [selectedStage, setSelectedStage] = useState<string>('');
-  const [buyerStage, setBuyerStage] = useState<string>('');
   const [separateByStatus, setSeparateByStatus] = useState(false);
+  const [statusStageMap, setStatusStageMap] = useState<Record<string, string>>({});
   const [progress, setProgress] = useState<number>(0);
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState<{ imported: number; skipped: number } | null>(null);
@@ -169,11 +161,31 @@ const ImportLeadsDialog: React.FC<ImportLeadsDialogProps> = ({
 
   const hasStatusColumn = parsedRows.length > 0 && parsedRows.some(r => r.metadata.status);
 
+  // Compute unique statuses with counts
+  const uniqueStatuses = useMemo(() => {
+    if (!hasStatusColumn) return [];
+    const counts: Record<string, number> = {};
+    for (const row of parsedRows) {
+      const status = getLeadStatus(row);
+      if (status) {
+        counts[status] = (counts[status] || 0) + 1;
+      }
+    }
+    return Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([status, count]) => ({ status, count }));
+  }, [parsedRows, hasStatusColumn]);
+
+  const noStatusCount = useMemo(() => {
+    return parsedRows.filter(r => !getLeadStatus(r)).length;
+  }, [parsedRows]);
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setFileName(file.name);
     setResult(null);
+    setStatusStageMap({});
     try {
       const rows = await parseSpreadsheet(file);
       const mapped = rows.map(mapRow).filter(l => l.email || l.phone);
@@ -188,37 +200,32 @@ const ImportLeadsDialog: React.FC<ImportLeadsDialogProps> = ({
     setImporting(true);
     setProgress(0);
 
-    if (separateByStatus && buyerStage) {
-      // Split into buyers and non-buyers
-      const buyers = parsedRows.filter(isBuyerLead);
-      const nonBuyers = parsedRows.filter(l => !isBuyerLead(l));
+    if (separateByStatus && uniqueStatuses.length > 0) {
+      // Group leads by their mapped stage
+      const groups: Record<string, ParsedLead[]> = {};
+      for (const lead of parsedRows) {
+        const status = getLeadStatus(lead);
+        const targetStage = (status && statusStageMap[status]) || selectedStage;
+        if (!groups[targetStage]) groups[targetStage] = [];
+        groups[targetStage].push(lead);
+      }
 
       let totalImported = 0;
       let totalSkipped = 0;
+      let processed = 0;
       const totalLeads = parsedRows.length;
 
-      if (buyers.length > 0) {
+      for (const [stageId, leads] of Object.entries(groups)) {
         const res = await importMutation.mutateAsync({
-          leads: buyers,
+          leads,
           funnelId,
-          stageId: buyerStage,
+          stageId,
           organizationId,
-          onProgress: (done) => setProgress(Math.round((done / totalLeads) * 100)),
+          onProgress: (done) => setProgress(Math.round(((processed + done) / totalLeads) * 100)),
         });
         totalImported += res.imported;
         totalSkipped += res.skipped;
-      }
-
-      if (nonBuyers.length > 0) {
-        const res = await importMutation.mutateAsync({
-          leads: nonBuyers,
-          funnelId,
-          stageId: selectedStage,
-          organizationId,
-          onProgress: (done) => setProgress(Math.round(((buyers.length + done) / totalLeads) * 100)),
-        });
-        totalImported += res.imported;
-        totalSkipped += res.skipped;
+        processed += leads.length;
       }
 
       setResult({ imported: totalImported, skipped: totalSkipped });
@@ -241,22 +248,26 @@ const ImportLeadsDialog: React.FC<ImportLeadsDialogProps> = ({
     setParsedRows([]);
     setFileName(null);
     setSelectedStage('');
-    setBuyerStage('');
+    setStatusStageMap({});
     setSeparateByStatus(false);
     setProgress(0);
     setResult(null);
     onOpenChange(false);
   };
 
+  const updateStatusMap = (status: string, stageId: string) => {
+    setStatusStageMap(prev => ({ ...prev, [status]: stageId }));
+  };
+
   const sortedStages = [...stages].sort((a, b) => a.sort_order - b.sort_order);
   const previewLeads = parsedRows.slice(0, 5);
 
-  const buyerCount = parsedRows.filter(isBuyerLead).length;
-  const nonBuyerCount = parsedRows.length - buyerCount;
+  // Check if all statuses are mapped (for button enable state)
+  const allMapped = !separateByStatus || uniqueStatuses.every(s => statusStageMap[s.status]);
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileSpreadsheet className="h-5 w-5 text-primary" />
@@ -299,7 +310,7 @@ const ImportLeadsDialog: React.FC<ImportLeadsDialogProps> = ({
             <div className="space-y-3">
               <div className="space-y-2">
                 <label className="text-sm font-medium text-foreground">
-                  {separateByStatus ? 'Etapa para não-compradores' : 'Etapa destino'}
+                  Etapa padrão {separateByStatus && <span className="text-muted-foreground font-normal">(fallback)</span>}
                 </label>
                 <Select value={selectedStage} onValueChange={setSelectedStage}>
                   <SelectTrigger>
@@ -329,29 +340,47 @@ const ImportLeadsDialog: React.FC<ImportLeadsDialogProps> = ({
                     <Switch checked={separateByStatus} onCheckedChange={setSeparateByStatus} />
                   </div>
                   {separateByStatus && (
-                    <>
+                    <div className="space-y-2">
                       <p className="text-xs text-muted-foreground">
-                        Compradores ({buyerCount}) vão para uma etapa, não-compradores ({nonBuyerCount}) para outra.
+                        Mapeie cada status para uma etapa do funil. Status sem mapeamento vão para a etapa padrão.
                       </p>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-foreground">Etapa para compradores</label>
-                        <Select value={buyerStage} onValueChange={setBuyerStage}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecione a etapa..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {sortedStages.map(s => (
-                              <SelectItem key={s.id} value={s.id}>
-                                <div className="flex items-center gap-2">
-                                  <span className="h-2 w-2 rounded-full" style={{ backgroundColor: s.color }} />
-                                  {s.name}
-                                </div>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                      <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
+                        {uniqueStatuses.map(({ status, count }) => (
+                          <div key={status} className="flex items-center gap-2">
+                            <div className="flex items-center gap-1.5 min-w-[160px]">
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-mono shrink-0">
+                                {status}
+                              </Badge>
+                              <span className="text-xs text-muted-foreground whitespace-nowrap">({count})</span>
+                            </div>
+                            <span className="text-xs text-muted-foreground">→</span>
+                            <Select
+                              value={statusStageMap[status] || ''}
+                              onValueChange={(v) => updateStatusMap(status, v)}
+                            >
+                              <SelectTrigger className="h-8 text-xs">
+                                <SelectValue placeholder="Etapa padrão" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {sortedStages.map(s => (
+                                  <SelectItem key={s.id} value={s.id}>
+                                    <div className="flex items-center gap-2">
+                                      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: s.color }} />
+                                      {s.name}
+                                    </div>
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        ))}
                       </div>
-                    </>
+                      {noStatusCount > 0 && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {noStatusCount} leads sem status → etapa padrão
+                        </p>
+                      )}
+                    </div>
                   )}
                 </div>
               )}
@@ -380,10 +409,7 @@ const ImportLeadsDialog: React.FC<ImportLeadsDialogProps> = ({
                         <td className="p-2 text-foreground truncate max-w-[120px]">{(lead.metadata.product_name as string) || '—'}</td>
                         <td className="p-2">
                           {lead.metadata.status ? (
-                            <Badge
-                              variant={isBuyerLead(lead) ? 'default' : 'secondary'}
-                              className="text-[10px] px-1.5 py-0"
-                            >
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-mono">
                               {lead.metadata.status as string}
                             </Badge>
                           ) : '—'}
@@ -431,7 +457,7 @@ const ImportLeadsDialog: React.FC<ImportLeadsDialogProps> = ({
           {!result && (
             <Button
               onClick={handleImport}
-              disabled={importing || parsedRows.length === 0 || !selectedStage || (separateByStatus && !buyerStage)}
+              disabled={importing || parsedRows.length === 0 || !selectedStage}
             >
               {importing ? 'Importando...' : `Importar ${parsedRows.length} leads`}
             </Button>
