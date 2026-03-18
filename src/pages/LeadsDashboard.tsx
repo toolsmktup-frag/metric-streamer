@@ -20,10 +20,13 @@ const LeadsDashboard: React.FC = () => {
     try {
       const { data, error } = await supabase.functions.invoke('sync-leads-from-sales');
       if (error) throw error;
-      toast.success(`Sincronização concluída`, {
-        description: `${data.leads_created} leads criados, ${data.leads_migrated_to_funnel} migrados para BASE DE LEADS, ${data.events_created} eventos`,
+      toast.success('Sincronização iniciada!', {
+        description: 'Processando em background. Atualize o dashboard em alguns segundos.',
       });
-      queryClient.invalidateQueries({ queryKey: ['leadStats'] });
+      // Auto-refresh after 5 seconds
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ['leadStats'] });
+      }, 5000);
     } catch (err: any) {
       toast.error('Erro na sincronização', { description: err.message });
     } finally {
