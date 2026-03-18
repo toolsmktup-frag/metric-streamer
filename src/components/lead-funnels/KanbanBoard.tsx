@@ -163,10 +163,16 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
             ? `${totalAll} leads`
             : `${totalFiltered} de ${totalAll} leads`}
         </span>
-        {totalRevenue > 0 && (
+        {confirmedRevenue > 0 && (
           <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded">
             <DollarSign className="h-3 w-3" />
-            {formatCurrency(totalRevenue)}
+            {formatCurrency(confirmedRevenue)}
+          </span>
+        )}
+        {lostRevenue > 0 && (
+          <span className="inline-flex items-center gap-1 text-xs font-semibold text-destructive bg-destructive/10 px-2 py-0.5 rounded">
+            <TrendingDown className="h-3 w-3" />
+            -{formatCurrency(lostRevenue)}
           </span>
         )}
       </div>
