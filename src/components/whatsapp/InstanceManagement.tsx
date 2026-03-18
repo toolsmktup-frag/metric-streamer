@@ -35,6 +35,7 @@ import {
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import type { WhatsAppInstance } from '@/hooks/useWhatsApp';
+import { getInstanceDisplayName } from '@/hooks/useWhatsApp';
 import InstanceAccessManager from '@/components/whatsapp/InstanceAccessManager';
 
 async function callInstanceAPI(instanceId: string, action: string, body: any = {}) {
@@ -65,6 +66,7 @@ export default function InstanceManagement({
   const [profileName, setProfileName] = useState('');
   const [profileImageUrl, setProfileImageUrl] = useState('');
   const [instanceName, setInstanceName] = useState('');
+  const [nickname, setNickname] = useState('');
   const [privacy, setPrivacy] = useState<any>(null);
   const [pairCode, setPairCode] = useState<string | null>(null);
   const [qrCode, setQrCode] = useState<string | null>(null);
@@ -103,6 +105,7 @@ export default function InstanceManagement({
   useEffect(() => {
     if (open && instance) {
       setInstanceName(instance.instance_name);
+      setNickname(instance.nickname || '');
       setProfileName(instance.display_name || '');
       fetchStatus();
       fetchPrivacy();
@@ -220,6 +223,19 @@ export default function InstanceManagement({
     }
   };
 
+  const handleUpdateNickname = async () => {
+    try {
+      const { error } = await (supabase as any)
+        .from('whatsapp_instances')
+        .update({ nickname: nickname.trim() || null })
+        .eq('id', instance.id);
+      if (error) throw error;
+      toast.success('Apelido atualizado!');
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao salvar apelido');
+    }
+  };
+
   const handleUpdatePrivacy = async (key: string, value: string) => {
     try {
       await callInstanceAPI(instance.id, 'set_privacy', {
@@ -287,7 +303,7 @@ export default function InstanceManagement({
               )}
               <div className="flex-1">
                 <p className="text-sm font-medium text-foreground">
-                  {instance.display_name || instance.instance_name}
+                  {getInstanceDisplayName(instance)}
                 </p>
                 <p className="text-xs text-muted-foreground">{instance.phone_number || 'Sem número'}</p>
               </div>
@@ -380,10 +396,33 @@ export default function InstanceManagement({
 
           <Separator />
 
+          {/* Nickname (Apelido) */}
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+              <Smartphone className="h-3.5 w-3.5" /> Apelido
+            </h3>
+            <p className="text-[11px] text-muted-foreground">
+              Nome amigável exibido nos seletores e badges. Não afeta a API.
+            </p>
+            <div className="flex gap-2">
+              <Input
+                value={nickname}
+                onChange={e => setNickname(e.target.value)}
+                className="h-8 text-sm flex-1"
+                placeholder="Ex: Vendas SP, Suporte, etc."
+              />
+              <Button size="sm" variant="outline" onClick={handleUpdateNickname}>
+                Salvar
+              </Button>
+            </div>
+          </div>
+
+          <Separator />
+
           {/* Instance Name */}
           <div className="space-y-2">
             <h3 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
-              <Smartphone className="h-3.5 w-3.5" /> Nome da Instância
+              <Smartphone className="h-3.5 w-3.5" /> Nome da Instância (técnico)
             </h3>
             <div className="flex gap-2">
               <Input

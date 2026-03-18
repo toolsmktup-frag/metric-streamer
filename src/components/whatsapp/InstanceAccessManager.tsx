@@ -5,6 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Loader2, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import type { WhatsAppInstance } from '@/hooks/useWhatsApp';
+import { getInstanceDisplayName } from '@/hooks/useWhatsApp';
 
 interface UserAccess {
   user_id: string;
@@ -119,7 +120,9 @@ export default function InstanceAccessManager({ instances, selectedInstanceId }:
     );
   }
 
-  const instanceName = instances.find(i => i.id === selectedInstanceId)?.instance_name || '';
+  const instanceName = instances.find(i => i.id === selectedInstanceId) 
+    ? getInstanceDisplayName(instances.find(i => i.id === selectedInstanceId)!) 
+    : '';
 
   return (
     <div className="space-y-3">
