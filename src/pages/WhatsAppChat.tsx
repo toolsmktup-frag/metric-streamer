@@ -135,6 +135,22 @@ export default function WhatsAppChat() {
   const [instanceMgmtOpen, setInstanceMgmtOpen] = useState(false);
   const [optimisticMessages, setOptimisticMessages] = useState<WhatsAppMessage[]>([]);
 
+  // Clear optimistic messages when switching chats
+  useEffect(() => {
+    setOptimisticMessages([]);
+  }, [selectedPhone]);
+
+  // Failsafe: remove stale optimistic messages after 60s
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = Date.now();
+      setOptimisticMessages(prev => prev.filter(m =>
+        now - new Date(m.created_at).getTime() < 60000
+      ));
+    }, 10000);
+    return () => clearInterval(interval);
+  }, []);
+
   // Auto-select first instance
   const activeInstance = selectedInstanceId || instances[0]?.id || null;
   const activeInstanceData = instances.find(i => i.id === activeInstance);

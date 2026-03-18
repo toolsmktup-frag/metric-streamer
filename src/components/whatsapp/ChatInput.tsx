@@ -31,6 +31,8 @@ export default function ChatInput({ instanceId, phone, onOptimisticSend, onOptim
   const handleSend = useCallback(async () => {
     const msg = text.trim();
     if (!msg && !attachment) return;
+    if (isSending.current) return;
+    isSending.current = true;
 
     const tempId = `temp-${crypto.randomUUID()}`;
     let mediaUrl: string | undefined;
