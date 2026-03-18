@@ -268,11 +268,21 @@ async function performSync() {
     else console.error("Position insert error:", error);
   }
 
-  // ===== STEP 6: Insert events with real dates =====
+  // ===== STEP 6: Insert events one by one (resilient) =====
   const allEvents: any[] = [];
   for (const [key, contact] of contactMap) {
     const leadId = leadIdByKey.get(key);
     if (!leadId) continue;
+
+    // Always add a "criado" event with the earliest date
+    allEvents.push({
+      lead_id: leadId,
+      funnel_id: baseFunnel.id,
+      event_name: "criado",
+      metadata: { source: "sync" },
+      created_at: contact.firstPurchaseDate || new Date().toISOString(),
+    });
+
     for (const evt of contact.events) {
       allEvents.push({
         lead_id: leadId,
@@ -285,11 +295,23 @@ async function performSync() {
   }
 
   let eventsCreated = 0;
-  for (let i = 0; i < allEvents.length; i += 500) {
-    const chunk = allEvents.slice(i, i + 500);
-    const { error } = await supabase.from("lead_events").insert(chunk);
-    if (!error) eventsCreated += chunk.length;
-    else console.error("Event insert error:", error);
+  for (const evt of allEvents) {
+    // Try with explicit created_at first
+    const { error } = await supabase.from("lead_events").insert(evt);
+    if (!error) {
+      eventsCreated++;
+    } else {
+      // Fallback: insert without created_at, store original date in metadata
+      console.warn("Event insert with date failed, retrying without created_at:", error.message);
+      const { created_at, ...rest } = evt;
+      const fallback = { ...rest, metadata: { ...rest.metadata, original_date: created_at } };
+      const { error: err2 } = await supabase.from("lead_events").insert(fallback);
+      if (!err2) {
+        eventsCreated++;
+      } else {
+        console.error("Event insert fallback also failed:", err2.message, evt.lead_id);
+      }
+    }
   }
 
   const result = {
