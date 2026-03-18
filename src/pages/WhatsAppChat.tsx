@@ -137,7 +137,7 @@ export default function WhatsAppChat() {
   const handleInstanceChange = (value: string) => {
     setSelectedInstanceId(value === 'all' ? 'all' : value);
     setSelectedPhone(null);
-    setChatInstanceId(null);
+    setReplyInstanceId(null);
   };
 
   const wrapWithSidebar = (content: React.ReactNode) => (
