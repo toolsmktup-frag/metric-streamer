@@ -7,7 +7,7 @@ import { Sheet, SheetContent, SheetHeader } from '@/components/ui/sheet';
 import { Lead } from '@/types/leadFunnels';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Mail, Phone, ShoppingCart, DollarSign, MapPin, Activity, UserPlus, CreditCard, CheckCircle2, XCircle, Clock, RotateCcw, AlertTriangle, LucideIcon } from 'lucide-react';
+import { Mail, Phone, ShoppingCart, DollarSign, MapPin, Activity, UserPlus, CreditCard, CheckCircle2, XCircle, Clock, RotateCcw, AlertTriangle, Eye, FileText, LucideIcon } from 'lucide-react';
 import { formatCurrency } from '@/lib/formatters';
 
 interface LeadTimelineProps {
@@ -37,6 +37,12 @@ const EVENT_MAP: Record<string, EventMapping> = {
   chargeback: { label: 'Chargeback', icon: AlertTriangle, colorClass: 'bg-destructive/10 text-destructive' },
   purchase: { label: 'Compra', icon: ShoppingCart, colorClass: 'bg-emerald-500/10 text-emerald-500' },
   compra: { label: 'Compra', icon: ShoppingCart, colorClass: 'bg-emerald-500/10 text-emerald-500' },
+  boleto_gerado: { label: 'Boleto Gerado', icon: FileText, colorClass: 'bg-amber-500/10 text-amber-500' },
+  bank_slip_created: { label: 'Boleto Gerado', icon: FileText, colorClass: 'bg-amber-500/10 text-amber-500' },
+  billet_printed: { label: 'Boleto Gerado', icon: FileText, colorClass: 'bg-amber-500/10 text-amber-500' },
+  open: { label: 'Checkout Aberto', icon: Eye, colorClass: 'bg-muted text-muted-foreground' },
+  waiting_payment: { label: 'Aguardando Pagamento', icon: Clock, colorClass: 'bg-amber-500/10 text-amber-500' },
+  import: { label: 'Importado', icon: UserPlus, colorClass: 'bg-muted text-muted-foreground' },
 };
 
 const DEFAULT_EVENT: EventMapping = { label: '', icon: Activity, colorClass: 'bg-primary/10 text-primary' };

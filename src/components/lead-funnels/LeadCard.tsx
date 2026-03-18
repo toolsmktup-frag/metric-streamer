@@ -12,6 +12,21 @@ interface LeadCardProps {
   isRevenue?: boolean;
 }
 
+const STATUS_LABELS: Record<string, string> = {
+  authorized: 'Aprovado', approved: 'Aprovado', paid: 'Aprovado', aprovada: 'Aprovado',
+  waiting_payment: 'Aguardando', pending: 'Aguardando', pix_created: 'PIX Gerado',
+  bank_slip_created: 'Boleto', billet_printed: 'Boleto',
+  rejected: 'Rejeitado', refused: 'Rejeitado', rejeitada: 'Rejeitado',
+  canceled: 'Cancelado', cancelled: 'Cancelado', cancelada: 'Cancelado',
+  expired: 'Expirado', expirada: 'Expirado',
+  refunded: 'Reembolsado', reembolsada: 'Reembolsado',
+  chargeback: 'Chargeback', open: 'Checkout',
+};
+
+function friendlyStatus(status: string): string {
+  return STATUS_LABELS[status.toLowerCase().trim()] || status;
+}
+
 const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, isDragging, isRevenue = true }) => {
   const lead = position.lead;
   const { data: purchaseData } = useLeadPurchases(lead.email, lead.phone);
@@ -111,7 +126,7 @@ const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, isDragging, isRe
         )}
         {!purchaseData?.totalOrders && lead.metadata?.status && (
           <span className="text-[10px] px-1.5 py-0.5 bg-muted rounded text-muted-foreground">
-            {lead.metadata.status as string}
+            {friendlyStatus(lead.metadata.status as string)}
           </span>
         )}
       </div>
