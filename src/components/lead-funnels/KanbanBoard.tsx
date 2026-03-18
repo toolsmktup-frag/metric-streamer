@@ -23,6 +23,7 @@ interface KanbanBoardProps {
   stages: LeadFunnelStage[];
   positions: (LeadStagePosition & { lead: Lead })[];
   onLeadClick?: (leadId: string) => void;
+  onWhatsAppClick?: (phone: string) => void;
   funnelId: string;
 }
 
@@ -43,7 +44,7 @@ const DroppableColumn: React.FC<{ id: string; isOver: boolean; children: React.R
   );
 };
 
-const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClick, funnelId }) => {
+const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClick, onWhatsAppClick, funnelId }) => {
   const [search, setSearch] = useState('');
   const [sortMode, setSortMode] = useState<SortMode>('recent');
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -231,6 +232,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
                         isDragging={activeId === pos.id}
                         isRevenue={isRevenue}
                         onClick={() => onLeadClick?.(pos.lead_id)}
+                        onWhatsAppClick={onWhatsAppClick}
                       />
                     ))
                   )}

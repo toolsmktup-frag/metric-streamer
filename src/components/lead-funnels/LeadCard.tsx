@@ -1,6 +1,6 @@
 import React from 'react';
 import { Lead, LeadStagePosition } from '@/types/leadFunnels';
-import { Mail, Phone, Clock, DollarSign, GripVertical } from 'lucide-react';
+import { Mail, Phone, Clock, DollarSign, GripVertical, MessageCircle } from 'lucide-react';
 import { useLeadPurchases } from '@/hooks/useLeadPurchases';
 import { useDraggable } from '@dnd-kit/core';
 import { formatLocalDateTime } from '@/lib/localDate';
@@ -8,6 +8,7 @@ import { formatLocalDateTime } from '@/lib/localDate';
 interface LeadCardProps {
   position: LeadStagePosition & { lead: Lead };
   onClick?: () => void;
+  onWhatsAppClick?: (phone: string) => void;
   isDragging?: boolean;
   isRevenue?: boolean;
 }
@@ -27,7 +28,7 @@ function friendlyStatus(status: string): string {
   return STATUS_LABELS[status.toLowerCase().trim()] || status;
 }
 
-const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, isDragging, isRevenue = true }) => {
+const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, onWhatsAppClick, isDragging, isRevenue = true }) => {
   const lead = position.lead;
   const { data: purchaseData } = useLeadPurchases(lead.email, lead.phone);
   const { attributes, listeners, setNodeRef, transform } = useDraggable({
@@ -83,6 +84,15 @@ const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, isDragging, isRe
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <Phone className="h-3 w-3 shrink-0" />
                 <span>{lead.phone}</span>
+                {onWhatsAppClick && (
+                  <button
+                    onClick={e => { e.stopPropagation(); onWhatsAppClick(lead.phone!); }}
+                    className="ml-1 text-emerald-500 hover:text-emerald-400 transition-colors"
+                    title="Abrir chat no WhatsApp"
+                  >
+                    <MessageCircle className="h-3.5 w-3.5" />
+                  </button>
+                )}
               </div>
             )}
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">

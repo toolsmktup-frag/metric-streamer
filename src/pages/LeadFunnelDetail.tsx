@@ -86,6 +86,10 @@ const LeadFunnelDetail: React.FC = () => {
     }
   };
 
+  const handleWhatsAppClick = (phone: string) => {
+    navigate(`/whatsapp?phone=${encodeURIComponent(phone)}`);
+  };
+
   // Auto-save nodes: update stage positions + upsert source nodes
   const handleAutoSaveNodes = useCallback(async (nodes: Node[]) => {
     if (!id) return;
@@ -213,6 +217,7 @@ const LeadFunnelDetail: React.FC = () => {
             stages={stages}
             positions={positions}
             onLeadClick={handleLeadClick}
+            onWhatsAppClick={handleWhatsAppClick}
             funnelId={funnel.id}
           />
         </TabsContent>

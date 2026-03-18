@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import type { WhatsAppMessage } from '@/hooks/useWhatsApp';
 import { MessageCircle, Settings, Plus, Wifi, WifiOff } from 'lucide-react';
 import { useWhatsAppInstances, useWhatsAppChats, useWhatsAppMessages, getInstanceDisplayName } from '@/hooks/useWhatsApp';
@@ -21,6 +22,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
 export default function WhatsAppChat() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const { instances, loading: loadingInstances, refetch: refetchInstances } = useWhatsAppInstances();
   const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null);
   const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
@@ -29,6 +31,22 @@ export default function WhatsAppChat() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [hubOpen, setHubOpen] = useState(false);
   const [optimisticMessages, setOptimisticMessages] = useState<WhatsAppMessage[]>([]);
+
+  // Auto-open chat from query param ?phone=
+  useEffect(() => {
+    const phoneParam = searchParams.get('phone');
+    if (phoneParam && !loadingInstances && instances.length > 0) {
+      setSelectedPhone(phoneParam);
+      // If single instance or "all" mode, auto-select
+      if (instances.length === 1) {
+        setChatInstanceId(instances[0].id);
+      } else {
+        setSelectedInstanceId('all');
+      }
+      // Clear param so it doesn't re-trigger
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, loadingInstances, instances, setSearchParams]);
 
   const isAllMode = selectedInstanceId === 'all';
 
