@@ -7,7 +7,7 @@ import { Sheet, SheetContent, SheetHeader } from '@/components/ui/sheet';
 import { Lead } from '@/types/leadFunnels';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Mail, Phone, ShoppingCart, DollarSign, MapPin, Activity, UserPlus, CreditCard } from 'lucide-react';
+import { Mail, Phone, ShoppingCart, DollarSign, MapPin, Activity, UserPlus, CreditCard, CheckCircle2, XCircle, Clock, RotateCcw, AlertTriangle, LucideIcon } from 'lucide-react';
 import { formatCurrency } from '@/lib/formatters';
 
 interface LeadTimelineProps {
@@ -16,15 +16,49 @@ interface LeadTimelineProps {
   onClose: () => void;
 }
 
+interface EventMapping {
+  label: string;
+  icon: LucideIcon;
+  colorClass: string;
+}
+
+const EVENT_MAP: Record<string, EventMapping> = {
+  lead_importado: { label: 'Lead Importado', icon: UserPlus, colorClass: 'bg-blue-500/10 text-blue-500' },
+  criado: { label: 'Lead Importado', icon: UserPlus, colorClass: 'bg-blue-500/10 text-blue-500' },
+  lead_created: { label: 'Lead Criado', icon: UserPlus, colorClass: 'bg-blue-500/10 text-blue-500' },
+  pago: { label: 'Pagamento Aprovado', icon: CheckCircle2, colorClass: 'bg-emerald-500/10 text-emerald-500' },
+  authorized: { label: 'Pagamento Aprovado', icon: CheckCircle2, colorClass: 'bg-emerald-500/10 text-emerald-500' },
+  pix_gerado: { label: 'PIX Gerado', icon: CreditCard, colorClass: 'bg-amber-500/10 text-amber-500' },
+  pix_created: { label: 'PIX Gerado', icon: CreditCard, colorClass: 'bg-amber-500/10 text-amber-500' },
+  rejeitado: { label: 'Pagamento Rejeitado', icon: XCircle, colorClass: 'bg-destructive/10 text-destructive' },
+  cancelado: { label: 'Cancelado', icon: XCircle, colorClass: 'bg-destructive/10 text-destructive' },
+  expirado: { label: 'Expirado', icon: Clock, colorClass: 'bg-muted text-muted-foreground' },
+  reembolsado: { label: 'Reembolsado', icon: RotateCcw, colorClass: 'bg-amber-500/10 text-amber-500' },
+  chargeback: { label: 'Chargeback', icon: AlertTriangle, colorClass: 'bg-destructive/10 text-destructive' },
+  purchase: { label: 'Compra', icon: ShoppingCart, colorClass: 'bg-emerald-500/10 text-emerald-500' },
+  compra: { label: 'Compra', icon: ShoppingCart, colorClass: 'bg-emerald-500/10 text-emerald-500' },
+};
+
+const DEFAULT_EVENT: EventMapping = { label: '', icon: Activity, colorClass: 'bg-primary/10 text-primary' };
+
+function getEventMapping(eventName: string): EventMapping {
+  const mapping = EVENT_MAP[eventName];
+  if (mapping) return mapping;
+  return { ...DEFAULT_EVENT, label: eventName };
+}
+
 function getInitials(name: string | null): string {
   if (!name) return '?';
   return name.split(' ').map(w => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
 }
 
-function getEventIcon(eventName: string) {
-  if (eventName === 'purchase' || eventName === 'compra') return ShoppingCart;
-  if (eventName === 'registration' || eventName === 'cadastro' || eventName === 'lead_created') return UserPlus;
-  return Activity;
+function getEventDate(ev: { created_at: string; metadata: Record<string, unknown> }): Date {
+  const originalDate = (ev.metadata as any)?.original_date;
+  if (originalDate) {
+    const d = new Date(originalDate);
+    if (!isNaN(d.getTime())) return d;
+  }
+  return new Date(ev.created_at);
 }
 
 const LeadTimeline: React.FC<LeadTimelineProps> = ({ lead, open, onClose }) => {
@@ -197,32 +231,22 @@ const LeadTimeline: React.FC<LeadTimelineProps> = ({ lead, open, onClose }) => {
                   <div className="absolute left-[11px] top-2 bottom-2 w-px bg-border" />
 
                   <div className="space-y-3">
-                    {events.map((ev, idx) => {
-                      const isPurchase = ev.event_name === 'purchase' || ev.event_name === 'compra';
-                      const Icon = getEventIcon(ev.event_name);
-                      const prevEvent = events[idx - 1];
-                      const timeDiff = prevEvent
-                        ? `+${formatDistanceToNow(new Date(ev.created_at), { locale: ptBR })}`
-                        : null;
+                    {events.map((ev) => {
+                      const mapping = getEventMapping(ev.event_name);
+                      const Icon = mapping.icon;
+                      const eventDate = getEventDate(ev);
 
                       return (
                         <div key={ev.id} className="flex gap-3 relative">
-                          <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 z-10 ${
-                            isPurchase
-                              ? 'bg-emerald-500/10 text-emerald-500'
-                              : 'bg-primary/10 text-primary'
-                          }`}>
+                          <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 z-10 ${mapping.colorClass}`}>
                             <Icon className="h-3 w-3" />
                           </div>
                           <div className="flex-1 min-w-0 pb-1">
                             <div className="flex items-center gap-2">
-                              <span className="text-xs font-medium text-foreground">{ev.event_name}</span>
-                              {timeDiff && (
-                                <span className="text-[10px] text-muted-foreground/60">{timeDiff}</span>
-                              )}
+                              <span className="text-xs font-medium text-foreground">{mapping.label}</span>
                             </div>
                             <p className="text-[10px] text-muted-foreground mt-0.5">
-                              {format(new Date(ev.created_at), 'dd/MM/yyyy HH:mm:ss')}
+                              {format(eventDate, 'dd/MM/yyyy HH:mm:ss')}
                             </p>
                             {ev.metadata && Object.keys(ev.metadata).length > 0 && (
                               <div className="flex items-center gap-2 mt-1 text-[10px] flex-wrap">
@@ -236,11 +260,6 @@ const LeadTimeline: React.FC<LeadTimelineProps> = ({ lead, open, onClose }) => {
                                   <span className="font-semibold text-emerald-600 dark:text-emerald-400">
                                     {formatCurrency(Number((ev.metadata as any).amount))}
                                   </span>
-                                )}
-                                {(ev.metadata as any).status && (
-                                  <Badge variant="secondary" className="text-[9px] px-1.5 py-0 h-4">
-                                    {(ev.metadata as any).status}
-                                  </Badge>
                                 )}
                                 {(ev.metadata as any).payment_method && (
                                   <span className="text-muted-foreground flex items-center gap-0.5">
