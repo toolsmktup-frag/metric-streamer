@@ -84,8 +84,6 @@ function emptySalesAgg(): SalesAggregation {
   };
 }
 
-// Use shared classification
-import { classifyTransaction as classifySale } from '@/lib/classifyTransaction';
 
 /**
  * Agrega vendas de todas as plataformas por campanha / adset / ad.
