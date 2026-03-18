@@ -29,3 +29,12 @@ verify_jwt = false
 
 [functions.whatsapp-instance]
 verify_jwt = false
+
+[functions.sync-leads-from-sales]
+verify_jwt = false
+
+[functions.guru-webhook]
+verify_jwt = false
+
+[functions.eduzz-webhook]
+verify_jwt = false
