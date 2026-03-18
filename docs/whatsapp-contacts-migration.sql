@@ -22,10 +22,6 @@ create index idx_whatsapp_contacts_org_instance on whatsapp_contacts(organizatio
 create policy "Org members can view contacts"
 on public.whatsapp_contacts for select
 to authenticated
-using (
-  organization_id in (
-    select organization_id from organization_members where user_id = auth.uid()
-  )
-);
+using (organization_id = public.get_user_org_id());
 
 -- Service role handles inserts/updates via webhook (bypasses RLS)
