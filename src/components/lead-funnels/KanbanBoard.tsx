@@ -77,6 +77,14 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
     return stageLeads;
   };
 
+  const getStageRevenue = (leads: (LeadStagePosition & { lead: Lead })[]) => {
+    return leads.reduce((sum, p) => sum + (Number(p.lead.metadata?.amount) || 0), 0);
+  };
+
+  const totalRevenue = useMemo(() => {
+    return positions.reduce((sum, p) => sum + (Number(p.lead.metadata?.amount) || 0), 0);
+  }, [positions]);
+
   const activePosition = activeId ? positions.find(p => p.id === activeId) : null;
 
   const handleDragStart = (event: DragStartEvent) => {
