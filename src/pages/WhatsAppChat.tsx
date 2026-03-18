@@ -120,9 +120,8 @@ export default function WhatsAppChat() {
     );
   }, []);
 
-  const handleSelectChat = useCallback((phone: string, instanceId?: string) => {
+  const handleSelectChat = useCallback((phone: string, _instanceId?: string) => {
     setSelectedPhone(phone);
-    if (instanceId) setChatInstanceId(instanceId);
   }, []);
 
   const selectedChat = useMemo(
