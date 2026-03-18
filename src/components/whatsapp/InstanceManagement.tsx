@@ -46,6 +46,7 @@ async function callInstanceAPI(instanceId: string, action: string, body: any = {
 
 interface InstanceManagementProps {
   instance: WhatsAppInstance | null;
+  instances?: WhatsAppInstance[];
   open: boolean;
   onClose: () => void;
   onInstanceDeleted?: () => void;
