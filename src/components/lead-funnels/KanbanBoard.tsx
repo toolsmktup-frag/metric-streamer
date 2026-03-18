@@ -23,6 +23,7 @@ interface KanbanBoardProps {
   stages: LeadFunnelStage[];
   positions: (LeadStagePosition & { lead: Lead })[];
   onLeadClick?: (leadId: string) => void;
+  onWhatsAppClick?: (phone: string) => void;
   funnelId: string;
 }
 
