@@ -159,7 +159,33 @@ const LeadFunnelDetail: React.FC = () => {
         {!funnel.is_active && (
           <span className="text-xs bg-destructive/10 text-destructive px-2 py-1 rounded">Inativo</span>
         )}
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/10">
+                <Trash2 className="h-4 w-4" />
+                Limpar Funil
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Limpar dados do funil?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Isso vai remover todos os leads e eventos deste funil. As etapas e configurações serão mantidas. Essa ação não pode ser desfeita.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleClearFunnel}
+                  disabled={clearing}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  {clearing ? 'Limpando...' : 'Sim, limpar tudo'}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
           <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setImportOpen(true)}>
             <Upload className="h-4 w-4" />
             Importar Leads
