@@ -2,19 +2,17 @@ import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useLeadStats } from '@/hooks/useAllLeads';
-import { Users, UserPlus, TrendingUp, Target, RefreshCw, Download } from 'lucide-react';
+import { Users, UserPlus, TrendingUp, Target, RefreshCw } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
-import * as XLSX from 'xlsx';
 
 const COLORS = ['hsl(var(--primary))', 'hsl(var(--accent))', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4'];
 
 const LeadsDashboard: React.FC = () => {
   const { data: stats, isLoading } = useLeadStats();
   const [syncing, setSyncing] = useState(false);
-  const [exporting, setExporting] = useState(false);
   const queryClient = useQueryClient();
 
   const handleSync = async () => {
@@ -37,84 +35,6 @@ const LeadsDashboard: React.FC = () => {
     }
   };
 
-  const handleExport = async () => {
-    setExporting(true);
-    try {
-      const contactMap = new Map<string, { name: string; email: string; phone: string; utm_source: string; utm_medium: string; utm_campaign: string }>();
-
-      // 1) Ticto transactions (authorized)
-      const { data: ticto } = await (supabase as any)
-        .from('ticto_transactions')
-        .select('customer_name, customer_email, customer_phone, utm_source, utm_medium, utm_campaign')
-        .eq('status', 'authorized');
-
-      for (const t of ticto || []) {
-        const key = (t.customer_email || '').toLowerCase().trim();
-        if (!key) continue;
-        if (!contactMap.has(key)) {
-          contactMap.set(key, {
-            name: t.customer_name || '',
-            email: key,
-            phone: t.customer_phone || '',
-            utm_source: t.utm_source || '',
-            utm_medium: t.utm_medium || '',
-            utm_campaign: t.utm_campaign || '',
-          });
-        }
-      }
-
-      // 2) customer_purchases joined with unified_customers
-      const { data: purchases } = await (supabase as any)
-        .from('customer_purchases')
-        .select('unified_customer_id, unified_customers(primary_email, full_name, primary_phone)')
-        .in('status', ['authorized', 'paid', 'approved', 'Aprovada']);
-
-      for (const p of purchases || []) {
-        const uc = p.unified_customers;
-        if (!uc) continue;
-        const key = (uc.primary_email || '').toLowerCase().trim();
-        if (!key) continue;
-        if (!contactMap.has(key)) {
-          contactMap.set(key, {
-            name: uc.full_name || '',
-            email: key,
-            phone: uc.primary_phone || '',
-            utm_source: '',
-            utm_medium: '',
-            utm_campaign: '',
-          });
-        }
-      }
-
-      if (contactMap.size === 0) {
-        toast.warning('Nenhum cliente encontrado para exportar.');
-        return;
-      }
-
-      const rows = Array.from(contactMap.values()).map(c => ({
-        Nome: c.name,
-        Email: c.email,
-        Telefone: c.phone,
-        'UTM Source': c.utm_source,
-        'UTM Medium': c.utm_medium,
-        'UTM Campaign': c.utm_campaign,
-      }));
-
-      const ws = XLSX.utils.json_to_sheet(rows);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Clientes');
-      XLSX.writeFile(wb, 'clientes-para-leads.xlsx');
-
-      toast.success(`${contactMap.size} clientes exportados!`, {
-        description: 'Agora importe o arquivo na BASE DE LEADS.',
-      });
-    } catch (err: any) {
-      toast.error('Erro ao exportar', { description: err.message });
-    } finally {
-      setExporting(false);
-    }
-  };
-
   if (isLoading) return <div className="p-6 text-muted-foreground">Carregando...</div>;
   if (!stats) return <div className="p-6 text-muted-foreground">Sem dados disponíveis.</div>;
 
@@ -129,10 +49,6 @@ const LeadsDashboard: React.FC = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Dashboard de Leads</h1>
-        <Button variant="outline" size="sm" onClick={handleExport} disabled={exporting}>
-          <Download className={`h-4 w-4`} />
-          {exporting ? 'Exportando...' : 'Exportar Clientes'}
-        </Button>
         <Button variant="outline" size="sm" onClick={handleSync} disabled={syncing}>
           <RefreshCw className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
           {syncing ? 'Sincronizando...' : 'Sincronizar Base'}

@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   DollarSign,
   TrendingUp,
@@ -13,7 +13,9 @@ import {
   Package,
   Receipt,
   GitCompare,
+  Download,
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
   ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, Legend,
@@ -198,6 +200,34 @@ export default function Resumo() {
           >
             <GitCompare className="h-4 w-4" />
             Comparar
+          </button>
+          <button
+            onClick={() => {
+              const rows = allSales.map(s => ({
+                Data: s.purchased_at ? new Date(s.purchased_at).toLocaleString('pt-BR') : '',
+                Nome: s.customer_name || '',
+                Email: s.customer_email || '',
+                Produto: s.product_name || '',
+                Oferta: s.offer_name || '',
+                Valor: s.revenue,
+                Status: s.status,
+                Pagamento: s.payment_method || '',
+                Plataforma: s.platform || '',
+                'UTM Source': s.utm_source || '',
+                'UTM Medium': s.utm_medium || '',
+                'UTM Campaign': s.utm_campaign || '',
+              }));
+              if (rows.length === 0) { toast.warning('Nenhuma venda para exportar.'); return; }
+              const ws = XLSX.utils.json_to_sheet(rows);
+              const wb = XLSX.utils.book_new();
+              XLSX.utils.book_append_sheet(wb, ws, 'Vendas');
+              XLSX.writeFile(wb, 'vendas.xlsx');
+              toast.success(`${rows.length} vendas exportadas!`);
+            }}
+            className="inline-flex items-center gap-2 rounded-lg border border-border bg-card text-muted-foreground px-3 py-2 text-sm font-medium hover:text-foreground hover:border-foreground/30 transition-colors"
+          >
+            <Download className="h-4 w-4" />
+            Exportar
           </button>
           <DateRangePicker />
           {isSyncRunning && !syncMeta.isPending && (
