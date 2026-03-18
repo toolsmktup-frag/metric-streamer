@@ -82,7 +82,10 @@ const App = () => (
           <Route path="/funis/:id/resumo" element={<Protected><FunilResumo /></Protected>} />
           <Route path="/funis/:id/kpi" element={<Protected><FunilKpi /></Protected>} />
           <Route path="/funis/:id/campanhas" element={<Protected><FunilCampanhas /></Protected>} />
-          {/* Funis de Leads */}
+          {/* Leads */}
+          <Route path="/leads/dashboard" element={<Protected><LeadsDashboard /></Protected>} />
+          <Route path="/leads" element={<Protected><LeadsList /></Protected>} />
+          <Route path="/leads/fontes" element={<Protected><LeadsSources /></Protected>} />
           <Route path="/lead-campaigns" element={<Protected><LeadCampaigns /></Protected>} />
           <Route path="/lead-funnels/:id" element={<Protected><LeadFunnelDetail /></Protected>} />
           {/* WhatsApp Chat - fullscreen layout */}

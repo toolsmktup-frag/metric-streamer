@@ -259,9 +259,9 @@ const AppSidebar = React.memo(function AppSidebar({ collapsed, onToggle }: AppSi
         {sectionLabel('Inteligência')}
         {INTELLIGENCE_ITEMS.map(item => navLink(item.path, item.label, item.icon))}
 
-        {/* Seção Funis de Leads */}
-        {sectionLabel('Funis de Leads')}
-        {LEAD_FUNNEL_ITEMS.map(item => navLink(item.path, item.label, item.icon))}
+        {/* Seção Leads */}
+        {sectionLabel('Leads')}
+        {LEAD_ITEMS.map(item => navLink(item.path, item.label, item.icon))}
 
         {/* Seção Ferramentas */}
         {sectionLabel('Ferramentas')}
