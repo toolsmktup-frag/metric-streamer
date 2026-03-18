@@ -274,11 +274,11 @@ async function performSync() {
     const leadId = leadIdByKey.get(key);
     if (!leadId) continue;
 
-    // Always add a "criado" event with the earliest date
+    // Always add a "lead_importado" event with the earliest date
     allEvents.push({
       lead_id: leadId,
       funnel_id: baseFunnel.id,
-      event_name: "criado",
+      event_name: "lead_importado",
       metadata: { source: "sync" },
       created_at: contact.firstPurchaseDate || new Date().toISOString(),
     });
