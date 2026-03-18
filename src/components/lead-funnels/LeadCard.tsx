@@ -1,9 +1,9 @@
 import React from 'react';
 import { Lead, LeadStagePosition } from '@/types/leadFunnels';
 import { Mail, Phone, Clock, DollarSign, GripVertical } from 'lucide-react';
-import { format } from 'date-fns';
 import { useLeadPurchases } from '@/hooks/useLeadPurchases';
 import { useDraggable } from '@dnd-kit/core';
+import { formatLocalDateTime } from '@/lib/localDate';
 
 interface LeadCardProps {
   position: LeadStagePosition & { lead: Lead };
@@ -15,7 +15,7 @@ interface LeadCardProps {
 const STATUS_LABELS: Record<string, string> = {
   authorized: 'Aprovado', approved: 'Aprovado', paid: 'Aprovado', aprovada: 'Aprovado',
   waiting_payment: 'Aguardando', pending: 'Aguardando', pix_created: 'PIX Gerado',
-  bank_slip_created: 'Boleto', billet_printed: 'Boleto',
+  bank_slip_created: 'Boleto', bank_slip_delayed: 'Boleto', billet_printed: 'Boleto',
   rejected: 'Rejeitado', refused: 'Rejeitado', rejeitada: 'Rejeitado',
   canceled: 'Cancelado', cancelled: 'Cancelado', cancelada: 'Cancelado',
   expired: 'Expirado', expirada: 'Expirado',
@@ -54,7 +54,6 @@ const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, isDragging, isRe
       onClick={onClick}
     >
       <div className="flex items-start gap-2.5">
-        {/* Drag handle */}
         <button
           {...attributes}
           {...listeners}
@@ -64,7 +63,6 @@ const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, isDragging, isRe
           <GripVertical className="h-4 w-4" />
         </button>
 
-        {/* Avatar */}
         <div className="h-8 w-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold shrink-0">
           {initials}
         </div>
@@ -89,13 +87,12 @@ const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, isDragging, isRe
             )}
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <Clock className="h-3 w-3 shrink-0" />
-              <span>{format(new Date(position.entered_at), 'dd/MM HH:mm')}</span>
+              <span>{formatLocalDateTime(position.entered_at, 'dd/MM HH:mm')}</span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Purchase summary row */}
       <div className="mt-2 flex items-center gap-2 flex-wrap">
         {purchaseData && purchaseData.totalOrders > 0 && (
           <>
@@ -108,7 +105,6 @@ const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, isDragging, isRe
             </span>
           </>
         )}
-        {/* Metadata from import: product & amount */}
         {!purchaseData?.totalOrders && lead.metadata?.product_name && (
           <span className="text-[10px] px-1.5 py-0.5 bg-primary/10 text-primary rounded font-medium truncate max-w-[140px]">
             {lead.metadata.product_name as string}

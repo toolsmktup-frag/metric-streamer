@@ -117,7 +117,11 @@ function parseSpreadsheet(file: File): Promise<Record<string, string>[]> {
         const data = new Uint8Array(e.target?.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: 'array' });
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const json = XLSX.utils.sheet_to_json<Record<string, string>>(sheet, { defval: '' });
+        const json = XLSX.utils.sheet_to_json<Record<string, string>>(sheet, {
+          defval: '',
+          raw: false,
+          blankrows: false,
+        });
         resolve(json);
       } catch (err) {
         reject(err);
@@ -219,46 +223,21 @@ const ImportLeadsDialog: React.FC<ImportLeadsDialogProps> = ({
     setImporting(true);
     setProgress(0);
 
-    if (separateByStatus && uniqueStatuses.length > 0) {
-      // Group leads by their mapped stage
-      const groups: Record<string, ParsedLead[]> = {};
-      for (const lead of parsedRows) {
-        const status = getLeadStatus(lead);
-        const targetStage = (status && statusStageMap[status]) || selectedStage;
-        if (!groups[targetStage]) groups[targetStage] = [];
-        groups[targetStage].push(lead);
-      }
+    const res = await importMutation.mutateAsync({
+      leads: parsedRows,
+      funnelId,
+      stageId: selectedStage,
+      organizationId,
+      resolveStageId: separateByStatus
+        ? (lead) => {
+            const status = getLeadStatus(lead as ParsedLead);
+            return (status && statusStageMap[status]) || selectedStage;
+          }
+        : undefined,
+      onProgress: (done, total) => setProgress(Math.round((done / total) * 100)),
+    });
 
-      let totalImported = 0;
-      let totalSkipped = 0;
-      let processed = 0;
-      const totalLeads = parsedRows.length;
-
-      for (const [stageId, leads] of Object.entries(groups)) {
-        const res = await importMutation.mutateAsync({
-          leads,
-          funnelId,
-          stageId,
-          organizationId,
-          onProgress: (done) => setProgress(Math.round(((processed + done) / totalLeads) * 100)),
-        });
-        totalImported += res.imported;
-        totalSkipped += res.skipped;
-        processed += leads.length;
-      }
-
-      setResult({ imported: totalImported, skipped: totalSkipped });
-    } else {
-      const res = await importMutation.mutateAsync({
-        leads: parsedRows,
-        funnelId,
-        stageId: selectedStage,
-        organizationId,
-        onProgress: (done, total) => setProgress(Math.round((done / total) * 100)),
-      });
-      setResult(res);
-    }
-
+    setResult(res);
     setImporting(false);
   };
 
