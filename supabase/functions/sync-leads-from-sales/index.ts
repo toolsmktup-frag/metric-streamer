@@ -100,7 +100,7 @@ async function performSync() {
   // This is the canonical deduplicated source
   const { data: customers } = await supabase
     .from("unified_customers")
-    .select("id, email, phone, name")
+    .select("id, primary_email, primary_phone, full_name")
     .eq("organization_id", ORG_ID);
 
   const { data: purchases } = await supabase
@@ -113,7 +113,7 @@ async function performSync() {
   // Build customer map by unified_customer_id (already deduplicated)
   const custMap = new Map<string, { email: string | null; phone: string | null; name: string | null }>();
   for (const c of (customers || [])) {
-    custMap.set(c.id, { email: normalizeEmail(c.email), phone: normalizePhone(c.phone), name: c.name });
+    custMap.set(c.id, { email: normalizeEmail(c.primary_email), phone: normalizePhone(c.primary_phone), name: c.full_name });
   }
 
   // ===== STEP 3: Build unique contacts from unified_customers that have purchases =====
