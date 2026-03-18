@@ -98,12 +98,61 @@ export function useUpsertStages() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ funnelId, stages }: { funnelId: string; stages: Partial<LeadFunnelStage>[] }) => {
-      await (supabase as any).from('lead_funnel_stages').delete().eq('funnel_id', funnelId);
-      if (stages.length === 0) return [];
+      // Separate existing stages (have id) from new ones
+      const existingStages = stages.filter(s => s.id);
+      const newStages = stages.filter(s => !s.id);
+      const keepIds = existingStages.map(s => s.id!);
+
+      // Delete stages that were removed (not in keepIds)
+      if (keepIds.length > 0) {
+        await (supabase as any)
+          .from('lead_funnel_stages')
+          .delete()
+          .eq('funnel_id', funnelId)
+          .not('id', 'in', `(${keepIds.join(',')})`);
+      } else {
+        await (supabase as any)
+          .from('lead_funnel_stages')
+          .delete()
+          .eq('funnel_id', funnelId);
+      }
+
+      // Update existing stages
+      for (let i = 0; i < existingStages.length; i++) {
+        const s = existingStages[i];
+        await (supabase as any)
+          .from('lead_funnel_stages')
+          .update({
+            name: s.name,
+            color: s.color,
+            sort_order: stages.indexOf(s),
+            page_url: s.page_url || null,
+            page_type: s.page_type || null,
+          })
+          .eq('id', s.id);
+      }
+
+      // Insert new stages
+      if (newStages.length > 0) {
+        const { error } = await (supabase as any)
+          .from('lead_funnel_stages')
+          .insert(newStages.map((s, i) => ({
+            funnel_id: funnelId,
+            name: s.name,
+            color: s.color,
+            sort_order: existingStages.length + i,
+            page_url: s.page_url || null,
+            page_type: s.page_type || null,
+          })));
+        if (error) throw error;
+      }
+
+      // Fetch final result
       const { data, error } = await (supabase as any)
         .from('lead_funnel_stages')
-        .insert(stages.map((s, i) => ({ ...s, funnel_id: funnelId, sort_order: i })))
-        .select();
+        .select()
+        .eq('funnel_id', funnelId)
+        .order('sort_order');
       if (error) throw error;
       return data as LeadFunnelStage[];
     },
