@@ -4,7 +4,19 @@ import { useLeadFunnel, useUpsertStages, useUpsertTransitionRules, useFunnelSour
 import { useLeadsByFunnel, useFunnelLeadCounts } from '@/hooks/useLeads';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Upload } from 'lucide-react';
+import { ArrowLeft, Upload, Trash2 } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import KanbanBoard from '@/components/lead-funnels/KanbanBoard';
 import FunnelVisual from '@/components/lead-funnels/FunnelVisual';
 import FunnelConfigTab from '@/components/lead-funnels/FunnelConfigTab';
