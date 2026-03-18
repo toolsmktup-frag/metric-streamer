@@ -171,7 +171,7 @@ const AppSidebar = React.memo(function AppSidebar({ collapsed, onToggle }: AppSi
         </button>
 
         {/* Seção Funis */}
-        {sectionLabel('Funis')}
+        {sectionLabel('Tráfego')}
 
         {funnels.map(funnel => (
           <div key={funnel.id}>
