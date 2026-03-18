@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useCallback } from 'react';
 import type { WhatsAppMessage } from '@/hooks/useWhatsApp';
 import { MessageCircle, Settings, Plus, Wifi, WifiOff } from 'lucide-react';
 import { useWhatsAppInstances, useWhatsAppChats, useWhatsAppMessages } from '@/hooks/useWhatsApp';
+import { useWhatsAppMultiChats } from '@/hooks/useWhatsAppMultiChat';
 import InstanceManagement from '@/components/whatsapp/InstanceManagement';
 import ChatList from '@/components/whatsapp/ChatList';
 import ChatThread from '@/components/whatsapp/ChatThread';
@@ -57,7 +58,6 @@ function AddInstanceDialog({ onCreated }: { onCreated: () => void }) {
 
       if (error) throw error;
 
-      // Auto-configure webhook for the new instance
       const { data: instances } = await (supabase as any)
         .from('whatsapp_instances')
         .select('id')
@@ -130,10 +130,14 @@ export default function WhatsAppChat() {
   const { instances, loading: loadingInstances, refetch: refetchInstances } = useWhatsAppInstances();
   const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null);
   const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
+  // Track which instance the selected chat belongs to (for multi-instance view)
+  const [chatInstanceId, setChatInstanceId] = useState<string | null>(null);
   const [showPanel, setShowPanel] = useState(true);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [instanceMgmtOpen, setInstanceMgmtOpen] = useState(false);
   const [optimisticMessages, setOptimisticMessages] = useState<WhatsAppMessage[]>([]);
+
+  const isAllMode = selectedInstanceId === 'all';
 
   // Clear optimistic messages when switching chats
   useEffect(() => {
@@ -151,18 +155,28 @@ export default function WhatsAppChat() {
     return () => clearInterval(interval);
   }, []);
 
-  // Auto-select first instance
-  const activeInstance = selectedInstanceId || instances[0]?.id || null;
-  const activeInstanceData = instances.find(i => i.id === activeInstance);
-  const isDisconnected = activeInstanceData?.status !== 'connected';
+  // For single instance mode
+  const singleInstanceId = isAllMode ? null : (selectedInstanceId || instances[0]?.id || null);
+  const activeInstanceData = instances.find(i => i.id === singleInstanceId);
+  const isDisconnected = activeInstanceData ? activeInstanceData.status !== 'connected' : false;
 
-  const { chats, loading: loadingChats, refetch: refetchChats } = useWhatsAppChats(activeInstance);
-  const { messages, loading: loadingMessages } = useWhatsAppMessages(activeInstance, selectedPhone);
+  // The effective instance for messages (either single mode or from selected chat in multi mode)
+  const effectiveInstanceId = isAllMode ? chatInstanceId : singleInstanceId;
 
-  // Merge real + optimistic messages, removing optimistic once real arrives
+  const { chats: singleChats, loading: loadingSingleChats, refetch: refetchSingleChats } = useWhatsAppChats(singleInstanceId);
+  const { chats: multiChats, loading: loadingMultiChats, refetch: refetchMultiChats } = useWhatsAppMultiChats(
+    isAllMode ? instances : []
+  );
+
+  const activeChats = isAllMode ? multiChats : singleChats;
+  const loadingChats = isAllMode ? loadingMultiChats : loadingSingleChats;
+  const refetchChats = isAllMode ? refetchMultiChats : refetchSingleChats;
+
+  const { messages, loading: loadingMessages } = useWhatsAppMessages(effectiveInstanceId, selectedPhone);
+
+  // Merge real + optimistic messages
   const mergedMessages = useMemo(() => {
     const realIds = new Set(messages.map(m => m.id));
-    // Remove optimistic msgs that have a matching real msg (same body+direction+phone within 30s)
     const filtered = optimisticMessages.filter(opt => {
       if (realIds.has(opt.id)) return false;
       return !messages.some(
@@ -185,15 +199,29 @@ export default function WhatsAppChat() {
     );
   }, []);
 
+  const handleSelectChat = useCallback((phone: string, instanceId?: string) => {
+    setSelectedPhone(phone);
+    if (instanceId) {
+      setChatInstanceId(instanceId);
+    }
+  }, []);
+
   const selectedChat = useMemo(
-    () => chats.find(c => c.phone === selectedPhone),
-    [chats, selectedPhone]
+    () => activeChats.find(c => c.phone === selectedPhone),
+    [activeChats, selectedPhone]
   );
 
   useEffect(() => {
     if (!selectedPhone || loadingMessages) return;
     refetchChats();
   }, [selectedPhone, loadingMessages, refetchChats]);
+
+  // Handle instance selector change
+  const handleInstanceChange = (value: string) => {
+    setSelectedInstanceId(value === 'all' ? 'all' : value);
+    setSelectedPhone(null);
+    setChatInstanceId(null);
+  };
 
   const wrapWithSidebar = (content: React.ReactNode) => (
     <div className="flex min-h-screen w-full bg-background">
@@ -227,6 +255,8 @@ export default function WhatsAppChat() {
     );
   }
 
+  const selectorValue = isAllMode ? 'all' : (singleInstanceId || '');
+
   return wrapWithSidebar(
     <>
       {/* Top bar */}
@@ -234,22 +264,25 @@ export default function WhatsAppChat() {
         <div className="flex items-center gap-2">
           <MessageCircle className="h-4 w-4 text-primary" />
           <span className="font-semibold text-sm text-foreground">WhatsApp</span>
-          {instances.length > 1 && (
-            <Select value={activeInstance || ''} onValueChange={v => { setSelectedInstanceId(v); setSelectedPhone(null); }}>
-              <SelectTrigger className="h-7 w-40 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {instances.map(inst => (
-                  <SelectItem key={inst.id} value={inst.id}>
-                    {inst.display_name || inst.instance_name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-          {/* Status indicator */}
-          {activeInstanceData && (
+          <Select value={selectorValue} onValueChange={handleInstanceChange}>
+            <SelectTrigger className="h-7 w-44 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {instances.length > 1 && (
+                <SelectItem value="all">
+                  📋 Todas as instâncias
+                </SelectItem>
+              )}
+              {instances.map(inst => (
+                <SelectItem key={inst.id} value={inst.id}>
+                  {inst.display_name || inst.instance_name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {/* Status indicator (only in single mode) */}
+          {!isAllMode && activeInstanceData && (
             <div className="flex items-center gap-1.5 ml-2">
               {activeInstanceData.profile_pic_url && (
                 <img src={activeInstanceData.profile_pic_url} alt="" className="h-5 w-5 rounded-full object-cover" />
@@ -292,10 +325,11 @@ export default function WhatsAppChat() {
         {/* Chat list */}
         <div className="w-[280px] shrink-0">
           <ChatList
-            chats={chats}
+            chats={activeChats}
             loading={loadingChats}
             selectedPhone={selectedPhone}
-            onSelectChat={setSelectedPhone}
+            onSelectChat={handleSelectChat}
+            showInstanceBadge={isAllMode}
           />
         </div>
 
@@ -306,9 +340,9 @@ export default function WhatsAppChat() {
             loading={loadingMessages}
             phone={selectedPhone}
           />
-          {selectedPhone && activeInstance && (
+          {selectedPhone && effectiveInstanceId && (
             <ChatInput
-              instanceId={activeInstance}
+              instanceId={effectiveInstanceId}
               phone={selectedPhone}
               onOptimisticSend={handleOptimisticSend}
               onOptimisticUpdate={handleOptimisticUpdate}
@@ -328,7 +362,7 @@ export default function WhatsAppChat() {
       </div>
 
       <InstanceManagement
-        instance={instances.find(i => i.id === activeInstance) || null}
+        instance={instances.find(i => i.id === (isAllMode ? chatInstanceId : singleInstanceId)) || null}
         open={instanceMgmtOpen}
         onClose={() => setInstanceMgmtOpen(false)}
         onInstanceDeleted={() => refetchInstances()}
