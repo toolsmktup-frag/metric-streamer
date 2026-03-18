@@ -117,7 +117,11 @@ function parseSpreadsheet(file: File): Promise<Record<string, string>[]> {
         const data = new Uint8Array(e.target?.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: 'array' });
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const json = XLSX.utils.sheet_to_json<Record<string, string>>(sheet, { defval: '' });
+        const json = XLSX.utils.sheet_to_json<Record<string, string>>(sheet, {
+          defval: '',
+          raw: false,
+          blankrows: false,
+        });
         resolve(json);
       } catch (err) {
         reject(err);
