@@ -36,12 +36,14 @@ export default function WhatsAppChat() {
   useEffect(() => {
     const phoneParam = searchParams.get('phone');
     if (phoneParam && !loadingInstances && instances.length > 0) {
-      setSelectedPhone(phoneParam);
-      // If single instance or "all" mode, auto-select
+      const cleanPhone = phoneParam.replace(/\D/g, '');
+      setSelectedPhone(cleanPhone);
       if (instances.length === 1) {
+        setSelectedInstanceId(instances[0].id);
         setChatInstanceId(instances[0].id);
       } else {
         setSelectedInstanceId('all');
+        setChatInstanceId(null);
       }
       // Clear param so it doesn't re-trigger
       setSearchParams({}, { replace: true });
