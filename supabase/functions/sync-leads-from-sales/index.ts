@@ -9,6 +9,19 @@ const corsHeaders = {
 const ORG_ID = "00000000-0000-0000-0000-000000000001";
 const APPROVED_STATUSES = ["authorized", "approved", "paid", "completed", "Aprovada", "aprovada"];
 
+function mapStatusToEventName(status: string | null): string {
+  if (!status) return "evento_desconhecido";
+  const s = status.toLowerCase().trim();
+  if (["authorized", "approved", "paid", "completed", "aprovada"].includes(s)) return "pago";
+  if (["waiting_payment", "pending", "pendente", "waiting"].includes(s)) return "pix_gerado";
+  if (["rejected", "recusada", "refused"].includes(s)) return "rejeitado";
+  if (["cancelled", "canceled", "cancelada"].includes(s)) return "cancelado";
+  if (["expired", "expirada"].includes(s)) return "expirado";
+  if (["refunded", "reembolsada", "reembolsado"].includes(s)) return "reembolsado";
+  if (["chargeback"].includes(s)) return "chargeback";
+  return s; // fallback: use raw status
+}
+
 function normalizeEmail(email: string | null): string | null {
   if (!email) return null;
   const trimmed = email.trim().toLowerCase();
