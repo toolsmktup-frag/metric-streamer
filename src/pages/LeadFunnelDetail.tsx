@@ -4,7 +4,19 @@ import { useLeadFunnel, useUpsertStages, useUpsertTransitionRules, useFunnelSour
 import { useLeadsByFunnel, useFunnelLeadCounts } from '@/hooks/useLeads';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Upload } from 'lucide-react';
+import { ArrowLeft, Upload, Trash2 } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import KanbanBoard from '@/components/lead-funnels/KanbanBoard';
 import FunnelVisual from '@/components/lead-funnels/FunnelVisual';
 import FunnelConfigTab from '@/components/lead-funnels/FunnelConfigTab';
@@ -30,10 +42,41 @@ const LeadFunnelDetail: React.FC = () => {
   const upsertRules = useUpsertTransitionRules();
   const saveSourceNodes = useSaveFunnelSourceNodes();
   const saveFunnelEdges = useSaveFunnelEdges();
+  const queryClient = useQueryClient();
 
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [timelineOpen, setTimelineOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [clearing, setClearing] = useState(false);
+
+  const handleClearFunnel = async () => {
+    if (!id) return;
+    setClearing(true);
+    try {
+      // Delete lead events for this funnel
+      await (supabase as any)
+        .from('lead_events')
+        .delete()
+        .eq('funnel_id', id);
+
+      // Delete lead stage positions for this funnel
+      await (supabase as any)
+        .from('lead_stage_positions')
+        .delete()
+        .eq('funnel_id', id);
+
+      // Invalidate queries to refresh UI
+      queryClient.invalidateQueries({ queryKey: ['leads-by-funnel', id] });
+      queryClient.invalidateQueries({ queryKey: ['funnel-lead-counts', id] });
+
+      toast.success('Dados do funil limpos com sucesso!');
+    } catch (err) {
+      console.error(err);
+      toast.error('Erro ao limpar dados do funil');
+    } finally {
+      setClearing(false);
+    }
+  };
 
   const handleLeadClick = (leadId: string) => {
     const pos = positions.find(p => p.lead_id === leadId);
@@ -116,7 +159,33 @@ const LeadFunnelDetail: React.FC = () => {
         {!funnel.is_active && (
           <span className="text-xs bg-destructive/10 text-destructive px-2 py-1 rounded">Inativo</span>
         )}
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/10">
+                <Trash2 className="h-4 w-4" />
+                Limpar Funil
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Limpar dados do funil?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Isso vai remover todos os leads e eventos deste funil. As etapas e configurações serão mantidas. Essa ação não pode ser desfeita.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleClearFunnel}
+                  disabled={clearing}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  {clearing ? 'Limpando...' : 'Sim, limpar tudo'}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
           <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setImportOpen(true)}>
             <Upload className="h-4 w-4" />
             Importar Leads
