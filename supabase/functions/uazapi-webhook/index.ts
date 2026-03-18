@@ -327,6 +327,25 @@ Deno.serve(async (req) => {
       throw insertErr
     }
 
+    // Upsert contact info when we have a sender name (inbound or from chat metadata)
+    const contactName = senderName || (chat?.name || chat?.wa_name || null)
+    const contactPic = chat?.imagePreview || chat?.profilePicUrl || null
+    if (contactName && phone) {
+      const { error: contactErr } = await supabaseAdmin
+        .from('whatsapp_contacts')
+        .upsert({
+          organization_id: orgId,
+          instance_id: instanceId,
+          phone,
+          name: contactName,
+          profile_pic_url: contactPic,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'organization_id,instance_id,phone' })
+      if (contactErr) {
+        console.error('Error upserting contact:', contactErr)
+      }
+    }
+
     console.log('Message saved successfully:', direction, phone)
     return new Response(JSON.stringify({ ok: true, type: direction, phone }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
