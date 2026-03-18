@@ -248,9 +248,13 @@ const AppSidebar = React.memo(function AppSidebar({ collapsed, onToggle }: AppSi
           </NavLink>
         )}
 
-        {/* Seção Análises */}
-        {sectionLabel('Análises')}
-        {GENERAL_ITEMS.map(item => navLink(item.path, item.label, item.icon))}
+        {/* Seção Análise de Anúncios */}
+        {sectionLabel('Anúncios')}
+        {AD_ANALYSIS_ITEMS.map(item => navLink(item.path, item.label, item.icon))}
+
+        {/* Seção Inteligência */}
+        {sectionLabel('Inteligência')}
+        {INTELLIGENCE_ITEMS.map(item => navLink(item.path, item.label, item.icon))}
 
         {/* Seção Funis de Leads */}
         {sectionLabel('Funis de Leads')}
