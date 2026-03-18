@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { LeadFunnelStage, Lead, LeadStagePosition } from '@/types/leadFunnels';
 import { MetricCard } from '@/components/kpi/MetricCard';
-import { Users, DollarSign, TrendingDown, Receipt } from 'lucide-react';
+import { Users, DollarSign, TrendingDown, Receipt, Package } from 'lucide-react';
 import { formatCurrency, formatPercent } from '@/lib/formatters';
 import { isRevenueStage } from '@/lib/revenueStage';
 
