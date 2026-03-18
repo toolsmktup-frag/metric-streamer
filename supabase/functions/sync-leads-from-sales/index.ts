@@ -9,6 +9,17 @@ const corsHeaders = {
 const ORG_ID = "00000000-0000-0000-0000-000000000001";
 const APPROVED_STATUSES = ["authorized", "approved", "paid", "completed", "Aprovada", "aprovada"];
 
+function normalizeEmail(email: string | null): string | null {
+  return email ? email.trim().toLowerCase() : null;
+}
+
+function normalizePhone(phone: string | null): string | null {
+  if (!phone) return null;
+  // Keep only digits
+  const digits = phone.replace(/\D/g, "");
+  return digits.length >= 8 ? digits : null;
+}
+
 async function performSync() {
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
@@ -16,7 +27,6 @@ async function performSync() {
   );
 
   // ===== STEP 0: Clean existing data =====
-  // Get all lead IDs for this org
   const { data: orgLeads } = await supabase
     .from("leads")
     .select("id")
@@ -25,7 +35,6 @@ async function performSync() {
   const leadIds = (orgLeads || []).map((l: any) => l.id);
 
   if (leadIds.length > 0) {
-    // Delete in batches to avoid payload limits
     for (let i = 0; i < leadIds.length; i += 500) {
       const chunk = leadIds.slice(i, i + 500);
       await supabase.from("lead_events").delete().in("lead_id", chunk);
@@ -75,7 +84,6 @@ async function performSync() {
     ]);
   }
 
-  // Get first stage
   const { data: firstStage } = await supabase
     .from("lead_funnel_stages")
     .select("id")
@@ -85,85 +93,69 @@ async function performSync() {
     .maybeSingle();
 
   if (!firstStage) {
-    console.error("No stages found for BASE DE LEADS funnel");
     return { success: false, error: "No stages found", leads_created: 0, events_created: 0 };
   }
 
-  // ===== STEP 2: Fetch transactions (only approved) =====
-  const { data: tictoTxs, error: tictoErr } = await supabase
-    .from("ticto_transactions")
-    .select("customer_email, customer_phone, customer_name, product_name, status, paid_amount, order_date, utm_source")
-    .in("status", APPROVED_STATUSES)
-    .order("order_date", { ascending: true });
+  // ===== STEP 2: Fetch ONLY from unified_customers + customer_purchases =====
+  // This is the canonical deduplicated source
+  const { data: customers } = await supabase
+    .from("unified_customers")
+    .select("id, email, phone, name")
+    .eq("organization_id", ORG_ID);
 
-  if (tictoErr) throw tictoErr;
-
-  // ===== STEP 3: Fetch customer_purchases with unified_customers =====
-  const { data: purchasesWithCust } = await supabase
+  const { data: purchases } = await supabase
     .from("customer_purchases")
     .select("unified_customer_id, product_name, status, gross_amount, purchased_at, utm_source, platform")
+    .eq("organization_id", ORG_ID)
     .in("status", APPROVED_STATUSES)
     .order("purchased_at", { ascending: true });
 
-  const { data: customers } = await supabase
-    .from("unified_customers")
-    .select("id, email, phone, name");
+  // Build customer map by unified_customer_id (already deduplicated)
+  const custMap = new Map<string, { email: string | null; phone: string | null; name: string | null }>();
+  for (const c of (customers || [])) {
+    custMap.set(c.id, { email: normalizeEmail(c.email), phone: normalizePhone(c.phone), name: c.name });
+  }
 
-  const custMap = new Map((customers || []).map((c: any) => [c.id, c]));
-  const purchaseContacts = (purchasesWithCust || []).map((p: any) => {
-    const cust = custMap.get(p.unified_customer_id);
-    return { ...p, email: cust?.email, phone: cust?.phone, name: cust?.name };
-  });
-
-  // ===== STEP 4: Merge into unique contact map =====
+  // ===== STEP 3: Build unique contacts from unified_customers that have purchases =====
   const contactMap = new Map<string, {
     email: string | null; phone: string | null; name: string | null;
     utm_source: string | null;
     events: { event_name: string; metadata: Record<string, unknown>; created_at: string }[];
   }>();
 
-  function normalizeEmail(email: string | null): string | null {
-    return email ? email.trim().toLowerCase() : null;
-  }
+  for (const p of (purchases || [])) {
+    const cust = custMap.get(p.unified_customer_id);
+    if (!cust) continue;
 
-  function addContact(
-    rawEmail: string | null, phone: string | null, name: string | null,
-    utm_source: string | null,
-    event: { event_name: string; metadata: Record<string, unknown>; created_at: string }
-  ) {
-    const email = normalizeEmail(rawEmail);
-    const key = email || phone;
-    if (!key) return;
+    // Use unified_customer_id as key (already deduplicated by the resolve_or_create_customer RPC)
+    const key = p.unified_customer_id;
     const existing = contactMap.get(key);
+    const event = {
+      event_name: "purchase",
+      metadata: { platform: p.platform || "unknown", product_name: p.product_name, status: p.status, amount: p.gross_amount },
+      created_at: p.purchased_at || new Date().toISOString(),
+    };
+
     if (existing) {
       existing.events.push(event);
-      if (name && !existing.name) existing.name = name;
-      if (phone && !existing.phone) existing.phone = phone;
-      if (email && !existing.email) existing.email = email;
     } else {
-      contactMap.set(key, { email, phone, name, utm_source, events: [event] });
+      contactMap.set(key, {
+        email: cust.email,
+        phone: cust.phone,
+        name: cust.name,
+        utm_source: p.utm_source || null,
+        events: [event],
+      });
     }
   }
 
-  (tictoTxs || []).forEach((tx: any) => {
-    addContact(tx.customer_email, tx.customer_phone, tx.customer_name, tx.utm_source, {
-      event_name: "purchase",
-      metadata: { platform: "ticto", product_name: tx.product_name, status: tx.status, amount_cents: tx.paid_amount },
-      created_at: tx.order_date || new Date().toISOString(),
-    });
-  });
+  console.log(`Unique customers with approved purchases: ${contactMap.size}`);
 
-  purchaseContacts.forEach((p: any) => {
-    addContact(p.email, p.phone, p.name, p.utm_source, {
-      event_name: "purchase",
-      metadata: { platform: p.platform || "guru", product_name: p.product_name, status: p.status, amount: p.gross_amount },
-      created_at: p.purchased_at || new Date().toISOString(),
-    });
-  });
-
-  // ===== STEP 5: Insert all leads fresh =====
+  // ===== STEP 4: Insert leads =====
   const newLeads: any[] = [];
-  for (const [_key, contact] of contactMap) {
+  const keyOrder: string[] = [];
+  for (const [key, contact] of contactMap) {
+    keyOrder.push(key);
     newLeads.push({
       organization_id: ORG_ID,
       phone: contact.phone || null,
@@ -174,22 +166,20 @@ async function performSync() {
     });
   }
 
-  const leadByEmail = new Map<string, string>();
-  const leadByPhone = new Map<string, string>();
+  const leadIdByKey = new Map<string, string>();
   let created = 0;
 
   for (let i = 0; i < newLeads.length; i += 500) {
     const chunk = newLeads.slice(i, i + 500);
-    const { data: inserted, error } = await supabase.from("leads").insert(chunk).select("id, email, phone");
+    const { data: inserted, error } = await supabase.from("leads").insert(chunk).select("id");
     if (error) { console.error("Batch insert error:", error); continue; }
-    created += (inserted || []).length;
-    (inserted || []).forEach((l: any) => {
-      if (l.email) leadByEmail.set(l.email.trim().toLowerCase(), l.id);
-      if (l.phone) leadByPhone.set(l.phone, l.id);
+    (inserted || []).forEach((l: any, idx: number) => {
+      leadIdByKey.set(keyOrder[i + idx], l.id);
     });
+    created += (inserted || []).length;
   }
 
-  // ===== STEP 6: Position all leads in BASE DE LEADS =====
+  // ===== STEP 5: Position all leads in BASE DE LEADS =====
   const { data: allLeads } = await supabase
     .from("leads")
     .select("id")
@@ -209,10 +199,10 @@ async function performSync() {
     else console.error("Position insert error:", error);
   }
 
-  // ===== STEP 7: Insert events =====
+  // ===== STEP 6: Insert events =====
   const allEvents: any[] = [];
-  for (const [_key, contact] of contactMap) {
-    const leadId = (contact.email && leadByEmail.get(contact.email)) || (contact.phone && leadByPhone.get(contact.phone));
+  for (const [key, contact] of contactMap) {
+    const leadId = leadIdByKey.get(key);
     if (!leadId) continue;
     for (const evt of contact.events) {
       allEvents.push({
