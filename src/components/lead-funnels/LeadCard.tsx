@@ -115,8 +115,8 @@ const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, isDragging, isRe
           </span>
         )}
         {lead.utm_source && (
-          <span className="text-[10px] px-1.5 py-0.5 bg-accent rounded text-accent-foreground">
-            {lead.utm_source}
+          <span className="text-[10px] px-1.5 py-0.5 bg-accent rounded text-accent-foreground truncate max-w-[120px]" title={lead.utm_source}>
+            {lead.utm_source.length > 20 ? lead.utm_source.slice(0, 20) + '…' : lead.utm_source}
           </span>
         )}
       </div>
