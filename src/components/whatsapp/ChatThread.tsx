@@ -126,7 +126,7 @@ function MediaRenderer({ message }: { message: WhatsAppMessage }) {
       );
     case 'audio':
     case 'ptt':
-      return <AudioPlayer src={media_url} />;
+      return <AudioPlayer src={media_url} isOutbound={message.direction === 'outbound'} />;
     case 'document':
       return (
         <a
