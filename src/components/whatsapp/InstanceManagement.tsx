@@ -223,6 +223,19 @@ export default function InstanceManagement({
     }
   };
 
+  const handleUpdateNickname = async () => {
+    try {
+      const { error } = await (supabase as any)
+        .from('whatsapp_instances')
+        .update({ nickname: nickname.trim() || null })
+        .eq('id', instance.id);
+      if (error) throw error;
+      toast.success('Apelido atualizado!');
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao salvar apelido');
+    }
+  };
+
   const handleUpdatePrivacy = async (key: string, value: string) => {
     try {
       await callInstanceAPI(instance.id, 'set_privacy', {
