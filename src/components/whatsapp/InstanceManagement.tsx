@@ -383,10 +383,33 @@ export default function InstanceManagement({
 
           <Separator />
 
+          {/* Nickname (Apelido) */}
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+              <Smartphone className="h-3.5 w-3.5" /> Apelido
+            </h3>
+            <p className="text-[11px] text-muted-foreground">
+              Nome amigável exibido nos seletores e badges. Não afeta a API.
+            </p>
+            <div className="flex gap-2">
+              <Input
+                value={nickname}
+                onChange={e => setNickname(e.target.value)}
+                className="h-8 text-sm flex-1"
+                placeholder="Ex: Vendas SP, Suporte, etc."
+              />
+              <Button size="sm" variant="outline" onClick={handleUpdateNickname}>
+                Salvar
+              </Button>
+            </div>
+          </div>
+
+          <Separator />
+
           {/* Instance Name */}
           <div className="space-y-2">
             <h3 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
-              <Smartphone className="h-3.5 w-3.5" /> Nome da Instância
+              <Smartphone className="h-3.5 w-3.5" /> Nome da Instância (técnico)
             </h3>
             <div className="flex gap-2">
               <Input
