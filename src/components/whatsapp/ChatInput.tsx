@@ -104,6 +104,8 @@ export default function ChatInput({ instanceId, phone, onOptimisticSend, onOptim
     } catch (err: any) {
       onOptimisticUpdate?.(tempId, 'failed');
       toast.error(err.message || 'Erro ao enviar mensagem');
+    } finally {
+      isSending.current = false;
     }
   }, [text, attachment, instanceId, phone, onOptimisticSend, onOptimisticUpdate]);
 
