@@ -7,6 +7,7 @@ import {
   TrendingUp, DollarSign, Eye, MousePointerClick,
   FileText, ShoppingCart, Target, BarChart3, Calculator, Gauge,
   ChevronLeft, ChevronRight, AlertTriangle,
+  Users, Globe, FileImage, Smartphone,
 } from 'lucide-react';
 
 import { classifyTransaction, FUNNEL_PRODUCTS, avgUnitPrice } from '@/lib/classifyTransaction';
@@ -16,6 +17,10 @@ import { FunnelStep } from '@/components/kpi/FunnelStep';
 import { FunnelSalesPanel } from '@/components/kpi/FunnelSalesPanel';
 import { ProjectionSimulator } from '@/components/kpi/ProjectionSimulator';
 import { DailyTable } from '@/components/kpi/DailyTable';
+import DemograficosSection from '@/components/geral-ads/DemograficosSection';
+import GeograficoSection from '@/components/geral-ads/GeograficoSection';
+import CriativosSection from '@/components/geral-ads/CriativosSection';
+import DispositivosSection from '@/components/geral-ads/DispositivosSection';
 
 const PRODUCTS = FUNNEL_PRODUCTS;
 
