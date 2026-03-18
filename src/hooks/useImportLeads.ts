@@ -24,6 +24,72 @@ interface ImportParams {
 
 const BATCH_SIZE = 100;
 
+/**
+ * Deduplicate leads within the batch by email/phone.
+ * Keeps the last occurrence (richer data), merges metadata.
+ * Returns a map of dedup key -> { lead, eventLeads[] } so we can
+ * still create one event per original row.
+ */
+function deduplicateBatch(batch: ImportLead[]) {
+  const byKey = new Map<string, { lead: ImportLead; allRows: ImportLead[] }>();
+
+  for (const lead of batch) {
+    const key = lead.email?.toLowerCase() || lead.phone || `anon-${Math.random()}`;
+    const existing = byKey.get(key);
+    if (existing) {
+      // Merge: keep non-null fields from latest row
+      existing.lead = {
+        ...existing.lead,
+        name: lead.name || existing.lead.name,
+        utm_source: lead.utm_source || existing.lead.utm_source,
+        utm_medium: lead.utm_medium || existing.lead.utm_medium,
+        utm_campaign: lead.utm_campaign || existing.lead.utm_campaign,
+        utm_content: lead.utm_content || existing.lead.utm_content,
+        utm_term: lead.utm_term || existing.lead.utm_term,
+        metadata: { ...existing.lead.metadata, ...lead.metadata },
+      };
+      existing.allRows.push(lead);
+    } else {
+      byKey.set(key, { lead, allRows: [lead] });
+    }
+  }
+
+  return byKey;
+}
+
+/**
+ * Build a rich event from an imported row, using the actual status/product
+ * instead of a generic "import" label.
+ */
+function buildEvent(
+  leadId: string,
+  funnelId: string,
+  row: ImportLead,
+): { lead_id: string; funnel_id: string; event_name: string; metadata: Record<string, unknown> } {
+  const status = ((row.metadata.status as string) || '').toLowerCase().trim();
+  const eventName = status || 'import';
+
+  return {
+    lead_id: leadId,
+    funnel_id: funnelId,
+    event_name: eventName,
+    metadata: {
+      source: 'spreadsheet',
+      product_name: row.metadata.product_name || null,
+      offer_name: row.metadata.offer_name || null,
+      amount: row.metadata.amount || null,
+      payment_method: row.metadata.payment_method || null,
+      platform: row.metadata.platform || null,
+      purchased_at: row.metadata.purchased_at || null,
+      ...Object.fromEntries(
+        Object.entries(row.metadata).filter(
+          ([k]) => !['status', 'product_name', 'offer_name', 'amount', 'payment_method', 'platform', 'purchased_at'].includes(k),
+        ),
+      ),
+    },
+  };
+}
+
 export function useImportLeads() {
   const queryClient = useQueryClient();
 
@@ -35,109 +101,147 @@ export function useImportLeads() {
       for (let i = 0; i < leads.length; i += BATCH_SIZE) {
         const batch = leads.slice(i, i + BATCH_SIZE);
 
-        // 1) Collect unique emails and phones from this batch
-        const emails = batch.map(l => l.email).filter(Boolean) as string[];
-        const phones = batch.map(l => l.phone).filter(Boolean) as string[];
+        // 1) Deduplicate within the batch (same email appearing 2x in CSV)
+        const dedupMap = deduplicateBatch(batch);
+        const uniqueLeads = Array.from(dedupMap.values());
 
-        // 2) Batch-fetch existing leads by email and phone (2 queries instead of 2*N)
+        // 2) Batch-fetch existing leads by email and phone
+        const emails = uniqueLeads.map(u => u.lead.email).filter(Boolean) as string[];
+        const phones = uniqueLeads.map(u => u.lead.phone).filter(Boolean) as string[];
+
         const existingByEmail: Record<string, string> = {};
         const existingByPhone: Record<string, string> = {};
 
+        const fetchPromises: Promise<void>[] = [];
+
         if (emails.length > 0) {
-          const { data } = await (supabase as any)
-            .from('leads')
-            .select('id, email')
-            .eq('organization_id', organizationId)
-            .in('email', emails);
-          for (const row of data || []) {
-            existingByEmail[row.email] = row.id;
-          }
+          fetchPromises.push(
+            (supabase as any)
+              .from('leads')
+              .select('id, email')
+              .eq('organization_id', organizationId)
+              .in('email', emails)
+              .then(({ data }: any) => {
+                for (const row of data || []) existingByEmail[row.email] = row.id;
+              }),
+          );
         }
 
         if (phones.length > 0) {
-          const { data } = await (supabase as any)
-            .from('leads')
-            .select('id, phone')
-            .eq('organization_id', organizationId)
-            .in('phone', phones);
-          for (const row of data || []) {
-            existingByPhone[row.phone] = row.id;
-          }
+          fetchPromises.push(
+            (supabase as any)
+              .from('leads')
+              .select('id, phone')
+              .eq('organization_id', organizationId)
+              .in('phone', phones)
+              .then(({ data }: any) => {
+                for (const row of data || []) existingByPhone[row.phone] = row.id;
+              }),
+          );
         }
 
-        // 3) Separate into existing vs new leads
+        await Promise.all(fetchPromises);
+
+        // 3) Separate into existing vs new, and resolve lead IDs
+        const leadIdMap = new Map<ImportLead, string>(); // unique lead -> resolved id
         const toUpdate: { id: string; lead: ImportLead }[] = [];
         const toInsert: ImportLead[] = [];
 
-        for (const lead of batch) {
-          const existingId = (lead.email && existingByEmail[lead.email])
-            || (lead.phone && existingByPhone[lead.phone]);
+        for (const { lead } of uniqueLeads) {
+          const existingId =
+            (lead.email && existingByEmail[lead.email]) ||
+            (lead.phone && existingByPhone[lead.phone]);
 
           if (existingId) {
             toUpdate.push({ id: existingId, lead });
+            leadIdMap.set(lead, existingId);
           } else {
             toInsert.push(lead);
           }
         }
 
-        // 4) Batch update existing leads (1 query per lead, but could be parallelized)
-        // Use Promise.all for parallel updates
-        await Promise.all(toUpdate.map(({ id, lead }) =>
-          (supabase as any)
-            .from('leads')
-            .update({
-              name: lead.name || undefined,
-              utm_source: lead.utm_source || undefined,
-              utm_medium: lead.utm_medium || undefined,
-              utm_campaign: lead.utm_campaign || undefined,
-              utm_content: lead.utm_content || undefined,
-              utm_term: lead.utm_term || undefined,
-              metadata: lead.metadata,
-            })
-            .eq('id', id)
-        ));
-
-        // 5) Batch insert new leads (1 query for all new leads)
-        const insertedIds: { id: string; email: string | null; phone: string | null }[] = [];
-
-        if (toInsert.length > 0) {
-          const { data: newLeads, error } = await (supabase as any)
-            .from('leads')
-            .insert(toInsert.map(lead => ({
-              organization_id: organizationId,
-              name: lead.name,
-              email: lead.email,
-              phone: lead.phone,
-              utm_source: lead.utm_source,
-              utm_medium: lead.utm_medium,
-              utm_campaign: lead.utm_campaign,
-              utm_content: lead.utm_content,
-              utm_term: lead.utm_term,
-              metadata: lead.metadata,
-            })))
-            .select('id, email, phone');
-
-          if (error) {
-            skipped += toInsert.length;
-          } else {
-            for (const nl of newLeads || []) {
-              insertedIds.push(nl);
-            }
-          }
+        // 4) Parallel update existing leads
+        if (toUpdate.length > 0) {
+          await Promise.all(
+            toUpdate.map(({ id, lead }) =>
+              (supabase as any)
+                .from('leads')
+                .update({
+                  name: lead.name || undefined,
+                  utm_source: lead.utm_source || undefined,
+                  utm_medium: lead.utm_medium || undefined,
+                  utm_campaign: lead.utm_campaign || undefined,
+                  utm_content: lead.utm_content || undefined,
+                  utm_term: lead.utm_term || undefined,
+                  metadata: lead.metadata,
+                })
+                .eq('id', id),
+            ),
+          );
         }
 
-        // 6) Build complete lead ID list for this batch
-        const allLeadIds: string[] = [
-          ...toUpdate.map(u => u.id),
-          ...insertedIds.map(n => n.id),
-        ];
+        // 5) Insert new leads one-by-one to avoid batch failure on constraint violation
+        if (toInsert.length > 0) {
+          const insertResults = await Promise.all(
+            toInsert.map(async (lead) => {
+              const { data, error } = await (supabase as any)
+                .from('leads')
+                .insert({
+                  organization_id: organizationId,
+                  name: lead.name,
+                  email: lead.email,
+                  phone: lead.phone,
+                  utm_source: lead.utm_source,
+                  utm_medium: lead.utm_medium,
+                  utm_campaign: lead.utm_campaign,
+                  utm_content: lead.utm_content,
+                  utm_term: lead.utm_term,
+                  metadata: lead.metadata,
+                })
+                .select('id')
+                .single();
+
+              if (error) {
+                // If insert fails (duplicate constraint), try to find existing
+                const { data: found } = await (supabase as any)
+                  .from('leads')
+                  .select('id')
+                  .eq('organization_id', organizationId)
+                  .or(
+                    [
+                      lead.email ? `email.eq.${lead.email}` : null,
+                      lead.phone ? `phone.eq.${lead.phone}` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(','),
+                  )
+                  .limit(1)
+                  .single();
+
+                if (found) {
+                  leadIdMap.set(lead, found.id);
+                  return found.id as string;
+                }
+                return null; // truly skipped
+              }
+
+              leadIdMap.set(lead, data.id);
+              return data.id as string;
+            }),
+          );
+
+          skipped += insertResults.filter((r) => r === null).length;
+        }
+
+        // 6) Collect all resolved lead IDs
+        const allLeadIds = Array.from(leadIdMap.values());
 
         if (allLeadIds.length === 0) {
           onProgress?.(Math.min(i + BATCH_SIZE, leads.length), leads.length);
           continue;
         }
 
-        // 7) Batch-fetch existing positions in this funnel (1 query)
+        // 7) Handle stage positions (batch fetch, then insert missing)
         const { data: existingPositions } = await (supabase as any)
           .from('lead_stage_positions')
           .select('id, lead_id, stage_id')
@@ -149,7 +253,6 @@ export function useImportLeads() {
           positionMap.set(pos.lead_id, { id: pos.id, stage_id: pos.stage_id });
         }
 
-        // 8) Determine which positions to delete and which to insert
         const positionsToDelete: string[] = [];
         const positionsToInsert: { lead_id: string; funnel_id: string; stage_id: string }[] = [];
 
@@ -160,47 +263,38 @@ export function useImportLeads() {
               positionsToDelete.push(existing.id);
               positionsToInsert.push({ lead_id: leadId, funnel_id: funnelId, stage_id: stageId });
             }
-            // If already in correct stage, skip
           } else {
             positionsToInsert.push({ lead_id: leadId, funnel_id: funnelId, stage_id: stageId });
           }
         }
 
-        // 9) Batch delete old positions (1 query)
+        const posPromises: Promise<any>[] = [];
         if (positionsToDelete.length > 0) {
-          await (supabase as any)
-            .from('lead_stage_positions')
-            .delete()
-            .in('id', positionsToDelete);
+          posPromises.push(
+            (supabase as any).from('lead_stage_positions').delete().in('id', positionsToDelete),
+          );
         }
-
-        // 10) Batch insert new positions (1 query)
         if (positionsToInsert.length > 0) {
-          await (supabase as any)
-            .from('lead_stage_positions')
-            .insert(positionsToInsert);
+          posPromises.push(
+            (supabase as any).from('lead_stage_positions').insert(positionsToInsert),
+          );
+        }
+        await Promise.all(posPromises);
+
+        // 8) Create one event per ORIGINAL row (not deduplicated), preserving full history
+        const events: ReturnType<typeof buildEvent>[] = [];
+        for (const { lead, allRows } of uniqueLeads) {
+          const resolvedId = leadIdMap.get(lead);
+          if (!resolvedId) continue;
+
+          for (const row of allRows) {
+            events.push(buildEvent(resolvedId, funnelId, row));
+          }
         }
 
-        // 11) Batch insert events (1 query)
-        const events = allLeadIds.map(leadId => {
-          const lead = batch.find(l => {
-            const lid = (l.email && existingByEmail[l.email])
-              || (l.phone && existingByPhone[l.phone]);
-            return lid === leadId || insertedIds.some(n => n.id === leadId &&
-              ((n.email && n.email === l.email) || (n.phone && n.phone === l.phone)));
-          });
-
-          return {
-            lead_id: leadId,
-            funnel_id: funnelId,
-            event_name: 'import',
-            metadata: { source: 'spreadsheet', ...(lead?.metadata || {}) },
-          };
-        });
-
-        await (supabase as any)
-          .from('lead_events')
-          .insert(events);
+        if (events.length > 0) {
+          await (supabase as any).from('lead_events').insert(events);
+        }
 
         imported += allLeadIds.length;
         onProgress?.(Math.min(i + BATCH_SIZE, leads.length), leads.length);
@@ -211,7 +305,9 @@ export function useImportLeads() {
     onSuccess: (result, vars) => {
       queryClient.invalidateQueries({ queryKey: ['leads-by-funnel', vars.funnelId] });
       queryClient.invalidateQueries({ queryKey: ['funnel-lead-counts', vars.funnelId] });
-      toast.success(`${result.imported} leads importados${result.skipped > 0 ? `, ${result.skipped} ignorados` : ''}`);
+      toast.success(
+        `${result.imported} leads importados${result.skipped > 0 ? `, ${result.skipped} ignorados` : ''}`,
+      );
     },
     onError: () => {
       toast.error('Erro durante importação');
