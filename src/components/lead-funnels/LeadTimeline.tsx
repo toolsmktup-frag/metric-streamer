@@ -1,14 +1,15 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useLeadEvents } from '@/hooks/useLeads';
 import { useLeadPurchases, useLeadFunnelJourney } from '@/hooks/useLeadPurchases';
 import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Sheet, SheetContent, SheetHeader } from '@/components/ui/sheet';
+import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { Lead } from '@/types/leadFunnels';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Mail, Phone, ShoppingCart, DollarSign, MapPin, Activity, UserPlus, CreditCard, CheckCircle2, XCircle, Clock, RotateCcw, AlertTriangle, Eye, FileText, LucideIcon } from 'lucide-react';
 import { formatCurrency } from '@/lib/formatters';
+import { parseLocalDateTime } from '@/lib/localDate';
 
 interface LeadTimelineProps {
   lead: Lead | null;
@@ -39,6 +40,7 @@ const EVENT_MAP: Record<string, EventMapping> = {
   compra: { label: 'Compra', icon: ShoppingCart, colorClass: 'bg-emerald-500/10 text-emerald-500' },
   boleto_gerado: { label: 'Boleto Gerado', icon: FileText, colorClass: 'bg-amber-500/10 text-amber-500' },
   bank_slip_created: { label: 'Boleto Gerado', icon: FileText, colorClass: 'bg-amber-500/10 text-amber-500' },
+  bank_slip_delayed: { label: 'Boleto Gerado', icon: FileText, colorClass: 'bg-amber-500/10 text-amber-500' },
   billet_printed: { label: 'Boleto Gerado', icon: FileText, colorClass: 'bg-amber-500/10 text-amber-500' },
   open: { label: 'Checkout Aberto', icon: Eye, colorClass: 'bg-muted text-muted-foreground' },
   waiting_payment: { label: 'Aguardando Pagamento', icon: Clock, colorClass: 'bg-amber-500/10 text-amber-500' },
@@ -60,11 +62,7 @@ function getInitials(name: string | null): string {
 
 function getEventDate(ev: { created_at: string; metadata: Record<string, unknown> }): Date {
   const originalDate = (ev.metadata as any)?.original_date;
-  if (originalDate) {
-    const d = new Date(originalDate);
-    if (!isNaN(d.getTime())) return d;
-  }
-  return new Date(ev.created_at);
+  return parseLocalDateTime(originalDate) || parseLocalDateTime(ev.created_at) || new Date();
 }
 
 const LeadTimeline: React.FC<LeadTimelineProps> = ({ lead, open, onClose }) => {
@@ -72,12 +70,16 @@ const LeadTimeline: React.FC<LeadTimelineProps> = ({ lead, open, onClose }) => {
   const { data: purchaseData } = useLeadPurchases(lead?.email ?? null, lead?.phone ?? null);
   const { data: journey = [] } = useLeadFunnelJourney(lead?.id ?? null);
 
+  const sortedEvents = useMemo(
+    () => [...events].sort((a, b) => getEventDate(a).getTime() - getEventDate(b).getTime()).reverse(),
+    [events],
+  );
+
   return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
       <SheetContent className="w-[440px] sm:w-[500px] overflow-y-auto p-0">
         {lead && (
           <div className="flex flex-col">
-            {/* Header */}
             <div className="p-5 border-b border-border">
               <div className="flex items-start gap-3">
                 <Avatar className="h-12 w-12 shrink-0">
@@ -101,7 +103,7 @@ const LeadTimeline: React.FC<LeadTimelineProps> = ({ lead, open, onClose }) => {
                   </div>
                 </div>
               </div>
-              {/* Tags */}
+
               <div className="flex flex-wrap gap-1.5 mt-3">
                 {journey.length > 0 && (
                   <Badge variant="outline" className="text-[10px] px-2 py-0.5">
@@ -125,7 +127,6 @@ const LeadTimeline: React.FC<LeadTimelineProps> = ({ lead, open, onClose }) => {
               </div>
             </div>
 
-            {/* Compras */}
             {purchaseData && purchaseData.totalOrders > 0 && (
               <div className="p-5 border-b border-border">
                 <div className="flex items-center gap-2 mb-3">
@@ -136,7 +137,6 @@ const LeadTimeline: React.FC<LeadTimelineProps> = ({ lead, open, onClose }) => {
                   </Badge>
                 </div>
 
-                {/* Revenue card */}
                 <div className="bg-muted/50 rounded-lg p-3 mb-3">
                   <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Receita líquida total</span>
                   <div className="flex items-center gap-2 mt-1">
@@ -147,7 +147,6 @@ const LeadTimeline: React.FC<LeadTimelineProps> = ({ lead, open, onClose }) => {
                   </div>
                 </div>
 
-                {/* Product list */}
                 <div className="space-y-2">
                   {purchaseData.purchases.slice(0, 10).map(p => {
                     const isPaid = p.status === 'approved' || p.status === 'Aprovada';
@@ -185,7 +184,6 @@ const LeadTimeline: React.FC<LeadTimelineProps> = ({ lead, open, onClose }) => {
               </div>
             )}
 
-            {/* Jornada nos Funis */}
             {journey.length > 0 && (
               <div className="p-5 border-b border-border">
                 <div className="flex items-center gap-2 mb-3">
@@ -219,25 +217,23 @@ const LeadTimeline: React.FC<LeadTimelineProps> = ({ lead, open, onClose }) => {
               </div>
             )}
 
-            {/* Timeline de Eventos */}
             <div className="p-5">
               <div className="flex items-center gap-2 mb-3">
                 <Activity className="h-4 w-4 text-foreground" />
                 <span className="text-sm font-semibold text-foreground">Timeline</span>
                 <Badge variant="secondary" className="text-[10px] ml-auto">
-                  {events.length} {events.length === 1 ? 'evento' : 'eventos'}
+                  {sortedEvents.length} {sortedEvents.length === 1 ? 'evento' : 'eventos'}
                 </Badge>
               </div>
 
-              {events.length === 0 ? (
+              {sortedEvents.length === 0 ? (
                 <p className="text-xs text-muted-foreground">Nenhum evento registrado</p>
               ) : (
                 <div className="relative">
-                  {/* Vertical line */}
                   <div className="absolute left-[11px] top-2 bottom-2 w-px bg-border" />
 
                   <div className="space-y-3">
-                    {events.map((ev) => {
+                    {sortedEvents.map((ev) => {
                       const mapping = getEventMapping(ev.event_name);
                       const Icon = mapping.icon;
                       const eventDate = getEventDate(ev);
