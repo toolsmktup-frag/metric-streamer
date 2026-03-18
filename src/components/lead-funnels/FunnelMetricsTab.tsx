@@ -138,6 +138,71 @@ const FunnelMetricsTab: React.FC<Props> = ({ stages, positions }) => {
           </div>
         </div>
       )}
+
+      {/* Top Products */}
+      <ProductsRanking positions={positions} stages={stages} />
+    </div>
+  );
+};
+
+/* ---- Products Ranking Sub-component ---- */
+interface ProductStat {
+  name: string;
+  count: number;
+  revenue: number;
+}
+
+const ProductsRanking: React.FC<{ positions: (LeadStagePosition & { lead: Lead })[]; stages: LeadFunnelStage[] }> = ({ positions, stages }) => {
+  const stageMap = useMemo(() => new Map(stages.map(s => [s.id, s])), [stages]);
+
+  const products = useMemo(() => {
+    const map = new Map<string, ProductStat>();
+    for (const pos of positions) {
+      const productName = (pos.lead.metadata?.product_name as string)?.trim();
+      if (!productName) continue;
+      const existing = map.get(productName) || { name: productName, count: 0, revenue: 0 };
+      existing.count += 1;
+      const amount = Number(pos.lead.metadata?.amount) || 0;
+      const stage = stageMap.get(pos.stage_id);
+      if (stage && isRevenueStage(stage.name)) {
+        existing.revenue += amount;
+      }
+      map.set(productName, existing);
+    }
+    return Array.from(map.values())
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+  }, [positions, stageMap]);
+
+  const maxCount = Math.max(...products.map(p => p.count), 1);
+
+  if (products.length === 0) return null;
+
+  return (
+    <div className="rounded-xl border border-border bg-card p-5">
+      <div className="flex items-center gap-2 mb-4">
+        <Package className="h-4 w-4 text-foreground" />
+        <h3 className="text-sm font-semibold text-foreground">Produtos Mais Vendidos</h3>
+      </div>
+      <div className="space-y-3">
+        {products.map((p) => (
+          <div key={p.name} className="flex items-center gap-3">
+            <span className="text-sm font-medium text-foreground w-44 truncate" title={p.name}>{p.name}</span>
+            <div className="flex-1 h-6 bg-muted rounded-full overflow-hidden">
+              <div
+                className="h-full rounded-full bg-primary/70 transition-all"
+                style={{ width: `${(p.count / maxCount) * 100}%`, minWidth: p.count > 0 ? '8px' : '0' }}
+              />
+            </div>
+            <span className="text-sm font-mono text-foreground w-10 text-right">{p.count}</span>
+            {p.revenue > 0 && (
+              <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 w-28 text-right">
+                {formatCurrency(p.revenue)}
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 };

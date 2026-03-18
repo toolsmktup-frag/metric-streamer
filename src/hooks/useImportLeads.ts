@@ -328,10 +328,18 @@ export function useImportLeads() {
         await Promise.all(posPromises);
 
         // 8) Create one event per ORIGINAL row (not deduplicated), preserving full history
+        // Also create a lead_importado event for new leads
         const events: ReturnType<typeof buildEvent>[] = [];
+        const newLeadIds = new Set(toInsert.map(l => leadIdMap.get(l)).filter(Boolean));
+
         for (const { lead, allRows } of uniqueLeads) {
           const resolvedId = leadIdMap.get(lead);
           if (!resolvedId) continue;
+
+          // Add lead_importado event for new leads
+          if (newLeadIds.has(resolvedId)) {
+            events.push(buildLeadImportadoEvent(resolvedId, funnelId, allRows[0]));
+          }
 
           for (const row of allRows) {
             events.push(buildEvent(resolvedId, funnelId, row));

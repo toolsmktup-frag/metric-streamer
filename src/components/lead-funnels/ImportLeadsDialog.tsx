@@ -207,7 +207,7 @@ const ImportLeadsDialog: React.FC<ImportLeadsDialogProps> = ({
     setStatusStageMap({});
     try {
       const rows = await parseSpreadsheet(file);
-      const mapped = rows.map(mapRow).filter(l => l.email || l.phone);
+      const mapped = rows.map(mapRow).filter(l => l.name || l.email || l.phone);
       setParsedRows(mapped);
     } catch {
       setParsedRows([]);
