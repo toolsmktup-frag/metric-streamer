@@ -24,6 +24,7 @@ import KPICard from '@/components/dashboard/KPICard';
 import DateRangePicker from '@/components/dashboard/DateRangePicker';
 import { useMetaCampaigns, useMetaKPISummary, useMetaDailyInsights, useSyncMeta, useSyncPollingRefetch, usePrevPeriodMetaInsights } from '@/hooks/useMetaData';
 import { useAllSales, useAllSalesAggregation, usePrevPeriodAllSales } from '@/hooks/useAllSales';
+import { supabase } from '@/integrations/supabase/client';
 import { useFilterStore } from '@/stores/filterStore';
 import { formatCurrency, formatNumber, formatPercent, formatRoas, getRoasColor } from '@/lib/formatters';
 import PerformanceTable from '@/components/dashboard/PerformanceTable';
