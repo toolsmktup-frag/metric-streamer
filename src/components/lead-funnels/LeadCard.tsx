@@ -12,7 +12,7 @@ interface LeadCardProps {
   isRevenue?: boolean;
 }
 
-const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, isDragging }) => {
+const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, isDragging, isRevenue = true }) => {
   const lead = position.lead;
   const { data: purchaseData } = useLeadPurchases(lead.email, lead.phone);
   const { attributes, listeners, setNodeRef, transform } = useDraggable({
