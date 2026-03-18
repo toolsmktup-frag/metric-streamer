@@ -286,12 +286,17 @@ export default function WhatsAppChat() {
         {/* Thread */}
         <div className="flex-1 flex flex-col min-w-0 border-r border-border">
           <ChatThread
-            messages={messages}
+            messages={mergedMessages}
             loading={loadingMessages}
             phone={selectedPhone}
           />
           {selectedPhone && activeInstance && (
-            <ChatInput instanceId={activeInstance} phone={selectedPhone} />
+            <ChatInput
+              instanceId={activeInstance}
+              phone={selectedPhone}
+              onOptimisticSend={handleOptimisticSend}
+              onOptimisticUpdate={handleOptimisticUpdate}
+            />
           )}
         </div>
 
