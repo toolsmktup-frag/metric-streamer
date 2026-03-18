@@ -1,6 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { useAllLeads, LeadWithPosition } from '@/hooks/useAllLeads';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
@@ -17,7 +19,24 @@ const LeadsList: React.FC = () => {
   const [selectedLead, setSelectedLead] = useState<LeadWithPosition | null>(null);
   const [timelineOpen, setTimelineOpen] = useState(false);
 
-  // Unique funnels and sources for filters
+  // Fetch total spent per email from ticto_transactions
+  const { data: spentMap = {} } = useQuery({
+    queryKey: ['leads-total-spent'],
+    queryFn: async () => {
+      const { data: txs } = await (supabase as any)
+        .from('ticto_transactions')
+        .select('customer_email, paid_amount');
+      const map: Record<string, number> = {};
+      (txs || []).forEach((tx: any) => {
+        if (tx.customer_email) {
+          map[tx.customer_email] = (map[tx.customer_email] || 0) + (tx.paid_amount || 0);
+        }
+      });
+      return map;
+    },
+    refetchInterval: 60000,
+  });
+
   const funnelOptions = useMemo(() => {
     const set = new Map<string, string>();
     leads.forEach(l => l.positions.forEach(p => { if (p.funnel_name) set.set(p.funnel_id, p.funnel_name); }));
@@ -40,11 +59,16 @@ const LeadsList: React.FC = () => {
     });
   }, [leads, search, funnelFilter, sourceFilter]);
 
+  const formatCurrency = (cents: number) => {
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cents / 100);
+  };
+
   const exportCSV = () => {
-    const header = 'Nome,Email,Telefone,Fonte,Meio,Funil,Etapa,Entrada\n';
+    const header = 'Nome,Email,Telefone,Fonte,Meio,Funil,Etapa,Total Gasto,Entrada\n';
     const rows = filtered.map(l => {
       const pos = l.positions[0];
-      return [l.name, l.email, l.phone, l.utm_source, l.utm_medium, pos?.funnel_name, pos?.stage_name, l.created_at].map(v => `"${v || ''}"`).join(',');
+      const spent = l.email ? (spentMap[l.email] || 0) : 0;
+      return [l.name, l.email, l.phone, l.utm_source, l.utm_medium, pos?.funnel_name, pos?.stage_name, formatCurrency(spent), l.created_at].map(v => `"${v || ''}"`).join(',');
     }).join('\n');
     const blob = new Blob([header + rows], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -64,7 +88,6 @@ const LeadsList: React.FC = () => {
         </Button>
       </div>
 
-      {/* Filters */}
       <Card>
         <CardContent className="p-4 flex flex-wrap gap-3 items-center">
           <div className="relative flex-1 min-w-[200px]">
@@ -89,7 +112,6 @@ const LeadsList: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Table */}
       <Card>
         <CardContent className="p-0">
           <Table>
@@ -101,12 +123,14 @@ const LeadsList: React.FC = () => {
                 <TableHead>Funil</TableHead>
                 <TableHead>Etapa</TableHead>
                 <TableHead>Fonte</TableHead>
+                <TableHead className="text-right">Total Gasto</TableHead>
                 <TableHead>Entrada</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filtered.slice(0, 200).map(lead => {
                 const pos = lead.positions[0];
+                const spent = lead.email ? (spentMap[lead.email] || 0) : 0;
                 return (
                   <TableRow key={lead.id} className="cursor-pointer hover:bg-muted/50" onClick={() => { setSelectedLead(lead); setTimelineOpen(true); }}>
                     <TableCell className="font-medium">{lead.name || '—'}</TableCell>
@@ -128,12 +152,13 @@ const LeadsList: React.FC = () => {
                       ) : '—'}
                     </TableCell>
                     <TableCell className="text-muted-foreground">{lead.utm_source || 'Direto'}</TableCell>
+                    <TableCell className="text-right font-medium text-emerald-600">{spent > 0 ? formatCurrency(spent) : '—'}</TableCell>
                     <TableCell className="text-muted-foreground">{format(new Date(lead.created_at), 'dd/MM/yy')}</TableCell>
                   </TableRow>
                 );
               })}
               {filtered.length === 0 && (
-                <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Nenhum lead encontrado.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Nenhum lead encontrado.</TableCell></TableRow>
               )}
             </TableBody>
           </Table>
