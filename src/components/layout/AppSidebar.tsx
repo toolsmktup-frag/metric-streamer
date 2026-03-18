@@ -45,6 +45,7 @@ const INTELLIGENCE_ITEMS = [
 ];
 
 const TOOL_ITEMS = [
+  { path: '/equipe',      label: 'Equipe',       icon: Users },
   { path: '/agente-ia',   label: 'Agente IA',    icon: Bot },
   { path: '/integracoes', label: 'Integrações',  icon: Link2 },
   { path: '/importar',    label: 'Importar',     icon: Upload },
