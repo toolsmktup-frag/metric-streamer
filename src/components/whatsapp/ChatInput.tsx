@@ -19,6 +19,7 @@ export default function ChatInput({ instanceId, phone, onOptimisticSend, onOptim
   const [attachment, setAttachment] = useState<File | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const typingTimeout = useRef<ReturnType<typeof setTimeout>>();
+  const isSending = useRef(false);
 
   const handleTextChange = (value: string) => {
     setText(value);
