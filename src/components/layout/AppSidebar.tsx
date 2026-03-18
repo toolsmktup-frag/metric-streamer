@@ -33,12 +33,15 @@ interface AppSidebarProps {
   onToggle: () => void;
 }
 
-const GENERAL_ITEMS = [
-  { path: '/vendas',       label: 'Vendas',                  icon: ShoppingCart },
-  { path: '/demograficos', label: 'Demográficos',            icon: Users },
-  { path: '/geografico',   label: 'Geográfico',              icon: Globe },
-  { path: '/criativos',    label: 'Criativos',               icon: FileImage },
-  { path: '/dispositivos', label: 'Dispositivos',            icon: Smartphone },
+const AD_ANALYSIS_ITEMS = [
+  { path: '/vendas',       label: 'Vendas',       icon: ShoppingCart },
+  { path: '/demograficos', label: 'Demográficos', icon: Users },
+  { path: '/geografico',   label: 'Geográfico',   icon: Globe },
+  { path: '/criativos',    label: 'Criativos',    icon: FileImage },
+  { path: '/dispositivos', label: 'Dispositivos', icon: Smartphone },
+];
+
+const INTELLIGENCE_ITEMS = [
   { path: '/escada-valor', label: 'Inteligência de Cliente', icon: TrendingUp },
   { path: '/ecommerce',    label: 'Ecommerce',               icon: ShoppingBag },
 ];
@@ -245,9 +248,13 @@ const AppSidebar = React.memo(function AppSidebar({ collapsed, onToggle }: AppSi
           </NavLink>
         )}
 
-        {/* Seção Análises */}
-        {sectionLabel('Análises')}
-        {GENERAL_ITEMS.map(item => navLink(item.path, item.label, item.icon))}
+        {/* Seção Análise de Anúncios */}
+        {sectionLabel('Anúncios')}
+        {AD_ANALYSIS_ITEMS.map(item => navLink(item.path, item.label, item.icon))}
+
+        {/* Seção Inteligência */}
+        {sectionLabel('Inteligência')}
+        {INTELLIGENCE_ITEMS.map(item => navLink(item.path, item.label, item.icon))}
 
         {/* Seção Funis de Leads */}
         {sectionLabel('Funis de Leads')}

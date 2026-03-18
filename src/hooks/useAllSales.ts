@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useFilterStore } from '@/stores/filterStore';
 import type { SalesAggregation } from './useTictoData';
+import { classifyTransaction as classifySale } from '@/lib/classifyTransaction';
 
 function toLocalDate(date: Date): string {
   const y = date.getFullYear();
@@ -83,14 +84,6 @@ function emptySalesAgg(): SalesAggregation {
   };
 }
 
-function classifySale(tx: UnifiedSale): 'principal' | 'bump1' | 'upsell1' | 'other' {
-  const pn = (tx.product_name || '').toLowerCase();
-  const on = (tx.offer_name || '').toLowerCase();
-  if (pn.includes('mestre das tinturas') || on.includes('oferta 197')) return 'upsell1';
-  if (pn.includes('tinturas') && (on.includes('checkout principal') || on === '')) return 'principal';
-  if (pn.includes('chás') || on.includes('bump')) return 'bump1';
-  return 'other';
-}
 
 /**
  * Agrega vendas de todas as plataformas por campanha / adset / ad.
@@ -145,9 +138,11 @@ export function useAllSalesAggregation(funnelId?: string | null) {
 /** Retorna vendas do período anterior (mesma duração) */
 export function usePrevPeriodAllSales(funnelId?: string | null) {
   const { dateRange, compareEnabled } = useFilterStore();
-  const duration = dateRange.end.getTime() - dateRange.start.getTime();
-  const prevEnd = new Date(dateRange.start.getTime() - 1);
-  const prevStart = new Date(prevEnd.getTime() - duration);
+  const durationDays = Math.round((dateRange.end.getTime() - dateRange.start.getTime()) / (24 * 60 * 60 * 1000));
+  const prevEnd = new Date(dateRange.start);
+  prevEnd.setDate(prevEnd.getDate() - 1); // day before current start
+  const prevStart = new Date(prevEnd);
+  prevStart.setDate(prevStart.getDate() - durationDays);
   const dateFrom = toLocalDate(prevStart);
   const dateTo = toLocalDate(prevEnd);
 
