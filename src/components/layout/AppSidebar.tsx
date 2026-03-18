@@ -27,6 +27,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { useFunnels } from '@/hooks/useFunnels';
 import { useFilterStore } from '@/stores/filterStore';
+import { useMyPermissions } from '@/hooks/useUserPermissions';
 
 interface AppSidebarProps {
   collapsed: boolean;
@@ -56,8 +57,9 @@ const LEAD_ITEMS = [
   { path: '/leads',           label: 'Todos os Leads',  icon: Users },
   { path: '/lead-campaigns',  label: 'Funis de Leads',  icon: Target },
   { path: '/leads/fontes',    label: 'Fontes / UTMs',   icon: Globe },
-  { path: '/whatsapp',        label: 'WhatsApp',        icon: MessageCircle },
 ];
+
+const WHATSAPP_ITEM = { path: '/whatsapp', label: 'WhatsApp', icon: MessageCircle };
 
 const AppSidebar = React.memo(function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
   const location = useLocation();
@@ -65,6 +67,13 @@ const AppSidebar = React.memo(function AppSidebar({ collapsed, onToggle }: AppSi
   const { data: funnels = [] } = useFunnels();
   const { setActiveFunnelId } = useFilterStore();
   const [expandedFunnel, setExpandedFunnel] = useState<string | null>(null);
+  const { data: perms } = useMyPermissions();
+
+  // Default: show everything (while loading or no permissions row)
+  const can = (mod: string) => {
+    if (!perms) return true;
+    return (perms as any)[mod] === true;
+  };
 
   const isActive = (path: string) => location.pathname === path;
   const isFunnelActive = (id: string) => location.pathname.startsWith(`/funis/${id}`);
@@ -168,106 +177,131 @@ const AppSidebar = React.memo(function AppSidebar({ collapsed, onToggle }: AppSi
           </AnimatePresence>
         </button>
 
-        {/* Seção Funis */}
-        {sectionLabel('Tráfego')}
+        {/* Seção Funis / Tráfego */}
+        {can('mod_trafego') && (
+          <>
+            {sectionLabel('Tráfego')}
 
-        {funnels.map(funnel => (
-          <div key={funnel.id}>
-            {/* Funnel header */}
-            <button
-              onClick={() => handleFunnelClick(funnel.id)}
-              className={`w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-                isFunnelActive(funnel.id)
-                  ? 'bg-sidebar-active text-sidebar-theme'
-                  : 'text-sidebar-theme/80 hover:bg-sidebar-hover hover:text-sidebar-theme'
-              }`}
-            >
-              <span
-                className="h-3 w-3 rounded-full shrink-0 border border-white/20"
-                style={{ backgroundColor: funnel.color }}
-              />
-              <AnimatePresence>
-                {!collapsed && (
-                  <motion.span
-                    initial={{ opacity: 0, width: 0 }}
-                    animate={{ opacity: 1, width: 'auto' }}
-                    exit={{ opacity: 0, width: 0 }}
-                    className="flex-1 text-left whitespace-nowrap overflow-hidden"
-                  >
-                    {funnel.name}
-                  </motion.span>
-                )}
-              </AnimatePresence>
-              {!collapsed && (
-                expandedFunnel === funnel.id
-                  ? <ChevronUp className="h-3.5 w-3.5 shrink-0" />
-                  : <ChevronDown className="h-3.5 w-3.5 shrink-0" />
-              )}
-            </button>
-
-            {/* Funnel sub-items */}
-            <AnimatePresence>
-              {!collapsed && expandedFunnel === funnel.id && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="pl-4 space-y-0.5 overflow-hidden"
+            {funnels.map(funnel => (
+              <div key={funnel.id}>
+                <button
+                  onClick={() => handleFunnelClick(funnel.id)}
+                  className={`w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                    isFunnelActive(funnel.id)
+                      ? 'bg-sidebar-active text-sidebar-theme'
+                      : 'text-sidebar-theme/80 hover:bg-sidebar-hover hover:text-sidebar-theme'
+                  }`}
                 >
-                  {[
-                    { path: `/funis/${funnel.id}/resumo`,    label: 'Resumo',    icon: LayoutDashboard },
-                    { path: `/funis/${funnel.id}/kpi`,       label: 'KPI',       icon: Layers },
-                    { path: `/funis/${funnel.id}/campanhas`, label: 'Campanhas', icon: Megaphone },
-                    { path: `/funis/configurar?editar=${funnel.id}`, label: 'Editar', icon: Pencil },
-                  ].map(({ path, label, icon: Icon }) => (
-                    <NavLink
-                      key={path}
-                      to={path}
-                      className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
-                        isActive(path)
-                          ? 'bg-sidebar-active text-sidebar-theme font-medium'
-                          : 'text-sidebar-theme/70 hover:bg-sidebar-hover hover:text-sidebar-theme'
-                      }`}
-                    >
-                      <Icon className="h-4 w-4 shrink-0" />
-                      <span className="whitespace-nowrap">{label}</span>
-                    </NavLink>
-                  ))}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        ))}
+                  <span
+                    className="h-3 w-3 rounded-full shrink-0 border border-white/20"
+                    style={{ backgroundColor: funnel.color }}
+                  />
+                  <AnimatePresence>
+                    {!collapsed && (
+                      <motion.span
+                        initial={{ opacity: 0, width: 0 }}
+                        animate={{ opacity: 1, width: 'auto' }}
+                        exit={{ opacity: 0, width: 0 }}
+                        className="flex-1 text-left whitespace-nowrap overflow-hidden"
+                      >
+                        {funnel.name}
+                      </motion.span>
+                    )}
+                  </AnimatePresence>
+                  {!collapsed && (
+                    expandedFunnel === funnel.id
+                      ? <ChevronUp className="h-3.5 w-3.5 shrink-0" />
+                      : <ChevronDown className="h-3.5 w-3.5 shrink-0" />
+                  )}
+                </button>
 
-        {/* Novo funil */}
-        {!collapsed && (
-          <NavLink
-            to="/funis/configurar"
-            className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-sidebar-theme/50 hover:text-sidebar-theme hover:bg-sidebar-hover transition-colors"
-          >
-            <Plus className="h-4 w-4 shrink-0" />
-            <span className="whitespace-nowrap">Novo funil</span>
-          </NavLink>
+                <AnimatePresence>
+                  {!collapsed && expandedFunnel === funnel.id && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="pl-4 space-y-0.5 overflow-hidden"
+                    >
+                      {[
+                        { path: `/funis/${funnel.id}/resumo`,    label: 'Resumo',    icon: LayoutDashboard },
+                        { path: `/funis/${funnel.id}/kpi`,       label: 'KPI',       icon: Layers },
+                        { path: `/funis/${funnel.id}/campanhas`, label: 'Campanhas', icon: Megaphone },
+                        { path: `/funis/configurar?editar=${funnel.id}`, label: 'Editar', icon: Pencil },
+                      ].map(({ path, label, icon: Icon }) => (
+                        <NavLink
+                          key={path}
+                          to={path}
+                          className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
+                            isActive(path)
+                              ? 'bg-sidebar-active text-sidebar-theme font-medium'
+                              : 'text-sidebar-theme/70 hover:bg-sidebar-hover hover:text-sidebar-theme'
+                          }`}
+                        >
+                          <Icon className="h-4 w-4 shrink-0" />
+                          <span className="whitespace-nowrap">{label}</span>
+                        </NavLink>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            ))}
+
+            {!collapsed && (
+              <NavLink
+                to="/funis/configurar"
+                className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-sidebar-theme/50 hover:text-sidebar-theme hover:bg-sidebar-hover transition-colors"
+              >
+                <Plus className="h-4 w-4 shrink-0" />
+                <span className="whitespace-nowrap">Novo funil</span>
+              </NavLink>
+            )}
+          </>
         )}
 
-        {/* Seção Análise de Anúncios */}
-        {sectionLabel('Anúncios')}
-        {AD_ANALYSIS_ITEMS.map(item => navLink(item.path, item.label, item.icon))}
+        {/* Seção Anúncios */}
+        {can('mod_anuncios') && (
+          <>
+            {sectionLabel('Anúncios')}
+            {AD_ANALYSIS_ITEMS.map(item => navLink(item.path, item.label, item.icon))}
+          </>
+        )}
 
         {/* Seção Inteligência */}
-        {sectionLabel('Inteligência')}
-        {INTELLIGENCE_ITEMS.map(item => navLink(item.path, item.label, item.icon))}
+        {can('mod_inteligencia') && (
+          <>
+            {sectionLabel('Inteligência')}
+            {INTELLIGENCE_ITEMS.map(item => navLink(item.path, item.label, item.icon))}
+          </>
+        )}
 
         {/* Seção Leads */}
-        {sectionLabel('Leads')}
-        {LEAD_ITEMS.map(item => navLink(item.path, item.label, item.icon))}
+        {can('mod_leads') && (
+          <>
+            {sectionLabel('Leads')}
+            {LEAD_ITEMS.map(item => navLink(item.path, item.label, item.icon))}
+          </>
+        )}
+
+        {/* WhatsApp (separado para controle granular) */}
+        {can('mod_whatsapp') && (
+          <>
+            {!can('mod_leads') && sectionLabel('Comunicação')}
+            {navLink(WHATSAPP_ITEM.path, WHATSAPP_ITEM.label, WHATSAPP_ITEM.icon)}
+          </>
+        )}
 
         {/* Seção Ferramentas */}
-        {sectionLabel('Ferramentas')}
-        {TOOL_ITEMS.map(item => navLink(item.path, item.label, item.icon))}
+        {can('mod_ferramentas') && (
+          <>
+            {sectionLabel('Ferramentas')}
+            {TOOL_ITEMS.map(item => navLink(item.path, item.label, item.icon))}
+          </>
+        )}
 
-        {/* Gerenciar funis */}
-        {navLink('/funis/configurar', 'Gerenciar Funis', Settings)}
+        {/* Gerenciar funis - only if tráfego enabled */}
+        {can('mod_trafego') && navLink('/funis/configurar', 'Gerenciar Funis', Settings)}
       </nav>
     </motion.aside>
   );
