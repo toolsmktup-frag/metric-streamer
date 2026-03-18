@@ -23,7 +23,7 @@ CREATE POLICY "Users can view own access"
   TO authenticated
   USING (
     user_id = auth.uid()
-    OR public.has_role(auth.uid(), 'admin')
+    OR public.get_user_role() = 'admin'
   );
 
 -- Apenas admins podem inserir
