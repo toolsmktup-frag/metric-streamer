@@ -9,6 +9,19 @@ const corsHeaders = {
 const ORG_ID = "00000000-0000-0000-0000-000000000001";
 const APPROVED_STATUSES = ["authorized", "approved", "paid", "completed", "Aprovada", "aprovada"];
 
+function mapStatusToEventName(status: string | null): string {
+  if (!status) return "evento_desconhecido";
+  const s = status.toLowerCase().trim();
+  if (["authorized", "approved", "paid", "completed", "aprovada"].includes(s)) return "pago";
+  if (["waiting_payment", "pending", "pendente", "waiting"].includes(s)) return "pix_gerado";
+  if (["rejected", "recusada", "refused"].includes(s)) return "rejeitado";
+  if (["cancelled", "canceled", "cancelada"].includes(s)) return "cancelado";
+  if (["expired", "expirada"].includes(s)) return "expirado";
+  if (["refunded", "reembolsada", "reembolsado"].includes(s)) return "reembolsado";
+  if (["chargeback"].includes(s)) return "chargeback";
+  return s; // fallback: use raw status
+}
+
 function normalizeEmail(email: string | null): string | null {
   if (!email) return null;
   const trimmed = email.trim().toLowerCase();
@@ -146,8 +159,9 @@ async function performSync() {
     const key = p.unified_customer_id;
     const isApproved = APPROVED_STATUSES.includes(p.status);
     const eventDate = p.purchased_at || new Date().toISOString();
+    const eventName = mapStatusToEventName(p.status);
     const event = {
-      event_name: isApproved ? "purchase" : (p.status || "unknown"),
+      event_name: eventName,
       metadata: { platform: p.platform || "unknown", product_name: p.product_name, status: p.status, amount: p.gross_amount },
       created_at: eventDate,
     };
@@ -254,11 +268,21 @@ async function performSync() {
     else console.error("Position insert error:", error);
   }
 
-  // ===== STEP 6: Insert events with real dates =====
+  // ===== STEP 6: Insert events one by one (resilient) =====
   const allEvents: any[] = [];
   for (const [key, contact] of contactMap) {
     const leadId = leadIdByKey.get(key);
     if (!leadId) continue;
+
+    // Always add a "criado" event with the earliest date
+    allEvents.push({
+      lead_id: leadId,
+      funnel_id: baseFunnel.id,
+      event_name: "criado",
+      metadata: { source: "sync" },
+      created_at: contact.firstPurchaseDate || new Date().toISOString(),
+    });
+
     for (const evt of contact.events) {
       allEvents.push({
         lead_id: leadId,
@@ -271,11 +295,23 @@ async function performSync() {
   }
 
   let eventsCreated = 0;
-  for (let i = 0; i < allEvents.length; i += 500) {
-    const chunk = allEvents.slice(i, i + 500);
-    const { error } = await supabase.from("lead_events").insert(chunk);
-    if (!error) eventsCreated += chunk.length;
-    else console.error("Event insert error:", error);
+  for (const evt of allEvents) {
+    // Try with explicit created_at first
+    const { error } = await supabase.from("lead_events").insert(evt);
+    if (!error) {
+      eventsCreated++;
+    } else {
+      // Fallback: insert without created_at, store original date in metadata
+      console.warn("Event insert with date failed, retrying without created_at:", error.message);
+      const { created_at, ...rest } = evt;
+      const fallback = { ...rest, metadata: { ...rest.metadata, original_date: created_at } };
+      const { error: err2 } = await supabase.from("lead_events").insert(fallback);
+      if (!err2) {
+        eventsCreated++;
+      } else {
+        console.error("Event insert fallback also failed:", err2.message, evt.lead_id);
+      }
+    }
   }
 
   const result = {
