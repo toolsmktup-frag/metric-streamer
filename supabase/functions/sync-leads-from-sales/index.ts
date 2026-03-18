@@ -10,12 +10,14 @@ const ORG_ID = "00000000-0000-0000-0000-000000000001";
 const APPROVED_STATUSES = ["authorized", "approved", "paid", "completed", "Aprovada", "aprovada"];
 
 function normalizeEmail(email: string | null): string | null {
-  return email ? email.trim().toLowerCase() : null;
+  if (!email) return null;
+  const trimmed = email.trim().toLowerCase();
+  // Only treat as email if it contains @
+  return trimmed.includes("@") ? trimmed : null;
 }
 
 function normalizePhone(phone: string | null): string | null {
   if (!phone) return null;
-  // Keep only digits
   const digits = phone.replace(/\D/g, "");
   return digits.length >= 8 ? digits : null;
 }
@@ -69,35 +71,49 @@ async function performSync() {
     return { success: false, error: "Could not create BASE DE LEADS funnel", leads_created: 0, events_created: 0 };
   }
 
-  // Ensure stages exist
+  // Ensure stages exist (including "Perdido")
   const { data: existingStages } = await supabase
     .from("lead_funnel_stages")
     .select("id, name")
     .eq("funnel_id", baseFunnel.id);
 
+  const stageNames = (existingStages || []).map((s: any) => s.name);
+
   if (!existingStages || existingStages.length === 0) {
     await supabase.from("lead_funnel_stages").insert([
       { funnel_id: baseFunnel.id, name: "Novo", color: "#94a3b8", sort_order: 0 },
       { funnel_id: baseFunnel.id, name: "Comprador", color: "#22c55e", sort_order: 1 },
-      { funnel_id: baseFunnel.id, name: "Recorrente", color: "#3b82f6", sort_order: 2 },
-      { funnel_id: baseFunnel.id, name: "VIP", color: "#f59e0b", sort_order: 3 },
+      { funnel_id: baseFunnel.id, name: "Perdido", color: "#ef4444", sort_order: 2 },
+      { funnel_id: baseFunnel.id, name: "Recorrente", color: "#3b82f6", sort_order: 3 },
+      { funnel_id: baseFunnel.id, name: "VIP", color: "#f59e0b", sort_order: 4 },
     ]);
+  } else if (!stageNames.includes("Perdido")) {
+    // Add "Perdido" stage if missing
+    const maxOrder = Math.max(...(existingStages || []).map((s: any) => s.sort_order || 0), 0);
+    await supabase.from("lead_funnel_stages").insert({
+      funnel_id: baseFunnel.id, name: "Perdido", color: "#ef4444", sort_order: maxOrder + 1,
+    });
   }
 
-  const { data: firstStage } = await supabase
+  // Fetch stages by name
+  const { data: allStages } = await supabase
     .from("lead_funnel_stages")
-    .select("id")
-    .eq("funnel_id", baseFunnel.id)
-    .order("sort_order", { ascending: true })
-    .limit(1)
-    .maybeSingle();
+    .select("id, name")
+    .eq("funnel_id", baseFunnel.id);
 
-  if (!firstStage) {
+  const stageMap = new Map<string, string>();
+  (allStages || []).forEach((s: any) => stageMap.set(s.name, s.id));
+
+  const compradorStageId = stageMap.get("Comprador");
+  const perdidoStageId = stageMap.get("Perdido");
+  const novoStageId = stageMap.get("Novo");
+  const fallbackStageId = novoStageId || compradorStageId || (allStages?.[0]?.id);
+
+  if (!fallbackStageId) {
     return { success: false, error: "No stages found", leads_created: 0, events_created: 0 };
   }
 
-  // ===== STEP 2: Fetch ONLY from unified_customers + customer_purchases =====
-  // This is the canonical deduplicated source
+  // ===== STEP 2: Fetch ALL purchases (no status filter) =====
   const { data: customers } = await supabase
     .from("unified_customers")
     .select("id, primary_email, primary_phone, full_name")
@@ -107,19 +123,19 @@ async function performSync() {
     .from("customer_purchases")
     .select("unified_customer_id, product_name, status, gross_amount, purchased_at, utm_source, platform")
     .eq("organization_id", ORG_ID)
-    .in("status", APPROVED_STATUSES)
     .order("purchased_at", { ascending: true });
 
-  // Build customer map by unified_customer_id (already deduplicated)
   const custMap = new Map<string, { email: string | null; phone: string | null; name: string | null }>();
   for (const c of (customers || [])) {
     custMap.set(c.id, { email: normalizeEmail(c.primary_email), phone: normalizePhone(c.primary_phone), name: c.full_name });
   }
 
-  // ===== STEP 3: Build unique contacts from unified_customers that have purchases =====
+  // ===== STEP 3: Build unique contacts from ALL purchases =====
   const contactMap = new Map<string, {
     email: string | null; phone: string | null; name: string | null;
     utm_source: string | null;
+    hasApproved: boolean;
+    firstPurchaseDate: string | null;
     events: { event_name: string; metadata: Record<string, unknown>; created_at: string }[];
   }>();
 
@@ -127,79 +143,118 @@ async function performSync() {
     const cust = custMap.get(p.unified_customer_id);
     if (!cust) continue;
 
-    // Use unified_customer_id as key (already deduplicated by the resolve_or_create_customer RPC)
     const key = p.unified_customer_id;
-    const existing = contactMap.get(key);
+    const isApproved = APPROVED_STATUSES.includes(p.status);
+    const eventDate = p.purchased_at || new Date().toISOString();
     const event = {
-      event_name: "purchase",
+      event_name: isApproved ? "purchase" : (p.status || "unknown"),
       metadata: { platform: p.platform || "unknown", product_name: p.product_name, status: p.status, amount: p.gross_amount },
-      created_at: p.purchased_at || new Date().toISOString(),
+      created_at: eventDate,
     };
 
+    const existing = contactMap.get(key);
     if (existing) {
       existing.events.push(event);
+      if (isApproved) existing.hasApproved = true;
+      if (!existing.firstPurchaseDate || eventDate < existing.firstPurchaseDate) {
+        existing.firstPurchaseDate = eventDate;
+      }
     } else {
       contactMap.set(key, {
         email: cust.email,
         phone: cust.phone,
         name: cust.name,
         utm_source: p.utm_source || null,
+        hasApproved: isApproved,
+        firstPurchaseDate: eventDate,
         events: [event],
       });
     }
   }
 
-  console.log(`Unique customers with approved purchases: ${contactMap.size}`);
+  console.log(`Unique customers with purchases: ${contactMap.size}`);
 
-  // ===== STEP 4: Insert leads =====
-  const newLeads: any[] = [];
-  const keyOrder: string[] = [];
+  // ===== STEP 4: Insert leads one by one (resilient) =====
+  const leadIdByKey = new Map<string, string>();
+  let created = 0;
+
   for (const [key, contact] of contactMap) {
-    keyOrder.push(key);
-    newLeads.push({
+    const leadRow = {
       organization_id: ORG_ID,
       phone: contact.phone || null,
       email: contact.email || null,
       name: contact.name || null,
       utm_source: contact.utm_source || null,
       metadata: {},
-    });
+    };
+
+    const { data: inserted, error } = await supabase
+      .from("leads")
+      .insert(leadRow)
+      .select("id")
+      .single();
+
+    if (inserted) {
+      leadIdByKey.set(key, inserted.id);
+      created++;
+    } else if (error) {
+      // Try to find existing lead by email or phone
+      let existingLead = null;
+      if (contact.email) {
+        const { data } = await supabase
+          .from("leads")
+          .select("id")
+          .eq("organization_id", ORG_ID)
+          .eq("email", contact.email)
+          .limit(1)
+          .maybeSingle();
+        existingLead = data;
+      }
+      if (!existingLead && contact.phone) {
+        const { data } = await supabase
+          .from("leads")
+          .select("id")
+          .eq("organization_id", ORG_ID)
+          .eq("phone", contact.phone)
+          .limit(1)
+          .maybeSingle();
+        existingLead = data;
+      }
+      if (existingLead) {
+        leadIdByKey.set(key, existingLead.id);
+      } else {
+        console.error("Failed to insert/find lead:", error.message, contact.email, contact.phone);
+      }
+    }
   }
 
-  const leadIdByKey = new Map<string, string>();
-  let created = 0;
+  // ===== STEP 5: Position leads in correct stage =====
+  const positions: any[] = [];
+  for (const [key, contact] of contactMap) {
+    const leadId = leadIdByKey.get(key);
+    if (!leadId) continue;
 
-  for (let i = 0; i < newLeads.length; i += 500) {
-    const chunk = newLeads.slice(i, i + 500);
-    const { data: inserted, error } = await supabase.from("leads").insert(chunk).select("id");
-    if (error) { console.error("Batch insert error:", error); continue; }
-    (inserted || []).forEach((l: any, idx: number) => {
-      leadIdByKey.set(keyOrder[i + idx], l.id);
+    const targetStageId = contact.hasApproved
+      ? (compradorStageId || fallbackStageId)
+      : (perdidoStageId || fallbackStageId);
+
+    positions.push({
+      lead_id: leadId,
+      funnel_id: baseFunnel.id,
+      stage_id: targetStageId,
+      entered_at: contact.firstPurchaseDate || new Date().toISOString(),
     });
-    created += (inserted || []).length;
   }
-
-  // ===== STEP 5: Position all leads in BASE DE LEADS =====
-  const { data: allLeads } = await supabase
-    .from("leads")
-    .select("id")
-    .eq("organization_id", ORG_ID);
-
-  const toInsert = (allLeads || []).map((l: any) => ({
-    lead_id: l.id,
-    funnel_id: baseFunnel.id,
-    stage_id: firstStage.id,
-  }));
 
   let positioned = 0;
-  for (let i = 0; i < toInsert.length; i += 500) {
-    const chunk = toInsert.slice(i, i + 500);
+  for (let i = 0; i < positions.length; i += 500) {
+    const chunk = positions.slice(i, i + 500);
     const { error } = await supabase.from("lead_stage_positions").insert(chunk);
     if (!error) positioned += chunk.length;
     else console.error("Position insert error:", error);
   }
 
-  // ===== STEP 6: Insert events =====
+  // ===== STEP 6: Insert events with real dates =====
   const allEvents: any[] = [];
   for (const [key, contact] of contactMap) {
     const leadId = leadIdByKey.get(key);
@@ -220,6 +275,7 @@ async function performSync() {
     const chunk = allEvents.slice(i, i + 500);
     const { error } = await supabase.from("lead_events").insert(chunk);
     if (!error) eventsCreated += chunk.length;
+    else console.error("Event insert error:", error);
   }
 
   const result = {
