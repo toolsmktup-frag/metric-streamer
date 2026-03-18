@@ -363,6 +363,7 @@ export default function WhatsAppChat() {
 
       <InstanceManagement
         instance={instances.find(i => i.id === (isAllMode ? chatInstanceId : singleInstanceId)) || null}
+        instances={instances}
         open={instanceMgmtOpen}
         onClose={() => setInstanceMgmtOpen(false)}
         onInstanceDeleted={() => refetchInstances()}
