@@ -57,6 +57,21 @@ function deduplicateBatch(batch: ImportLead[]) {
   return byKey;
 }
 
+function mapStatusToEventName(status: string): string {
+  const s = status.toLowerCase().trim();
+  if (['authorized', 'approved', 'paid', 'aprovada', 'aprovado'].includes(s)) return 'pago';
+  if (['waiting_payment', 'pending', 'aguardando pagamento'].includes(s)) return 'pix_gerado';
+  if (['pix_created'].includes(s)) return 'pix_gerado';
+  if (['bank_slip_created', 'billet_printed', 'boleto'].includes(s)) return 'boleto_gerado';
+  if (['rejected', 'refused', 'rejeitada', 'rejeitado'].includes(s)) return 'rejeitado';
+  if (['canceled', 'cancelled', 'cancelada', 'cancelado'].includes(s)) return 'cancelado';
+  if (['expired', 'expirada', 'expirado'].includes(s)) return 'expirado';
+  if (['refunded', 'reembolsada', 'reembolsado'].includes(s)) return 'reembolsado';
+  if (['chargeback', 'chargedback'].includes(s)) return 'chargeback';
+  if (['open', 'checkout'].includes(s)) return 'open';
+  return s || 'import';
+}
+
 /**
  * Build a rich event from an imported row, using the actual status/product
  * instead of a generic "import" label.
@@ -67,9 +82,8 @@ function buildEvent(
   row: ImportLead,
 ): { lead_id: string; funnel_id: string; event_name: string; created_at: string; metadata: Record<string, unknown> } {
   const status = ((row.metadata.status as string) || '').toLowerCase().trim();
-  const eventName = status || 'import';
+  const eventName = mapStatusToEventName(status);
 
-  // Use the actual purchase date from the spreadsheet instead of now()
   const purchasedAt = row.metadata.purchased_at as string | null;
   const createdAt = purchasedAt || new Date().toISOString();
 
@@ -86,12 +100,29 @@ function buildEvent(
       payment_method: row.metadata.payment_method || null,
       platform: row.metadata.platform || null,
       purchased_at: row.metadata.purchased_at || null,
+      original_date: purchasedAt || null,
       ...Object.fromEntries(
         Object.entries(row.metadata).filter(
           ([k]) => !['status', 'product_name', 'offer_name', 'amount', 'payment_method', 'platform', 'purchased_at'].includes(k),
         ),
       ),
     },
+  };
+}
+
+function buildLeadImportadoEvent(
+  leadId: string,
+  funnelId: string,
+  row: ImportLead,
+): { lead_id: string; funnel_id: string; event_name: string; created_at: string; metadata: Record<string, unknown> } {
+  const purchasedAt = row.metadata.purchased_at as string | null;
+  const createdAt = purchasedAt || new Date().toISOString();
+  return {
+    lead_id: leadId,
+    funnel_id: funnelId,
+    event_name: 'lead_importado',
+    created_at: createdAt,
+    metadata: { source: 'spreadsheet', original_date: purchasedAt || null },
   };
 }
 
