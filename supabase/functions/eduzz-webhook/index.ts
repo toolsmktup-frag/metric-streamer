@@ -292,6 +292,30 @@ Deno.serve(async (req) => {
       ` | product "${productName}" | funnel_id: ${funnelId} | R$${amountReais}`
     );
 
+    // ── Sincronizar lead na "BASE DE LEADS" ──
+    try {
+      await syncLeadFromSale(supabase, {
+        email: clientEmail,
+        phone: clientPhone,
+        name: clientName,
+        utm_source: utmSource,
+        utm_medium: utmMedium,
+        utm_campaign: utmCampaign,
+        utm_content: utmContent,
+        utm_term: utmTerm,
+        event_name: "purchase",
+        metadata: {
+          platform: "eduzz",
+          product_name: productName,
+          status: normalizedStatus,
+          amount_reais: amountReais,
+          invoice_id: invoiceId,
+        },
+      });
+    } catch (leadErr) {
+      console.error("Lead sync error (non-fatal):", leadErr);
+    }
+
     return jsonResponse({ success: true });
   } catch (err) {
     console.error("Webhook error:", err);

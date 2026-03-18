@@ -252,6 +252,29 @@ Deno.serve(async (req) => {
 
     console.log(`Guru webhook processed: ${normalizedStatus} - product "${productName}" - funnel_id: ${funnelId}`);
 
+    // ── Sincronizar lead na "BASE DE LEADS" ──
+    try {
+      await syncLeadFromSale(supabase, {
+        email: customer.email || null,
+        phone: customer.phone || customer.telephone || null,
+        name: customer.name || customer.full_name || null,
+        utm_source: utmSource,
+        utm_medium: utmMedium,
+        utm_campaign: utmCampaign,
+        utm_content: utmContent,
+        utm_term: utmTerm,
+        event_name: "purchase",
+        metadata: {
+          platform: "guru",
+          product_name: productName,
+          status: normalizedStatus,
+          amount: record.gross_amount,
+        },
+      });
+    } catch (leadErr) {
+      console.error("Lead sync error (non-fatal):", leadErr);
+    }
+
     return jsonResponse({ success: true });
   } catch (err) {
     console.error("Webhook error:", err);
