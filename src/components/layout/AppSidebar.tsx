@@ -34,12 +34,8 @@ interface AppSidebarProps {
 }
 
 const AD_ANALYSIS_ITEMS = [
-  { path: '/vendas',       label: 'Vendas',       icon: ShoppingCart },
-  { path: '/kpi-geral',    label: 'Geral ADS',    icon: Layers },
-  { path: '/demograficos', label: 'Demográficos', icon: Users },
-  { path: '/geografico',   label: 'Geográfico',   icon: Globe },
-  { path: '/criativos',    label: 'Criativos',    icon: FileImage },
-  { path: '/dispositivos', label: 'Dispositivos', icon: Smartphone },
+  { path: '/vendas',    label: 'Vendas',    icon: ShoppingCart },
+  { path: '/kpi-geral', label: 'Geral ADS', icon: Layers },
 ];
 
 const INTELLIGENCE_ITEMS = [
