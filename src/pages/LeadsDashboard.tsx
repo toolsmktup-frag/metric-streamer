@@ -1,13 +1,35 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { useLeadStats } from '@/hooks/useAllLeads';
-import { Users, UserPlus, TrendingUp, Target } from 'lucide-react';
+import { Users, UserPlus, TrendingUp, Target, RefreshCw } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+import { useQueryClient } from '@tanstack/react-query';
 
 const COLORS = ['hsl(var(--primary))', 'hsl(var(--accent))', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4'];
 
 const LeadsDashboard: React.FC = () => {
   const { data: stats, isLoading } = useLeadStats();
+  const [syncing, setSyncing] = useState(false);
+  const queryClient = useQueryClient();
+
+  const handleSync = async () => {
+    setSyncing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('sync-leads-from-sales');
+      if (error) throw error;
+      toast.success(`Sincronização concluída`, {
+        description: `${data.leads_created} leads criados, ${data.leads_migrated_to_funnel} migrados para BASE DE LEADS, ${data.events_created} eventos`,
+      });
+      queryClient.invalidateQueries({ queryKey: ['leadStats'] });
+    } catch (err: any) {
+      toast.error('Erro na sincronização', { description: err.message });
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   if (isLoading) return <div className="p-6 text-muted-foreground">Carregando...</div>;
   if (!stats) return <div className="p-6 text-muted-foreground">Sem dados disponíveis.</div>;
@@ -21,7 +43,13 @@ const LeadsDashboard: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Dashboard de Leads</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">Dashboard de Leads</h1>
+        <Button variant="outline" size="sm" onClick={handleSync} disabled={syncing}>
+          <RefreshCw className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
+          {syncing ? 'Sincronizando...' : 'Sincronizar Base'}
+        </Button>
+      </div>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
