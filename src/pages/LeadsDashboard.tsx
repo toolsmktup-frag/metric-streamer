@@ -129,6 +129,10 @@ const LeadsDashboard: React.FC = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Dashboard de Leads</h1>
+        <Button variant="outline" size="sm" onClick={handleExport} disabled={exporting}>
+          <Download className={`h-4 w-4`} />
+          {exporting ? 'Exportando...' : 'Exportar Clientes'}
+        </Button>
         <Button variant="outline" size="sm" onClick={handleSync} disabled={syncing}>
           <RefreshCw className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
           {syncing ? 'Sincronizando...' : 'Sincronizar Base'}
