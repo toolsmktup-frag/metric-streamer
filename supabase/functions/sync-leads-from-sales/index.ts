@@ -100,7 +100,7 @@ async function performSync() {
   // This is the canonical deduplicated source
   const { data: customers } = await supabase
     .from("unified_customers")
-    .select("id, email, phone, name")
+    .select("id, primary_email, primary_phone, full_name")
     .eq("organization_id", ORG_ID);
 
   const { data: purchases } = await supabase
