@@ -232,6 +232,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
                         isDragging={activeId === pos.id}
                         isRevenue={isRevenue}
                         onClick={() => onLeadClick?.(pos.lead_id)}
+                        onWhatsAppClick={onWhatsAppClick}
                       />
                     ))
                   )}

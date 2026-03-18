@@ -217,6 +217,7 @@ const LeadFunnelDetail: React.FC = () => {
             stages={stages}
             positions={positions}
             onLeadClick={handleLeadClick}
+            onWhatsAppClick={handleWhatsAppClick}
             funnelId={funnel.id}
           />
         </TabsContent>
