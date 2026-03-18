@@ -34,17 +34,36 @@ interface ParsedLead {
 
 // Common column name mappings (Guru, Eduzz, generic)
 const COLUMN_MAP: Record<string, keyof ParsedLead | null> = {
+  // Name variations
   'nome contato': 'name',
   'nome': 'name',
   'name': 'name',
   'full_name': 'name',
+  'cliente': 'name',
+  'comprador': 'name',
+  'nome do cliente': 'name',
+  'nome cliente': 'name',
+  'nome comprador': 'name',
+  'customer_name': 'name',
+  'buyer_name': 'name',
+  'nome completo': 'name',
+  // Email variations
   'email contato': 'email',
   'email': 'email',
   'e-mail': 'email',
+  'email do cliente': 'email',
+  'email cliente': 'email',
+  'customer_email': 'email',
+  'buyer_email': 'email',
+  'e-mail contato': 'email',
+  // Phone variations
   'telefone contato': 'phone',
   'telefone': 'phone',
   'phone': 'phone',
   'celular': 'phone',
+  'telefone cliente': 'phone',
+  'customer_phone': 'phone',
+  // UTM variations
   'utm_source': 'utm_source',
   'utm source': 'utm_source',
   'utm_medium': 'utm_medium',
