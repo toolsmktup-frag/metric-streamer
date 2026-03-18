@@ -66,6 +66,7 @@ export default function InstanceManagement({
   const [profileName, setProfileName] = useState('');
   const [profileImageUrl, setProfileImageUrl] = useState('');
   const [instanceName, setInstanceName] = useState('');
+  const [nickname, setNickname] = useState('');
   const [privacy, setPrivacy] = useState<any>(null);
   const [pairCode, setPairCode] = useState<string | null>(null);
   const [qrCode, setQrCode] = useState<string | null>(null);
