@@ -92,6 +92,23 @@ const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, isDragging }) =>
             </span>
           </>
         )}
+        {/* Metadata from import: product & amount */}
+        {!purchaseData?.totalOrders && lead.metadata?.product_name && (
+          <span className="text-[10px] px-1.5 py-0.5 bg-primary/10 text-primary rounded font-medium truncate max-w-[140px]">
+            {lead.metadata.product_name as string}
+          </span>
+        )}
+        {!purchaseData?.totalOrders && lead.metadata?.amount && (
+          <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded">
+            <DollarSign className="h-3 w-3" />
+            {Number(lead.metadata.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+          </span>
+        )}
+        {!purchaseData?.totalOrders && lead.metadata?.status && (
+          <span className="text-[10px] px-1.5 py-0.5 bg-muted rounded text-muted-foreground">
+            {lead.metadata.status as string}
+          </span>
+        )}
         {lead.utm_source && (
           <span className="text-[10px] px-1.5 py-0.5 bg-accent rounded text-accent-foreground">
             {lead.utm_source}

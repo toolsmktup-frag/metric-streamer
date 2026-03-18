@@ -6,9 +6,11 @@ import {
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Upload, FileSpreadsheet, CheckCircle, AlertCircle } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Upload, FileSpreadsheet, CheckCircle, AlertCircle, GitBranch } from 'lucide-react';
 import { LeadFunnelStage } from '@/types/leadFunnels';
 import { useImportLeads } from '@/hooks/useImportLeads';
+import { Badge } from '@/components/ui/badge';
 
 interface ImportLeadsDialogProps {
   open: boolean;
@@ -44,20 +46,55 @@ const COLUMN_MAP: Record<string, keyof ParsedLead | null> = {
   'phone': 'phone',
   'celular': 'phone',
   'utm_source': 'utm_source',
+  'utm source': 'utm_source',
   'utm_medium': 'utm_medium',
+  'utm medium': 'utm_medium',
   'utm_campaign': 'utm_campaign',
+  'utm campaign': 'utm_campaign',
   'utm_content': 'utm_content',
+  'utm content': 'utm_content',
   'utm_term': 'utm_term',
+  'utm term': 'utm_term',
 };
 
-const METADATA_COLUMNS = [
-  'nome produto', 'product_name', 'produto',
-  'valor venda', 'valor líquido', 'gross_amount', 'net_amount', 'valor',
-  'status', 'status da compra',
-  'data pedido', 'purchased_at', 'data',
-  'plataforma', 'platform',
-  'código de telefone', 'código telefone',
-];
+// Map export columns to standardized metadata keys
+const METADATA_KEY_MAP: Record<string, string> = {
+  'produto': 'product_name',
+  'nome produto': 'product_name',
+  'product_name': 'product_name',
+  'oferta': 'offer_name',
+  'offer_name': 'offer_name',
+  'valor': 'amount',
+  'valor venda': 'amount',
+  'valor líquido': 'amount',
+  'gross_amount': 'amount',
+  'net_amount': 'amount',
+  'status': 'status',
+  'status da compra': 'status',
+  'pagamento': 'payment_method',
+  'payment_method': 'payment_method',
+  'método pagamento': 'payment_method',
+  'plataforma': 'platform',
+  'platform': 'platform',
+  'data': 'purchased_at',
+  'data pedido': 'purchased_at',
+  'purchased_at': 'purchased_at',
+  'campanha meta': 'meta_campaign_name',
+  'meta campaign name': 'meta_campaign_name',
+  'adset meta': 'meta_adset_name',
+  'meta adset name': 'meta_adset_name',
+  'anúncio meta': 'meta_ad_name',
+  'meta ad name': 'meta_ad_name',
+  'tráfego pago': 'is_paid_traffic',
+  'código de telefone': '_phone_code',
+  'código telefone': '_phone_code',
+};
+
+// Status values considered as "buyer"
+const BUYER_STATUSES = new Set([
+  'authorized', 'approved', 'aprovada', 'completed', 'paid',
+  'bank_slip_created', 'pix_created',
+]);
 
 function parseSpreadsheet(file: File): Promise<Record<string, string>[]> {
   return new Promise((resolve, reject) => {
@@ -91,19 +128,29 @@ function mapRow(row: Record<string, string>): ParsedLead {
 
     if (mapped) {
       (lead as any)[mapped] = val?.toString().trim() || null;
-    } else if (METADATA_COLUMNS.some(mc => normalizedCol.includes(mc.toLowerCase()))) {
-      lead.metadata[normalizedCol] = val;
     } else {
-      lead.metadata[normalizedCol] = val;
+      // Check standardized metadata key map
+      const metaKey = METADATA_KEY_MAP[normalizedCol];
+      if (metaKey) {
+        lead.metadata[metaKey] = val?.toString().trim() || null;
+      } else {
+        lead.metadata[normalizedCol] = val;
+      }
     }
   }
 
   // Combine phone code if separate
-  if (lead.metadata['código de telefone'] && lead.phone) {
-    lead.phone = `+${lead.metadata['código de telefone']}${lead.phone}`;
+  if (lead.metadata['_phone_code'] && lead.phone) {
+    lead.phone = `+${lead.metadata['_phone_code']}${lead.phone}`;
+    delete lead.metadata['_phone_code'];
   }
 
   return lead;
+}
+
+function isBuyerLead(lead: ParsedLead): boolean {
+  const status = ((lead.metadata.status as string) || '').toLowerCase().trim();
+  return BUYER_STATUSES.has(status);
 }
 
 const ImportLeadsDialog: React.FC<ImportLeadsDialogProps> = ({
@@ -112,11 +159,15 @@ const ImportLeadsDialog: React.FC<ImportLeadsDialogProps> = ({
   const [parsedRows, setParsedRows] = useState<ParsedLead[]>([]);
   const [fileName, setFileName] = useState<string | null>(null);
   const [selectedStage, setSelectedStage] = useState<string>('');
+  const [buyerStage, setBuyerStage] = useState<string>('');
+  const [separateByStatus, setSeparateByStatus] = useState(false);
   const [progress, setProgress] = useState<number>(0);
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState<{ imported: number; skipped: number } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const importMutation = useImportLeads();
+
+  const hasStatusColumn = parsedRows.length > 0 && parsedRows.some(r => r.metadata.status);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -137,15 +188,51 @@ const ImportLeadsDialog: React.FC<ImportLeadsDialogProps> = ({
     setImporting(true);
     setProgress(0);
 
-    const res = await importMutation.mutateAsync({
-      leads: parsedRows,
-      funnelId,
-      stageId: selectedStage,
-      organizationId,
-      onProgress: (done, total) => setProgress(Math.round((done / total) * 100)),
-    });
+    if (separateByStatus && buyerStage) {
+      // Split into buyers and non-buyers
+      const buyers = parsedRows.filter(isBuyerLead);
+      const nonBuyers = parsedRows.filter(l => !isBuyerLead(l));
 
-    setResult(res);
+      let totalImported = 0;
+      let totalSkipped = 0;
+      const totalLeads = parsedRows.length;
+
+      if (buyers.length > 0) {
+        const res = await importMutation.mutateAsync({
+          leads: buyers,
+          funnelId,
+          stageId: buyerStage,
+          organizationId,
+          onProgress: (done) => setProgress(Math.round((done / totalLeads) * 100)),
+        });
+        totalImported += res.imported;
+        totalSkipped += res.skipped;
+      }
+
+      if (nonBuyers.length > 0) {
+        const res = await importMutation.mutateAsync({
+          leads: nonBuyers,
+          funnelId,
+          stageId: selectedStage,
+          organizationId,
+          onProgress: (done) => setProgress(Math.round(((buyers.length + done) / totalLeads) * 100)),
+        });
+        totalImported += res.imported;
+        totalSkipped += res.skipped;
+      }
+
+      setResult({ imported: totalImported, skipped: totalSkipped });
+    } else {
+      const res = await importMutation.mutateAsync({
+        leads: parsedRows,
+        funnelId,
+        stageId: selectedStage,
+        organizationId,
+        onProgress: (done, total) => setProgress(Math.round((done / total) * 100)),
+      });
+      setResult(res);
+    }
+
     setImporting(false);
   };
 
@@ -154,6 +241,8 @@ const ImportLeadsDialog: React.FC<ImportLeadsDialogProps> = ({
     setParsedRows([]);
     setFileName(null);
     setSelectedStage('');
+    setBuyerStage('');
+    setSeparateByStatus(false);
     setProgress(0);
     setResult(null);
     onOpenChange(false);
@@ -161,6 +250,9 @@ const ImportLeadsDialog: React.FC<ImportLeadsDialogProps> = ({
 
   const sortedStages = [...stages].sort((a, b) => a.sort_order - b.sort_order);
   const previewLeads = parsedRows.slice(0, 5);
+
+  const buyerCount = parsedRows.filter(isBuyerLead).length;
+  const nonBuyerCount = parsedRows.length - buyerCount;
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -204,23 +296,65 @@ const ImportLeadsDialog: React.FC<ImportLeadsDialogProps> = ({
 
           {/* Stage Selector */}
           {parsedRows.length > 0 && (
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">Etapa destino</label>
-              <Select value={selectedStage} onValueChange={setSelectedStage}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione a etapa..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {sortedStages.map(s => (
-                    <SelectItem key={s.id} value={s.id}>
-                      <div className="flex items-center gap-2">
-                        <span className="h-2 w-2 rounded-full" style={{ backgroundColor: s.color }} />
-                        {s.name}
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">
+                  {separateByStatus ? 'Etapa para não-compradores' : 'Etapa destino'}
+                </label>
+                <Select value={selectedStage} onValueChange={setSelectedStage}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione a etapa..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {sortedStages.map(s => (
+                      <SelectItem key={s.id} value={s.id}>
+                        <div className="flex items-center gap-2">
+                          <span className="h-2 w-2 rounded-full" style={{ backgroundColor: s.color }} />
+                          {s.name}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Separate by status toggle */}
+              {hasStatusColumn && (
+                <div className="rounded-lg border border-border p-3 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <GitBranch className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm font-medium text-foreground">Separar por status</span>
+                    </div>
+                    <Switch checked={separateByStatus} onCheckedChange={setSeparateByStatus} />
+                  </div>
+                  {separateByStatus && (
+                    <>
+                      <p className="text-xs text-muted-foreground">
+                        Compradores ({buyerCount}) vão para uma etapa, não-compradores ({nonBuyerCount}) para outra.
+                      </p>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-foreground">Etapa para compradores</label>
+                        <Select value={buyerStage} onValueChange={setBuyerStage}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione a etapa..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {sortedStages.map(s => (
+                              <SelectItem key={s.id} value={s.id}>
+                                <div className="flex items-center gap-2">
+                                  <span className="h-2 w-2 rounded-full" style={{ backgroundColor: s.color }} />
+                                  {s.name}
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -234,17 +368,26 @@ const ImportLeadsDialog: React.FC<ImportLeadsDialogProps> = ({
                     <tr className="bg-muted/50">
                       <th className="text-left p-2 font-medium text-muted-foreground">Nome</th>
                       <th className="text-left p-2 font-medium text-muted-foreground">Email</th>
-                      <th className="text-left p-2 font-medium text-muted-foreground">Telefone</th>
-                      <th className="text-left p-2 font-medium text-muted-foreground">UTM Source</th>
+                      <th className="text-left p-2 font-medium text-muted-foreground">Produto</th>
+                      <th className="text-left p-2 font-medium text-muted-foreground">Status</th>
                     </tr>
                   </thead>
                   <tbody>
                     {previewLeads.map((lead, i) => (
                       <tr key={i} className="border-t border-border">
-                        <td className="p-2 text-foreground truncate max-w-[150px]">{lead.name || '—'}</td>
-                        <td className="p-2 text-foreground truncate max-w-[180px]">{lead.email || '—'}</td>
-                        <td className="p-2 text-foreground">{lead.phone || '—'}</td>
-                        <td className="p-2 text-foreground">{lead.utm_source || '—'}</td>
+                        <td className="p-2 text-foreground truncate max-w-[120px]">{lead.name || '—'}</td>
+                        <td className="p-2 text-foreground truncate max-w-[150px]">{lead.email || '—'}</td>
+                        <td className="p-2 text-foreground truncate max-w-[120px]">{(lead.metadata.product_name as string) || '—'}</td>
+                        <td className="p-2">
+                          {lead.metadata.status ? (
+                            <Badge
+                              variant={isBuyerLead(lead) ? 'default' : 'secondary'}
+                              className="text-[10px] px-1.5 py-0"
+                            >
+                              {lead.metadata.status as string}
+                            </Badge>
+                          ) : '—'}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -288,7 +431,7 @@ const ImportLeadsDialog: React.FC<ImportLeadsDialogProps> = ({
           {!result && (
             <Button
               onClick={handleImport}
-              disabled={importing || parsedRows.length === 0 || !selectedStage}
+              disabled={importing || parsedRows.length === 0 || !selectedStage || (separateByStatus && !buyerStage)}
             >
               {importing ? 'Importando...' : `Importar ${parsedRows.length} leads`}
             </Button>

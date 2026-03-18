@@ -225,13 +225,26 @@ const LeadTimeline: React.FC<LeadTimelineProps> = ({ lead, open, onClose }) => {
                               {format(new Date(ev.created_at), 'dd/MM/yyyy HH:mm:ss')}
                             </p>
                             {ev.metadata && Object.keys(ev.metadata).length > 0 && (
-                              <div className="flex items-center gap-2 mt-1 text-[10px]">
+                              <div className="flex items-center gap-2 mt-1 text-[10px] flex-wrap">
                                 {(ev.metadata as any).product_name && (
                                   <span className="text-muted-foreground">{(ev.metadata as any).product_name}</span>
+                                )}
+                                {(ev.metadata as any).offer_name && (
+                                  <span className="text-muted-foreground/80">({(ev.metadata as any).offer_name})</span>
                                 )}
                                 {(ev.metadata as any).amount && (
                                   <span className="font-semibold text-emerald-600 dark:text-emerald-400">
                                     {formatCurrency(Number((ev.metadata as any).amount))}
+                                  </span>
+                                )}
+                                {(ev.metadata as any).status && (
+                                  <Badge variant="secondary" className="text-[9px] px-1.5 py-0 h-4">
+                                    {(ev.metadata as any).status}
+                                  </Badge>
+                                )}
+                                {(ev.metadata as any).payment_method && (
+                                  <span className="text-muted-foreground flex items-center gap-0.5">
+                                    <CreditCard className="h-2.5 w-2.5" /> {(ev.metadata as any).payment_method}
                                   </span>
                                 )}
                                 {(ev.metadata as any).platform && (
