@@ -163,6 +163,30 @@ Deno.serve(async (req) => {
 
     console.log(`Ticto webhook processed: ${payload.status} - order ${order.hash} - tx ${order.transaction_hash}`);
 
+    // ── Sincronizar lead na "BASE DE LEADS" ──
+    try {
+      await syncLeadFromSale(supabase, {
+        email: record.customer_email,
+        phone: record.customer_phone,
+        name: record.customer_name,
+        utm_source: record.utm_source,
+        utm_medium: record.utm_medium,
+        utm_campaign: record.utm_campaign,
+        utm_content: record.utm_content,
+        utm_term: record.utm_term,
+        event_name: "purchase",
+        metadata: {
+          platform: "ticto",
+          product_name: record.product_name,
+          status: record.status,
+          amount_cents: record.paid_amount,
+          order_hash: record.order_hash,
+        },
+      });
+    } catch (leadErr) {
+      console.error("Lead sync error (non-fatal):", leadErr);
+    }
+
     return new Response(JSON.stringify({ success: true }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
