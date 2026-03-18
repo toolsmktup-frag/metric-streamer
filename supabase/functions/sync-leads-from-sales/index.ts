@@ -113,7 +113,7 @@ async function performSync() {
   // Build customer map by unified_customer_id (already deduplicated)
   const custMap = new Map<string, { email: string | null; phone: string | null; name: string | null }>();
   for (const c of (customers || [])) {
-    custMap.set(c.id, { email: normalizeEmail(c.email), phone: normalizePhone(c.phone), name: c.name });
+    custMap.set(c.id, { email: normalizeEmail(c.primary_email), phone: normalizePhone(c.primary_phone), name: c.full_name });
   }
 
   // ===== STEP 3: Build unique contacts from unified_customers that have purchases =====
