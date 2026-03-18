@@ -46,16 +46,16 @@ const LeadTimeline: React.FC<LeadTimelineProps> = ({ lead, open, onClose }) => {
                   </AvatarFallback>
                 </Avatar>
                 <div className="flex-1 min-w-0">
-                  <h3 className="text-base font-semibold text-foreground truncate">{lead.name || 'Lead sem nome'}</h3>
+                  <h3 className="text-base font-semibold text-foreground truncate">{lead.name || lead.email || lead.phone || 'Lead sem nome'}</h3>
                   <div className="flex flex-col gap-0.5 mt-1">
+                    {lead.email && lead.name && (
+                      <span className="text-xs text-muted-foreground flex items-center gap-1.5">
+                        <Mail className="h-3 w-3" /> {lead.email}
+                      </span>
+                    )}
                     {lead.phone && (
                       <span className="text-xs text-muted-foreground flex items-center gap-1.5">
                         <Phone className="h-3 w-3" /> {lead.phone}
-                      </span>
-                    )}
-                    {lead.email && (
-                      <span className="text-xs text-muted-foreground flex items-center gap-1.5">
-                        <Mail className="h-3 w-3" /> {lead.email}
                       </span>
                     )}
                   </div>

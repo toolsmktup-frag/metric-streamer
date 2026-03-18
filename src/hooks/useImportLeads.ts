@@ -65,14 +65,19 @@ function buildEvent(
   leadId: string,
   funnelId: string,
   row: ImportLead,
-): { lead_id: string; funnel_id: string; event_name: string; metadata: Record<string, unknown> } {
+): { lead_id: string; funnel_id: string; event_name: string; created_at: string; metadata: Record<string, unknown> } {
   const status = ((row.metadata.status as string) || '').toLowerCase().trim();
   const eventName = status || 'import';
+
+  // Use the actual purchase date from the spreadsheet instead of now()
+  const purchasedAt = row.metadata.purchased_at as string | null;
+  const createdAt = purchasedAt || new Date().toISOString();
 
   return {
     lead_id: leadId,
     funnel_id: funnelId,
     event_name: eventName,
+    created_at: createdAt,
     metadata: {
       source: 'spreadsheet',
       product_name: row.metadata.product_name || null,
