@@ -1,0 +1,262 @@
+import React, { useState, useMemo } from 'react';
+import { Users, ChevronDown, ChevronUp, Info } from 'lucide-react';
+import { formatCurrency } from '@/lib/formatters';
+import {
+  useRFM,
+  SEGMENT_CONFIG,
+  SEGMENT_ORDER,
+  type RFMSegment,
+  type RFMCustomer,
+} from '@/hooks/useRFM';
+import { pct, ScoreDot, LoadingState } from './shared';
+import RFMHeatmap from './RFMHeatmap';
+
+function RFMSegmentBadge({ segment }: { segment: RFMSegment }) {
+  const cfg = SEGMENT_CONFIG[segment];
+  return (
+    <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium ${cfg.badgeClass}`}>
+      {cfg.emoji} {cfg.label}
+    </span>
+  );
+}
+
+export default function RFMTab() {
+  const { data, isLoading } = useRFM();
+  const [selectedSegment, setSelectedSegment] = useState<RFMSegment | 'all'>('all');
+  const [sortBy, setSortBy] = useState<'monetary' | 'recency' | 'frequency'>('monetary');
+  const [sortAsc, setSortAsc] = useState(false);
+  const [expandedSegment, setExpandedSegment] = useState<RFMSegment | null>(null);
+  const [showHeatmap, setShowHeatmap] = useState(true);
+
+  const filteredCustomers = useMemo(() => {
+    if (!data) return [];
+    const list = selectedSegment === 'all'
+      ? data.customers
+      : data.customers.filter(c => c.segment === selectedSegment);
+    return [...list].sort((a, b) => {
+      const va = sortBy === 'monetary' ? a.monetary : sortBy === 'recency' ? a.recencyDays : a.frequency;
+      const vb = sortBy === 'monetary' ? b.monetary : sortBy === 'recency' ? b.recencyDays : b.frequency;
+      return sortAsc ? va - vb : vb - va;
+    });
+  }, [data, selectedSegment, sortBy, sortAsc]);
+
+  if (isLoading) return <LoadingState message="Calculando segmentos RFM..." />;
+
+  if (!data || data.totalCustomers === 0) {
+    return (
+      <div className="rounded-xl border border-dashed border-border p-10 text-center text-muted-foreground">
+        <Users className="h-8 w-8 mx-auto mb-3 opacity-40" />
+        <p className="font-medium">Nenhum cliente com e-mail identificado ainda.</p>
+        <p className="text-sm mt-1">Vendas com e-mail do cliente aparecerão aqui após os próximos webhooks.</p>
+      </div>
+    );
+  }
+
+  const champions = data.bySegment.champions;
+  const atRisk = data.bySegment.at_risk;
+  const lost = data.bySegment.lost;
+
+  const toggleSort = (col: typeof sortBy) => {
+    if (sortBy === col) setSortAsc(p => !p);
+    else { setSortBy(col); setSortAsc(false); }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Summary cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="rounded-xl border border-border bg-card p-4 space-y-1">
+          <p className="text-xs text-muted-foreground uppercase font-semibold">Clientes Analisados</p>
+          <p className="text-3xl font-bold text-foreground">{data.totalCustomers.toLocaleString('pt-BR')}</p>
+          <p className="text-xs text-muted-foreground">Guru + Ticto unificados — base do RFM</p>
+        </div>
+        <div className="rounded-xl border border-yellow-200 dark:border-yellow-800/50 bg-card p-4 space-y-1">
+          <p className="text-xs text-yellow-700 dark:text-yellow-400 uppercase font-semibold">🏆 Campeões</p>
+          <p className="text-3xl font-bold text-foreground">{champions.count.toLocaleString('pt-BR')}</p>
+          <p className="text-xs text-muted-foreground">{pct(champions.pct)} da base · LTV médio {formatCurrency(champions.avgMonetary)}</p>
+        </div>
+        <div className="rounded-xl border border-orange-200 dark:border-orange-800/50 bg-card p-4 space-y-1">
+          <p className="text-xs text-orange-700 dark:text-orange-400 uppercase font-semibold">⚠️ Em Risco</p>
+          <p className="text-3xl font-bold text-foreground">{atRisk.count.toLocaleString('pt-BR')}</p>
+          <p className="text-xs text-muted-foreground">{pct(atRisk.pct)} da base · Último contato {atRisk.avgRecencyDays}d atrás</p>
+        </div>
+        <div className="rounded-xl border border-red-200 dark:border-red-800/50 bg-card p-4 space-y-1">
+          <p className="text-xs text-red-700 dark:text-red-400 uppercase font-semibold">❌ Perdidos</p>
+          <p className="text-3xl font-bold text-foreground">{lost.count.toLocaleString('pt-BR')}</p>
+          <p className="text-xs text-muted-foreground">{pct(lost.pct)} da base · Receita em risco {formatCurrency(lost.totalRevenue)}</p>
+        </div>
+      </div>
+
+      {/* RFM 5x5 Heatmap */}
+      <div className="rounded-xl border border-border bg-card overflow-hidden">
+        <div className="px-4 py-3 border-b border-border bg-table-header flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold text-foreground">Matriz RFM 5×5</span>
+            <span className="text-xs text-muted-foreground">Recência × Frequência+Monetário</span>
+          </div>
+          <button
+            onClick={() => setShowHeatmap(v => !v)}
+            className="text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded border border-border"
+          >
+            {showHeatmap ? 'Ocultar' : 'Mostrar'}
+          </button>
+        </div>
+        {showHeatmap && <RFMHeatmap customers={data.customers} />}
+      </div>
+
+      {/* Segment grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        {SEGMENT_ORDER.map(seg => {
+          const cfg = SEGMENT_CONFIG[seg];
+          const stats = data.bySegment[seg];
+          const isExpanded = expandedSegment === seg;
+          return (
+            <div
+              key={seg}
+              className={`rounded-xl border bg-card p-4 space-y-3 cursor-pointer hover:shadow-sm transition-shadow ${cfg.cardClass}`}
+              onClick={() => {
+                setExpandedSegment(isExpanded ? null : seg);
+                setSelectedSegment(seg);
+              }}
+            >
+              <div className="flex items-center justify-between">
+                <span className={`text-sm font-semibold ${cfg.colorClass}`}>
+                  {cfg.emoji} {cfg.label}
+                </span>
+                <span className="text-2xl font-bold text-foreground">{stats.count}</span>
+              </div>
+              <div className="space-y-0.5 text-xs text-muted-foreground">
+                <div className="flex justify-between">
+                  <span>% da base</span>
+                  <span className="font-medium text-foreground">{pct(stats.pct)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>LTV médio</span>
+                  <span className="font-medium text-foreground">{formatCurrency(stats.avgMonetary)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Últ. compra</span>
+                  <span className="font-medium text-foreground">{stats.avgRecencyDays}d atrás</span>
+                </div>
+              </div>
+              {isExpanded && (
+                <div className={`rounded-lg border p-2.5 text-xs ${cfg.badgeClass} space-y-1`}>
+                  <p className="font-semibold">Ação recomendada:</p>
+                  <p>{cfg.action}</p>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Customer table */}
+      <div className="rounded-xl border border-border bg-card overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-border bg-table-header">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold text-foreground">Clientes</span>
+            <span className="text-xs text-muted-foreground">({filteredCustomers.length.toLocaleString('pt-BR')})</span>
+          </div>
+          <select
+            value={selectedSegment}
+            onChange={e => setSelectedSegment(e.target.value as RFMSegment | 'all')}
+            className="rounded-lg border border-border bg-card px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          >
+            <option value="all">Todos os segmentos</option>
+            {SEGMENT_ORDER.map(seg => (
+              <option key={seg} value={seg}>
+                {SEGMENT_CONFIG[seg].emoji} {SEGMENT_CONFIG[seg].label} ({data.bySegment[seg].count})
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-table-header border-b border-border">
+                <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground uppercase">Cliente</th>
+                <th
+                  className="px-4 py-2.5 text-center text-xs font-semibold text-muted-foreground uppercase cursor-pointer hover:text-foreground select-none"
+                  onClick={() => toggleSort('recency')}
+                >
+                  <span className="flex items-center justify-center gap-1">
+                    Recência
+                    {sortBy === 'recency' ? (sortAsc ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />) : null}
+                  </span>
+                </th>
+                <th
+                  className="px-4 py-2.5 text-center text-xs font-semibold text-muted-foreground uppercase cursor-pointer hover:text-foreground select-none"
+                  onClick={() => toggleSort('frequency')}
+                >
+                  <span className="flex items-center justify-center gap-1">
+                    Compras
+                    {sortBy === 'frequency' ? (sortAsc ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />) : null}
+                  </span>
+                </th>
+                <th
+                  className="px-4 py-2.5 text-right text-xs font-semibold text-muted-foreground uppercase cursor-pointer hover:text-foreground select-none"
+                  onClick={() => toggleSort('monetary')}
+                >
+                  <span className="flex items-center justify-end gap-1">
+                    Total Gasto
+                    {sortBy === 'monetary' ? (sortAsc ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />) : null}
+                  </span>
+                </th>
+                <th className="px-4 py-2.5 text-center text-xs font-semibold text-muted-foreground uppercase">R/F/M</th>
+                <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground uppercase">Segmento</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredCustomers.slice(0, 200).map((c: RFMCustomer) => (
+                <tr key={c.email} className="border-b border-border hover:bg-table-hover">
+                  <td className="px-4 py-2.5">
+                    <div className="text-sm font-medium text-foreground truncate max-w-[180px]">{c.name || '—'}</div>
+                    <div className="text-xs text-muted-foreground truncate max-w-[180px]">{c.email}</div>
+                  </td>
+                  <td className="px-4 py-2.5 text-center text-sm text-muted-foreground">{c.recencyDays}d atrás</td>
+                  <td className="px-4 py-2.5 text-center font-medium">{c.frequency}</td>
+                  <td className="px-4 py-2.5 text-right font-mono-value font-semibold">{formatCurrency(c.monetary)}</td>
+                  <td className="px-4 py-2.5">
+                    <div className="flex items-center justify-center gap-1">
+                      <ScoreDot score={c.rScore} />
+                      <ScoreDot score={c.fScore} />
+                      <ScoreDot score={c.mScore} />
+                    </div>
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <RFMSegmentBadge segment={c.segment} />
+                  </td>
+                </tr>
+              ))}
+              {filteredCustomers.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground text-sm">
+                    Nenhum cliente neste segmento.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+          {filteredCustomers.length > 200 && (
+            <div className="px-4 py-3 text-center text-xs text-muted-foreground border-t border-border">
+              Exibindo 200 de {filteredCustomers.length.toLocaleString('pt-BR')} clientes — use o filtro de segmento para navegar
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Legend */}
+      <div className="rounded-lg border border-border bg-muted/30 p-4 flex gap-3 text-sm text-muted-foreground">
+        <Info className="h-4 w-4 shrink-0 mt-0.5" />
+        <div>
+          <strong className="text-foreground">Como funciona o RFM:</strong> cada cliente recebe pontuação de 1-5 em{' '}
+          <strong className="text-foreground">Recência</strong> (quando comprou pela última vez),{' '}
+          <strong className="text-foreground">Frequência</strong> (quantas vezes comprou) e{' '}
+          <strong className="text-foreground">Monetário</strong> (quanto gastou no total). Os segmentos são definidos pela combinação dessas notas.
+          {' '}Os dados unificam Guru e Ticto via identidade de cliente — todos os compradores são incluídos.
+        </div>
+      </div>
+    </div>
+  );
+}
