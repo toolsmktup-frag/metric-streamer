@@ -23,7 +23,7 @@ CREATE POLICY "Users can view own access"
   TO authenticated
   USING (
     user_id = auth.uid()
-    OR public.has_role(auth.uid(), 'admin')
+    OR public.get_user_role() = 'admin'
   );
 
 -- Apenas admins podem inserir
@@ -32,7 +32,7 @@ CREATE POLICY "Admins can insert access"
   FOR INSERT
   TO authenticated
   WITH CHECK (
-    public.has_role(auth.uid(), 'admin')
+    public.get_user_role() = 'admin'
   );
 
 -- Apenas admins podem deletar
@@ -41,7 +41,7 @@ CREATE POLICY "Admins can delete access"
   FOR DELETE
   TO authenticated
   USING (
-    public.has_role(auth.uid(), 'admin')
+    public.get_user_role() = 'admin'
   );
 
 -- Index para queries rápidas
