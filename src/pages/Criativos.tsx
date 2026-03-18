@@ -94,7 +94,7 @@ interface EnrichedAd {
   thumbnail_url?: string;
 }
 
-export default function Criativos() {
+export default function Criativos({ embedded = false }: { embedded?: boolean }) {
   const { data: ads = [], isLoading: loadingAds } = useMetaAds();
   const { data: campaigns = [] } = useMetaCampaigns();
   const { data: adsets = [] } = useMetaAdsets();
