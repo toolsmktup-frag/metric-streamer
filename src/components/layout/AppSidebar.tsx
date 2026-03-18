@@ -35,6 +35,7 @@ interface AppSidebarProps {
 
 const AD_ANALYSIS_ITEMS = [
   { path: '/vendas',       label: 'Vendas',       icon: ShoppingCart },
+  { path: '/kpi-geral',    label: 'Geral ADS',    icon: Layers },
   { path: '/demograficos', label: 'Demográficos', icon: Users },
   { path: '/geografico',   label: 'Geográfico',   icon: Globe },
   { path: '/criativos',    label: 'Criativos',    icon: FileImage },
@@ -47,7 +48,6 @@ const INTELLIGENCE_ITEMS = [
 ];
 
 const TOOL_ITEMS = [
-  { path: '/whatsapp',    label: 'WhatsApp',     icon: MessageCircle },
   { path: '/agente-ia',   label: 'Agente IA',    icon: Bot },
   { path: '/integracoes', label: 'Integrações',  icon: Link2 },
   { path: '/importar',    label: 'Importar',     icon: Upload },
@@ -58,6 +58,7 @@ const LEAD_ITEMS = [
   { path: '/leads',           label: 'Todos os Leads',  icon: Users },
   { path: '/lead-campaigns',  label: 'Funis de Leads',  icon: Target },
   { path: '/leads/fontes',    label: 'Fontes / UTMs',   icon: Globe },
+  { path: '/whatsapp',        label: 'WhatsApp',        icon: MessageCircle },
 ];
 
 const AppSidebar = React.memo(function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
@@ -170,7 +171,7 @@ const AppSidebar = React.memo(function AppSidebar({ collapsed, onToggle }: AppSi
         </button>
 
         {/* Seção Funis */}
-        {sectionLabel('Funis')}
+        {sectionLabel('Tráfego')}
 
         {funnels.map(funnel => (
           <div key={funnel.id}>
