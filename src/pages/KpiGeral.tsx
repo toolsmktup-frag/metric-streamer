@@ -11,21 +11,10 @@ import {
 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
-// ─── Product config ───
-const PRODUCTS = {
-  principal: { label: 'Guia de Tinturas', price: 43.70 },
-  bump1: { label: 'Guia dos Chás Originais', price: 25.68 },
-  upsell1: { label: 'Curso Mestre das Tinturas', price: 186.37 },
-};
+import { classifyTransaction, FUNNEL_PRODUCTS, avgUnitPrice } from '@/lib/classifyTransaction';
 
-function classifyTransaction(tx: any): 'principal' | 'bump1' | 'upsell1' | 'other' {
-  const pn = (tx.product_name || '').toLowerCase();
-  const on = (tx.offer_name || '').toLowerCase();
-  if (pn.includes('mestre das tinturas') || on.includes('oferta 197')) return 'upsell1';
-  if (pn.includes('tinturas') && (on.includes('checkout principal') || on === '')) return 'principal';
-  if (pn.includes('chás') || on.includes('bump')) return 'bump1';
-  return 'other';
-}
+// Labels only — prices are computed from actual data
+const PRODUCTS = FUNNEL_PRODUCTS;
 
 function getActionValue(actions: any[] | null, actionType: string): number {
   if (!actions || !Array.isArray(actions)) return 0;
