@@ -103,18 +103,29 @@ Deno.serve(async (req) => {
     }
 
     if (action === 'list_chats') {
-      const { data: chats, error: chatsErr } = await adminClient
-        .from('whatsapp_messages')
-        .select('*')
-        .eq('organization_id', orgId)
-        .eq('instance_id', instanceId)
-        .order('created_at', { ascending: false })
+      const [messagesResult, contactsResult] = await Promise.all([
+        adminClient
+          .from('whatsapp_messages')
+          .select('*')
+          .eq('organization_id', orgId)
+          .eq('instance_id', instanceId)
+          .order('created_at', { ascending: false }),
+        adminClient
+          .from('whatsapp_contacts')
+          .select('phone, name, profile_pic_url')
+          .eq('organization_id', orgId)
+          .eq('instance_id', instanceId),
+      ])
 
-      if (chatsErr) throw chatsErr
+      if (messagesResult.error) throw messagesResult.error
+
+      const contactMap = new Map(
+        (contactsResult.data || []).map((c: any) => [c.phone, c])
+      )
 
       const chatMap = new Map<string, any>()
 
-      for (const msg of chats || []) {
+      for (const msg of messagesResult.data || []) {
         if (!chatMap.has(msg.phone)) {
           chatMap.set(msg.phone, {
             phone: msg.phone,
@@ -123,9 +134,25 @@ Deno.serve(async (req) => {
             unread_count: 0,
           })
         }
+        const current = chatMap.get(msg.phone)
+        // Fallback: grab sender_name from any inbound message if not set yet
+        if (!current.sender_name && msg.sender_name && msg.direction === 'inbound') {
+          current.sender_name = msg.sender_name
+        }
         if (msg.direction === 'inbound' && msg.status !== 'read' && !msg.is_deleted) {
-          const current = chatMap.get(msg.phone)
           if (current) current.unread_count++
+        }
+      }
+
+      // Enrich with persistent contact data
+      for (const [phone, chat] of chatMap) {
+        const contact = contactMap.get(phone)
+        if (contact) {
+          chat.contact_name = contact.name
+          chat.contact_picture = contact.profile_pic_url
+          if (!chat.sender_name) {
+            chat.sender_name = contact.name
+          }
         }
       }
 
