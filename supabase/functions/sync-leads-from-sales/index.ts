@@ -159,8 +159,9 @@ async function performSync() {
     const key = p.unified_customer_id;
     const isApproved = APPROVED_STATUSES.includes(p.status);
     const eventDate = p.purchased_at || new Date().toISOString();
+    const eventName = mapStatusToEventName(p.status);
     const event = {
-      event_name: isApproved ? "purchase" : (p.status || "unknown"),
+      event_name: eventName,
       metadata: { platform: p.platform || "unknown", product_name: p.product_name, status: p.status, amount: p.gross_amount },
       created_at: eventDate,
     };
