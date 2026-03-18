@@ -311,6 +311,23 @@ export default function KpiGeral() {
         totals={totals}
         monthLabel={`${MONTH_NAMES[selectedMonth]} ${selectedYear}`}
       />
+
+      {/* SEÇÕES DETALHADAS */}
+      <div className="border-t border-border pt-6">
+        <DemograficosSection />
+      </div>
+
+      <div className="border-t border-border pt-6">
+        <GeograficoSection />
+      </div>
+
+      <div className="border-t border-border pt-6">
+        <CriativosSection />
+      </div>
+
+      <div className="border-t border-border pt-6">
+        <DispositivosSection />
+      </div>
     </div>
   );
 }
