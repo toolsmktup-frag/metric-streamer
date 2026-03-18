@@ -168,6 +168,10 @@ const LeadFunnelDetail: React.FC = () => {
           />
         </TabsContent>
 
+        <TabsContent value="metrics" className="mt-4">
+          <FunnelMetricsTab stages={stages} positions={positions} />
+        </TabsContent>
+
         <TabsContent value="config" className="mt-4">
           <FunnelConfigTab
             stages={stages}

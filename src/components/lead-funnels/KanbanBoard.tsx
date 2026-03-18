@@ -188,6 +188,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
         <div className="flex gap-4 overflow-x-auto pb-4">
           {sortedStages.map(stage => {
             const stageLeads = getLeadsForStage(stage.id);
+            const isRevenue = isRevenueStage(stage.name);
             return (
               <div
                 key={stage.id}
@@ -209,8 +210,9 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
                   {(() => {
                     const rev = getStageRevenue(stageLeads);
                     return rev > 0 ? (
-                      <p className="text-xs font-medium text-muted-foreground mt-1">
-                        {formatCurrency(rev)}
+                      <p className={`text-xs font-medium mt-1 ${isRevenue ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}`}>
+                        {isRevenue ? '' : '- '}{formatCurrency(rev)}
+                        {!isRevenue && <span className="text-[10px] ml-1 opacity-70">perdido</span>}
                       </p>
                     ) : null;
                   })()}
@@ -227,6 +229,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
                         key={pos.id}
                         position={pos}
                         isDragging={activeId === pos.id}
+                        isRevenue={isRevenue}
                         onClick={() => onLeadClick?.(pos.lead_id)}
                       />
                     ))
