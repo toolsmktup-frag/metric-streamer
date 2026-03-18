@@ -32,7 +32,7 @@ CREATE POLICY "Admins can insert access"
   FOR INSERT
   TO authenticated
   WITH CHECK (
-    public.has_role(auth.uid(), 'admin')
+    public.get_user_role() = 'admin'
   );
 
 -- Apenas admins podem deletar
