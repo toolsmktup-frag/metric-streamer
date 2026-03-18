@@ -1,6 +1,6 @@
 import React from 'react';
 import { Lead, LeadStagePosition } from '@/types/leadFunnels';
-import { Mail, Phone, Clock, DollarSign, GripVertical } from 'lucide-react';
+import { Mail, Phone, Clock, DollarSign, GripVertical, MessageCircle } from 'lucide-react';
 import { useLeadPurchases } from '@/hooks/useLeadPurchases';
 import { useDraggable } from '@dnd-kit/core';
 import { formatLocalDateTime } from '@/lib/localDate';
@@ -8,6 +8,7 @@ import { formatLocalDateTime } from '@/lib/localDate';
 interface LeadCardProps {
   position: LeadStagePosition & { lead: Lead };
   onClick?: () => void;
+  onWhatsAppClick?: (phone: string) => void;
   isDragging?: boolean;
   isRevenue?: boolean;
 }
