@@ -82,9 +82,21 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
     return leads.reduce((sum, p) => sum + (Number(p.lead.metadata?.amount) || 0), 0);
   };
 
-  const totalRevenue = useMemo(() => {
-    return positions.reduce((sum, p) => sum + (Number(p.lead.metadata?.amount) || 0), 0);
-  }, [positions]);
+  const { confirmedRevenue, lostRevenue } = useMemo(() => {
+    let confirmed = 0;
+    let lost = 0;
+    const stageMap = new Map(stages.map(s => [s.id, s]));
+    for (const p of positions) {
+      const amount = Number(p.lead.metadata?.amount) || 0;
+      const stage = stageMap.get(p.stage_id);
+      if (stage && isRevenueStage(stage.name)) {
+        confirmed += amount;
+      } else {
+        lost += amount;
+      }
+    }
+    return { confirmedRevenue: confirmed, lostRevenue: lost };
+  }, [positions, stages]);
 
   const activePosition = activeId ? positions.find(p => p.id === activeId) : null;
 
