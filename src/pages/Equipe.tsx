@@ -266,28 +266,65 @@ export default function Equipe() {
           const isExpanded = expandedPerms === member.id;
           if (!isExpanded || !perm) return null;
 
+          const userInstances = instanceAccess[member.id] || new Set();
+
           return (
-            <div key={`perm-${member.id}`} className="border-t border-border bg-muted/10 px-6 py-4">
-              <p className="text-xs font-semibold text-muted-foreground mb-3">
-                Permissões de módulo — {member.full_name || 'Sem nome'}
-              </p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4">
-                {MODULE_KEYS.map(mod => (
-                  <label key={mod} className="flex items-center gap-2 cursor-pointer">
-                    <Switch
-                      checked={perm[mod]}
-                      onCheckedChange={(checked: boolean) =>
-                        updatePermission.mutate({
-                          permissionId: perm.id,
-                          field: mod,
-                          value: checked,
-                        })
-                      }
-                    />
-                    <span className="text-xs text-foreground">{MODULE_LABELS[mod]}</span>
-                  </label>
-                ))}
+            <div key={`perm-${member.id}`} className="border-t border-border bg-muted/10 px-6 py-4 space-y-5">
+              {/* Module permissions */}
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground mb-3">
+                  Permissões de módulo — {member.full_name || 'Sem nome'}
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4">
+                  {MODULE_KEYS.map(mod => (
+                    <label key={mod} className="flex items-center gap-2 cursor-pointer">
+                      <Switch
+                        checked={perm[mod]}
+                        onCheckedChange={(checked: boolean) =>
+                          updatePermission.mutate({
+                            permissionId: perm.id,
+                            field: mod,
+                            value: checked,
+                          })
+                        }
+                      />
+                      <span className="text-xs text-foreground">{MODULE_LABELS[mod]}</span>
+                    </label>
+                  ))}
+                </div>
               </div>
+
+              {/* WhatsApp instances */}
+              {instances.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground mb-3 flex items-center gap-1.5">
+                    <MessageSquare className="h-3.5 w-3.5" />
+                    Instâncias WhatsApp
+                  </p>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                    {instances.map(inst => {
+                      const hasAccess = userInstances.has(inst.id);
+                      const isSaving = savingAccess === `${member.id}-${inst.id}`;
+                      return (
+                        <label
+                          key={inst.id}
+                          className="flex items-center gap-2 p-2 rounded-md hover:bg-muted/50 cursor-pointer"
+                        >
+                          <Checkbox
+                            checked={hasAccess}
+                            onCheckedChange={(checked) =>
+                              toggleInstanceAccess(member.id, inst.id, !!checked)
+                            }
+                            disabled={isSaving}
+                          />
+                          <span className="text-xs text-foreground">{getInstanceDisplayName(inst)}</span>
+                          {isSaving && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           );
         })}
