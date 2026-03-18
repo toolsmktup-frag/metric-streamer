@@ -31,6 +31,7 @@ import LeadsDashboard from "./pages/LeadsDashboard";
 import LeadsList from "./pages/LeadsList";
 import LeadsSources from "./pages/LeadsSources";
 import WhatsAppChat from "./pages/WhatsAppChat";
+import Equipe from "./pages/Equipe";
 
 const queryClient = new QueryClient({
   defaultOptions: {
