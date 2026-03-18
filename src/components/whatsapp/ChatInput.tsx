@@ -1,12 +1,13 @@
 import { useState, useRef, useCallback } from 'react';
-import { Send, Paperclip, X, Smile } from 'lucide-react';
+import { Send, Paperclip, X, Smile, ChevronDown } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { sendWhatsAppMessage, sendPresence } from '@/hooks/useWhatsApp';
+import type { WhatsAppInstance, WhatsAppMessage } from '@/hooks/useWhatsApp';
+import { getInstanceDisplayName } from '@/hooks/useWhatsApp';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import type { WhatsAppMessage } from '@/hooks/useWhatsApp';
 import EmojiPicker from './EmojiPicker';
 import AudioRecorder from './AudioRecorder';
 import ShortcutMenu from './ShortcutMenu';
@@ -17,9 +18,74 @@ interface ChatInputProps {
   phone: string;
   onOptimisticSend?: (msg: WhatsAppMessage) => void;
   onOptimisticUpdate?: (tempId: string, status: string) => void;
+  /** Available instances for the reply selector (unified mode) */
+  instances?: WhatsAppInstance[];
+  /** Currently selected reply instance */
+  replyInstanceId?: string;
+  /** Callback when user changes reply instance */
+  onReplyInstanceChange?: (instanceId: string) => void;
 }
 
-export default function ChatInput({ instanceId, phone, onOptimisticSend, onOptimisticUpdate }: ChatInputProps) {
+function InstanceSelector({
+  instances,
+  selectedId,
+  onChange,
+}: {
+  instances: WhatsAppInstance[];
+  selectedId: string;
+  onChange: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = instances.find(i => i.id === selectedId);
+
+  if (instances.length <= 1) return null;
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          className="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium bg-muted hover:bg-muted/80 text-foreground shrink-0 max-w-[140px] transition-colors"
+          title="Responder por..."
+        >
+          <span className="truncate">{selected ? getInstanceDisplayName(selected) : 'Selecionar'}</span>
+          <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent side="top" align="start" className="p-1 w-48">
+        <div className="text-[10px] uppercase tracking-wider text-muted-foreground px-2 py-1 font-semibold">
+          Responder por
+        </div>
+        {instances.map(inst => (
+          <button
+            key={inst.id}
+            onClick={() => { onChange(inst.id); setOpen(false); }}
+            className={`w-full text-left px-2 py-1.5 rounded text-xs hover:bg-accent transition-colors flex items-center gap-2 ${
+              inst.id === selectedId ? 'bg-accent font-medium' : ''
+            }`}
+          >
+            {inst.profile_pic_url && (
+              <img src={inst.profile_pic_url} alt="" className="h-4 w-4 rounded-full object-cover shrink-0" />
+            )}
+            <span className="truncate">{getInstanceDisplayName(inst)}</span>
+            {inst.status !== 'connected' && (
+              <span className="text-[9px] text-destructive ml-auto">offline</span>
+            )}
+          </button>
+        ))}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+export default function ChatInput({
+  instanceId,
+  phone,
+  onOptimisticSend,
+  onOptimisticUpdate,
+  instances,
+  replyInstanceId,
+  onReplyInstanceChange,
+}: ChatInputProps) {
   const [text, setText] = useState('');
   const [attachment, setAttachment] = useState<File | null>(null);
   const [emojiOpen, setEmojiOpen] = useState(false);
@@ -28,10 +94,12 @@ export default function ChatInput({ instanceId, phone, onOptimisticSend, onOptim
   const typingTimeout = useRef<ReturnType<typeof setTimeout>>();
   const isSending = useRef(false);
 
+  // The actual instance to send from: reply selector or prop
+  const sendInstanceId = replyInstanceId || instanceId;
+
   const handleTextChange = (value: string) => {
     setText(value);
 
-    // Show/hide shortcut menu
     if (value.startsWith('/')) {
       setShowShortcuts(true);
     } else {
@@ -40,7 +108,7 @@ export default function ChatInput({ instanceId, phone, onOptimisticSend, onOptim
 
     if (typingTimeout.current) clearTimeout(typingTimeout.current);
     typingTimeout.current = setTimeout(() => {
-      sendPresence(instanceId, phone);
+      sendPresence(sendInstanceId, phone);
     }, 500);
   };
 
@@ -69,7 +137,7 @@ export default function ChatInput({ instanceId, phone, onOptimisticSend, onOptim
     const optimisticMsg: WhatsAppMessage = {
       id: tempId,
       organization_id: '',
-      instance_id: instanceId,
+      instance_id: sendInstanceId,
       phone,
       body: msg || null,
       message_type: messageType,
@@ -95,7 +163,7 @@ export default function ChatInput({ instanceId, phone, onOptimisticSend, onOptim
     try {
       if (currentAttachment) {
         const ext = currentAttachment.name.split('.').pop();
-        const path = `${instanceId}/${Date.now()}.${ext}`;
+        const path = `${sendInstanceId}/${Date.now()}.${ext}`;
         const { error: uploadErr } = await supabase.storage
           .from('whatsapp-media')
           .upload(path, currentAttachment);
@@ -115,7 +183,7 @@ export default function ChatInput({ instanceId, phone, onOptimisticSend, onOptim
       }
 
       await sendWhatsAppMessage({
-        instance_id: instanceId,
+        instance_id: sendInstanceId,
         phone,
         body: msg || undefined,
         message_type: messageType,
@@ -130,10 +198,9 @@ export default function ChatInput({ instanceId, phone, onOptimisticSend, onOptim
     } finally {
       isSending.current = false;
     }
-  }, [text, attachment, instanceId, phone, onOptimisticSend, onOptimisticUpdate]);
+  }, [text, attachment, sendInstanceId, phone, onOptimisticSend, onOptimisticUpdate]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    // Don't handle Enter if shortcuts menu is open (it handles its own Enter)
     if (showShortcuts) return;
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -153,10 +220,10 @@ export default function ChatInput({ instanceId, phone, onOptimisticSend, onOptim
   };
 
   const hasContent = text.trim() || attachment;
+  const showInstanceSelector = instances && instances.length > 1 && replyInstanceId && onReplyInstanceChange;
 
   return (
     <div className="border-t border-border bg-card p-3 relative">
-      {/* Shortcut menu */}
       {showShortcuts && (
         <ShortcutMenu
           query={text.slice(1)}
@@ -176,6 +243,15 @@ export default function ChatInput({ instanceId, phone, onOptimisticSend, onOptim
       )}
 
       <div className="flex items-center gap-2">
+        {/* Instance selector for unified mode */}
+        {showInstanceSelector && (
+          <InstanceSelector
+            instances={instances}
+            selectedId={replyInstanceId}
+            onChange={onReplyInstanceChange}
+          />
+        )}
+
         {/* Emoji picker */}
         <Popover open={emojiOpen} onOpenChange={setEmojiOpen}>
           <PopoverTrigger asChild>
@@ -205,7 +281,6 @@ export default function ChatInput({ instanceId, phone, onOptimisticSend, onOptim
           <Paperclip className="h-4 w-4" />
         </Button>
 
-        {/* Shortcut manager */}
         <ShortcutManager />
 
         <Input
@@ -216,7 +291,6 @@ export default function ChatInput({ instanceId, phone, onOptimisticSend, onOptim
           className="flex-1 h-9 text-sm"
         />
 
-        {/* Send or Mic */}
         {hasContent ? (
           <Button
             onClick={handleSend}
@@ -228,7 +302,7 @@ export default function ChatInput({ instanceId, phone, onOptimisticSend, onOptim
           </Button>
         ) : (
           <AudioRecorder
-            instanceId={instanceId}
+            instanceId={sendInstanceId}
             phone={phone}
             onOptimisticSend={onOptimisticSend}
             onOptimisticUpdate={onOptimisticUpdate}

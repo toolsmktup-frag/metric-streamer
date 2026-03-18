@@ -1,13 +1,17 @@
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useState, useMemo } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Check, CheckCheck, Clock, Ban, Download, Play, Pause } from 'lucide-react';
 import type { WhatsAppMessage } from '@/hooks/useWhatsApp';
+import type { WhatsAppInstance } from '@/hooks/useWhatsApp';
+import { getInstanceDisplayName } from '@/hooks/useWhatsApp';
 import { format } from 'date-fns';
 
 interface ChatThreadProps {
   messages: WhatsAppMessage[];
   loading: boolean;
   phone: string | null;
+  /** Pass instances to show instance badges on outbound messages in unified mode */
+  instances?: WhatsAppInstance[];
 }
 
 function StatusIcon({ status, direction }: { status: string; direction: string }) {
@@ -144,8 +148,31 @@ function MediaRenderer({ message }: { message: WhatsAppMessage }) {
   }
 }
 
-export default function ChatThread({ messages, loading, phone }: ChatThreadProps) {
+/** Small badge showing which instance sent a message */
+function InstanceBadge({ instanceName, isOutbound }: { instanceName: string; isOutbound: boolean }) {
+  return (
+    <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded-full ${
+      isOutbound
+        ? 'bg-primary-foreground/15 text-primary-foreground/80'
+        : 'bg-muted text-muted-foreground'
+    }`}>
+      {instanceName}
+    </span>
+  );
+}
+
+export default function ChatThread({ messages, loading, phone, instances }: ChatThreadProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Build instance map for badge display
+  const instanceMap = useMemo(() => {
+    if (!instances || instances.length <= 1) return null;
+    const map = new Map<string, string>();
+    for (const inst of instances) {
+      map.set(inst.id, getInstanceDisplayName(inst));
+    }
+    return map;
+  }, [instances]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -174,6 +201,7 @@ export default function ChatThread({ messages, loading, phone }: ChatThreadProps
           const isOut = msg.direction === 'outbound';
           const isDeleted = msg.is_deleted;
           const time = format(new Date(msg.created_at), 'HH:mm');
+          const instanceName = instanceMap?.get(msg.instance_id);
 
           return (
             <div
@@ -187,6 +215,13 @@ export default function ChatThread({ messages, loading, phone }: ChatThreadProps
                     : 'bg-card border border-border text-foreground rounded-bl-sm'
                 } ${isDeleted ? 'opacity-50 italic' : ''}`}
               >
+                {/* Instance badge for outbound in unified mode */}
+                {instanceName && isOut && (
+                  <div className="mb-1">
+                    <InstanceBadge instanceName={instanceName} isOutbound={isOut} />
+                  </div>
+                )}
+
                 {msg.message_type !== 'text' && msg.media_url && !isDeleted ? (
                   <MediaRenderer message={msg} />
                 ) : (
