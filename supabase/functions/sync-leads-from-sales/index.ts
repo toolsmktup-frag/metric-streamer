@@ -7,6 +7,7 @@ const corsHeaders = {
 };
 
 const ORG_ID = "00000000-0000-0000-0000-000000000001";
+const APPROVED_STATUSES = ["authorized", "approved", "paid", "completed", "Aprovada", "aprovada"];
 
 async function performSync() {
   const supabase = createClient(
@@ -14,7 +15,7 @@ async function performSync() {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
   );
 
-  // 1. Ensure "BASE DE LEADS" funnel exists with stages
+  // 1. Ensure "BASE DE LEADS" funnel exists
   let { data: baseFunnel } = await supabase
     .from("lead_funnels")
     .select("id")
@@ -29,20 +30,26 @@ async function performSync() {
       .select("id")
       .single();
     baseFunnel = created;
-
-    if (baseFunnel) {
-      await supabase.from("lead_funnel_stages").insert([
-        { funnel_id: baseFunnel.id, name: "Novo", color: "#94a3b8", sort_order: 0 },
-        { funnel_id: baseFunnel.id, name: "Comprador", color: "#22c55e", sort_order: 1 },
-        { funnel_id: baseFunnel.id, name: "Recorrente", color: "#3b82f6", sort_order: 2 },
-        { funnel_id: baseFunnel.id, name: "VIP", color: "#f59e0b", sort_order: 3 },
-      ]);
-    }
   }
 
   if (!baseFunnel) {
     console.error("Could not create BASE DE LEADS funnel");
     return { success: false, error: "Could not create BASE DE LEADS funnel" };
+  }
+
+  // Ensure stages exist
+  const { data: existingStages } = await supabase
+    .from("lead_funnel_stages")
+    .select("id, name")
+    .eq("funnel_id", baseFunnel.id);
+
+  if (!existingStages || existingStages.length === 0) {
+    await supabase.from("lead_funnel_stages").insert([
+      { funnel_id: baseFunnel.id, name: "Novo", color: "#94a3b8", sort_order: 0 },
+      { funnel_id: baseFunnel.id, name: "Comprador", color: "#22c55e", sort_order: 1 },
+      { funnel_id: baseFunnel.id, name: "Recorrente", color: "#3b82f6", sort_order: 2 },
+      { funnel_id: baseFunnel.id, name: "VIP", color: "#f59e0b", sort_order: 3 },
+    ]);
   }
 
   // Get first stage
@@ -54,18 +61,25 @@ async function performSync() {
     .limit(1)
     .maybeSingle();
 
-  // 2. Fetch transactions
+  if (!firstStage) {
+    console.error("No stages found for BASE DE LEADS funnel");
+    return { success: false, error: "No stages found" };
+  }
+
+  // 2. Fetch transactions (only approved)
   const { data: tictoTxs, error: tictoErr } = await supabase
     .from("ticto_transactions")
-    .select("customer_email, customer_phone, customer_name, product_name, status, paid_amount, order_date, utm_source, utm_medium, utm_campaign, utm_content, utm_term")
+    .select("customer_email, customer_phone, customer_name, product_name, status, paid_amount, order_date, utm_source")
+    .in("status", APPROVED_STATUSES)
     .order("order_date", { ascending: true });
 
   if (tictoErr) throw tictoErr;
 
-  // 3. Fetch customer_purchases with unified_customers
+  // 3. Fetch customer_purchases with unified_customers (only approved)
   const { data: purchasesWithCust } = await supabase
     .from("customer_purchases")
-    .select("unified_customer_id, product_name, status, gross_amount, purchased_at, utm_source, utm_medium, utm_campaign, utm_content, utm_term, platform")
+    .select("unified_customer_id, product_name, status, gross_amount, purchased_at, utm_source, platform")
+    .in("status", APPROVED_STATUSES)
     .order("purchased_at", { ascending: true });
 
   const { data: customers } = await supabase
@@ -78,18 +92,23 @@ async function performSync() {
     return { ...p, email: cust?.email, phone: cust?.phone, name: cust?.name };
   });
 
-  // 4. Merge into unique contact map
+  // 4. Merge into unique contact map (case-insensitive email)
   const contactMap = new Map<string, {
     email: string | null; phone: string | null; name: string | null;
     utm_source: string | null;
     events: { event_name: string; metadata: Record<string, unknown>; created_at: string }[];
   }>();
 
+  function normalizeEmail(email: string | null): string | null {
+    return email ? email.trim().toLowerCase() : null;
+  }
+
   function addContact(
-    email: string | null, phone: string | null, name: string | null,
+    rawEmail: string | null, phone: string | null, name: string | null,
     utm_source: string | null,
     event: { event_name: string; metadata: Record<string, unknown>; created_at: string }
   ) {
+    const email = normalizeEmail(rawEmail);
     const key = email || phone;
     if (!key) return;
     const existing = contactMap.get(key);
@@ -119,7 +138,7 @@ async function performSync() {
     });
   });
 
-  // 5. Batch: get all existing leads
+  // 5. Get existing leads (normalize for comparison)
   const { data: existingLeads } = await supabase
     .from("leads")
     .select("id, email, phone")
@@ -128,7 +147,7 @@ async function performSync() {
   const leadByEmail = new Map<string, string>();
   const leadByPhone = new Map<string, string>();
   (existingLeads || []).forEach((l: any) => {
-    if (l.email) leadByEmail.set(l.email, l.id);
+    if (l.email) leadByEmail.set(l.email.trim().toLowerCase(), l.id);
     if (l.phone) leadByPhone.set(l.phone, l.id);
   });
 
@@ -137,14 +156,15 @@ async function performSync() {
   const existingContactKeys = new Set<string>();
 
   for (const [key, contact] of contactMap) {
-    const found = (contact.phone && leadByPhone.get(contact.phone)) || (contact.email && leadByEmail.get(contact.email));
+    const normalizedEmail = contact.email;
+    const found = (normalizedEmail && leadByEmail.get(normalizedEmail)) || (contact.phone && leadByPhone.get(contact.phone));
     if (found) {
       existingContactKeys.add(key);
     } else {
       newLeads.push({
         organization_id: ORG_ID,
         phone: contact.phone || null,
-        email: contact.email || null,
+        email: contact.email || null, // already lowercase
         name: contact.name || null,
         utm_source: contact.utm_source || null,
         metadata: {},
@@ -153,48 +173,46 @@ async function performSync() {
   }
 
   let created = 0;
-  // Insert in chunks of 500
   for (let i = 0; i < newLeads.length; i += 500) {
     const chunk = newLeads.slice(i, i + 500);
     const { data: inserted, error } = await supabase.from("leads").insert(chunk).select("id, email, phone");
     if (error) { console.error("Batch insert error:", error); continue; }
     created += (inserted || []).length;
     (inserted || []).forEach((l: any) => {
-      if (l.email) leadByEmail.set(l.email, l.id);
+      if (l.email) leadByEmail.set(l.email.trim().toLowerCase(), l.id);
       if (l.phone) leadByPhone.set(l.phone, l.id);
     });
   }
 
-  // 6. Batch position all leads in BASE DE LEADS
+  // 6. Position all leads in BASE DE LEADS
   let migrated = 0;
-  if (firstStage) {
-    const { data: positioned } = await supabase
-      .from("lead_stage_positions")
-      .select("lead_id")
-      .eq("funnel_id", baseFunnel.id);
+  const { data: positioned } = await supabase
+    .from("lead_stage_positions")
+    .select("lead_id")
+    .eq("funnel_id", baseFunnel.id);
 
-    const positionedSet = new Set((positioned || []).map((p: any) => p.lead_id));
+  const positionedSet = new Set((positioned || []).map((p: any) => p.lead_id));
 
-    const { data: allLeads } = await supabase
-      .from("leads")
-      .select("id")
-      .eq("organization_id", ORG_ID);
+  const { data: allLeads } = await supabase
+    .from("leads")
+    .select("id")
+    .eq("organization_id", ORG_ID);
 
-    const toInsert = (allLeads || [])
-      .filter((l: any) => !positionedSet.has(l.id))
-      .map((l: any) => ({ lead_id: l.id, funnel_id: baseFunnel.id, stage_id: firstStage.id }));
+  const toInsert = (allLeads || [])
+    .filter((l: any) => !positionedSet.has(l.id))
+    .map((l: any) => ({ lead_id: l.id, funnel_id: baseFunnel.id, stage_id: firstStage.id }));
 
-    for (let i = 0; i < toInsert.length; i += 500) {
-      const chunk = toInsert.slice(i, i + 500);
-      await supabase.from("lead_stage_positions").insert(chunk);
-    }
-    migrated = toInsert.length;
+  for (let i = 0; i < toInsert.length; i += 500) {
+    const chunk = toInsert.slice(i, i + 500);
+    const { error } = await supabase.from("lead_stage_positions").insert(chunk);
+    if (error) console.error("Position insert error:", error);
   }
+  migrated = toInsert.length;
 
-  // 7. Batch insert events (skip individual inserts)
+  // 7. Batch insert events
   const allEvents: any[] = [];
-  for (const [key, contact] of contactMap) {
-    const leadId = (contact.phone && leadByPhone.get(contact.phone)) || (contact.email && leadByEmail.get(contact.email));
+  for (const [_key, contact] of contactMap) {
+    const leadId = (contact.email && leadByEmail.get(contact.email)) || (contact.phone && leadByPhone.get(contact.phone));
     if (!leadId) continue;
     for (const evt of contact.events) {
       allEvents.push({
@@ -225,14 +243,10 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Start background processing
     const resultPromise = performSync();
-
-    // Use EdgeRuntime.waitUntil to continue processing after response
     (globalThis as any).EdgeRuntime?.waitUntil?.(resultPromise.catch((e: any) => console.error("Background sync error:", e)));
 
-    // Return immediately
-    return new Response(JSON.stringify({ success: true, message: "Sincronização iniciada em background. Aguarde alguns segundos e atualize o dashboard.", leads_created: 0, leads_existing: 0, events_created: 0, leads_migrated_to_funnel: 0 }), {
+    return new Response(JSON.stringify({ success: true, message: "Sincronização iniciada em background. Aguarde alguns segundos e atualize o dashboard." }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
