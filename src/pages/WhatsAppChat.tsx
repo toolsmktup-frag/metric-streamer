@@ -259,6 +259,7 @@ export default function WhatsAppChat() {
             messages={mergedMessages}
             loading={loadingMessages}
             phone={selectedPhone}
+            instances={isAllMode ? instances : undefined}
           />
           {selectedPhone && effectiveInstanceId && (
             <ChatInput
@@ -266,6 +267,9 @@ export default function WhatsAppChat() {
               phone={selectedPhone}
               onOptimisticSend={handleOptimisticSend}
               onOptimisticUpdate={handleOptimisticUpdate}
+              instances={isAllMode ? instances : undefined}
+              replyInstanceId={replyInstanceId || undefined}
+              onReplyInstanceChange={isAllMode ? (id) => setReplyInstanceId(id) : undefined}
             />
           )}
         </div>
