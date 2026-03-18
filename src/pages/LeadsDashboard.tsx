@@ -13,7 +13,6 @@ const COLORS = ['hsl(var(--primary))', 'hsl(var(--accent))', '#10b981', '#f59e0b
 const LeadsDashboard: React.FC = () => {
   const { data: stats, isLoading } = useLeadStats();
   const [syncing, setSyncing] = useState(false);
-  const [exporting, setExporting] = useState(false);
   const queryClient = useQueryClient();
 
   const handleSync = async () => {
