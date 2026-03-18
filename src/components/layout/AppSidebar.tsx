@@ -58,6 +58,7 @@ const LEAD_ITEMS = [
   { path: '/leads',           label: 'Todos os Leads',  icon: Users },
   { path: '/lead-campaigns',  label: 'Funis de Leads',  icon: Target },
   { path: '/leads/fontes',    label: 'Fontes / UTMs',   icon: Globe },
+  { path: '/whatsapp',        label: 'WhatsApp',        icon: MessageCircle },
 ];
 
 const AppSidebar = React.memo(function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
