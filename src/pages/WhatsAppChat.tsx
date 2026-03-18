@@ -1,4 +1,5 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
+import type { WhatsAppMessage } from '@/hooks/useWhatsApp';
 import { MessageCircle, Settings, Plus, Wifi, WifiOff } from 'lucide-react';
 import { useWhatsAppInstances, useWhatsAppChats, useWhatsAppMessages } from '@/hooks/useWhatsApp';
 import InstanceManagement from '@/components/whatsapp/InstanceManagement';
@@ -132,6 +133,8 @@ export default function WhatsAppChat() {
   const [showPanel, setShowPanel] = useState(true);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [instanceMgmtOpen, setInstanceMgmtOpen] = useState(false);
+  const [optimisticMessages, setOptimisticMessages] = useState<WhatsAppMessage[]>([]);
+
   // Auto-select first instance
   const activeInstance = selectedInstanceId || instances[0]?.id || null;
   const activeInstanceData = instances.find(i => i.id === activeInstance);
@@ -139,6 +142,32 @@ export default function WhatsAppChat() {
 
   const { chats, loading: loadingChats, refetch: refetchChats } = useWhatsAppChats(activeInstance);
   const { messages, loading: loadingMessages } = useWhatsAppMessages(activeInstance, selectedPhone);
+
+  // Merge real + optimistic messages, removing optimistic once real arrives
+  const mergedMessages = useMemo(() => {
+    const realIds = new Set(messages.map(m => m.id));
+    // Remove optimistic msgs that have a matching real msg (same body+direction+phone within 30s)
+    const filtered = optimisticMessages.filter(opt => {
+      if (realIds.has(opt.id)) return false;
+      return !messages.some(
+        real => real.direction === 'outbound' &&
+          real.body === opt.body &&
+          real.phone === opt.phone &&
+          Math.abs(new Date(real.created_at).getTime() - new Date(opt.created_at).getTime()) < 30000
+      );
+    });
+    return [...messages, ...filtered];
+  }, [messages, optimisticMessages]);
+
+  const handleOptimisticSend = useCallback((msg: WhatsAppMessage) => {
+    setOptimisticMessages(prev => [...prev, msg]);
+  }, []);
+
+  const handleOptimisticUpdate = useCallback((tempId: string, status: string) => {
+    setOptimisticMessages(prev =>
+      prev.map(m => m.id === tempId ? { ...m, status } : m)
+    );
+  }, []);
 
   const selectedChat = useMemo(
     () => chats.find(c => c.phone === selectedPhone),
@@ -257,12 +286,17 @@ export default function WhatsAppChat() {
         {/* Thread */}
         <div className="flex-1 flex flex-col min-w-0 border-r border-border">
           <ChatThread
-            messages={messages}
+            messages={mergedMessages}
             loading={loadingMessages}
             phone={selectedPhone}
           />
           {selectedPhone && activeInstance && (
-            <ChatInput instanceId={activeInstance} phone={selectedPhone} />
+            <ChatInput
+              instanceId={activeInstance}
+              phone={selectedPhone}
+              onOptimisticSend={handleOptimisticSend}
+              onOptimisticUpdate={handleOptimisticUpdate}
+            />
           )}
         </div>
 
