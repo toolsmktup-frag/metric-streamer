@@ -290,17 +290,27 @@ export function useImportLeads() {
         }
 
         const positionsToDelete: string[] = [];
-        const positionsToInsert: { lead_id: string; funnel_id: string; stage_id: string }[] = [];
+        const positionsToInsert: { lead_id: string; funnel_id: string; stage_id: string; entered_at?: string }[] = [];
 
         for (const leadId of allLeadIds) {
           const existing = positionMap.get(leadId);
+          // Find the original row to get purchased_at for entered_at
+          const matchingEntry = uniqueLeads.find(u => leadIdMap.get(u.lead) === leadId);
+          const purchasedAt = matchingEntry?.lead.metadata?.purchased_at as string | undefined;
+
           if (existing) {
             if (existing.stage_id !== stageId) {
               positionsToDelete.push(existing.id);
-              positionsToInsert.push({ lead_id: leadId, funnel_id: funnelId, stage_id: stageId });
+              positionsToInsert.push({
+                lead_id: leadId, funnel_id: funnelId, stage_id: stageId,
+                ...(purchasedAt ? { entered_at: purchasedAt } : {}),
+              });
             }
           } else {
-            positionsToInsert.push({ lead_id: leadId, funnel_id: funnelId, stage_id: stageId });
+            positionsToInsert.push({
+              lead_id: leadId, funnel_id: funnelId, stage_id: stageId,
+              ...(purchasedAt ? { entered_at: purchasedAt } : {}),
+            });
           }
         }
 
