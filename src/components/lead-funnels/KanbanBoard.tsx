@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { LeadFunnelStage, Lead, LeadStagePosition } from '@/types/leadFunnels';
 import LeadCard from './LeadCard';
-import { Search, ArrowUpDown } from 'lucide-react';
+import { Search, ArrowUpDown, DollarSign } from 'lucide-react';
+import { formatCurrency } from '@/lib/formatters';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
@@ -76,6 +77,14 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
     return stageLeads;
   };
 
+  const getStageRevenue = (leads: (LeadStagePosition & { lead: Lead })[]) => {
+    return leads.reduce((sum, p) => sum + (Number(p.lead.metadata?.amount) || 0), 0);
+  };
+
+  const totalRevenue = useMemo(() => {
+    return positions.reduce((sum, p) => sum + (Number(p.lead.metadata?.amount) || 0), 0);
+  }, [positions]);
+
   const activePosition = activeId ? positions.find(p => p.id === activeId) : null;
 
   const handleDragStart = (event: DragStartEvent) => {
@@ -141,6 +150,12 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
             ? `${totalAll} leads`
             : `${totalFiltered} de ${totalAll} leads`}
         </span>
+        {totalRevenue > 0 && (
+          <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded">
+            <DollarSign className="h-3 w-3" />
+            {formatCurrency(totalRevenue)}
+          </span>
+        )}
       </div>
 
       {/* Kanban Columns */}
@@ -159,17 +174,27 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
                 key={stage.id}
                 className="flex-shrink-0 w-72 bg-muted/50 rounded-xl border border-border"
               >
-                <div className="p-3 border-b border-border flex items-center gap-2">
-                  <span
-                    className="h-3 w-3 rounded-full shrink-0"
-                    style={{ backgroundColor: stage.color }}
-                  />
-                  <h3 className="font-semibold text-sm text-foreground flex-1 truncate">
-                    {stage.name}
-                  </h3>
-                  <span className="text-xs text-muted-foreground bg-background rounded-full px-2 py-0.5">
-                    {stageLeads.length}
-                  </span>
+                <div className="p-3 border-b border-border">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="h-3 w-3 rounded-full shrink-0"
+                      style={{ backgroundColor: stage.color }}
+                    />
+                    <h3 className="font-semibold text-sm text-foreground flex-1 truncate">
+                      {stage.name}
+                    </h3>
+                    <span className="text-xs text-muted-foreground bg-background rounded-full px-2 py-0.5">
+                      {stageLeads.length}
+                    </span>
+                  </div>
+                  {(() => {
+                    const rev = getStageRevenue(stageLeads);
+                    return rev > 0 ? (
+                      <p className="text-xs font-medium text-muted-foreground mt-1">
+                        {formatCurrency(rev)}
+                      </p>
+                    ) : null;
+                  })()}
                 </div>
 
                 <DroppableColumn id={stage.id} isOver={overId === stage.id}>
