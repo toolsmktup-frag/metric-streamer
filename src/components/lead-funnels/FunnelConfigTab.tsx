@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { LeadFunnelStage, StageTransitionRule } from '@/types/leadFunnels';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,6 +21,17 @@ const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSave
     stages.length ? stages : [{ name: 'Novo Lead', color: COLORS[0], sort_order: 0 }]
   );
   const [localRules, setLocalRules] = useState<Partial<StageTransitionRule>[]>(rules);
+
+  // Sync local state when props update (e.g. after save)
+  useEffect(() => {
+    if (stages.length > 0) {
+      setLocalStages(stages);
+    }
+  }, [stages]);
+
+  useEffect(() => {
+    setLocalRules(rules);
+  }, [rules]);
 
   const addStage = () => {
     setLocalStages(prev => [
