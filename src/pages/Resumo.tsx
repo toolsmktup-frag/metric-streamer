@@ -202,27 +202,52 @@ export default function Resumo() {
             Comparar
           </button>
           <button
-            onClick={() => {
-              const rows = allSales.map(s => ({
-                Data: s.purchased_at ? new Date(s.purchased_at).toLocaleString('pt-BR') : '',
-                Nome: s.customer_name || '',
-                Email: s.customer_email || '',
-                Produto: s.product_name || '',
-                Oferta: s.offer_name || '',
-                Valor: s.revenue,
-                Status: s.status,
-                Pagamento: s.payment_method || '',
-                Plataforma: s.platform || '',
-                'UTM Source': s.utm_source || '',
-                'UTM Medium': s.utm_medium || '',
-                'UTM Campaign': s.utm_campaign || '',
-              }));
-              if (rows.length === 0) { toast.warning('Nenhuma venda para exportar.'); return; }
-              const ws = XLSX.utils.json_to_sheet(rows);
-              const wb = XLSX.utils.book_new();
-              XLSX.utils.book_append_sheet(wb, ws, 'Vendas');
-              XLSX.writeFile(wb, 'vendas.xlsx');
-              toast.success(`${rows.length} vendas exportadas!`);
+            onClick={async () => {
+              try {
+                // Buscar telefones das tabelas de transações para enriquecer
+                const { data: tictoPhones } = await (supabase as any)
+                  .from('ticto_transactions')
+                  .select('customer_email, customer_phone');
+                const { data: purchasePhones } = await (supabase as any)
+                  .from('customer_purchases')
+                  .select('customer_email, customer_phone');
+
+                const phoneMap = new Map<string, string>();
+                for (const t of [...(tictoPhones || []), ...(purchasePhones || [])]) {
+                  if (t.customer_email && t.customer_phone) {
+                    phoneMap.set(t.customer_email.toLowerCase().trim(), t.customer_phone);
+                  }
+                }
+
+                const rows = allSales.map(s => ({
+                  Data: s.purchased_at ? new Date(s.purchased_at).toLocaleString('pt-BR') : '',
+                  Nome: s.customer_name || '',
+                  Email: s.customer_email || '',
+                  Telefone: phoneMap.get((s.customer_email || '').toLowerCase().trim()) || '',
+                  Produto: s.product_name || '',
+                  Oferta: s.offer_name || '',
+                  Valor: s.revenue,
+                  Status: s.status,
+                  Pagamento: s.payment_method || '',
+                  Plataforma: s.platform || '',
+                  'Tráfego Pago': s.is_paid_traffic ? 'Sim' : 'Não',
+                  'UTM Source': s.utm_source || '',
+                  'UTM Medium': s.utm_medium || '',
+                  'UTM Campaign': s.utm_campaign || '',
+                  'UTM Content': s.utm_content || '',
+                  'Campanha Meta': s.meta_campaign_name || '',
+                  'Conjunto Meta': s.meta_adset_name || '',
+                  'Anúncio Meta': s.meta_ad_name || '',
+                }));
+                if (rows.length === 0) { toast.warning('Nenhuma venda para exportar.'); return; }
+                const ws = XLSX.utils.json_to_sheet(rows);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, 'Vendas');
+                XLSX.writeFile(wb, 'vendas.xlsx');
+                toast.success(`${rows.length} vendas exportadas!`);
+              } catch (err: any) {
+                toast.error('Erro ao exportar', { description: err.message });
+              }
             }}
             className="inline-flex items-center gap-2 rounded-lg border border-border bg-card text-muted-foreground px-3 py-2 text-sm font-medium hover:text-foreground hover:border-foreground/30 transition-colors"
           >
