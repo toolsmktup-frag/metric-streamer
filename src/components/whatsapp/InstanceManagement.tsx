@@ -105,6 +105,7 @@ export default function InstanceManagement({
   useEffect(() => {
     if (open && instance) {
       setInstanceName(instance.instance_name);
+      setNickname(instance.nickname || '');
       setProfileName(instance.display_name || '');
       fetchStatus();
       fetchPrivacy();
