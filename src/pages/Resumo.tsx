@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   DollarSign,
   TrendingUp,
@@ -13,7 +13,9 @@ import {
   Package,
   Receipt,
   GitCompare,
+  Download,
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
   ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, Legend,
