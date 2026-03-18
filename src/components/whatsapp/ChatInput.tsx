@@ -19,6 +19,7 @@ export default function ChatInput({ instanceId, phone, onOptimisticSend, onOptim
   const [attachment, setAttachment] = useState<File | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const typingTimeout = useRef<ReturnType<typeof setTimeout>>();
+  const isSending = useRef(false);
 
   const handleTextChange = (value: string) => {
     setText(value);
@@ -31,6 +32,8 @@ export default function ChatInput({ instanceId, phone, onOptimisticSend, onOptim
   const handleSend = useCallback(async () => {
     const msg = text.trim();
     if (!msg && !attachment) return;
+    if (isSending.current) return;
+    isSending.current = true;
 
     const tempId = `temp-${crypto.randomUUID()}`;
     let mediaUrl: string | undefined;
@@ -101,6 +104,8 @@ export default function ChatInput({ instanceId, phone, onOptimisticSend, onOptim
     } catch (err: any) {
       onOptimisticUpdate?.(tempId, 'failed');
       toast.error(err.message || 'Erro ao enviar mensagem');
+    } finally {
+      isSending.current = false;
     }
   }, [text, attachment, instanceId, phone, onOptimisticSend, onOptimisticUpdate]);
 
