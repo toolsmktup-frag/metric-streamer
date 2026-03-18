@@ -38,8 +38,8 @@ export interface SalesAggregation {
   upsell_revenue: number;
 }
 
-// Re-export from shared util for backward compatibility
-export { classifyTransaction } from '@/lib/classifyTransaction';
+// classifyTransaction is imported from @/lib/classifyTransaction
+export { classifyTransaction };
 
 function emptySalesAgg(): SalesAggregation {
   return { sales_count: 0, revenue: 0, front_sales: 0, front_revenue: 0, bump_sales: 0, bump_revenue: 0, upsell_sales: 0, upsell_revenue: 0 };
