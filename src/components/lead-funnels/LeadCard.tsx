@@ -9,6 +9,7 @@ interface LeadCardProps {
   position: LeadStagePosition & { lead: Lead };
   onClick?: () => void;
   isDragging?: boolean;
+  isRevenue?: boolean;
 }
 
 const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, isDragging }) => {
