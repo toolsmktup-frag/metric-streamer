@@ -9,9 +9,10 @@ interface LeadCardProps {
   position: LeadStagePosition & { lead: Lead };
   onClick?: () => void;
   isDragging?: boolean;
+  isRevenue?: boolean;
 }
 
-const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, isDragging }) => {
+const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, isDragging, isRevenue = true }) => {
   const lead = position.lead;
   const { data: purchaseData } = useLeadPurchases(lead.email, lead.phone);
   const { attributes, listeners, setNodeRef, transform } = useDraggable({
@@ -99,9 +100,13 @@ const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, isDragging }) =>
           </span>
         )}
         {!purchaseData?.totalOrders && lead.metadata?.amount && (
-          <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded">
+          <span className={`inline-flex items-center gap-1 text-xs font-semibold px-1.5 py-0.5 rounded ${
+            isRevenue
+              ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10'
+              : 'text-destructive bg-destructive/10'
+          }`}>
             <DollarSign className="h-3 w-3" />
-            {Number(lead.metadata.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+            {isRevenue ? '' : '-'}{Number(lead.metadata.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
           </span>
         )}
         {!purchaseData?.totalOrders && lead.metadata?.status && (

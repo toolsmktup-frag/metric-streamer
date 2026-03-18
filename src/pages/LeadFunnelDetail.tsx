@@ -10,6 +10,7 @@ import FunnelVisual from '@/components/lead-funnels/FunnelVisual';
 import FunnelConfigTab from '@/components/lead-funnels/FunnelConfigTab';
 import WebhookConfig from '@/components/lead-funnels/WebhookConfig';
 import FunnelFlowEditor from '@/components/lead-funnels/FunnelFlowEditor';
+import FunnelMetricsTab from '@/components/lead-funnels/FunnelMetricsTab';
 import LeadTimeline from '@/components/lead-funnels/LeadTimeline';
 import ImportLeadsDialog from '@/components/lead-funnels/ImportLeadsDialog';
 import { Lead } from '@/types/leadFunnels';
@@ -133,6 +134,7 @@ const LeadFunnelDetail: React.FC = () => {
           <TabsTrigger value="kanban">Kanban</TabsTrigger>
           <TabsTrigger value="visual">Funil</TabsTrigger>
           <TabsTrigger value="flow">Flow Editor</TabsTrigger>
+          <TabsTrigger value="metrics">Métricas</TabsTrigger>
           <TabsTrigger value="config">Configuração</TabsTrigger>
           <TabsTrigger value="webhook">Webhook</TabsTrigger>
         </TabsList>
@@ -164,6 +166,10 @@ const LeadFunnelDetail: React.FC = () => {
             onAutoSaveNodes={handleAutoSaveNodes}
             onAutoSaveEdges={handleAutoSaveEdges}
           />
+        </TabsContent>
+
+        <TabsContent value="metrics" className="mt-4">
+          <FunnelMetricsTab stages={stages} positions={positions} />
         </TabsContent>
 
         <TabsContent value="config" className="mt-4">

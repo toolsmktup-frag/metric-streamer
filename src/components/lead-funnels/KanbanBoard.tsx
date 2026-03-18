@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { LeadFunnelStage, Lead, LeadStagePosition } from '@/types/leadFunnels';
 import LeadCard from './LeadCard';
-import { Search, ArrowUpDown, DollarSign } from 'lucide-react';
+import { Search, ArrowUpDown, DollarSign, TrendingDown } from 'lucide-react';
 import { formatCurrency } from '@/lib/formatters';
+import { isRevenueStage } from '@/lib/revenueStage';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
@@ -81,9 +82,21 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
     return leads.reduce((sum, p) => sum + (Number(p.lead.metadata?.amount) || 0), 0);
   };
 
-  const totalRevenue = useMemo(() => {
-    return positions.reduce((sum, p) => sum + (Number(p.lead.metadata?.amount) || 0), 0);
-  }, [positions]);
+  const { confirmedRevenue, lostRevenue } = useMemo(() => {
+    let confirmed = 0;
+    let lost = 0;
+    const stageMap = new Map(stages.map(s => [s.id, s]));
+    for (const p of positions) {
+      const amount = Number(p.lead.metadata?.amount) || 0;
+      const stage = stageMap.get(p.stage_id);
+      if (stage && isRevenueStage(stage.name)) {
+        confirmed += amount;
+      } else {
+        lost += amount;
+      }
+    }
+    return { confirmedRevenue: confirmed, lostRevenue: lost };
+  }, [positions, stages]);
 
   const activePosition = activeId ? positions.find(p => p.id === activeId) : null;
 
@@ -150,10 +163,16 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
             ? `${totalAll} leads`
             : `${totalFiltered} de ${totalAll} leads`}
         </span>
-        {totalRevenue > 0 && (
+        {confirmedRevenue > 0 && (
           <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded">
             <DollarSign className="h-3 w-3" />
-            {formatCurrency(totalRevenue)}
+            {formatCurrency(confirmedRevenue)}
+          </span>
+        )}
+        {lostRevenue > 0 && (
+          <span className="inline-flex items-center gap-1 text-xs font-semibold text-destructive bg-destructive/10 px-2 py-0.5 rounded">
+            <TrendingDown className="h-3 w-3" />
+            -{formatCurrency(lostRevenue)}
           </span>
         )}
       </div>
@@ -169,6 +188,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
         <div className="flex gap-4 overflow-x-auto pb-4">
           {sortedStages.map(stage => {
             const stageLeads = getLeadsForStage(stage.id);
+            const isRevenue = isRevenueStage(stage.name);
             return (
               <div
                 key={stage.id}
@@ -190,8 +210,9 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
                   {(() => {
                     const rev = getStageRevenue(stageLeads);
                     return rev > 0 ? (
-                      <p className="text-xs font-medium text-muted-foreground mt-1">
-                        {formatCurrency(rev)}
+                      <p className={`text-xs font-medium mt-1 ${isRevenue ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}`}>
+                        {isRevenue ? '' : '- '}{formatCurrency(rev)}
+                        {!isRevenue && <span className="text-[10px] ml-1 opacity-70">perdido</span>}
                       </p>
                     ) : null;
                   })()}
@@ -208,6 +229,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
                         key={pos.id}
                         position={pos}
                         isDragging={activeId === pos.id}
+                        isRevenue={isRevenue}
                         onClick={() => onLeadClick?.(pos.lead_id)}
                       />
                     ))
