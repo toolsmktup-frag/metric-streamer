@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useFilterStore } from '@/stores/filterStore';
 import type { SalesAggregation } from './useTictoData';
+import { classifyTransaction as classifySale } from '@/lib/classifyTransaction';
 
 function toLocalDate(date: Date): string {
   const y = date.getFullYear();
