@@ -174,17 +174,27 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
                 key={stage.id}
                 className="flex-shrink-0 w-72 bg-muted/50 rounded-xl border border-border"
               >
-                <div className="p-3 border-b border-border flex items-center gap-2">
-                  <span
-                    className="h-3 w-3 rounded-full shrink-0"
-                    style={{ backgroundColor: stage.color }}
-                  />
-                  <h3 className="font-semibold text-sm text-foreground flex-1 truncate">
-                    {stage.name}
-                  </h3>
-                  <span className="text-xs text-muted-foreground bg-background rounded-full px-2 py-0.5">
-                    {stageLeads.length}
-                  </span>
+                <div className="p-3 border-b border-border">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="h-3 w-3 rounded-full shrink-0"
+                      style={{ backgroundColor: stage.color }}
+                    />
+                    <h3 className="font-semibold text-sm text-foreground flex-1 truncate">
+                      {stage.name}
+                    </h3>
+                    <span className="text-xs text-muted-foreground bg-background rounded-full px-2 py-0.5">
+                      {stageLeads.length}
+                    </span>
+                  </div>
+                  {(() => {
+                    const rev = getStageRevenue(stageLeads);
+                    return rev > 0 ? (
+                      <p className="text-xs font-medium text-muted-foreground mt-1">
+                        {formatCurrency(rev)}
+                      </p>
+                    ) : null;
+                  })()}
                 </div>
 
                 <DroppableColumn id={stage.id} isOver={overId === stage.id}>
