@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { LeadFunnelStage, Lead, LeadStagePosition } from '@/types/leadFunnels';
 import LeadCard from './LeadCard';
-import { Search, ArrowUpDown, DollarSign } from 'lucide-react';
+import { Search, ArrowUpDown, DollarSign, TrendingDown } from 'lucide-react';
 import { formatCurrency } from '@/lib/formatters';
+import { isRevenueStage } from '@/lib/revenueStage';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
