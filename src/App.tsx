@@ -31,6 +31,7 @@ import LeadsDashboard from "./pages/LeadsDashboard";
 import LeadsList from "./pages/LeadsList";
 import LeadsSources from "./pages/LeadsSources";
 import WhatsAppChat from "./pages/WhatsAppChat";
+import Equipe from "./pages/Equipe";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -88,6 +89,8 @@ const App = () => (
           <Route path="/leads/fontes" element={<Protected><LeadsSources /></Protected>} />
           <Route path="/lead-campaigns" element={<Protected><LeadCampaigns /></Protected>} />
           <Route path="/lead-funnels/:id" element={<Protected><LeadFunnelDetail /></Protected>} />
+          {/* Equipe */}
+          <Route path="/equipe" element={<Protected><Equipe /></Protected>} />
           {/* WhatsApp Chat - fullscreen layout */}
           <Route path="/whatsapp" element={<ProtectedFullscreen><WhatsAppChat /></ProtectedFullscreen>} />
           <Route path="*" element={<NotFound />} />
