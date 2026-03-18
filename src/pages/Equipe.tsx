@@ -28,9 +28,68 @@ const ROLE_COLORS: Record<string, string> = {
 export default function Equipe() {
   const { data: members = [], isLoading, updateRole, updateName } = useTeamMembers();
   const { data: permissions = [], isLoading: loadingPerms, updatePermission } = useOrgPermissions();
+  const { instances, loading: loadingInstances } = useWhatsAppInstances();
   const [editingName, setEditingName] = useState<string | null>(null);
   const [nameValue, setNameValue] = useState('');
   const [expandedPerms, setExpandedPerms] = useState<string | null>(null);
+  const [instanceAccess, setInstanceAccess] = useState<Record<string, Set<string>>>({});
+  const [savingAccess, setSavingAccess] = useState<string | null>(null);
+
+  // Fetch instance access for all members
+  const fetchInstanceAccess = useCallback(async () => {
+    try {
+      const { data } = await (supabase as any)
+        .from('whatsapp_instance_access')
+        .select('user_id, instance_id');
+      if (data) {
+        const map: Record<string, Set<string>> = {};
+        for (const row of data) {
+          if (!map[row.user_id]) map[row.user_id] = new Set();
+          map[row.user_id].add(row.instance_id);
+        }
+        setInstanceAccess(map);
+      }
+    } catch (err) {
+      console.error('Error fetching instance access:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchInstanceAccess();
+  }, [fetchInstanceAccess]);
+
+  const toggleInstanceAccess = async (userId: string, instanceId: string, grant: boolean) => {
+    setSavingAccess(`${userId}-${instanceId}`);
+    try {
+      const { data: orgId } = await (supabase as any).rpc('get_user_org_id');
+      if (grant) {
+        const { error } = await (supabase as any)
+          .from('whatsapp_instance_access')
+          .insert({ user_id: userId, instance_id: instanceId, organization_id: orgId });
+        if (error) throw error;
+      } else {
+        const { error } = await (supabase as any)
+          .from('whatsapp_instance_access')
+          .delete()
+          .eq('user_id', userId)
+          .eq('instance_id', instanceId);
+        if (error) throw error;
+      }
+      setInstanceAccess(prev => {
+        const updated = { ...prev };
+        if (!updated[userId]) updated[userId] = new Set();
+        else updated[userId] = new Set(updated[userId]);
+        if (grant) updated[userId].add(instanceId);
+        else updated[userId].delete(instanceId);
+        return updated;
+      });
+      toast.success(grant ? 'Acesso concedido' : 'Acesso removido');
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao atualizar acesso');
+    } finally {
+      setSavingAccess(null);
+    }
+  };
 
   function startEditName(userId: string, currentName: string) {
     setEditingName(userId);
