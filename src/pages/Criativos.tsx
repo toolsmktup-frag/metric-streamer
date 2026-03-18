@@ -94,7 +94,7 @@ interface EnrichedAd {
   thumbnail_url?: string;
 }
 
-export default function Criativos() {
+export default function Criativos({ embedded = false }: { embedded?: boolean }) {
   const { data: ads = [], isLoading: loadingAds } = useMetaAds();
   const { data: campaigns = [] } = useMetaCampaigns();
   const { data: adsets = [] } = useMetaAdsets();
@@ -370,13 +370,18 @@ export default function Criativos() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Criativos</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">{filtered.length} anúncio{filtered.length !== 1 ? 's' : ''} com dados</p>
+      {!embedded && (
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">Criativos</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">{filtered.length} anúncio{filtered.length !== 1 ? 's' : ''} com dados</p>
+          </div>
+          <DateRangePicker />
         </div>
-        <DateRangePicker />
-      </div>
+      )}
+      {embedded && (
+        <p className="text-sm text-muted-foreground">{filtered.length} anúncio{filtered.length !== 1 ? 's' : ''} com dados</p>
+      )}
 
       {/* KPI Cards */}
       {loadingAds ? (
