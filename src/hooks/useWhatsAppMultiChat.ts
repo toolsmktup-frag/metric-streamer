@@ -64,7 +64,7 @@ export function useWhatsAppMultiChats(instances: WhatsAppInstance[]) {
             return data.map(chat => ({
               ...chat,
               instance_id: inst.id,
-              instance_name: inst.display_name || inst.instance_name,
+              instance_name: getInstanceDisplayName(inst),
               instance_color: getInstanceColor(index),
             }));
           } catch {

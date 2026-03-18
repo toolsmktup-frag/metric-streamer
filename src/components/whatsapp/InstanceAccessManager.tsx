@@ -5,6 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Loader2, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import type { WhatsAppInstance } from '@/hooks/useWhatsApp';
+import { getInstanceDisplayName } from '@/hooks/useWhatsApp';
 
 interface UserAccess {
   user_id: string;

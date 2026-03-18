@@ -17,12 +17,18 @@ export interface WhatsAppInstance {
   id: string;
   organization_id: string;
   instance_name: string;
+  nickname: string | null;
   phone_number: string | null;
   api_url: string;
   api_token: string;
   display_name: string | null;
   profile_pic_url: string | null;
   status: string;
+}
+
+/** Returns the best display label for an instance: nickname → display_name → instance_name */
+export function getInstanceDisplayName(inst: WhatsAppInstance): string {
+  return inst.nickname || inst.display_name || inst.instance_name;
 }
 
 export interface WhatsAppMessage {

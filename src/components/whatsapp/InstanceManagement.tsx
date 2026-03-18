@@ -35,6 +35,7 @@ import {
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import type { WhatsAppInstance } from '@/hooks/useWhatsApp';
+import { getInstanceDisplayName } from '@/hooks/useWhatsApp';
 import InstanceAccessManager from '@/components/whatsapp/InstanceAccessManager';
 
 async function callInstanceAPI(instanceId: string, action: string, body: any = {}) {
