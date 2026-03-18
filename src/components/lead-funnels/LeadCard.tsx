@@ -28,7 +28,7 @@ function friendlyStatus(status: string): string {
   return STATUS_LABELS[status.toLowerCase().trim()] || status;
 }
 
-const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, isDragging, isRevenue = true }) => {
+const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, onWhatsAppClick, isDragging, isRevenue = true }) => {
   const lead = position.lead;
   const { data: purchaseData } = useLeadPurchases(lead.email, lead.phone);
   const { attributes, listeners, setNodeRef, transform } = useDraggable({
