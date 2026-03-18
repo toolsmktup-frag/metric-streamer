@@ -111,7 +111,7 @@ const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, isDragging, isRe
         )}
         {!purchaseData?.totalOrders && lead.metadata?.status && (
           <span className="text-[10px] px-1.5 py-0.5 bg-muted rounded text-muted-foreground">
-            {lead.metadata.status as string}
+            {friendlyStatus(lead.metadata.status as string)}
           </span>
         )}
       </div>
