@@ -276,7 +276,7 @@ export default function WhatsAppChat() {
               )}
               {instances.map(inst => (
                 <SelectItem key={inst.id} value={inst.id}>
-                  {inst.display_name || inst.instance_name}
+                  {getInstanceDisplayName(inst)}
                 </SelectItem>
               ))}
             </SelectContent>
