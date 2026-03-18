@@ -209,7 +209,37 @@ Deno.serve(async (req) => {
       }
     }
 
-    const result = { success: true, leads_created: created, leads_existing: skipped, events_created: eventsCreated, total_contacts: contactMap.size };
+    // 6. Position ALL existing leads (org-wide) into BASE DE LEADS if not already there
+    let migrated = 0;
+    if (firstStage) {
+      // Get all leads for org
+      const { data: allLeads } = await supabase
+        .from("leads")
+        .select("id")
+        .eq("organization_id", ORG_ID);
+
+      // Get all leads already positioned in this funnel
+      const { data: positioned } = await supabase
+        .from("lead_stage_positions")
+        .select("lead_id")
+        .eq("funnel_id", baseFunnel.id);
+
+      const positionedSet = new Set((positioned || []).map((p: any) => p.lead_id));
+      const toInsert = (allLeads || [])
+        .filter((l: any) => !positionedSet.has(l.id))
+        .map((l: any) => ({ lead_id: l.id, funnel_id: baseFunnel.id, stage_id: firstStage.id }));
+
+      if (toInsert.length > 0) {
+        // Batch insert in chunks of 500
+        for (let i = 0; i < toInsert.length; i += 500) {
+          const chunk = toInsert.slice(i, i + 500);
+          await supabase.from("lead_stage_positions").insert(chunk);
+        }
+        migrated = toInsert.length;
+      }
+    }
+
+    const result = { success: true, leads_created: created, leads_existing: skipped, events_created: eventsCreated, total_contacts: contactMap.size, leads_migrated_to_funnel: migrated };
     console.log("Sync complete:", JSON.stringify(result));
 
     return new Response(JSON.stringify(result), {
