@@ -288,7 +288,7 @@ export default function InstanceManagement({
               )}
               <div className="flex-1">
                 <p className="text-sm font-medium text-foreground">
-                  {instance.display_name || instance.instance_name}
+                  {getInstanceDisplayName(instance)}
                 </p>
                 <p className="text-xs text-muted-foreground">{instance.phone_number || 'Sem número'}</p>
               </div>

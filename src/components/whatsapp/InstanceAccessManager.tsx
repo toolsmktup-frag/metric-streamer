@@ -120,7 +120,9 @@ export default function InstanceAccessManager({ instances, selectedInstanceId }:
     );
   }
 
-  const instanceName = instances.find(i => i.id === selectedInstanceId)?.instance_name || '';
+  const instanceName = instances.find(i => i.id === selectedInstanceId) 
+    ? getInstanceDisplayName(instances.find(i => i.id === selectedInstanceId)!) 
+    : '';
 
   return (
     <div className="space-y-3">
