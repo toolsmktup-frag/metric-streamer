@@ -24,6 +24,7 @@ import {
   RefreshCw,
   Trash2,
   User,
+  Users,
   Camera,
   Shield,
   Loader2,
@@ -34,6 +35,7 @@ import {
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import type { WhatsAppInstance } from '@/hooks/useWhatsApp';
+import InstanceAccessManager from '@/components/whatsapp/InstanceAccessManager';
 
 async function callInstanceAPI(instanceId: string, action: string, body: any = {}) {
   const { data, error } = await supabase.functions.invoke('whatsapp-instance', {
@@ -45,6 +47,7 @@ async function callInstanceAPI(instanceId: string, action: string, body: any = {
 
 interface InstanceManagementProps {
   instance: WhatsAppInstance | null;
+  instances?: WhatsAppInstance[];
   open: boolean;
   onClose: () => void;
   onInstanceDeleted?: () => void;
@@ -52,6 +55,7 @@ interface InstanceManagementProps {
 
 export default function InstanceManagement({
   instance,
+  instances = [],
   open,
   onClose,
   onInstanceDeleted,
@@ -557,6 +561,19 @@ export default function InstanceManagement({
               <RefreshCw className="h-3.5 w-3.5" />
               Configurar Webhook
             </Button>
+          </div>
+
+          <Separator />
+
+          {/* Access Management */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+              <Users className="h-3.5 w-3.5" /> Acesso de Vendedores
+            </h3>
+            <InstanceAccessManager
+              instances={instances}
+              selectedInstanceId={instance?.id || null}
+            />
           </div>
 
           <Separator />

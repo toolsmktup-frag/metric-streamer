@@ -2,15 +2,22 @@ import { Search, MessageCircle } from 'lucide-react';
 import { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Badge } from '@/components/ui/badge';
 import type { ChatSummary } from '@/hooks/useWhatsApp';
+import type { MultiChatSummary } from '@/hooks/useWhatsAppMultiChat';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 interface ChatListProps {
-  chats: ChatSummary[];
+  chats: (ChatSummary | MultiChatSummary)[];
   loading: boolean;
   selectedPhone: string | null;
-  onSelectChat: (phone: string) => void;
+  onSelectChat: (phone: string, instanceId?: string) => void;
+  showInstanceBadge?: boolean;
+}
+
+function isMultiChat(chat: ChatSummary | MultiChatSummary): chat is MultiChatSummary {
+  return 'instance_id' in chat;
 }
 
 function formatPhone(phone: string): string {
@@ -23,7 +30,7 @@ function formatPhone(phone: string): string {
   return phone;
 }
 
-export default function ChatList({ chats, loading, selectedPhone, onSelectChat }: ChatListProps) {
+export default function ChatList({ chats, loading, selectedPhone, onSelectChat, showInstanceBadge }: ChatListProps) {
   const [search, setSearch] = useState('');
 
   const filtered = chats.filter(c => {
@@ -32,7 +39,8 @@ export default function ChatList({ chats, loading, selectedPhone, onSelectChat }
       c.phone.includes(q) ||
       (c.sender_name?.toLowerCase().includes(q)) ||
       (c.contact_name?.toLowerCase().includes(q)) ||
-      (c.last_message.body?.toLowerCase().includes(q))
+      (c.last_message.body?.toLowerCase().includes(q)) ||
+      (isMultiChat(c) && c.instance_name.toLowerCase().includes(q))
     );
   });
 
@@ -62,7 +70,9 @@ export default function ChatList({ chats, loading, selectedPhone, onSelectChat }
         ) : filtered.length === 0 ? (
           <div className="p-4 text-center text-xs text-muted-foreground">Nenhuma conversa</div>
         ) : (
-          filtered.map(chat => {
+          filtered.map((chat, idx) => {
+            const multi = isMultiChat(chat);
+            const chatKey = multi ? `${chat.instance_id}-${chat.phone}` : chat.phone;
             const isSelected = selectedPhone === chat.phone;
             const displayName = chat.contact_name || chat.sender_name || formatPhone(chat.phone);
             const preview = chat.last_message.is_deleted
@@ -74,8 +84,8 @@ export default function ChatList({ chats, loading, selectedPhone, onSelectChat }
 
             return (
               <button
-                key={chat.phone}
-                onClick={() => onSelectChat(chat.phone)}
+                key={chatKey}
+                onClick={() => onSelectChat(chat.phone, multi ? chat.instance_id : undefined)}
                 className={`w-full flex items-center gap-3 px-3 py-3 text-left transition-colors border-b border-border/50 ${
                   isSelected ? 'bg-accent' : 'hover:bg-muted/50'
                 }`}
@@ -105,6 +115,17 @@ export default function ChatList({ chats, loading, selectedPhone, onSelectChat }
                       </span>
                     )}
                   </div>
+                  {/* Instance badge */}
+                  {showInstanceBadge && multi && (
+                    <div className="mt-1">
+                      <span
+                        className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-medium text-white"
+                        style={{ backgroundColor: chat.instance_color }}
+                      >
+                        {chat.instance_name}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </button>
             );
