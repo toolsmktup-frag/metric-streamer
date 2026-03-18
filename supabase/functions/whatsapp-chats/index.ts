@@ -1,4 +1,4 @@
-// v1.0.3 - use admin client for message reads and simplify UAZAPI read sync
+// v1.1.0 - unified chat: support instance_id=all for cross-instance history
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
@@ -88,33 +88,47 @@ Deno.serve(async (req) => {
       })
     }
 
-    const { data: instance, error: instErr } = await userClient
-      .from('whatsapp_instances')
-      .select('id, organization_id, api_url, api_token')
-      .eq('id', instanceId)
-      .eq('organization_id', orgId)
-      .single()
+    const isAllMode = instanceId === 'all'
 
-    if (instErr || !instance) {
-      return new Response(JSON.stringify({ error: 'Instance not found' }), {
-        status: 404,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+    // For single-instance mode, validate the instance exists
+    let instance: any = null
+    if (!isAllMode) {
+      const { data: inst, error: instErr } = await userClient
+        .from('whatsapp_instances')
+        .select('id, organization_id, api_url, api_token')
+        .eq('id', instanceId)
+        .eq('organization_id', orgId)
+        .single()
+
+      if (instErr || !inst) {
+        return new Response(JSON.stringify({ error: 'Instance not found' }), {
+          status: 404,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+      instance = inst
     }
 
     if (action === 'list_chats') {
+      let messagesQuery = adminClient
+        .from('whatsapp_messages')
+        .select('*')
+        .eq('organization_id', orgId)
+        .order('created_at', { ascending: false })
+
+      let contactsQuery = adminClient
+        .from('whatsapp_contacts')
+        .select('phone, name, profile_pic_url')
+        .eq('organization_id', orgId)
+
+      if (!isAllMode) {
+        messagesQuery = messagesQuery.eq('instance_id', instanceId)
+        contactsQuery = contactsQuery.eq('instance_id', instanceId)
+      }
+
       const [messagesResult, contactsResult] = await Promise.all([
-        adminClient
-          .from('whatsapp_messages')
-          .select('*')
-          .eq('organization_id', orgId)
-          .eq('instance_id', instanceId)
-          .order('created_at', { ascending: false }),
-        adminClient
-          .from('whatsapp_contacts')
-          .select('phone, name, profile_pic_url')
-          .eq('organization_id', orgId)
-          .eq('instance_id', instanceId),
+        messagesQuery,
+        contactsQuery,
       ])
 
       if (messagesResult.error) throw messagesResult.error
@@ -135,7 +149,6 @@ Deno.serve(async (req) => {
           })
         }
         const current = chatMap.get(msg.phone)
-        // Fallback: grab sender_name from any inbound message if not set yet
         if (!current.sender_name && msg.sender_name && msg.direction === 'inbound') {
           current.sender_name = msg.sender_name
         }
@@ -144,7 +157,6 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Enrich with persistent contact data
       for (const [phone, chat] of chatMap) {
         const contact = contactMap.get(phone)
         if (contact) {
@@ -177,14 +189,19 @@ Deno.serve(async (req) => {
       const limit = parseInt(url.searchParams.get('limit') || '50')
       const offset = parseInt(url.searchParams.get('offset') || '0')
 
-      const { data: messages, error: msgErr } = await adminClient
+      let messagesQuery = adminClient
         .from('whatsapp_messages')
         .select('*')
         .eq('organization_id', orgId)
-        .eq('instance_id', instanceId)
         .eq('phone', cleanPhone)
         .order('created_at', { ascending: true })
         .range(offset, offset + limit - 1)
+
+      if (!isAllMode) {
+        messagesQuery = messagesQuery.eq('instance_id', instanceId)
+      }
+
+      const { data: messages, error: msgErr } = await messagesQuery
 
       if (msgErr) throw msgErr
 
@@ -194,14 +211,19 @@ Deno.serve(async (req) => {
       let responseMessages = messageList
 
       if (unreadInbound.length > 0) {
-        const { error: updateErr } = await adminClient
+        let updateQuery = adminClient
           .from('whatsapp_messages')
           .update({ status: 'read', updated_at: new Date().toISOString() })
           .eq('organization_id', orgId)
-          .eq('instance_id', instanceId)
           .eq('phone', cleanPhone)
           .eq('direction', 'inbound')
           .neq('status', 'read')
+
+        if (!isAllMode) {
+          updateQuery = updateQuery.eq('instance_id', instanceId)
+        }
+
+        const { error: updateErr } = await updateQuery
 
         if (updateErr) {
           console.error('Failed to mark messages as read locally:', updateErr)
@@ -211,7 +233,21 @@ Deno.serve(async (req) => {
           )
         }
 
-        await tryMarkChatAsRead(instance.api_url, instance.api_token, cleanPhone)
+        // Mark as read on UAZAPI - for all mode, mark on all instances
+        if (isAllMode) {
+          const { data: allInstances } = await adminClient
+            .from('whatsapp_instances')
+            .select('api_url, api_token')
+            .eq('organization_id', orgId)
+
+          if (allInstances) {
+            await Promise.allSettled(
+              allInstances.map(inst => tryMarkChatAsRead(inst.api_url, inst.api_token, cleanPhone))
+            )
+          }
+        } else {
+          await tryMarkChatAsRead(instance.api_url, instance.api_token, cleanPhone)
+        }
       }
 
       return new Response(JSON.stringify(responseMessages), {

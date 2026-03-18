@@ -158,6 +158,9 @@ export function useWhatsAppChats(instanceId: string | null) {
   return { chats, loading, refetch: fetchChats };
 }
 
+/**
+ * Fetch messages for a phone. instanceId can be a real ID or 'all' for unified cross-instance view.
+ */
 export function useWhatsAppMessages(instanceId: string | null, phone: string | null) {
   const [messages, setMessages] = useState<WhatsAppMessage[]>([]);
   const [loading, setLoading] = useState(true);
@@ -187,7 +190,7 @@ export function useWhatsAppMessages(instanceId: string | null, phone: string | n
     fetchMessages();
   }, [fetchMessages]);
 
-  // Realtime subscription
+  // Realtime subscription — listen by phone (works for both single and all mode)
   useEffect(() => {
     if (!instanceId || !phone) return;
 

@@ -26,11 +26,11 @@ export default function WhatsAppChat() {
   const { instances, loading: loadingInstances, refetch: refetchInstances } = useWhatsAppInstances();
   const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null);
   const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
-  const [chatInstanceId, setChatInstanceId] = useState<string | null>(null);
   const [showPanel, setShowPanel] = useState(true);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [hubOpen, setHubOpen] = useState(false);
   const [optimisticMessages, setOptimisticMessages] = useState<WhatsAppMessage[]>([]);
+  const [replyInstanceId, setReplyInstanceId] = useState<string | null>(null);
 
   // Auto-open chat from query param ?phone=
   useEffect(() => {
@@ -40,12 +40,9 @@ export default function WhatsAppChat() {
       setSelectedPhone(cleanPhone);
       if (instances.length === 1) {
         setSelectedInstanceId(instances[0].id);
-        setChatInstanceId(instances[0].id);
       } else {
         setSelectedInstanceId('all');
-        setChatInstanceId(null);
       }
-      // Clear param so it doesn't re-trigger
       setSearchParams({}, { replace: true });
     }
   }, [searchParams, loadingInstances, instances, setSearchParams]);
@@ -67,7 +64,9 @@ export default function WhatsAppChat() {
   const singleInstanceId = isAllMode ? null : (selectedInstanceId || instances[0]?.id || null);
   const activeInstanceData = instances.find(i => i.id === singleInstanceId);
   const isDisconnected = activeInstanceData ? activeInstanceData.status !== 'connected' : false;
-  const effectiveInstanceId = isAllMode ? chatInstanceId : singleInstanceId;
+
+  // For messages: in "all" mode pass 'all', otherwise use the single instance
+  const effectiveInstanceId = isAllMode ? 'all' : singleInstanceId;
 
   const { chats: singleChats, loading: loadingSingleChats, refetch: refetchSingleChats } = useWhatsAppChats(singleInstanceId);
   const { chats: multiChats, loading: loadingMultiChats, refetch: refetchMultiChats } = useWhatsAppMultiChats(
@@ -79,6 +78,23 @@ export default function WhatsAppChat() {
   const refetchChats = isAllMode ? refetchMultiChats : refetchSingleChats;
 
   const { messages, loading: loadingMessages } = useWhatsAppMessages(effectiveInstanceId, selectedPhone);
+
+  // Auto-select reply instance: most recent outbound message's instance, or first connected
+  useEffect(() => {
+    if (!isAllMode || !selectedPhone || instances.length === 0) {
+      setReplyInstanceId(null);
+      return;
+    }
+    // Find the most recent outbound message to determine default reply instance
+    const lastOutbound = [...messages].reverse().find(m => m.direction === 'outbound');
+    if (lastOutbound) {
+      setReplyInstanceId(lastOutbound.instance_id);
+    } else {
+      // Default to first connected instance
+      const connected = instances.find(i => i.status === 'connected');
+      setReplyInstanceId(connected?.id || instances[0].id);
+    }
+  }, [isAllMode, selectedPhone, messages, instances]);
 
   const mergedMessages = useMemo(() => {
     const realIds = new Set(messages.map(m => m.id));
@@ -104,9 +120,8 @@ export default function WhatsAppChat() {
     );
   }, []);
 
-  const handleSelectChat = useCallback((phone: string, instanceId?: string) => {
+  const handleSelectChat = useCallback((phone: string, _instanceId?: string) => {
     setSelectedPhone(phone);
-    if (instanceId) setChatInstanceId(instanceId);
   }, []);
 
   const selectedChat = useMemo(
@@ -122,7 +137,7 @@ export default function WhatsAppChat() {
   const handleInstanceChange = (value: string) => {
     setSelectedInstanceId(value === 'all' ? 'all' : value);
     setSelectedPhone(null);
-    setChatInstanceId(null);
+    setReplyInstanceId(null);
   };
 
   const wrapWithSidebar = (content: React.ReactNode) => (
@@ -244,6 +259,7 @@ export default function WhatsAppChat() {
             messages={mergedMessages}
             loading={loadingMessages}
             phone={selectedPhone}
+            instances={isAllMode ? instances : undefined}
           />
           {selectedPhone && effectiveInstanceId && (
             <ChatInput
@@ -251,6 +267,9 @@ export default function WhatsAppChat() {
               phone={selectedPhone}
               onOptimisticSend={handleOptimisticSend}
               onOptimisticUpdate={handleOptimisticUpdate}
+              instances={isAllMode ? instances : undefined}
+              replyInstanceId={replyInstanceId || undefined}
+              onReplyInstanceChange={isAllMode ? (id) => setReplyInstanceId(id) : undefined}
             />
           )}
         </div>
