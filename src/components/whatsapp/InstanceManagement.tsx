@@ -54,6 +54,7 @@ interface InstanceManagementProps {
 
 export default function InstanceManagement({
   instance,
+  instances = [],
   open,
   onClose,
   onInstanceDeleted,
