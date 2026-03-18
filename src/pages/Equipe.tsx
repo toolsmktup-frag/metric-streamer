@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useTeamMembers, ROLES, ROLE_LABELS } from '@/hooks/useTeamMembers';
 import { useOrgPermissions, MODULE_KEYS, MODULE_LABELS, type ModuleKey } from '@/hooks/useUserPermissions';
-import { Loader2, Users, Pencil, Check, X, Shield, ChevronDown, ChevronUp } from 'lucide-react';
+import { useWhatsAppInstances, getInstanceDisplayName } from '@/hooks/useWhatsApp';
+import { supabase } from '@/integrations/supabase/client';
+import { Loader2, Users, Pencil, Check, X, Shield, ChevronDown, ChevronUp, MessageSquare } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -13,6 +15,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
+import { toast } from 'sonner';
 
 const ROLE_COLORS: Record<string, string> = {
   admin: 'bg-destructive/15 text-destructive border-destructive/30',
