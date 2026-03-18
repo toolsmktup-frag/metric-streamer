@@ -53,8 +53,11 @@ const TOOL_ITEMS = [
   { path: '/importar',    label: 'Importar',     icon: Upload },
 ];
 
-const LEAD_FUNNEL_ITEMS = [
-  { path: '/lead-campaigns', label: 'Funis de Leads', icon: Target },
+const LEAD_ITEMS = [
+  { path: '/leads/dashboard', label: 'Dashboard Leads', icon: LayoutDashboard },
+  { path: '/leads',           label: 'Todos os Leads',  icon: Users },
+  { path: '/lead-campaigns',  label: 'Funis de Leads',  icon: Target },
+  { path: '/leads/fontes',    label: 'Fontes / UTMs',   icon: Globe },
 ];
 
 const AppSidebar = React.memo(function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
