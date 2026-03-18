@@ -564,6 +564,19 @@ export default function InstanceManagement({
 
           <Separator />
 
+          {/* Access Management */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+              <Users className="h-3.5 w-3.5" /> Acesso de Vendedores
+            </h3>
+            <InstanceAccessManager
+              instances={instances}
+              selectedInstanceId={instance?.id || null}
+            />
+          </div>
+
+          <Separator />
+
           {/* Danger Zone */}
           <div className="space-y-2">
             <h3 className="text-sm font-semibold text-destructive">Zona de Perigo</h3>
