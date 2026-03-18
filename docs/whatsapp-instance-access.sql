@@ -41,7 +41,7 @@ CREATE POLICY "Admins can delete access"
   FOR DELETE
   TO authenticated
   USING (
-    public.has_role(auth.uid(), 'admin')
+    public.get_user_role() = 'admin'
   );
 
 -- Index para queries rápidas
