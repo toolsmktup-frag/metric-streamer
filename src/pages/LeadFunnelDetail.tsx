@@ -42,10 +42,41 @@ const LeadFunnelDetail: React.FC = () => {
   const upsertRules = useUpsertTransitionRules();
   const saveSourceNodes = useSaveFunnelSourceNodes();
   const saveFunnelEdges = useSaveFunnelEdges();
+  const queryClient = useQueryClient();
 
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [timelineOpen, setTimelineOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [clearing, setClearing] = useState(false);
+
+  const handleClearFunnel = async () => {
+    if (!id) return;
+    setClearing(true);
+    try {
+      // Delete lead events for this funnel
+      await (supabase as any)
+        .from('lead_events')
+        .delete()
+        .eq('funnel_id', id);
+
+      // Delete lead stage positions for this funnel
+      await (supabase as any)
+        .from('lead_stage_positions')
+        .delete()
+        .eq('funnel_id', id);
+
+      // Invalidate queries to refresh UI
+      queryClient.invalidateQueries({ queryKey: ['leads-by-funnel', id] });
+      queryClient.invalidateQueries({ queryKey: ['funnel-lead-counts', id] });
+
+      toast.success('Dados do funil limpos com sucesso!');
+    } catch (err) {
+      console.error(err);
+      toast.error('Erro ao limpar dados do funil');
+    } finally {
+      setClearing(false);
+    }
+  };
 
   const handleLeadClick = (leadId: string) => {
     const pos = positions.find(p => p.lead_id === leadId);
