@@ -60,7 +60,7 @@ const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, isDragging, isRe
           </p>
 
           <div className="mt-1 space-y-0.5">
-            {lead.email && (
+            {lead.email && lead.email.includes('@') && (
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <Mail className="h-3 w-3 shrink-0" />
                 <span className="truncate">{lead.email}</span>
