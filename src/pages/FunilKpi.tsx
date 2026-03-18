@@ -465,7 +465,7 @@ export default function FunilKpi() {
                 <span className="text-[11px] text-muted-foreground">
                   {totalVendasFunil > 0 ? ((totals.vendas_principal / totalVendasFunil) * 100).toFixed(1) : 0}% do funil
                 </span>
-                <span className="text-[11px] text-muted-foreground">{formatCurrency(PRODUCTS.principal.price)}/un</span>
+                <span className="text-[11px] text-muted-foreground">{formatCurrency(avgUnitPrice(totals.rev_principal, totals.vendas_principal))}/un</span>
               </div>
             </div>
 

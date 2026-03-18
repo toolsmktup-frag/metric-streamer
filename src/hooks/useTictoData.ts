@@ -37,14 +37,8 @@ export interface SalesAggregation {
   upsell_revenue: number;
 }
 
-export function classifyTransaction(tx: { product_name?: string | null; offer_name?: string | null }): 'principal' | 'bump1' | 'upsell1' | 'other' {
-  const pn = (tx.product_name || '').toLowerCase();
-  const on = (tx.offer_name || '').toLowerCase();
-  if (pn.includes('mestre das tinturas') || on.includes('oferta 197')) return 'upsell1';
-  if (pn.includes('tinturas') && (on.includes('checkout principal') || on === '')) return 'principal';
-  if (pn.includes('chás') || on.includes('bump')) return 'bump1';
-  return 'other';
-}
+// Re-export from shared util for backward compatibility
+export { classifyTransaction } from '@/lib/classifyTransaction';
 
 function emptySalesAgg(): SalesAggregation {
   return { sales_count: 0, revenue: 0, front_sales: 0, front_revenue: 0, bump_sales: 0, bump_revenue: 0, upsell_sales: 0, upsell_revenue: 0 };
