@@ -110,10 +110,47 @@ function AudioPlayer({ src, isOutbound = false }: { src: string; isOutbound?: bo
   );
 }
 
-function MediaRenderer({ message }: { message: WhatsAppMessage }) {
-  const { message_type, media_url, body } = message;
+/** Try to extract media URL from payload_raw when media_url column is null */
+function extractMediaUrlFromPayload(message: WhatsAppMessage): string | null {
+  if (message.media_url) return message.media_url;
+  const raw = message.payload_raw;
+  if (!raw) return null;
+  
+  // UAZAPI v2: check message.content object
+  const v2Msg = raw.message || raw;
+  if (v2Msg.mediaUrl || v2Msg.media_url || v2Msg.fileUrl || v2Msg.file_url) {
+    return v2Msg.mediaUrl || v2Msg.media_url || v2Msg.fileUrl || v2Msg.file_url;
+  }
+  if (typeof v2Msg.content === 'object' && v2Msg.content) {
+    if (v2Msg.content.url || v2Msg.content.mediaUrl || v2Msg.content.fileUrl) {
+      return v2Msg.content.url || v2Msg.content.mediaUrl || v2Msg.content.fileUrl;
+    }
+  }
+  
+  // Legacy baileys
+  const legacyMsg = raw.message;
+  if (legacyMsg) {
+    return legacyMsg.audioMessage?.url || legacyMsg.imageMessage?.url || legacyMsg.videoMessage?.url || legacyMsg.documentMessage?.url || null;
+  }
+  return null;
+}
 
-  if (!media_url) return null;
+function MediaRenderer({ message }: { message: WhatsAppMessage }) {
+  const { message_type, body } = message;
+  const media_url = extractMediaUrlFromPayload(message);
+
+  if (!media_url) {
+    // For audio/ptt without URL, show a placeholder
+    if (message_type === 'audio' || message_type === 'ptt') {
+      return (
+        <div className="flex items-center gap-2 min-w-[200px] text-xs text-muted-foreground italic">
+          <Play className="h-4 w-4 shrink-0" />
+          <span>Áudio não disponível</span>
+        </div>
+      );
+    }
+    return null;
+  }
 
   switch (message_type) {
     case 'image':
