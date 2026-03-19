@@ -61,8 +61,15 @@ const DroppableColumn: React.FC<{ id: string; isOver: boolean; children: React.R
   );
 };
 
-const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClick, onWhatsAppClick, funnelId, recontactMap, userRole }) => {
+const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClick, onWhatsAppClick, funnelId, recontactMap, userRole, currentUserId }) => {
+  const isSeller = userRole === 'vendedor' || userRole === 'vendedora' || userRole === 'suporte';
   const isAdmin = userRole === 'admin' || userRole === 'gestor';
+
+  // Filter positions: sellers only see leads assigned to them or unassigned
+  const visiblePositions = useMemo(() => {
+    if (!isSeller || !currentUserId) return positions;
+    return positions.filter(p => !p.lead.assigned_to || p.lead.assigned_to === currentUserId);
+  }, [positions, isSeller, currentUserId]);
   const [search, setSearch] = useState('');
   const [sortMode, setSortMode] = useState<SortMode>('ltv');
   const [activeId, setActiveId] = useState<string | null>(null);
