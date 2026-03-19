@@ -7,7 +7,7 @@ interface Props {
   fallbackPath?: string;
 }
 
-export default function PermissionRoute({ children, requiredPermission, fallbackPath = '/leads' }: Props) {
+export default function PermissionRoute({ children, requiredPermission, fallbackPath = '/leads/dashboard' }: Props) {
   const { data: permissions, isLoading } = useMyPermissions();
 
   if (isLoading) {
