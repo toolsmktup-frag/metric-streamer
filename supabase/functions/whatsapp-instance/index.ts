@@ -261,7 +261,7 @@ Deno.serve(async (req) => {
 
         const profileName = result?.instance?.profileName || result?.instance?.pushName || null
         const profilePicUrl = result?.instance?.profilePicUrl || null
-        const phoneNumber = result?.instance?.phone || instance.phone_number
+        const phoneNumber = result?.instance?.phone || result?.instance?.owner || result?.status?.jid?.split(':')?.[0] || instance.phone_number
 
         const finalDisplayName = profileName || instance.display_name
         const finalProfilePic = profilePicUrl || instance.profile_pic_url
