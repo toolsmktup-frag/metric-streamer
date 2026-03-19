@@ -121,6 +121,11 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
             const ltvB = purchaseMap?.get(b.lead_id)?.totalSpent || 0;
             return ltvB - ltvA;
           }
+          case 'recontact': {
+            const rA = recontactMap?.get(a.lead_id)?.daysRemaining ?? 9999;
+            const rB = recontactMap?.get(b.lead_id)?.daysRemaining ?? 9999;
+            return rA - rB; // most urgent first
+          }
           default:
             return 0;
         }
