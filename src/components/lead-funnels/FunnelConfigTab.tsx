@@ -136,6 +136,13 @@ const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSave
                 placeholder="URL da página (opcional)"
                 className="flex-1"
               />
+              <div className="flex items-center gap-1.5 shrink-0" title="Ocultar valores para vendedores">
+                <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
+                <Switch
+                  checked={!!stage.hide_values}
+                  onCheckedChange={checked => updateStage(idx, 'hide_values', checked as any)}
+                />
+              </div>
               <Button variant="ghost" size="icon" onClick={() => removeStage(idx)} className="shrink-0">
                 <Trash2 className="h-4 w-4 text-destructive" />
               </Button>
