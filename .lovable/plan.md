@@ -1,34 +1,40 @@
 
 
-## Plan: Centralizar controle de acesso de vendedores no Gerenciar Instâncias
+## Plano: Criação automática de instância UAZAPI + QR Code automático
 
-### Problema atual
-O controle de acesso de vendedores está espalhado em 3 lugares diferentes:
-1. **Gerenciar Instâncias** (WhatsApp) — `InstanceAccessManager` ✅ manter
-2. **Página de Campanhas** (botão 👥 por campanha) — `FunnelAccessManager` ❌ remover
-3. **Aba Config do Funil** (seção de acesso) — `FunnelAccessManager` ❌ remover
-
-Além disso, o `InstanceAccessManager` mostra "Nenhum vendedor encontrado" porque a query filtra por `organization_id` mas possivelmente não encontra os perfis.
+### Contexto
+Você já tem a URL base (`https://tracker1.uazapi.com`) e o admin token global. A API UAZAPI tem o endpoint `POST /instance/init` que cria uma nova instância usando o `admintoken`. Isso permite criar instâncias sem o usuário precisar inserir URL/token manualmente.
 
 ### Alterações
 
-**1. Remover acesso de vendedores da página de Campanhas (`LeadCampaigns.tsx`)**
-- Remover import do `FunnelAccessManager`
-- Remover import do ícone `Users`
-- Remover estado `accessCampaignId`
-- Remover botão 👥 no header da campanha
-- Remover bloco expandível do `FunnelAccessManager`
+**1. Adicionar secrets UAZAPI_BASE_URL e UAZAPI_TOKEN**
+- Armazenar `https://tracker1.uazapi.com` como `UAZAPI_BASE_URL`
+- Armazenar o admin token como `UAZAPI_TOKEN`
+- Disponíveis nas edge functions via `Deno.env.get()`
 
-**2. Remover acesso de vendedores da aba Config do Funil (`FunnelConfigTab.tsx`)**
-- Remover import do `FunnelAccessManager`
-- Remover seção `{funnelId && <FunnelAccessManager ... />}`
+**2. Adicionar action `create_instance` na edge function (`whatsapp-instance/index.ts`)**
+- Nova action que NÃO precisa de `instance_id` (é uma criação)
+- Chama `POST {UAZAPI_BASE_URL}/instance/init` com header `admintoken` e body `{ name: "nome-da-instancia" }`
+- A UAZAPI retorna o token e URL da instância criada
+- Insere automaticamente na tabela `whatsapp_instances` com `api_url` e `api_token` corretos
+- Configura webhook automaticamente
+- Invoca `connect` para gerar o QR Code imediatamente
+- Retorna o QR Code/pair code na resposta
 
-**3. Corrigir InstanceAccessManager para encontrar vendedores**
-- Investigar e corrigir a query que busca membros da organização (possivelmente o `get_user_org_id` retorna null ou a query de `user_profiles` precisa ajuste)
-- Garantir que lista todos os membros não-admin da organização corretamente
+**3. Simplificar formulário de criação (`InstanceHub.tsx` → `AddInstanceForm`)**
+- Remover campos URL da API e Token (não são mais necessários)
+- Manter apenas: Nome da instância
+- Ao clicar "Criar Instância", chama a nova action `create_instance`
+- Após criação, seleciona a instância automaticamente e já mostra o QR Code
+
+### Fluxo simplificado
+```text
+Usuário digita nome → Clica "Criar" → Edge function cria na UAZAPI → 
+Salva no banco → Conecta → Retorna QR Code → Exibe na tela
+```
 
 ### Arquivos modificados
-- `src/pages/LeadCampaigns.tsx`
-- `src/components/lead-funnels/FunnelConfigTab.tsx`
-- `src/components/whatsapp/InstanceAccessManager.tsx` (fix query)
+- `supabase/functions/whatsapp-instance/index.ts` — nova action `create_instance`
+- `src/components/whatsapp/InstanceHub.tsx` — simplificar `AddInstanceForm`
+- 2 novos secrets: `UAZAPI_BASE_URL`, `UAZAPI_TOKEN`
 
