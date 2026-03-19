@@ -6,6 +6,7 @@ import { useFunnels } from '@/hooks/useFunnels';
 import { useLeadFunnelProducts, useUpsertLeadFunnelProducts } from '@/hooks/useLeadFunnelProducts';
 import { useLeadProductMappings, useDistinctLeadProducts, useSaveLeadProductMappings } from '@/hooks/useLeadProductMappings';
 import { useRecontactDeadlines } from '@/hooks/useRecontactDeadlines';
+import { useMoveLeadStage } from '@/hooks/useMoveLeadStage';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Upload, Trash2 } from 'lucide-react';
@@ -53,7 +54,9 @@ const LeadFunnelDetail: React.FC = () => {
   const saveProductMappings = useSaveLeadProductMappings();
   const saveSourceNodes = useSaveFunnelSourceNodes();
   const saveFunnelEdges = useSaveFunnelEdges();
+  const moveLeadStage = useMoveLeadStage();
   const queryClient = useQueryClient();
+  const [bulkMoving, setBulkMoving] = useState(false);
 
   // Use lead funnel products for recontact with explicit mappings
   const recontactMap = useRecontactDeadlines(positions, leadFunnelProducts, productMappings);
@@ -64,6 +67,48 @@ const LeadFunnelDetail: React.FC = () => {
   const [timelineOpen, setTimelineOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [clearing, setClearing] = useState(false);
+
+  const handleBulkMoveOverdue = useCallback(async () => {
+    if (!id || !funnel) return;
+    const stagesArr = funnel.lead_funnel_stages || [];
+    setBulkMoving(true);
+    let movedCount = 0;
+    try {
+      for (const product of leadFunnelProducts) {
+        if (!product.auto_move_stage_id || !product.recontact_days) continue;
+        
+        for (const pos of positions) {
+          const leadId = pos.lead_id;
+          const recontact = recontactMap.get(leadId);
+          if (!recontact?.isOverdue) continue;
+          // Match by product id
+          if (recontact.matchedProductId !== product.id) continue;
+          // Don't move if already in target stage
+          if (pos.stage_id === product.auto_move_stage_id) continue;
+
+          const targetStage = stagesArr.find(s => s.id === product.auto_move_stage_id);
+          await moveLeadStage.mutateAsync({
+            positionId: pos.id,
+            leadId,
+            funnelId: id,
+            fromStageId: pos.stage_id,
+            toStageId: product.auto_move_stage_id,
+            toStageName: targetStage?.name,
+          });
+          movedCount++;
+        }
+      }
+      if (movedCount > 0) {
+        toast.success(`${movedCount} lead(s) movido(s) por recontato vencido`);
+      } else {
+        toast.info('Nenhum lead vencido para mover');
+      }
+    } catch {
+      toast.error('Erro ao mover leads');
+    } finally {
+      setBulkMoving(false);
+    }
+  }, [id, funnel, leadFunnelProducts, positions, recontactMap, moveLeadStage]);
 
   const handleClearFunnel = async () => {
     if (!id) return;
@@ -311,6 +356,8 @@ const LeadFunnelDetail: React.FC = () => {
               }
             }}
             savingProducts={upsertLeadProducts.isPending}
+            onBulkMoveOverdue={handleBulkMoveOverdue}
+            bulkMoving={bulkMoving}
             distinctLeadProducts={distinctLeadProducts}
             existingMappings={productMappings}
             onSaveMappings={async (mappings) => {

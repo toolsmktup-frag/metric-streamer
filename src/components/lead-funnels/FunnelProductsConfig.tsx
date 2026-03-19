@@ -2,10 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Trash2, Link2, Package } from 'lucide-react';
+import { Plus, Trash2, Link2, Package, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import type { LeadFunnelProduct } from '@/hooks/useLeadFunnelProducts';
 import type { FunnelProduct } from '@/hooks/useFunnels';
+import type { LeadFunnelStage } from '@/types/leadFunnels';
 
 interface ProductRow {
   id?: string;
@@ -13,20 +14,27 @@ interface ProductRow {
   product_name_contains: string;
   display_name: string;
   recontact_days: number | null;
+  auto_move_stage_id: string | null;
 }
 
 interface FunnelProductsConfigProps {
   products: LeadFunnelProduct[];
   catalogProducts: FunnelProduct[];
+  stages: LeadFunnelStage[];
   onSave: (products: Omit<LeadFunnelProduct, 'id' | 'lead_funnel_id' | 'created_at'>[]) => void;
   saving?: boolean;
+  onBulkMoveOverdue?: () => void;
+  bulkMoving?: boolean;
 }
 
 const FunnelProductsConfig: React.FC<FunnelProductsConfigProps> = ({
   products,
   catalogProducts,
+  stages,
   onSave,
   saving,
+  onBulkMoveOverdue,
+  bulkMoving,
 }) => {
   const [localProducts, setLocalProducts] = useState<ProductRow[]>([]);
 
@@ -38,6 +46,7 @@ const FunnelProductsConfig: React.FC<FunnelProductsConfigProps> = ({
         product_name_contains: p.product_name_contains,
         display_name: p.display_name || '',
         recontact_days: p.recontact_days,
+        auto_move_stage_id: p.auto_move_stage_id,
       }))
     );
   }, [products]);
@@ -45,26 +54,8 @@ const FunnelProductsConfig: React.FC<FunnelProductsConfigProps> = ({
   const addProduct = () => {
     setLocalProducts(prev => [
       ...prev,
-      { source_funnel_product_id: null, product_name_contains: '', display_name: '', recontact_days: null },
+      { source_funnel_product_id: null, product_name_contains: '', display_name: '', recontact_days: null, auto_move_stage_id: null },
     ]);
-  };
-
-  const syncFromCatalog = (idx: number, catalogId: string) => {
-    const cat = catalogProducts.find(c => c.id === catalogId);
-    if (!cat) return;
-    setLocalProducts(prev =>
-      prev.map((p, i) =>
-        i === idx
-          ? {
-              ...p,
-              source_funnel_product_id: cat.id,
-              product_name_contains: cat.product_name_contains,
-              display_name: cat.display_name || '',
-              recontact_days: cat.recontact_days,
-            }
-          : p
-      )
-    );
   };
 
   const updateProduct = (idx: number, field: keyof ProductRow, value: string | number | null) => {
@@ -89,6 +80,7 @@ const FunnelProductsConfig: React.FC<FunnelProductsConfigProps> = ({
         product_name_contains: p.product_name_contains.trim(),
         display_name: p.display_name.trim() || null,
         recontact_days: p.recontact_days,
+        auto_move_stage_id: p.auto_move_stage_id,
       }))
     );
   };
@@ -106,6 +98,18 @@ const FunnelProductsConfig: React.FC<FunnelProductsConfigProps> = ({
           Produtos &amp; Recontato
         </h3>
         <div className="flex gap-2">
+          {onBulkMoveOverdue && localProducts.some(p => p.auto_move_stage_id && p.recontact_days) && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onBulkMoveOverdue}
+              disabled={bulkMoving}
+              className="gap-1.5"
+            >
+              <RefreshCw className={`h-4 w-4 ${bulkMoving ? 'animate-spin' : ''}`} />
+              Atualizar Funil
+            </Button>
+          )}
           {availableCatalog.length > 0 && (
             <Select onValueChange={(v) => {
               const cat = catalogProducts.find(c => c.id === v);
@@ -117,6 +121,7 @@ const FunnelProductsConfig: React.FC<FunnelProductsConfigProps> = ({
                   product_name_contains: cat.product_name_contains,
                   display_name: cat.display_name || '',
                   recontact_days: cat.recontact_days,
+                  auto_move_stage_id: null,
                 },
               ]);
             }}>
@@ -142,7 +147,7 @@ const FunnelProductsConfig: React.FC<FunnelProductsConfigProps> = ({
 
       <p className="text-xs text-muted-foreground mb-3">
         Configure os produtos deste funil e defina os dias para recontato (recompra). 
-        Você pode importar do catálogo de funis de tráfego ou criar avulso.
+        Ao definir "Mover para", leads vencidos serão movidos automaticamente ao clicar em "Atualizar Funil".
       </p>
 
       <div className="space-y-2">
@@ -175,6 +180,22 @@ const FunnelProductsConfig: React.FC<FunnelProductsConfigProps> = ({
               title="Dias para recontato após compra"
               className="w-20"
             />
+            <Select
+              value={prod.auto_move_stage_id || 'none'}
+              onValueChange={v => updateProduct(idx, 'auto_move_stage_id', v === 'none' ? null : v)}
+            >
+              <SelectTrigger className="w-44" title="Mover lead vencido para esta etapa">
+                <SelectValue placeholder="Mover p/ etapa" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Sem auto-mover</SelectItem>
+                {stages.map(s => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Button variant="ghost" size="icon" onClick={() => removeProduct(idx)} className="shrink-0">
               <Trash2 className="h-4 w-4 text-destructive" />
             </Button>

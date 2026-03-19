@@ -16,6 +16,7 @@ export interface RecontactInfo {
   deadlineDate: Date;
   productName: string;
   recontactDays: number;
+  matchedProductId?: string;
 }
 
 /**
@@ -89,6 +90,7 @@ export function useRecontactDeadlines(
         deadlineDate,
         productName: matchedProduct.display_name || matchedProduct.product_name_contains,
         recontactDays: matchedProduct.recontact_days!,
+        matchedProductId: matchedProduct.id,
       });
     }
 
