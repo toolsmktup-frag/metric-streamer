@@ -59,8 +59,11 @@ const LeadFunnelDetail: React.FC = () => {
   const queryClient = useQueryClient();
   const [bulkMoving, setBulkMoving] = useState(false);
 
-  // Use lead funnel products for recontact with explicit mappings
-  const recontactMap = useRecontactDeadlines(positions, leadFunnelProducts, productMappings);
+  // Bulk purchase data for recontact fallback
+  const { data: purchaseMap } = useBulkLeadPurchases(positions);
+
+  // Use lead funnel products for recontact with explicit mappings + purchase fallback
+  const recontactMap = useRecontactDeadlines(positions, leadFunnelProducts, productMappings, purchaseMap);
   // Catalog products for sync dropdown
   const allCatalogProducts = paymentFunnels.flatMap(f => f.funnel_products || []);
 
