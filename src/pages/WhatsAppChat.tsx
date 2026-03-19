@@ -34,10 +34,13 @@ export default function WhatsAppChat() {
   const [optimisticMessages, setOptimisticMessages] = useState<WhatsAppMessage[]>([]);
   const [replyInstanceId, setReplyInstanceId] = useState<string | null>(null);
 
-  // Auto-select when vendor has only one instance
+  // Auto-select instance: single → that instance, multiple → 'all'
   useEffect(() => {
-    if (instances.length === 1 && selectedInstanceId === null) {
+    if (selectedInstanceId !== null || instances.length === 0) return;
+    if (instances.length === 1) {
       setSelectedInstanceId(instances[0].id);
+    } else {
+      setSelectedInstanceId('all');
     }
   }, [instances, selectedInstanceId]);
 
