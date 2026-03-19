@@ -47,7 +47,6 @@ export default function FunnelAccessManager({ campaignId, funnelId, title }: Fun
       const mapped: UserAccess[] = sellers.map((p: any) => ({
         user_id: p.id,
         full_name: p.full_name || 'Sem nome',
-        email: p.email || '',
         hasCampaignAccess: allAccess.some(
           a => a.user_id === p.id && a.campaign_id === campaignId && !a.funnel_id
         ),
