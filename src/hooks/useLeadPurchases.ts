@@ -26,7 +26,7 @@ export function useLeadPurchases(email: string | null, phone: string | null) {
   return useQuery({
     queryKey: ['lead-purchases', email, phone],
     queryFn: async (): Promise<LeadPurchaseSummary> => {
-      // Find unified_customer by email or phone
+      // Find unified_customer by email or phone (with variations)
       let customerId: string | null = null;
 
       if (email) {
@@ -39,10 +39,20 @@ export function useLeadPurchases(email: string | null, phone: string | null) {
       }
 
       if (!customerId && phone) {
+        // Generate phone variations for flexible matching
+        const digits = phone.replace(/\D/g, '');
+        const phoneVariants = [phone, digits, `+${digits}`];
+        if (digits.startsWith('55') && digits.length >= 12) {
+          phoneVariants.push(digits.slice(2));
+        } else if (digits.length >= 10 && digits.length <= 11) {
+          phoneVariants.push(`55${digits}`, `+55${digits}`);
+        }
+
         const { data } = await supabase
           .from('unified_customers')
           .select('id')
-          .eq('primary_phone', phone)
+          .in('primary_phone', [...new Set(phoneVariants)])
+          .limit(1)
           .maybeSingle();
         customerId = data?.id ?? null;
       }
