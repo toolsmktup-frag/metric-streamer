@@ -1,40 +1,26 @@
 
 
-## Plano: Criação automática de instância UAZAPI + QR Code automático
+## Plano: Corrigir tela branca do WhatsApp e loop infinito
 
-### Contexto
-Você já tem a URL base (`https://tracker1.uazapi.com`) e o admin token global. A API UAZAPI tem o endpoint `POST /instance/init` que cria uma nova instância usando o `admintoken`. Isso permite criar instâncias sem o usuário precisar inserir URL/token manualmente.
+### Problemas identificados
+
+1. **Loop infinito (`Maximum update depth exceeded`)**: Em `WhatsAppChat.tsx` linha 73, `isAllMode ? instances : []` cria um novo array `[]` a cada render. Isso muda a referência da prop de `useWhatsAppMultiChats`, que recria o `fetchAllChats` callback, que dispara o `useEffect`, que chama `setChats`/`setLoading` → re-render → loop.
+
+2. **Tela branca quando vendedor tem 1 instância**: O `selectedInstanceId` começa como `null` e só é setado automaticamente quando há `?phone=` na URL. Sem o param, o vendedor vê a tela sem instância selecionada e não consegue fazer nada. Deveria auto-selecionar a única instância disponível.
 
 ### Alterações
 
-**1. Adicionar secrets UAZAPI_BASE_URL e UAZAPI_TOKEN**
-- Armazenar `https://tracker1.uazapi.com` como `UAZAPI_BASE_URL`
-- Armazenar o admin token como `UAZAPI_TOKEN`
-- Disponíveis nas edge functions via `Deno.env.get()`
+**1. Corrigir loop infinito (`WhatsAppChat.tsx`)**
+- Substituir `isAllMode ? instances : []` por uma constante estável (ex: `const EMPTY: WhatsAppInstance[] = []` fora do componente) para evitar nova referência a cada render.
 
-**2. Adicionar action `create_instance` na edge function (`whatsapp-instance/index.ts`)**
-- Nova action que NÃO precisa de `instance_id` (é uma criação)
-- Chama `POST {UAZAPI_BASE_URL}/instance/init` com header `admintoken` e body `{ name: "nome-da-instancia" }`
-- A UAZAPI retorna o token e URL da instância criada
-- Insere automaticamente na tabela `whatsapp_instances` com `api_url` e `api_token` corretos
-- Configura webhook automaticamente
-- Invoca `connect` para gerar o QR Code imediatamente
-- Retorna o QR Code/pair code na resposta
+**2. Auto-selecionar instância quando só há uma (`WhatsAppChat.tsx`)**
+- Adicionar um `useEffect` que, quando `instances.length === 1` e `selectedInstanceId` é `null`, seta automaticamente `selectedInstanceId = instances[0].id`.
+- Isso garante que vendedores com acesso a apenas 1 instância já entram com ela selecionada e podem ver/iniciar conversas imediatamente.
 
-**3. Simplificar formulário de criação (`InstanceHub.tsx` → `AddInstanceForm`)**
-- Remover campos URL da API e Token (não são mais necessários)
-- Manter apenas: Nome da instância
-- Ao clicar "Criar Instância", chama a nova action `create_instance`
-- Após criação, seleciona a instância automaticamente e já mostra o QR Code
-
-### Fluxo simplificado
-```text
-Usuário digita nome → Clica "Criar" → Edge function cria na UAZAPI → 
-Salva no banco → Conecta → Retorna QR Code → Exibe na tela
-```
+**3. Estabilizar dependências em `useWhatsAppMultiChat.ts`**
+- Usar `JSON.stringify(instances.map(i => i.id))` como chave no `useCallback`/`useEffect` para evitar recriação desnecessária quando a referência do array muda mas o conteúdo é o mesmo.
 
 ### Arquivos modificados
-- `supabase/functions/whatsapp-instance/index.ts` — nova action `create_instance`
-- `src/components/whatsapp/InstanceHub.tsx` — simplificar `AddInstanceForm`
-- 2 novos secrets: `UAZAPI_BASE_URL`, `UAZAPI_TOKEN`
+- `src/pages/WhatsAppChat.tsx` — constante vazia estável + auto-select de instância única
+- `src/hooks/useWhatsAppMultiChat.ts` — estabilizar dependências do callback
 
