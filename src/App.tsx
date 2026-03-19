@@ -7,6 +7,7 @@ import AppLayout from "./components/layout/AppLayout";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Login from "./pages/Login";
 import Resumo from "./pages/Resumo";
+import Index from "./pages/Index";
 import Campanhas from "./pages/Campanhas";
 import Vendas from "./pages/Vendas";
 import Demograficos from "./pages/Demograficos";
@@ -20,6 +21,7 @@ import AgenteIA from "./pages/AgenteIA";
 import ImportCSV from "./pages/ImportCSV";
 import Importar from "./pages/Importar";
 import EscadaValor from "./pages/EscadaValor";
+import PermissionRoute from "./components/PermissionRoute";
 import FunilResumo from "./pages/FunilResumo";
 import FunilKpi from "./pages/FunilKpi";
 import FunilCampanhas from "./pages/FunilCampanhas";
@@ -63,8 +65,8 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<Login />} />
-          <Route path="/" element={<Protected><Resumo /></Protected>} />
-          <Route path="/resumo" element={<Protected><Resumo /></Protected>} />
+          <Route path="/" element={<Protected><Index /></Protected>} />
+          <Route path="/resumo" element={<Protected><PermissionRoute requiredPermission="mod_resumo"><Resumo /></PermissionRoute></Protected>} />
           <Route path="/campanhas" element={<Protected><Campanhas /></Protected>} />
           <Route path="/kpi-geral" element={<Protected><KpiGeral /></Protected>} />
           <Route path="/vendas" element={<Protected><Vendas /></Protected>} />
