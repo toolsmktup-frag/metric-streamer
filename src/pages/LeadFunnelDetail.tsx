@@ -311,6 +311,18 @@ const LeadFunnelDetail: React.FC = () => {
               }
             }}
             savingProducts={upsertLeadProducts.isPending}
+            distinctLeadProducts={distinctLeadProducts}
+            existingMappings={productMappings}
+            onSaveMappings={async (mappings) => {
+              try {
+                await saveProductMappings.mutateAsync({ funnelId: funnel.id, mappings });
+                toast.success('Vínculos salvos!');
+              } catch {
+                toast.error('Erro ao salvar vínculos');
+              }
+            }}
+            savingMappings={saveProductMappings.isPending}
+            loadingDistinctProducts={loadingDistinctProducts}
           />
         </TabsContent>
 
