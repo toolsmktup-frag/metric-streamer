@@ -91,7 +91,8 @@ async function batchInsert(supabase: any, table: string, rows: any[]): Promise<n
 /** Upsert leads in batches, building key→id map */
 async function batchUpsertLeads(
   supabase: any,
-  contactMap: Map<string, any>
+  contactMap: Map<string, any>,
+  ORG_ID: string
 ): Promise<Map<string, string>> {
   const leadIdByKey = new Map<string, string>();
   const entries = Array.from(contactMap.entries());
