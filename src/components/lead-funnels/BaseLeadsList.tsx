@@ -282,6 +282,22 @@ const BaseLeadsList: React.FC<BaseLeadsListProps> = ({ positions, onLeadClick, o
                       {formatDate(p.entered_at)}
                     </TableCell>
                     <TableCell>
+                      {(() => {
+                        const rc = recontactMap?.get(p.lead_id);
+                        if (!rc) return <span className="text-muted-foreground">—</span>;
+                        const cls = rc.daysRemaining < 0
+                          ? 'text-destructive font-bold'
+                          : rc.daysRemaining <= 7
+                          ? 'text-yellow-600 dark:text-yellow-400 font-semibold'
+                          : 'text-emerald-600 dark:text-emerald-400';
+                        return (
+                          <span className={`text-xs ${cls}`}>
+                            {rc.daysRemaining < 0 ? `${rc.daysRemaining}d 🔥` : rc.daysRemaining <= 7 ? `${rc.daysRemaining}d ⚠️` : `${rc.daysRemaining}d`}
+                          </span>
+                        );
+                      })()}
+                    </TableCell>
+                    <TableCell>
                       {p.lead.phone && (
                         <Button
                           variant="ghost"
