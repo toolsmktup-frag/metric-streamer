@@ -89,7 +89,7 @@ export default function RFMTab() {
       while (hasMore) {
         const { data: batch, error } = await supabase
           .from('customer_purchases')
-          .select('product_name, gross_amount, net_amount, status, purchased_at, platform, offer_name, payment_method, installments, product_type, unified_customer_id, unified_customers!inner(primary_email, name)')
+          .select('product_name, gross_amount, net_amount, status, purchased_at, platform, offer_name, payment_method, installments, product_type, unified_customer_id, unified_customers!inner(primary_email, full_name)')
           .range(from, from + PAGE_SIZE - 1)
           .order('purchased_at', { ascending: false });
 
@@ -100,7 +100,7 @@ export default function RFMTab() {
           const customer = row.unified_customers;
           allRows.push({
             email: customer?.primary_email || '',
-            nome: customer?.name || '',
+            nome: customer?.full_name || '',
             produto: row.product_name || '',
             oferta: row.offer_name || '',
             valor_bruto: row.gross_amount ?? 0,
