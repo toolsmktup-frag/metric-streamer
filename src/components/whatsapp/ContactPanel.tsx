@@ -171,7 +171,7 @@ export default function ContactPanel({ phone, senderName }: ContactPanelProps) {
             </div>
             <div className="space-y-1.5 max-h-[160px] overflow-y-auto">
               {purchaseData.purchases.map(p => {
-                const isPaid = p.status === 'approved' || p.status === 'Aprovada';
+                const isPaid = p.status === 'authorized';
                 return (
                   <div key={p.id} className="flex items-start gap-1.5 text-[11px]">
                     <div className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${isPaid ? 'bg-emerald-500' : 'bg-muted-foreground/40'}`} />

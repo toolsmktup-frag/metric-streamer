@@ -60,8 +60,8 @@ export function useLeadPurchases(email: string | null, phone: string | null) {
       if (error) throw error;
 
       const list = (purchases || []) as LeadPurchase[];
-      const approvedPurchases = list.filter(p => p.status === 'approved' || p.status === 'Aprovada');
-      const totalSpent = approvedPurchases.reduce((sum, p) => sum + (p.net_amount ?? p.gross_amount), 0);
+      const approvedPurchases = list.filter(p => p.status === 'authorized');
+      const totalSpent = approvedPurchases.reduce((sum, p) => sum + p.gross_amount, 0);
       const products = [...new Set(list.map(p => p.product_name))];
 
       return {
