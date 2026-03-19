@@ -313,7 +313,7 @@ export default function FunisConfigurar() {
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   </div>
-                ))
+                ))}
                 {products.length === 0 && (
                   <p className="text-xs text-muted-foreground py-2">Nenhum produto. Clique em "Adicionar" para configurar.</p>
                 )}
