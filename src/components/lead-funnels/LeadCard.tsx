@@ -1,13 +1,12 @@
 import React from 'react';
 import { Lead, LeadStagePosition } from '@/types/leadFunnels';
-import { Mail, Phone, Clock, DollarSign, GripVertical, MessageCircle, ShoppingBag, CalendarClock, Timer, EyeOff, User } from 'lucide-react';
+import { Mail, Phone, Clock, DollarSign, GripVertical, MessageCircle, ShoppingBag, CalendarClock, Timer, EyeOff } from 'lucide-react';
 import { PurchaseSummary } from '@/hooks/useBulkLeadPurchases';
 import { useDraggable } from '@dnd-kit/core';
 import { formatLocalDateTime } from '@/lib/localDate';
 import { differenceInDays } from 'date-fns';
 import type { RecontactInfo } from '@/hooks/useRecontactDeadlines';
 import LeadAssignSelect from './LeadAssignSelect';
-import { useTeamMembers } from '@/hooks/useTeamMembers';
 
 interface LeadCardProps {
   position: LeadStagePosition & { lead: Lead };
