@@ -6,66 +6,15 @@ import type { Lead, LeadStagePosition } from '@/types/leadFunnels';
 export interface PurchaseSummary {
   totalSpent: number;
   totalOrders: number;
-  firstPurchaseDate: string | null; // ISO date of earliest purchase
-}
-
-const PAGE_SIZE = 1000;
-
-async function fetchAllIn<T>(
-  table: string,
-  select: string,
-  column: string,
-  values: string[],
-): Promise<T[]> {
-  if (values.length === 0) return [];
-
-  const rows: T[] = [];
-  // Supabase .in() has a limit, batch in chunks of 300
-  const CHUNK = 300;
-  for (let i = 0; i < values.length; i += CHUNK) {
-    const chunk = values.slice(i, i + CHUNK);
-    let from = 0;
-    while (true) {
-      const { data, error } = await (supabase as any)
-        .from(table)
-        .select(select)
-        .in(column, chunk)
-        .range(from, from + PAGE_SIZE - 1);
-      if (error) {
-        console.warn(`[useBulkLeadPurchases] query error on ${table}:`, error.message);
-        break;
-      }
-      const batch = (data || []) as T[];
-      rows.push(...batch);
-      if (batch.length < PAGE_SIZE) break;
-      from += PAGE_SIZE;
-    }
-  }
-  return rows;
-}
-
-interface UnifiedCustomer {
-  id: string;
-  primary_email: string | null;
-  primary_phone: string | null;
-}
-
-interface CustomerPurchase {
-  unified_customer_id: string;
-  net_amount: number | null;
-  gross_amount: number;
-  status: string;
-  purchased_at: string;
+  firstPurchaseDate: string | null;
 }
 
 export function useBulkLeadPurchases(
   positions: (LeadStagePosition & { lead: Lead })[] | undefined,
 ) {
-  // Extract unique emails and phones
   const { emails, phones, leadKeyMap } = useMemo(() => {
     const emailSet = new Set<string>();
     const phoneSet = new Set<string>();
-    // Map email/phone → lead ids
     const keyMap = new Map<string, Set<string>>();
 
     (positions || []).forEach((p) => {
@@ -92,10 +41,8 @@ export function useBulkLeadPurchases(
     };
   }, [positions]);
 
-  // Build a stable hash from actual email/phone values to avoid cache collisions
   const stableKey = useMemo(() => {
     const sorted = [...emails, '|', ...phones].sort();
-    // Simple hash
     let h = 0;
     const str = sorted.join(',');
     for (let i = 0; i < str.length; i++) {
@@ -107,70 +54,49 @@ export function useBulkLeadPurchases(
   return useQuery({
     queryKey: ['bulk-lead-purchases', stableKey],
     queryFn: async (): Promise<Map<string, PurchaseSummary>> => {
-      console.log(`[useBulkLeadPurchases] Starting: ${emails.length} emails, ${phones.length} phones`);
-      // 1. Find unified_customers by email or phone
-      const [byEmail, byPhone] = await Promise.all([
-        fetchAllIn<UnifiedCustomer>('unified_customers', 'id, primary_email, primary_phone', 'primary_email', emails),
-        fetchAllIn<UnifiedCustomer>('unified_customers', 'id, primary_email, primary_phone', 'primary_phone', phones),
-      ]);
+      console.log(`[useBulkLeadPurchases] RPC call: ${emails.length} emails, ${phones.length} phones`);
 
-      // Merge and dedupe customers
-      const customerMap = new Map<string, UnifiedCustomer>();
-      [...byEmail, ...byPhone].forEach((c) => customerMap.set(c.id, c));
-
-      // Map customer_id → lead_ids
-      const customerToLeads = new Map<string, Set<string>>();
-      customerMap.forEach((customer) => {
-        const leadIds = new Set<string>();
-        if (customer.primary_email) {
-          const key = `e:${customer.primary_email.toLowerCase().trim()}`;
-          leadKeyMap.get(key)?.forEach((id) => leadIds.add(id));
-        }
-        if (customer.primary_phone) {
-          const key = `p:${customer.primary_phone.trim()}`;
-          leadKeyMap.get(key)?.forEach((id) => leadIds.add(id));
-        }
-        customerToLeads.set(customer.id, leadIds);
+      const { data: rpcData, error } = await (supabase as any).rpc('get_bulk_purchase_summaries', {
+        p_emails: emails,
+        p_phones: phones,
       });
 
-      // 2. Fetch purchases for all customers
-      const customerIds = Array.from(customerMap.keys());
-      const purchases = await fetchAllIn<CustomerPurchase>(
-        'customer_purchases',
-        'unified_customer_id, net_amount, gross_amount, status, purchased_at',
-        'unified_customer_id',
-        customerIds,
-      );
+      if (error) {
+        console.error('[useBulkLeadPurchases] RPC error:', error.message);
+        throw error;
+      }
 
-      // 3. Aggregate per lead
       const result = new Map<string, PurchaseSummary>();
 
-      // Accept all "successful" statuses
-      const APPROVED_STATUSES = new Set([
-        'approved', 'aprovada', 'authorized', 'paid', 'pago', 'completed', 'complete',
-      ]);
+      (rpcData || []).forEach((row: { match_type: string; match_value: string; total_spent: number; total_orders: number; first_purchase_date: string | null }) => {
+        const prefix = row.match_type === 'email' ? 'e:' : 'p:';
+        const key = prefix + (row.match_type === 'email' ? row.match_value.toLowerCase().trim() : row.match_value.trim());
+        const leadIds = leadKeyMap.get(key);
 
-      purchases.forEach((p) => {
-        if (!APPROVED_STATUSES.has(p.status?.toLowerCase().trim())) return;
-
-        const amount = p.net_amount ?? p.gross_amount;
-        const leadIds = customerToLeads.get(p.unified_customer_id);
         leadIds?.forEach((leadId) => {
-          const existing = result.get(leadId) || { totalSpent: 0, totalOrders: 0, firstPurchaseDate: null };
-          existing.totalSpent += amount;
-          existing.totalOrders += 1;
-          // Track earliest purchase date
-          if (!existing.firstPurchaseDate || p.purchased_at < existing.firstPurchaseDate) {
-            existing.firstPurchaseDate = p.purchased_at;
+          const existing = result.get(leadId);
+          if (existing) {
+            existing.totalSpent += Number(row.total_spent);
+            existing.totalOrders += row.total_orders;
+            if (row.first_purchase_date && (!existing.firstPurchaseDate || row.first_purchase_date < existing.firstPurchaseDate)) {
+              existing.firstPurchaseDate = row.first_purchase_date;
+            }
+          } else {
+            result.set(leadId, {
+              totalSpent: Number(row.total_spent),
+              totalOrders: row.total_orders,
+              firstPurchaseDate: row.first_purchase_date,
+            });
           }
-          result.set(leadId, existing);
         });
       });
 
-      console.log(`[useBulkLeadPurchases] Done: ${customerMap.size} customers, ${purchases.length} purchases, ${result.size} leads with LTV`);
+      console.log(`[useBulkLeadPurchases] Done: ${rpcData?.length || 0} rows, ${result.size} leads with LTV`);
       return result;
     },
     enabled: emails.length > 0 || phones.length > 0,
     staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    structuralSharing: false,
   });
 }
