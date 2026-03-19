@@ -96,6 +96,7 @@ export function useMyPermissions() {
       if (error) throw error;
       return data;
     },
-    staleTime: 2 * 60 * 1000,
+    staleTime: 30 * 1000,
+    refetchOnMount: true,
   });
 }

@@ -18,7 +18,7 @@ const Index = () => {
   }
 
   // Fallback to first available module
-  if (permissions.mod_leads) return <Navigate to="/leads" replace />;
+  if (permissions.mod_leads) return <Navigate to="/leads/dashboard" replace />;
   if (permissions.mod_trafego) return <Navigate to="/campanhas" replace />;
   if (permissions.mod_anuncios) return <Navigate to="/criativos" replace />;
   if (permissions.mod_whatsapp) return <Navigate to="/whatsapp" replace />;
