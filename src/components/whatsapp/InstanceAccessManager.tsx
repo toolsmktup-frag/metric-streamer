@@ -42,7 +42,7 @@ export default function InstanceAccessManager({ instances, selectedInstanceId }:
       // Get all org members (exclude admins — they always have access)
       const { data: profiles } = await (supabase as any)
         .from('user_profiles')
-        .select('id, full_name, email, role')
+        .select('id, full_name, role')
         .eq('organization_id', currentProfile.organization_id)
         .neq('role', 'admin');
 
