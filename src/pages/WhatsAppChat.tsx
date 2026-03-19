@@ -21,6 +21,8 @@ import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
+const EMPTY_INSTANCES: import('@/hooks/useWhatsApp').WhatsAppInstance[] = [];
+
 export default function WhatsAppChat() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { instances, loading: loadingInstances, refetch: refetchInstances } = useWhatsAppInstances();
@@ -31,6 +33,13 @@ export default function WhatsAppChat() {
   const [hubOpen, setHubOpen] = useState(false);
   const [optimisticMessages, setOptimisticMessages] = useState<WhatsAppMessage[]>([]);
   const [replyInstanceId, setReplyInstanceId] = useState<string | null>(null);
+
+  // Auto-select when vendor has only one instance
+  useEffect(() => {
+    if (instances.length === 1 && selectedInstanceId === null) {
+      setSelectedInstanceId(instances[0].id);
+    }
+  }, [instances, selectedInstanceId]);
 
   // Auto-open chat from query param ?phone=
   useEffect(() => {
@@ -70,7 +79,7 @@ export default function WhatsAppChat() {
 
   const { chats: singleChats, loading: loadingSingleChats, refetch: refetchSingleChats } = useWhatsAppChats(singleInstanceId);
   const { chats: multiChats, loading: loadingMultiChats, refetch: refetchMultiChats } = useWhatsAppMultiChats(
-    isAllMode ? instances : []
+    isAllMode ? instances : EMPTY_INSTANCES
   );
 
   const activeChats = isAllMode ? multiChats : singleChats;
