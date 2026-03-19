@@ -59,7 +59,7 @@ export function useBulkLeadPurchases(
       const { data: rpcData, error } = await (supabase as any).rpc('get_bulk_purchase_summaries', {
         p_emails: emails,
         p_phones: phones,
-      });
+      }).limit(100000);
 
       if (error) {
         console.error('[useBulkLeadPurchases] RPC error:', error.message);
