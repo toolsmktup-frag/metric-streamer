@@ -58,6 +58,8 @@ const LeadFunnelDetail: React.FC = () => {
   const saveFunnelEdges = useSaveFunnelEdges();
   const moveLeadStage = useMoveLeadStage();
   const queryClient = useQueryClient();
+  const { data: userRole = 'vendedor' } = useCurrentUserRole();
+  const isAdmin = userRole === 'admin' || userRole === 'gestor';
   const [bulkMoving, setBulkMoving] = useState(false);
 
   // Bulk purchase data for recontact fallback
