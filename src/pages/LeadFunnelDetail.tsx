@@ -18,6 +18,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import KanbanBoard from '@/components/lead-funnels/KanbanBoard';
+import BaseLeadsList from '@/components/lead-funnels/BaseLeadsList';
 import FunnelVisual from '@/components/lead-funnels/FunnelVisual';
 import FunnelConfigTab from '@/components/lead-funnels/FunnelConfigTab';
 import WebhookConfig from '@/components/lead-funnels/WebhookConfig';
