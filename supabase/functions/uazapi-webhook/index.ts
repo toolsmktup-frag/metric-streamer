@@ -44,6 +44,15 @@ function extractMessageType(payload: any): string {
     if (t.includes('location')) return 'location'
     if (t.includes('contact') || t.includes('vcard')) return 'contact'
   }
+  // Fallback: detect from content object (v2 audio/media with generic type)
+  if (typeof payload.content === 'object' && payload.content) {
+    if (payload.content.PTT || payload.content.ptt) return 'audio'
+    const mime = (payload.content.mimetype || '').toLowerCase()
+    if (mime.includes('audio')) return 'audio'
+    if (mime.includes('image')) return 'image'
+    if (mime.includes('video')) return 'video'
+    if (mime.includes('pdf') || mime.includes('document')) return 'document'
+  }
   // Legacy baileys format
   if (payload.message?.imageMessage) return 'image'
   if (payload.message?.audioMessage) return 'audio'

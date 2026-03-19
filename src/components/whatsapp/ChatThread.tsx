@@ -135,8 +135,29 @@ function extractMediaUrlFromPayload(message: WhatsAppMessage): string | null {
   return null;
 }
 
+/** Re-detect message type from payload_raw for messages saved as 'text' but actually media */
+function detectRealMessageType(message: WhatsAppMessage): string {
+  if (message.message_type !== 'text') return message.message_type;
+  const raw = message.payload_raw as any;
+  if (!raw) return 'text';
+  const v2Msg = raw.message || raw;
+  if (typeof v2Msg.content === 'object' && v2Msg.content) {
+    if (v2Msg.content.PTT || v2Msg.content.ptt) return 'audio';
+    const mime = (v2Msg.content.mimetype || '').toLowerCase();
+    if (mime.includes('audio')) return 'audio';
+    if (mime.includes('image')) return 'image';
+    if (mime.includes('video')) return 'video';
+  }
+  const mediaType = (v2Msg.mediaType || '').toLowerCase();
+  if (mediaType === 'ptt' || mediaType.includes('audio')) return 'audio';
+  if (mediaType.includes('image')) return 'image';
+  if (mediaType.includes('video')) return 'video';
+  return 'text';
+}
+
 function MediaRenderer({ message }: { message: WhatsAppMessage }) {
-  const { message_type, body } = message;
+  const message_type = detectRealMessageType(message);
+  const { body } = message;
   const media_url = extractMediaUrlFromPayload(message);
 
   if (!media_url) {
@@ -261,11 +282,15 @@ export default function ChatThread({ messages, loading, phone, instances }: Chat
                   </div>
                 )}
 
-                {msg.message_type !== 'text' && (msg.media_url || msg.message_type === 'audio' || msg.message_type === 'ptt') && !isDeleted ? (
-                  <MediaRenderer message={msg} />
-                ) : (
-                  <p className="whitespace-pre-wrap break-words">{msg.body || ''}</p>
-                )}
+                {(() => {
+                  const realType = detectRealMessageType(msg);
+                  const hasMedia = realType !== 'text' && (extractMediaUrlFromPayload(msg) || realType === 'audio' || realType === 'ptt');
+                  return hasMedia && !isDeleted ? (
+                    <MediaRenderer message={msg} />
+                  ) : (
+                    <p className="whitespace-pre-wrap break-words">{msg.body || ''}</p>
+                  );
+                })()}
 
                 <div className={`flex items-center gap-1 mt-1 ${isOut ? 'justify-end' : 'justify-start'}`}>
                   <span className={`text-[10px] ${isOut ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
