@@ -528,7 +528,6 @@ export default function Equipe() {
             </div>
           );
         })}
-        })}
       </div>
 
       <p className="text-xs text-muted-foreground">
