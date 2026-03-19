@@ -1,29 +1,38 @@
 
 
-## Mostrar nome do vendedor no card do Kanban
+## Mostrar foto do vendedor no card (em vez do nome)
 
-### O que muda
+### Problema atual
+- O badge com nome do vendedor está aparecendo, mas o email do lead também aparece (bug: o badge do vendedor ficou junto ao email)
+- O usuário quer **foto** do vendedor no avatar compacto (que já existe no canto do card), em vez de um badge de texto com o nome
 
-No `LeadCard.tsx`, ao lado do avatar compacto do vendedor (que já existe), vamos exibir o **nome** do vendedor responsável como um badge de texto. O card já carrega `lead.assigned_to` e já importa `LeadAssignSelect` que usa `useTeamMembers` — vamos reutilizar esses dados.
+### O que será feito
 
-### Como
+**1. Adicionar coluna `avatar_url` na tabela `user_profiles`**
+- Nova migration: `ALTER TABLE user_profiles ADD COLUMN avatar_url text;`
+- Permitirá armazenar URL da foto de cada membro da equipe
 
-**Editar: `src/components/lead-funnels/LeadCard.tsx`**
+**2. Configurar Storage bucket para avatares**
+- Criar bucket `avatars` no Supabase (via migration)
+- Políticas: usuário autenticado pode fazer upload do próprio avatar; leitura pública
 
-1. Importar `useTeamMembers` do hook existente
-2. Buscar o nome do membro atribuído (`lead.assigned_to`) na lista de membros
-3. Exibir um badge com o nome do vendedor abaixo dos badges de LTV/recontato (na área `ml-[42px]`), com ícone de `User` e estilo similar aos outros badges
+**3. Atualizar `useTeamMembers` para incluir `avatar_url`**
+- Adicionar `avatar_url` ao select e à interface `TeamMember`
 
-O nome aparecerá como:
-```text
-👤 Maria Silva
-```
+**4. Upload de foto na página de Equipe**
+- Na listagem de membros (ou no perfil), adicionar botão de upload de foto
+- Faz upload ao bucket `avatars`, salva URL em `user_profiles.avatar_url`
 
-Em badge azul/primary discreto, visível sem precisar abrir o card. Se não houver vendedor atribuído, não mostra nada (o avatar compacto já indica "sem vendedor").
+**5. Atualizar `LeadAssignSelect` (avatar compacto no card)**
+- Se o vendedor tem `avatar_url`, mostrar `<AvatarImage>` em vez de iniciais
+- Mantém fallback de iniciais quando não há foto
 
-### Impacto
+**6. Remover badge de nome do vendedor do `LeadCard.tsx`**
+- Remover o bloco `{assignedMember && ...}` que mostra o badge com nome
+- O avatar compacto com foto já identifica o vendedor; ao passar o mouse mostra tooltip com nome
 
-- Apenas 1 arquivo editado
-- Reutiliza o hook `useTeamMembers` que já é carregado pelo `LeadAssignSelect` (sem queries extras)
-- Sem mudanças no banco de dados
+### Resultado
+- No card: avatar compacto com **foto** do vendedor (ou iniciais como fallback)
+- Sem badge de texto extra com nome/email
+- Cada vendedor pode ter foto configurada na página de equipe
 
