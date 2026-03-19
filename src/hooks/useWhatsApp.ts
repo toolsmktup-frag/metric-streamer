@@ -66,11 +66,52 @@ export function useWhatsAppInstances() {
   const [loading, setLoading] = useState(true);
 
   const fetchInstances = useCallback(async () => {
-    const { data, error } = await (supabase as any)
+    // Fetch all instances
+    const { data: allInstances, error } = await (supabase as any)
       .from('whatsapp_instances')
       .select('*')
       .order('created_at', { ascending: true });
-    if (!error && data) setInstances(data as any);
+    if (error || !allInstances) {
+      setLoading(false);
+      return;
+    }
+
+    // Check user role to determine if filtering is needed
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      setInstances(allInstances as any);
+      setLoading(false);
+      return;
+    }
+
+    const { data: profile } = await (supabase as any)
+      .from('user_profiles')
+      .select('role')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    const role = profile?.role || 'vendedor';
+    const isAdmin = role === 'admin' || role === 'gestor';
+
+    if (isAdmin) {
+      setInstances(allInstances as any);
+    } else {
+      // Filter by whatsapp_instance_access
+      const { data: accessRows } = await (supabase as any)
+        .from('whatsapp_instance_access')
+        .select('instance_id')
+        .eq('user_id', user.id);
+
+      const allowedIds = new Set((accessRows || []).map((r: any) => r.instance_id));
+
+      // If no access rows exist, show nothing (strict access control)
+      if (allowedIds.size === 0) {
+        setInstances([]);
+      } else {
+        setInstances((allInstances as WhatsAppInstance[]).filter(i => allowedIds.has(i.id)));
+      }
+    }
+
     setLoading(false);
   }, []);
 
