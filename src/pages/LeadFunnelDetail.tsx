@@ -81,6 +81,7 @@ const LeadFunnelDetail: React.FC = () => {
   }, [selectedLeadId, positions]);
   const [timelineOpen, setTimelineOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [clearing, setClearing] = useState(false);
 
   const handleBulkMoveOverdue = useCallback(async () => {
     if (!id || !funnel) return;
