@@ -48,7 +48,7 @@ export function useUpsertLeadFunnelProducts() {
       const toUpdate = products.filter(p => p.id && existingIds.has(p.id));
       const toInsert = products.filter(p => !p.id);
       const keepIds = new Set(products.filter(p => p.id).map(p => p.id));
-      const toDeleteIds = [...existingIds].filter(id => !keepIds.has(id));
+      const toDeleteIds = ([...existingIds] as string[]).filter(id => !keepIds.has(id));
 
       // Delete only removed products
       if (toDeleteIds.length > 0) {
