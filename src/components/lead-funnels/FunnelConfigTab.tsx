@@ -22,6 +22,8 @@ interface FunnelConfigTabProps {
   catalogProducts?: FunnelProduct[];
   onSaveProducts?: (products: Omit<LeadFunnelProduct, 'id' | 'lead_funnel_id' | 'created_at'>[]) => void;
   savingProducts?: boolean;
+  onBulkMoveOverdue?: () => void;
+  bulkMoving?: boolean;
   // Product Mappings
   distinctLeadProducts?: string[];
   existingMappings?: LeadProductMapping[];
