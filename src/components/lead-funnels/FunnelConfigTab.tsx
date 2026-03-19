@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { LeadFunnelStage, StageTransitionRule } from '@/types/leadFunnels';
+import { LeadFunnelStage, StageTransitionRule, LeadStagePosition, Lead } from '@/types/leadFunnels';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
-import { Plus, Trash2, GripVertical, ArrowRight, EyeOff } from 'lucide-react';
+import { Plus, Trash2, GripVertical, ArrowRight, EyeOff, Shuffle } from 'lucide-react';
 import { toast } from 'sonner';
 import FunnelProductsConfig from './FunnelProductsConfig';
+import RedistributeLeadsDialog from './RedistributeLeadsDialog';
 import ProductMappingConfig from './ProductMappingConfig';
 
 import type { LeadFunnelProduct } from '@/hooks/useLeadFunnelProducts';
@@ -33,15 +34,18 @@ interface FunnelConfigTabProps {
   onSaveMappings?: (mappings: { raw_product_name: string; lead_funnel_product_id: string }[]) => void;
   savingMappings?: boolean;
   loadingDistinctProducts?: boolean;
+  // Redistribute
+  positions?: (LeadStagePosition & { lead?: Lead })[];
 }
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
 
-const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSaveStages, onSaveRules, saving, funnelId, leadFunnelProducts = [], catalogProducts = [], onSaveProducts, savingProducts, onBulkMoveOverdue, bulkMoving, distinctLeadProducts = [], existingMappings = [], onSaveMappings, savingMappings, loadingDistinctProducts }) => {
+const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSaveStages, onSaveRules, saving, funnelId, leadFunnelProducts = [], catalogProducts = [], onSaveProducts, savingProducts, onBulkMoveOverdue, bulkMoving, distinctLeadProducts = [], existingMappings = [], onSaveMappings, savingMappings, loadingDistinctProducts, positions = [] }) => {
   const [localStages, setLocalStages] = useState<Partial<LeadFunnelStage>[]>(
     stages.length ? stages : [{ name: 'Novo Lead', color: COLORS[0], sort_order: 0 }]
   );
   const [localRules, setLocalRules] = useState<Partial<StageTransitionRule>[]>(rules);
+  const [redistributeOpen, setRedistributeOpen] = useState(false);
 
   // Sync local state when props update (e.g. after save)
   useEffect(() => {
@@ -246,6 +250,27 @@ const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSave
           saving={savingMappings}
           loading={loadingDistinctProducts}
         />
+      )}
+
+      {/* Redistribute Leads */}
+      {funnelId && stages.length > 0 && (
+        <div>
+          <h3 className="text-lg font-semibold text-foreground mb-3">Redistribuição de Leads</h3>
+          <Button variant="outline" className="gap-2" onClick={() => setRedistributeOpen(true)}>
+            <Shuffle className="h-4 w-4" />
+            Redistribuir Leads
+          </Button>
+          <p className="text-xs text-muted-foreground mt-1.5">
+            Distribui leads igualmente entre os vendedores com acesso ao funil (round-robin).
+          </p>
+          <RedistributeLeadsDialog
+            open={redistributeOpen}
+            onOpenChange={setRedistributeOpen}
+            funnelId={funnelId}
+            stages={stages}
+            positions={positions}
+          />
+        </div>
       )}
 
     </div>
