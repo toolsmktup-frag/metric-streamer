@@ -167,14 +167,6 @@ const LeadCampaignsPage: React.FC = () => {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => setAccessCampaignId(accessCampaignId === campaign.id ? null : campaign.id)}
-                    title="Gerenciar acesso de vendedores"
-                  >
-                    <Users className="h-4 w-4 text-muted-foreground" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
                     onClick={() => {
                       if (confirm('Excluir campanha?')) deleteCampaign.mutate(campaign.id);
                     }}
@@ -183,14 +175,6 @@ const LeadCampaignsPage: React.FC = () => {
                   </Button>
                 </div>
               )}
-            </div>
-
-            {/* Campaign access manager (expanded) */}
-            {isAdmin && accessCampaignId === campaign.id && (
-              <div className="px-4 py-3 border-b border-border bg-muted/10">
-                <FunnelAccessManager campaignId={campaign.id} />
-              </div>
-            )}
 
             <div className="divide-y divide-border">
               {funnels.map(funnel => (

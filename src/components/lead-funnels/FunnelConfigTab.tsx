@@ -248,10 +248,6 @@ const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSave
         />
       )}
 
-      {/* Funnel Access */}
-      {funnelId && (
-        <FunnelAccessManager funnelId={funnelId} />
-      )}
     </div>
   );
 };
