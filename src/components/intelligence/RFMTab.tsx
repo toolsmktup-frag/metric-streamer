@@ -1,5 +1,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import { Users, ChevronDown, ChevronUp, Info, Download } from 'lucide-react';
+import { Users, ChevronDown, ChevronUp, Info, Download, Loader2 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { formatLocalDateTime } from '@/lib/localDate';
 import { formatCurrency } from '@/lib/formatters';
 import { downloadCsv } from '@/lib/exportCsv';
 import { format } from 'date-fns';
