@@ -114,7 +114,7 @@ const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, onWhatsAppClick,
       </div>
 
       {/* LTV prominente */}
-      {hasLTV && (
+      {hasLTV && !hideValues && (
         <div className="mt-1.5 flex items-center gap-2 flex-wrap ml-[42px]">
           <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md">
             <DollarSign className="h-3.5 w-3.5" />
@@ -130,6 +130,14 @@ const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, onWhatsAppClick,
               {differenceInDays(new Date(), new Date(purchaseSummary!.firstPurchaseDate))}d
             </span>
           )}
+        </div>
+      )}
+      {hasLTV && hideValues && (
+        <div className="mt-1.5 ml-[42px]">
+          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-md">
+            <EyeOff className="h-3 w-3" />
+            Valores ocultos
+          </span>
         </div>
       )}
 
