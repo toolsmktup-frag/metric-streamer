@@ -21,7 +21,7 @@ interface FunnelProductsConfigProps {
   products: LeadFunnelProduct[];
   catalogProducts: FunnelProduct[];
   stages: LeadFunnelStage[];
-  onSave: (products: Omit<LeadFunnelProduct, 'id' | 'lead_funnel_id' | 'created_at'>[]) => void;
+  onSave: (products: Partial<Pick<LeadFunnelProduct, 'id'>> & Omit<LeadFunnelProduct, 'id' | 'lead_funnel_id' | 'created_at'>[]) => void;
   saving?: boolean;
   onBulkMoveOverdue?: () => void;
   bulkMoving?: boolean;
@@ -76,6 +76,7 @@ const FunnelProductsConfig: React.FC<FunnelProductsConfigProps> = ({
     }
     onSave(
       localProducts.map(p => ({
+        ...(p.id ? { id: p.id } : {}),
         source_funnel_product_id: p.source_funnel_product_id,
         product_name_contains: p.product_name_contains.trim(),
         display_name: p.display_name.trim() || null,
