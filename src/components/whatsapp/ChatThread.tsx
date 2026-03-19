@@ -122,8 +122,8 @@ function extractMediaUrlFromPayload(message: WhatsAppMessage): string | null {
     return v2Msg.mediaUrl || v2Msg.media_url || v2Msg.fileUrl || v2Msg.file_url;
   }
   if (typeof v2Msg.content === 'object' && v2Msg.content) {
-    if (v2Msg.content.url || v2Msg.content.mediaUrl || v2Msg.content.fileUrl) {
-      return v2Msg.content.url || v2Msg.content.mediaUrl || v2Msg.content.fileUrl;
+    if (v2Msg.content.url || v2Msg.content.URL || v2Msg.content.mediaUrl || v2Msg.content.fileUrl) {
+      return v2Msg.content.url || v2Msg.content.URL || v2Msg.content.mediaUrl || v2Msg.content.fileUrl;
     }
   }
   
