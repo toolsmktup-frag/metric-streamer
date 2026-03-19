@@ -9,6 +9,7 @@ export const MODULE_KEYS = [
   'mod_leads',
   'mod_whatsapp',
   'mod_ferramentas',
+  'mod_resumo',
 ] as const;
 
 export type ModuleKey = typeof MODULE_KEYS[number];
@@ -20,6 +21,7 @@ export const MODULE_LABELS: Record<ModuleKey, string> = {
   mod_leads: 'Leads',
   mod_whatsapp: 'WhatsApp',
   mod_ferramentas: 'Ferramentas',
+  mod_resumo: 'Resumo Geral',
 };
 
 export interface UserPermissions {
@@ -32,6 +34,7 @@ export interface UserPermissions {
   mod_leads: boolean;
   mod_whatsapp: boolean;
   mod_ferramentas: boolean;
+  mod_resumo: boolean;
 }
 
 /** Fetch permissions for all users in the org (admin view) */

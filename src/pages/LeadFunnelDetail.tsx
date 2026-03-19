@@ -312,25 +312,29 @@ const LeadFunnelDetail: React.FC = () => {
           <FunnelVisual stages={stages} leadCounts={leadCounts} />
         </TabsContent>
 
-        <TabsContent value="flow" className="mt-4">
-          <FunnelFlowEditor
-            stages={stages}
-            sourceNodes={sourceNodes}
-            leadCounts={leadCounts}
-            funnelId={funnel.id}
-            edges={funnelEdges.map(e => ({
-              source_node_id: e.source_node_id,
-              target_node_id: e.target_node_id,
-              source_type: e.source_type,
-            }))}
-            onAutoSaveNodes={handleAutoSaveNodes}
-            onAutoSaveEdges={handleAutoSaveEdges}
-          />
-        </TabsContent>
+        {isAdmin && (
+          <TabsContent value="flow" className="mt-4">
+            <FunnelFlowEditor
+              stages={stages}
+              sourceNodes={sourceNodes}
+              leadCounts={leadCounts}
+              funnelId={funnel.id}
+              edges={funnelEdges.map(e => ({
+                source_node_id: e.source_node_id,
+                target_node_id: e.target_node_id,
+                source_type: e.source_type,
+              }))}
+              onAutoSaveNodes={handleAutoSaveNodes}
+              onAutoSaveEdges={handleAutoSaveEdges}
+            />
+          </TabsContent>
+        )}
 
-        <TabsContent value="metrics" className="mt-4">
-          <FunnelMetricsTab stages={stages} positions={positions} />
-        </TabsContent>
+        {isAdmin && (
+          <TabsContent value="metrics" className="mt-4">
+            <FunnelMetricsTab stages={stages} positions={positions} />
+          </TabsContent>
+        )}
 
         {isAdmin && (
           <TabsContent value="config" className="mt-4">
