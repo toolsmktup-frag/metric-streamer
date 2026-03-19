@@ -32,16 +32,17 @@ interface KanbanBoardProps {
   recontactMap?: Map<string, RecontactInfo>;
 }
 
-type SortMode = 'recent' | 'value' | 'orders' | 'ltv';
+type SortMode = 'recent' | 'value' | 'orders' | 'ltv' | 'recontact';
 
 const SORT_LABELS: Record<SortMode, string> = {
   recent: 'Mais recentes',
   value: 'Maior valor',
   orders: 'Mais compras',
   ltv: 'Maior LTV',
+  recontact: 'Recontato',
 };
 
-const SORT_CYCLE: SortMode[] = ['recent', 'value', 'orders', 'ltv'];
+const SORT_CYCLE: SortMode[] = ['recent', 'value', 'orders', 'ltv', 'recontact'];
 
 /* Droppable column wrapper */
 const DroppableColumn: React.FC<{ id: string; isOver: boolean; children: React.ReactNode }> = ({ id, isOver, children }) => {
