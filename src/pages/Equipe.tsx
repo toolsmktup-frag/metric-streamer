@@ -163,7 +163,39 @@ export default function Equipe() {
     updateStatus.mutate({ userId, status: 'active' });
   }
 
-  if (isLoading || loadingPerms) {
+  const queryClient = useQueryClient();
+
+  async function handleAvatarUpload(userId: string, e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingAvatar(userId);
+    try {
+      const ext = file.name.split('.').pop() || 'jpg';
+      const path = `${userId}/avatar.${ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(path, file, { upsert: true });
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
+      const avatarUrl = `${urlData.publicUrl}?t=${Date.now()}`;
+
+      const { error: updateError } = await (supabase as any)
+        .from('user_profiles')
+        .update({ avatar_url: avatarUrl, updated_at: new Date().toISOString() })
+        .eq('id', userId);
+      if (updateError) throw updateError;
+
+      queryClient.invalidateQueries({ queryKey: ['team-members'] });
+      toast.success('Foto atualizada com sucesso');
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao enviar foto');
+    } finally {
+      setUploadingAvatar(null);
+    }
+  }
+
+
     return (
       <div className="flex items-center justify-center py-20">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
