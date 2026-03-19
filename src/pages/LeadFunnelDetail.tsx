@@ -296,6 +296,17 @@ const LeadFunnelDetail: React.FC = () => {
               }
             }}
             saving={upsertStages.isPending || upsertRules.isPending}
+            leadFunnelProducts={leadFunnelProducts}
+            catalogProducts={allCatalogProducts}
+            onSaveProducts={async (prods) => {
+              try {
+                await upsertLeadProducts.mutateAsync({ funnelId: funnel.id, products: prods });
+                toast.success('Produtos salvos!');
+              } catch {
+                toast.error('Erro ao salvar produtos');
+              }
+            }}
+            savingProducts={upsertLeadProducts.isPending}
           />
         </TabsContent>
 
