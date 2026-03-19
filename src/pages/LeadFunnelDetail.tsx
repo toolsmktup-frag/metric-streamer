@@ -332,7 +332,7 @@ const LeadFunnelDetail: React.FC = () => {
           <FunnelMetricsTab stages={stages} positions={positions} />
         </TabsContent>
 
-        <TabsContent value="config" className="mt-4">
+        {isAdmin && <TabsContent value="config" className="mt-4">
           <FunnelConfigTab
             stages={stages}
             rules={rules}
