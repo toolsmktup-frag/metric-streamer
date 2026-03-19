@@ -1,26 +1,26 @@
 
 
-## Plano: Corrigir tela branca do WhatsApp e loop infinito
+## Plano: Integrar controle de acesso a Campanhas/Funis na página de Equipe
 
-### Problemas identificados
+### Situação atual
+- O componente `FunnelAccessManager` existe em `src/components/lead-funnels/FunnelAccessManager.tsx` mas **nunca é importado ou renderizado** em nenhuma página.
+- Na página `/equipe`, ao expandir um vendedor, aparecem apenas: permissões de módulo e instâncias WhatsApp. Falta a seção de acesso a campanhas/funis.
+- A tabela `lead_funnel_access` e os hooks (`useGrantFunnelAccess`, `useRevokeFunnelAccess`) já funcionam.
 
-1. **Loop infinito (`Maximum update depth exceeded`)**: Em `WhatsAppChat.tsx` linha 73, `isAllMode ? instances : []` cria um novo array `[]` a cada render. Isso muda a referência da prop de `useWhatsAppMultiChats`, que recria o `fetchAllChats` callback, que dispara o `useEffect`, que chama `setChats`/`setLoading` → re-render → loop.
+### O que será feito
 
-2. **Tela branca quando vendedor tem 1 instância**: O `selectedInstanceId` começa como `null` e só é setado automaticamente quando há `?phone=` na URL. Sem o param, o vendedor vê a tela sem instância selecionada e não consegue fazer nada. Deveria auto-selecionar a única instância disponível.
+**1. Adicionar seção "Acesso a Campanhas/Funis" na página de Equipe (`src/pages/Equipe.tsx`)**
+- No painel expandido de cada vendedor (abaixo das instâncias WhatsApp), adicionar uma nova seção.
+- Listar todas as campanhas da organização com checkboxes para conceder acesso à campanha inteira.
+- Dentro de cada campanha, listar os funis com checkboxes individuais.
+- Se o vendedor já tem acesso à campanha, os funis internos aparecem marcados e desabilitados (acesso herdado).
+- Usar os hooks existentes (`useLeadCampaigns`, `useLeadFunnels`, `useOrgFunnelAccess`, `useGrantFunnelAccess`, `useRevokeFunnelAccess`).
 
-### Alterações
+**2. Arquivos modificados**
+- `src/pages/Equipe.tsx` — importar hooks de campanhas/funis e adicionar a seção de acesso no painel expandido de cada vendedor.
 
-**1. Corrigir loop infinito (`WhatsAppChat.tsx`)**
-- Substituir `isAllMode ? instances : []` por uma constante estável (ex: `const EMPTY: WhatsAppInstance[] = []` fora do componente) para evitar nova referência a cada render.
-
-**2. Auto-selecionar instância quando só há uma (`WhatsAppChat.tsx`)**
-- Adicionar um `useEffect` que, quando `instances.length === 1` e `selectedInstanceId` é `null`, seta automaticamente `selectedInstanceId = instances[0].id`.
-- Isso garante que vendedores com acesso a apenas 1 instância já entram com ela selecionada e podem ver/iniciar conversas imediatamente.
-
-**3. Estabilizar dependências em `useWhatsAppMultiChat.ts`**
-- Usar `JSON.stringify(instances.map(i => i.id))` como chave no `useCallback`/`useEffect` para evitar recriação desnecessária quando a referência do array muda mas o conteúdo é o mesmo.
-
-### Arquivos modificados
-- `src/pages/WhatsAppChat.tsx` — constante vazia estável + auto-select de instância única
-- `src/hooks/useWhatsAppMultiChat.ts` — estabilizar dependências do callback
+### Detalhes técnicos
+- Reutilizar a lógica já existente no `FunnelAccessManager` (verificação de acesso campanha vs funil, toggle campaign/funnel).
+- Layout: grid com campanhas como grupos, funis indentados abaixo, usando `Checkbox` consistente com o padrão das instâncias WhatsApp.
+- Só exibir para vendedores/suporte (admins e gestores já têm acesso total).
 
