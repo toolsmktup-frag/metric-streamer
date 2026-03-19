@@ -31,6 +31,7 @@ export default function RFMTab() {
   const [sortAsc, setSortAsc] = useState(false);
   const [expandedSegment, setExpandedSegment] = useState<RFMSegment | null>(null);
   const [showHeatmap, setShowHeatmap] = useState(true);
+  const [exportingDetailed, setExportingDetailed] = useState(false);
 
   const filteredCustomers = useMemo(() => {
     if (!data) return [];
