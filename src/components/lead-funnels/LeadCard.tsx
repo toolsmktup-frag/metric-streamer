@@ -15,6 +15,7 @@ interface LeadCardProps {
   isRevenue?: boolean;
   purchaseSummary?: PurchaseSummary;
   recontactInfo?: RecontactInfo;
+  hideValues?: boolean;
 }
 
 const STATUS_LABELS: Record<string, string> = {
