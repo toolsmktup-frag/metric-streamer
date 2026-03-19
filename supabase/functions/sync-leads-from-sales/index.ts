@@ -324,7 +324,7 @@ async function performSync() {
   console.log(`Unique customers with purchases: ${contactMap.size}`);
 
   // ===== STEP 4: Insert leads in batches =====
-  const leadIdByKey = await batchUpsertLeads(supabase, contactMap);
+  const leadIdByKey = await batchUpsertLeads(supabase, contactMap, ORG_ID);
 
   // ===== STEP 5: Position leads in correct stage (batch) =====
   const positions: any[] = [];
