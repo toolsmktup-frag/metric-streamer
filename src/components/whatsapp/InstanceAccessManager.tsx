@@ -155,9 +155,6 @@ export default function InstanceAccessManager({ instances, selectedInstanceId }:
             />
             <Label htmlFor={`access-${user.user_id}`} className="flex-1 cursor-pointer">
               <span className="text-sm text-foreground">{user.full_name}</span>
-              {user.email && (
-                <span className="text-xs text-muted-foreground ml-2">{user.email}</span>
-              )}
             </Label>
             {saving === user.user_id && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
           </div>
