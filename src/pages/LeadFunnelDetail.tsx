@@ -312,6 +312,7 @@ const LeadFunnelDetail: React.FC = () => {
               funnelId={funnel.id}
               recontactMap={recontactMap}
               userRole={userRole}
+              currentUserId={currentUserId}
             />
           </TabsContent>
         )}
