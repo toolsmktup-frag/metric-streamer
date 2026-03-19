@@ -7,6 +7,7 @@ import AppLayout from "./components/layout/AppLayout";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Login from "./pages/Login";
 import Resumo from "./pages/Resumo";
+import Index from "./pages/Index";
 import Campanhas from "./pages/Campanhas";
 import Vendas from "./pages/Vendas";
 import Demograficos from "./pages/Demograficos";
