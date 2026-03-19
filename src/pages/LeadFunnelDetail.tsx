@@ -43,15 +43,18 @@ const LeadFunnelDetail: React.FC = () => {
   const { data: sourceNodes = [] } = useFunnelSourceNodes(id ?? null);
   const { data: funnelEdges = [] } = useFunnelEdges(id ?? null);
   const { data: paymentFunnels = [] } = useFunnels();
+  const { data: leadFunnelProducts = [] } = useLeadFunnelProducts(id ?? null);
   const upsertStages = useUpsertStages();
   const upsertRules = useUpsertTransitionRules();
+  const upsertLeadProducts = useUpsertLeadFunnelProducts();
   const saveSourceNodes = useSaveFunnelSourceNodes();
   const saveFunnelEdges = useSaveFunnelEdges();
   const queryClient = useQueryClient();
 
-  // Collect all funnel_products with recontact_days from payment funnels
-  const allFunnelProducts = paymentFunnels.flatMap(f => f.funnel_products || []);
-  const recontactMap = useRecontactDeadlines(positions, allFunnelProducts);
+  // Use lead funnel products for recontact (not payment funnel products)
+  const recontactMap = useRecontactDeadlines(positions, leadFunnelProducts);
+  // Catalog products for sync dropdown
+  const allCatalogProducts = paymentFunnels.flatMap(f => f.funnel_products || []);
 
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [timelineOpen, setTimelineOpen] = useState(false);
