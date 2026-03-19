@@ -1,4 +1,4 @@
-// v1.0.2 - force redeploy
+// v1.0.3 - use service role for DB ops
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
@@ -20,20 +20,26 @@ Deno.serve(async (req) => {
       })
     }
 
-    const token = authHeader.replace('Bearer ', '')
-    const supabase = createClient(
+    // Auth client just for user validation
+    const authClient = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_ANON_KEY')!,
       { global: { headers: { Authorization: authHeader } } }
     )
 
-    const { data: claimsData, error: claimsErr } = await supabase.auth.getClaims(token)
-    if (claimsErr || !claimsData?.claims?.sub) {
+    const { data: { user }, error: userErr } = await authClient.auth.getUser()
+    if (userErr || !user) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
+
+    // Service role client for DB operations (bypasses RLS)
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+    )
 
     // Parse action from query or body
     const url = new URL(req.url)
@@ -74,7 +80,7 @@ Deno.serve(async (req) => {
       }
 
       // Get user org_id
-      const userId = claimsData.claims.sub
+      const userId = user.id
       const { data: profile } = await supabase
         .from('user_profiles')
         .select('organization_id')
