@@ -20,6 +20,7 @@ import AgenteIA from "./pages/AgenteIA";
 import ImportCSV from "./pages/ImportCSV";
 import Importar from "./pages/Importar";
 import EscadaValor from "./pages/EscadaValor";
+import PermissionRoute from "./components/PermissionRoute";
 import FunilResumo from "./pages/FunilResumo";
 import FunilKpi from "./pages/FunilKpi";
 import FunilCampanhas from "./pages/FunilCampanhas";
