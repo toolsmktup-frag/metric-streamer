@@ -318,7 +318,7 @@ export default function Resumo() {
           <KPICard label="Ticket Médio" value={formatCurrency(ticketMedio)} icon={Receipt} tooltip="Valor médio por venda aprovada" />
           <KPICard label="CPA" value={formatCurrency(kpi.cpa)} variation={calcVar(kpi.cpa, prevCpa)} icon={Target} tooltip="Custo por aquisição" />
           <KPICard label="Impressões" value={formatNumber(kpi.impressions)} variation={calcVar(kpi.impressions, prevMetaInsights?.impressions ?? 0)} icon={Eye} tooltip="Número total de impressões" />
-          <KPICard label="Clientes" value={formatNumber(uniqueCustomers)} variation={calcVar(uniqueCustomers, prevUniqueCustomers)} icon={Users} tooltip="Clientes únicos com vendas aprovadas" />
+          <KPICard label="Clientes" value={formatNumber(totalCustomers)} icon={Users} tooltip="Total de clientes únicos na base" />
         </div>
       )}
 
