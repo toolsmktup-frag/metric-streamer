@@ -105,6 +105,7 @@ export function useBulkLeadPurchases(
   return useQuery({
     queryKey: ['bulk-lead-purchases', stableKey],
     queryFn: async (): Promise<Map<string, PurchaseSummary>> => {
+      console.log(`[useBulkLeadPurchases] Starting: ${emails.length} emails, ${phones.length} phones`);
       // 1. Find unified_customers by email or phone
       const [byEmail, byPhone] = await Promise.all([
         fetchAllIn<UnifiedCustomer>('unified_customers', 'id, primary_email, primary_phone', 'primary_email', emails),
