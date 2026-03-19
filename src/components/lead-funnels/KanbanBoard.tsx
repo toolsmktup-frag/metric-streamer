@@ -153,7 +153,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
     let confirmed = 0;
     let lost = 0;
     const stageMap = new Map(stages.map(s => [s.id, s]));
-    for (const p of positions) {
+    for (const p of visiblePositions) {
       const amount = Number(p.lead.metadata?.amount) || 0;
       const stage = stageMap.get(p.stage_id);
       if (stage && isRevenueStage(stage.name)) {
@@ -163,9 +163,9 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
       }
     }
     return { confirmedRevenue: confirmed, lostRevenue: lost };
-  }, [positions, stages]);
+  }, [visiblePositions, stages]);
 
-  const activePosition = activeId ? positions.find(p => p.id === activeId) : null;
+  const activePosition = activeId ? visiblePositions.find(p => p.id === activeId) : null;
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as string);
