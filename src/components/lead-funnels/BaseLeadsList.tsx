@@ -233,6 +233,12 @@ const BaseLeadsList: React.FC<BaseLeadsListProps> = ({ positions, onLeadClick, o
               >
                 <span className="flex items-center gap-1">Entrada <SortIcon col="date" /></span>
               </TableHead>
+              <TableHead
+                className="cursor-pointer select-none"
+                onClick={() => toggleSort('recontact')}
+              >
+                <span className="flex items-center gap-1"><Timer className="h-3 w-3" /> Recontato <SortIcon col="recontact" /></span>
+              </TableHead>
               <TableHead className="w-10" />
             </TableRow>
           </TableHeader>
