@@ -1,18 +1,70 @@
-import { useState } from 'react';
-import { User, Tag, TrendingUp, ShoppingCart, StickyNote, Trash2, Plus, Send } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { User, Tag, StickyNote, Trash2, Send, ShoppingCart, DollarSign, MapPin, Activity, CreditCard, CheckCircle2, XCircle, Clock, RotateCcw, AlertTriangle, UserPlus, Eye, FileText, type LucideIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
 import { useContactNotes } from '@/hooks/useContactNotes';
-import { format } from 'date-fns';
+import { useLeadByPhone } from '@/hooks/useLeadByPhone';
+import { useLeadPurchases, useLeadFunnelJourney } from '@/hooks/useLeadPurchases';
+import { useLeadEvents } from '@/hooks/useLeads';
+import { format, formatDistanceToNow } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { formatCurrency } from '@/lib/formatters';
+import { parseLocalDateTime } from '@/lib/localDate';
 
 interface ContactPanelProps {
   phone: string | null;
   senderName: string | null;
 }
 
+interface EventMapping {
+  label: string;
+  icon: LucideIcon;
+  colorClass: string;
+}
+
+const EVENT_MAP: Record<string, EventMapping> = {
+  lead_importado: { label: 'Lead Importado', icon: UserPlus, colorClass: 'bg-blue-500/10 text-blue-500' },
+  criado: { label: 'Lead Importado', icon: UserPlus, colorClass: 'bg-blue-500/10 text-blue-500' },
+  pago: { label: 'Pagamento Aprovado', icon: CheckCircle2, colorClass: 'bg-emerald-500/10 text-emerald-500' },
+  authorized: { label: 'Pagamento Aprovado', icon: CheckCircle2, colorClass: 'bg-emerald-500/10 text-emerald-500' },
+  pix_gerado: { label: 'PIX Gerado', icon: CreditCard, colorClass: 'bg-amber-500/10 text-amber-500' },
+  pix_created: { label: 'PIX Gerado', icon: CreditCard, colorClass: 'bg-amber-500/10 text-amber-500' },
+  rejeitado: { label: 'Rejeitado', icon: XCircle, colorClass: 'bg-destructive/10 text-destructive' },
+  cancelado: { label: 'Cancelado', icon: XCircle, colorClass: 'bg-destructive/10 text-destructive' },
+  expirado: { label: 'Expirado', icon: Clock, colorClass: 'bg-muted text-muted-foreground' },
+  reembolsado: { label: 'Reembolsado', icon: RotateCcw, colorClass: 'bg-amber-500/10 text-amber-500' },
+  chargeback: { label: 'Chargeback', icon: AlertTriangle, colorClass: 'bg-destructive/10 text-destructive' },
+  boleto_gerado: { label: 'Boleto Gerado', icon: FileText, colorClass: 'bg-amber-500/10 text-amber-500' },
+  bank_slip_created: { label: 'Boleto Gerado', icon: FileText, colorClass: 'bg-amber-500/10 text-amber-500' },
+  open: { label: 'Checkout Aberto', icon: Eye, colorClass: 'bg-muted text-muted-foreground' },
+  waiting_payment: { label: 'Aguardando Pagamento', icon: Clock, colorClass: 'bg-amber-500/10 text-amber-500' },
+};
+
+const DEFAULT_EVENT: EventMapping = { label: '', icon: Activity, colorClass: 'bg-primary/10 text-primary' };
+
+function getEventMapping(eventName: string): EventMapping {
+  return EVENT_MAP[eventName] || { ...DEFAULT_EVENT, label: eventName };
+}
+
+function getEventDate(ev: { created_at: string; metadata: Record<string, unknown> }): Date {
+  const originalDate = (ev.metadata as any)?.original_date;
+  return parseLocalDateTime(originalDate) || parseLocalDateTime(ev.created_at) || new Date();
+}
+
 export default function ContactPanel({ phone, senderName }: ContactPanelProps) {
   const { notes, loading: notesLoading, addNote, deleteNote } = useContactNotes(phone);
   const [noteText, setNoteText] = useState('');
+
+  const { data: lead } = useLeadByPhone(phone);
+  const { data: purchaseData } = useLeadPurchases(lead?.email ?? null, phone);
+  const { data: journey = [] } = useLeadFunnelJourney(lead?.id ?? null);
+  const { data: events = [] } = useLeadEvents(lead?.id ?? null);
+
+  const sortedEvents = useMemo(
+    () => [...events].sort((a, b) => getEventDate(b).getTime() - getEventDate(a).getTime()),
+    [events],
+  );
 
   if (!phone) {
     return (
@@ -43,9 +95,12 @@ export default function ContactPanel({ phone, senderName }: ContactPanelProps) {
           <User className="h-8 w-8 text-primary" />
         </div>
         <h3 className="font-semibold text-foreground text-sm">
-          {senderName || formatPhone(phone)}
+          {senderName || lead?.name || formatPhone(phone)}
         </h3>
         <span className="text-xs text-muted-foreground">{formatPhone(phone)}</span>
+        {lead?.email && (
+          <span className="text-xs text-muted-foreground">{lead.email}</span>
+        )}
       </div>
 
       {/* Notes */}
@@ -53,8 +108,6 @@ export default function ContactPanel({ phone, senderName }: ContactPanelProps) {
         <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
           <StickyNote className="h-3 w-3" /> Notas internas
         </h4>
-        
-        {/* Add note */}
         <div className="flex gap-1.5 mb-2">
           <Textarea
             value={noteText}
@@ -68,18 +121,10 @@ export default function ContactPanel({ phone, senderName }: ContactPanelProps) {
               }
             }}
           />
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 shrink-0 self-end"
-            onClick={handleAddNote}
-            disabled={!noteText.trim()}
-          >
+          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 self-end" onClick={handleAddNote} disabled={!noteText.trim()}>
             <Send className="h-3.5 w-3.5" />
           </Button>
         </div>
-
-        {/* Notes list */}
         {notesLoading ? (
           <p className="text-xs text-muted-foreground italic">Carregando...</p>
         ) : notes.length === 0 ? (
@@ -93,15 +138,134 @@ export default function ContactPanel({ phone, senderName }: ContactPanelProps) {
                   <span className="text-[10px] text-muted-foreground">
                     {format(new Date(note.created_at), 'dd/MM/yy HH:mm')}
                   </span>
-                  <button
-                    onClick={() => deleteNote(note.id)}
-                    className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
-                  >
+                  <button onClick={() => deleteNote(note.id)} className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive">
                     <Trash2 className="h-3 w-3" />
                   </button>
                 </div>
               </div>
             ))}
+          </div>
+        )}
+      </div>
+
+      {/* Purchases */}
+      <div>
+        <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
+          <ShoppingCart className="h-3 w-3" /> Vendas
+          {purchaseData && purchaseData.totalOrders > 0 && (
+            <Badge variant="secondary" className="text-[9px] ml-auto px-1.5 py-0 h-4">
+              {purchaseData.totalOrders}
+            </Badge>
+          )}
+        </h4>
+        {!purchaseData || purchaseData.purchases.length === 0 ? (
+          <p className="text-xs text-muted-foreground italic">Nenhuma venda encontrada</p>
+        ) : (
+          <>
+            <div className="bg-muted/50 rounded-lg p-2.5 mb-2">
+              <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Receita líquida</span>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <DollarSign className="h-4 w-4 text-emerald-500" />
+                <span className="text-base font-bold text-foreground">{formatCurrency(purchaseData.totalSpent)}</span>
+              </div>
+            </div>
+            <div className="space-y-1.5 max-h-[160px] overflow-y-auto">
+              {purchaseData.purchases.map(p => {
+                const isPaid = p.status === 'approved' || p.status === 'Aprovada';
+                return (
+                  <div key={p.id} className="flex items-start gap-1.5 text-[11px]">
+                    <div className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${isPaid ? 'bg-emerald-500' : 'bg-muted-foreground/40'}`} />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-foreground truncate">{p.product_name}</p>
+                      <span className="text-muted-foreground">{format(new Date(p.purchased_at), 'dd/MM/yy')}</span>
+                    </div>
+                    <span className={`shrink-0 font-semibold ${isPaid ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`}>
+                      {formatCurrency(p.net_amount ?? p.gross_amount)}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Funnels */}
+      <div>
+        <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
+          <MapPin className="h-3 w-3" /> Funis
+          {journey.length > 0 && (
+            <Badge variant="secondary" className="text-[9px] ml-auto px-1.5 py-0 h-4">
+              {journey.length}
+            </Badge>
+          )}
+        </h4>
+        {journey.length === 0 ? (
+          <p className="text-xs text-muted-foreground italic">Nenhum funil vinculado</p>
+        ) : (
+          <div className="space-y-1.5">
+            {journey.map((j: any) => (
+              <div key={j.id} className="rounded-lg border border-border p-2 flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: j.funnel?.color || 'hsl(var(--primary))' }} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-[11px] font-medium text-foreground truncate">{j.funnel?.name || 'Funil'}</p>
+                  <div className="flex items-center gap-1 mt-0.5">
+                    <span className="text-[9px] px-1.5 py-0.5 rounded font-medium" style={{
+                      backgroundColor: `${j.stage?.color || '#888'}20`,
+                      color: j.stage?.color || '#888',
+                    }}>
+                      {j.stage?.name || 'Etapa'}
+                    </span>
+                    <span className="text-[9px] text-muted-foreground">
+                      {formatDistanceToNow(new Date(j.entered_at), { locale: ptBR, addSuffix: true })}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Timeline */}
+      <div>
+        <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
+          <Activity className="h-3 w-3" /> Timeline
+          {sortedEvents.length > 0 && (
+            <Badge variant="secondary" className="text-[9px] ml-auto px-1.5 py-0 h-4">
+              {sortedEvents.length}
+            </Badge>
+          )}
+        </h4>
+        {sortedEvents.length === 0 ? (
+          <p className="text-xs text-muted-foreground italic">Nenhum evento registrado</p>
+        ) : (
+          <div className="relative max-h-[250px] overflow-y-auto">
+            <div className="absolute left-[9px] top-2 bottom-2 w-px bg-border" />
+            <div className="space-y-2.5">
+              {sortedEvents.map(ev => {
+                const mapping = getEventMapping(ev.event_name);
+                const Icon = mapping.icon;
+                const eventDate = getEventDate(ev);
+                return (
+                  <div key={ev.id} className="flex gap-2.5 relative">
+                    <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 z-10 ${mapping.colorClass}`}>
+                      <Icon className="h-2.5 w-2.5" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <span className="text-[11px] font-medium text-foreground">{mapping.label}</span>
+                      <p className="text-[9px] text-muted-foreground">{format(eventDate, 'dd/MM/yy HH:mm')}</p>
+                      {(ev.metadata as any)?.product_name && (
+                        <p className="text-[9px] text-muted-foreground truncate mt-0.5">
+                          {(ev.metadata as any).product_name}
+                          {(ev.metadata as any).amount && ` · ${formatCurrency(Number((ev.metadata as any).amount))}`}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
       </div>
@@ -112,22 +276,6 @@ export default function ContactPanel({ phone, senderName }: ContactPanelProps) {
           <Tag className="h-3 w-3" /> Tags
         </h4>
         <p className="text-xs text-muted-foreground italic">Nenhuma tag vinculada</p>
-      </div>
-
-      {/* Funnel placeholder */}
-      <div>
-        <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
-          <TrendingUp className="h-3 w-3" /> Funis
-        </h4>
-        <p className="text-xs text-muted-foreground italic">Nenhum funil vinculado</p>
-      </div>
-
-      {/* Sales placeholder */}
-      <div>
-        <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
-          <ShoppingCart className="h-3 w-3" /> Vendas
-        </h4>
-        <p className="text-xs text-muted-foreground italic">Nenhuma venda encontrada</p>
       </div>
     </div>
   );
