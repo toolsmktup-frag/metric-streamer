@@ -21,6 +21,8 @@ import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
+const EMPTY_INSTANCES: import('@/hooks/useWhatsApp').WhatsAppInstance[] = [];
+
 export default function WhatsAppChat() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { instances, loading: loadingInstances, refetch: refetchInstances } = useWhatsAppInstances();
