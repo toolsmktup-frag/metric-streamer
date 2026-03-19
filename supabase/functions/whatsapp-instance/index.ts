@@ -47,8 +47,132 @@ Deno.serve(async (req) => {
       instanceId = instanceId || body.instance_id
     }
 
-    if (!instanceId || !action) {
-      return new Response(JSON.stringify({ error: 'instance_id and action required' }), {
+    if (!action) {
+      return new Response(JSON.stringify({ error: 'action required' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    // === CREATE INSTANCE (no instance_id needed) ===
+    if (action === 'create_instance') {
+      const instanceName = body.instance_name
+      if (!instanceName) {
+        return new Response(JSON.stringify({ error: 'instance_name required' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      const UAZAPI_BASE_URL = Deno.env.get('UAZAPI_BASE_URL')
+      const UAZAPI_TOKEN = Deno.env.get('UAZAPI_TOKEN')
+      if (!UAZAPI_BASE_URL || !UAZAPI_TOKEN) {
+        return new Response(JSON.stringify({ error: 'UAZAPI credentials not configured' }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      // Get user org_id
+      const userId = claimsData.claims.sub
+      const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('organization_id')
+        .eq('id', userId)
+        .single()
+
+      if (!profile?.organization_id) {
+        return new Response(JSON.stringify({ error: 'Organization not found' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      // 1. Create instance on UAZAPI
+      const sanitizedName = instanceName.toLowerCase().replace(/[^a-z0-9_-]/g, '-')
+      const uazCreateRes = await fetch(`${UAZAPI_BASE_URL}/instance/init`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'admintoken': UAZAPI_TOKEN,
+        },
+        body: JSON.stringify({ name: sanitizedName }),
+      })
+      const uazCreateData = await uazCreateRes.json()
+      console.log('[create_instance] UAZAPI response:', JSON.stringify(uazCreateData))
+
+      if (!uazCreateRes.ok) {
+        return new Response(JSON.stringify({ error: 'Failed to create UAZAPI instance', details: uazCreateData }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      // Extract instance URL and token from UAZAPI response
+      const instanceApiUrl = uazCreateData?.instance?.instanceUrl || uazCreateData?.instanceUrl || `${UAZAPI_BASE_URL}/instance/${sanitizedName}`
+      const instanceApiToken = uazCreateData?.instance?.token || uazCreateData?.token || uazCreateData?.instance?.apitoken || ''
+
+      // 2. Save to database
+      const { data: newInstance, error: insertErr } = await supabase
+        .from('whatsapp_instances')
+        .insert({
+          organization_id: profile.organization_id,
+          instance_name: instanceName,
+          api_url: instanceApiUrl.replace(/\/$/, ''),
+          api_token: instanceApiToken,
+          status: 'connecting',
+        })
+        .select('*')
+        .single()
+
+      if (insertErr) {
+        return new Response(JSON.stringify({ error: insertErr.message }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      // 3. Configure webhook
+      const webhookUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/uazapi-webhook`
+      try {
+        await fetch(`${instanceApiUrl}/webhook`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'token': instanceApiToken },
+          body: JSON.stringify({ url: webhookUrl, enabled: true, events: ['messages', 'messages_update', 'connection'] }),
+        })
+      } catch (e) {
+        console.error('Webhook config failed:', e.message)
+      }
+
+      // 4. Connect to get QR code
+      let qrcode = null
+      let paircode = null
+      try {
+        const connectRes = await fetch(`${instanceApiUrl}/instance/connect`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'token': instanceApiToken },
+          body: JSON.stringify({}),
+        })
+        const connectData = await connectRes.json()
+        console.log('[create_instance] connect response:', JSON.stringify(connectData))
+        qrcode = connectData?.qrcode || connectData?.base64 || connectData?.instance?.qrcode || null
+        paircode = connectData?.paircode || connectData?.instance?.paircode || null
+      } catch (e) {
+        console.error('Connect after create failed:', e.message)
+      }
+
+      return new Response(JSON.stringify({
+        instance: newInstance,
+        qrcode,
+        paircode,
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    // All other actions require instance_id
+    if (!instanceId) {
+      return new Response(JSON.stringify({ error: 'instance_id required' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
