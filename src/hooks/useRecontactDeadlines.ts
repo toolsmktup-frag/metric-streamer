@@ -1,7 +1,12 @@
 import { useMemo } from 'react';
 import { differenceInDays, addDays } from 'date-fns';
 import type { Lead, LeadStagePosition } from '@/types/leadFunnels';
-import type { FunnelProduct } from '@/hooks/useFunnels';
+
+export interface RecontactProduct {
+  product_name_contains: string;
+  display_name?: string | null;
+  recontact_days: number | null;
+}
 
 export interface RecontactInfo {
   daysRemaining: number;
@@ -12,17 +17,17 @@ export interface RecontactInfo {
 }
 
 /**
- * For each lead, match their product (from metadata) against funnel_products
- * with recontact_days configured, then calculate countdown.
+ * For each lead, match their product (from metadata) against configured products
+ * with recontact_days, then calculate countdown.
  */
 export function useRecontactDeadlines(
   positions: (LeadStagePosition & { lead: Lead })[],
-  funnelProducts: FunnelProduct[] | undefined,
+  products: RecontactProduct[] | undefined,
 ): Map<string, RecontactInfo> {
   return useMemo(() => {
     const map = new Map<string, RecontactInfo>();
 
-    const productsWithRecontact = (funnelProducts || []).filter(
+    const productsWithRecontact = (products || []).filter(
       fp => fp.recontact_days != null && fp.recontact_days > 0,
     );
 
@@ -37,7 +42,6 @@ export function useRecontactDeadlines(
 
       if (!productName || !purchasedAt) continue;
 
-      // Find matching funnel product (case-insensitive contains)
       const matchedProduct = productsWithRecontact.find(fp =>
         productName.toLowerCase().includes(fp.product_name_contains.toLowerCase()),
       );
@@ -60,5 +64,5 @@ export function useRecontactDeadlines(
     }
 
     return map;
-  }, [positions, funnelProducts]);
+  }, [positions, products]);
 }

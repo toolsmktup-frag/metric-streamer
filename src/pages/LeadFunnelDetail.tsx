@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useLeadFunnel, useUpsertStages, useUpsertTransitionRules, useFunnelSourceNodes, useFunnelEdges, useSaveFunnelSourceNodes, useSaveFunnelEdges } from '@/hooks/useLeadFunnels';
 import { useLeadsByFunnel, useFunnelLeadCounts } from '@/hooks/useLeads';
 import { useFunnels } from '@/hooks/useFunnels';
+import { useLeadFunnelProducts, useUpsertLeadFunnelProducts } from '@/hooks/useLeadFunnelProducts';
 import { useRecontactDeadlines } from '@/hooks/useRecontactDeadlines';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -42,15 +43,18 @@ const LeadFunnelDetail: React.FC = () => {
   const { data: sourceNodes = [] } = useFunnelSourceNodes(id ?? null);
   const { data: funnelEdges = [] } = useFunnelEdges(id ?? null);
   const { data: paymentFunnels = [] } = useFunnels();
+  const { data: leadFunnelProducts = [] } = useLeadFunnelProducts(id ?? null);
   const upsertStages = useUpsertStages();
   const upsertRules = useUpsertTransitionRules();
+  const upsertLeadProducts = useUpsertLeadFunnelProducts();
   const saveSourceNodes = useSaveFunnelSourceNodes();
   const saveFunnelEdges = useSaveFunnelEdges();
   const queryClient = useQueryClient();
 
-  // Collect all funnel_products with recontact_days from payment funnels
-  const allFunnelProducts = paymentFunnels.flatMap(f => f.funnel_products || []);
-  const recontactMap = useRecontactDeadlines(positions, allFunnelProducts);
+  // Use lead funnel products for recontact (not payment funnel products)
+  const recontactMap = useRecontactDeadlines(positions, leadFunnelProducts);
+  // Catalog products for sync dropdown
+  const allCatalogProducts = paymentFunnels.flatMap(f => f.funnel_products || []);
 
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [timelineOpen, setTimelineOpen] = useState(false);
@@ -292,6 +296,17 @@ const LeadFunnelDetail: React.FC = () => {
               }
             }}
             saving={upsertStages.isPending || upsertRules.isPending}
+            leadFunnelProducts={leadFunnelProducts}
+            catalogProducts={allCatalogProducts}
+            onSaveProducts={async (prods) => {
+              try {
+                await upsertLeadProducts.mutateAsync({ funnelId: funnel.id, products: prods });
+                toast.success('Produtos salvos!');
+              } catch {
+                toast.error('Erro ao salvar produtos');
+              }
+            }}
+            savingProducts={upsertLeadProducts.isPending}
           />
         </TabsContent>
 
