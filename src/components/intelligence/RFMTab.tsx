@@ -100,7 +100,7 @@ export default function RFMTab() {
           const customer = row.unified_customers;
           allRows.push({
             email: customer?.primary_email || '',
-            nome: customer?.name || '',
+            nome: customer?.full_name || '',
             produto: row.product_name || '',
             oferta: row.offer_name || '',
             valor_bruto: row.gross_amount ?? 0,
