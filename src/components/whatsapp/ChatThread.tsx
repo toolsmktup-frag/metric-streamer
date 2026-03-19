@@ -44,10 +44,14 @@ function AudioPlayer({ src, isOutbound = false }: { src: string; isOutbound?: bo
     if (!audioRef.current) return;
     if (playing) {
       audioRef.current.pause();
+      setPlaying(false);
     } else {
-      audioRef.current.play();
+      audioRef.current.play().then(() => {
+        setPlaying(true);
+      }).catch((err) => {
+        console.error('[AudioPlayer] play failed:', err.message, 'src:', src?.slice(0, 80));
+      });
     }
-    setPlaying(!playing);
   };
 
   const changeSpeed = () => {
@@ -76,9 +80,11 @@ function AudioPlayer({ src, isOutbound = false }: { src: string; isOutbound?: bo
         ref={audioRef}
         src={src}
         preload="metadata"
+        crossOrigin="anonymous"
         onLoadedMetadata={() => { if (audioRef.current) setDuration(audioRef.current.duration); }}
         onTimeUpdate={() => { if (audioRef.current) setCurrentTime(audioRef.current.currentTime); }}
         onEnded={() => { setPlaying(false); setCurrentTime(0); }}
+        onError={(e) => { console.error('[AudioPlayer] load error:', (e.target as HTMLAudioElement)?.error?.message, 'src:', src?.slice(0, 80)); }}
       />
       <button onClick={toggle} className={`h-8 w-8 shrink-0 rounded-full flex items-center justify-center transition-colors ${isOutbound ? 'bg-primary-foreground/20 hover:bg-primary-foreground/30' : 'bg-primary/10 hover:bg-primary/20'}`}>
         {playing
