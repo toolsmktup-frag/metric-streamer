@@ -45,15 +45,18 @@ const LeadFunnelDetail: React.FC = () => {
   const { data: funnelEdges = [] } = useFunnelEdges(id ?? null);
   const { data: paymentFunnels = [] } = useFunnels();
   const { data: leadFunnelProducts = [] } = useLeadFunnelProducts(id ?? null);
+  const { data: productMappings = [] } = useLeadProductMappings(id ?? null);
+  const { data: distinctLeadProducts = [], isLoading: loadingDistinctProducts } = useDistinctLeadProducts(id ?? null);
   const upsertStages = useUpsertStages();
   const upsertRules = useUpsertTransitionRules();
   const upsertLeadProducts = useUpsertLeadFunnelProducts();
+  const saveProductMappings = useSaveLeadProductMappings();
   const saveSourceNodes = useSaveFunnelSourceNodes();
   const saveFunnelEdges = useSaveFunnelEdges();
   const queryClient = useQueryClient();
 
-  // Use lead funnel products for recontact (not payment funnel products)
-  const recontactMap = useRecontactDeadlines(positions, leadFunnelProducts);
+  // Use lead funnel products for recontact with explicit mappings
+  const recontactMap = useRecontactDeadlines(positions, leadFunnelProducts, productMappings);
   // Catalog products for sync dropdown
   const allCatalogProducts = paymentFunnels.flatMap(f => f.funnel_products || []);
 
