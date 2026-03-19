@@ -9,9 +9,10 @@ import { useLeadProductMappings, useDistinctLeadProducts, useSaveLeadProductMapp
 import { useRecontactDeadlines } from '@/hooks/useRecontactDeadlines';
 import { useMoveLeadStage } from '@/hooks/useMoveLeadStage';
 import { useCurrentUserRole } from '@/hooks/useCurrentUserRole';
+import { useHasFunnelAccess } from '@/hooks/useLeadFunnelAccess';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Upload, Trash2 } from 'lucide-react';
+import { ArrowLeft, Upload, Trash2, Layers } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   AlertDialog,
@@ -60,14 +61,12 @@ const LeadFunnelDetail: React.FC = () => {
   const queryClient = useQueryClient();
   const { data: userRole = 'vendedor' } = useCurrentUserRole();
   const isAdmin = userRole === 'admin' || userRole === 'gestor';
+  const { data: hasAccess, isLoading: loadingAccess } = useHasFunnelAccess(id ?? null);
   const [bulkMoving, setBulkMoving] = useState(false);
 
   // Bulk purchase data for recontact fallback
   const { data: purchaseMap } = useBulkLeadPurchases(positions);
-
-  // Use lead funnel products for recontact with explicit mappings + purchase fallback
   const recontactMap = useRecontactDeadlines(positions, leadFunnelProducts, productMappings, purchaseMap);
-  // Catalog products for sync dropdown
   const allCatalogProducts = paymentFunnels.flatMap(f => f.funnel_products || []);
 
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
@@ -88,9 +87,7 @@ const LeadFunnelDetail: React.FC = () => {
           const leadId = pos.lead_id;
           const recontact = recontactMap.get(leadId);
           if (!recontact?.isOverdue) continue;
-          // Match by product id
           if (recontact.matchedProductId !== product.id) continue;
-          // Don't move if already in target stage
           if (pos.stage_id === product.auto_move_stage_id) continue;
 
           const targetStage = stagesArr.find(s => s.id === product.auto_move_stage_id);
@@ -121,19 +118,16 @@ const LeadFunnelDetail: React.FC = () => {
     if (!id) return;
     setClearing(true);
     try {
-      // Delete lead events for this funnel
       await (supabase as any)
         .from('lead_events')
         .delete()
         .eq('funnel_id', id);
 
-      // Delete lead stage positions for this funnel
       await (supabase as any)
         .from('lead_stage_positions')
         .delete()
         .eq('funnel_id', id);
 
-      // Invalidate queries to refresh UI
       queryClient.invalidateQueries({ queryKey: ['leads-by-funnel', id] });
       queryClient.invalidateQueries({ queryKey: ['funnel-lead-counts', id] });
 
@@ -158,11 +152,9 @@ const LeadFunnelDetail: React.FC = () => {
     navigate(`/whatsapp?phone=${encodeURIComponent(phone)}`);
   };
 
-  // Auto-save nodes: update stage positions + upsert source nodes
   const handleAutoSaveNodes = useCallback(async (nodes: Node[]) => {
     if (!id) return;
 
-    // Update stage positions in lead_funnel_stages
     const stageNodes = nodes.filter(n => n.id.startsWith('stage-'));
     for (const node of stageNodes) {
       const stageId = node.id.replace('stage-', '');
@@ -179,7 +171,6 @@ const LeadFunnelDetail: React.FC = () => {
         .eq('id', stageId);
     }
 
-    // Upsert source nodes
     const srcNodes = nodes.filter(n => n.type === 'trafficSource');
     await saveSourceNodes.mutateAsync({
       funnelId: id,
@@ -192,7 +183,6 @@ const LeadFunnelDetail: React.FC = () => {
     });
   }, [id, saveSourceNodes]);
 
-  // Auto-save edges
   const handleAutoSaveEdges = useCallback(async (edges: Edge[]) => {
     if (!id) return;
 
@@ -206,12 +196,25 @@ const LeadFunnelDetail: React.FC = () => {
     });
   }, [id, saveFunnelEdges]);
 
-  if (isLoading) {
+  if (isLoading || loadingAccess) {
     return <div className="p-6 text-muted-foreground">Carregando funil...</div>;
   }
 
   if (!funnel) {
     return <div className="p-6 text-destructive">Funil não encontrado</div>;
+  }
+
+  if (!isAdmin && hasAccess === false) {
+    return (
+      <div className="p-6 text-center text-muted-foreground">
+        <Layers className="h-12 w-12 mx-auto mb-4 opacity-40" />
+        <p className="text-lg font-medium">Acesso negado</p>
+        <p className="text-sm mt-1">Você não tem permissão para acessar este funil.</p>
+        <Button variant="outline" className="mt-4" onClick={() => navigate('/lead-campaigns')}>
+          <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
+        </Button>
+      </div>
+    );
   }
 
   const stages = funnel.lead_funnel_stages || [];
@@ -339,6 +342,7 @@ const LeadFunnelDetail: React.FC = () => {
         {isAdmin && (
           <TabsContent value="config" className="mt-4">
             <FunnelConfigTab
+              funnelId={funnel.id}
               stages={stages}
               rules={rules}
               onSaveStages={async (newStages) => {
