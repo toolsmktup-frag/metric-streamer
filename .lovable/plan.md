@@ -1,39 +1,30 @@
 
 
-## Plano: Auto-mover leads vencidos para etapa configurada
+## Plano: Corrigir perda de vínculos ao salvar produtos
 
-### O que muda
+### Causa raiz
+`useUpsertLeadFunnelProducts` faz DELETE ALL + INSERT nos produtos. Como `lead_product_mappings.lead_funnel_product_id` tem `ON DELETE CASCADE`, os vínculos são destruídos em cascata a cada save.
 
-Adicionar um campo **"Mover para etapa"** em cada produto configurado na seção "Produtos & Recontato". Quando o recontato vence, o sistema pode mover automaticamente os leads para a etapa selecionada. Um botão **"Atualizar Funil"** dispara a movimentação em lote.
+### Solução
+Mudar a estratégia de save de "delete all + insert" para **upsert real**:
+- Produtos com `id` existente → UPDATE
+- Produtos novos (sem `id`) → INSERT
+- Produtos removidos (IDs que existiam mas não estão mais na lista) → DELETE
+
+Isso preserva os IDs dos produtos existentes e, consequentemente, os vínculos de mapeamento.
 
 ### Mudanças
 
-**1. Coluna `auto_move_stage_id` na tabela `lead_funnel_products`**
+**1. `src/hooks/useLeadFunnelProducts.ts`** — Reescrever `useUpsertLeadFunnelProducts`:
+- Receber os produtos com seus `id` opcionais
+- Buscar IDs atuais do banco
+- DELETE apenas os que foram removidos
+- UPDATE os existentes
+- INSERT os novos
+- Retornar os dados atualizados
 
-```sql
-ALTER TABLE public.lead_funnel_products 
-ADD COLUMN auto_move_stage_id uuid REFERENCES public.lead_funnel_stages(id) ON DELETE SET NULL;
-```
+**2. `src/components/lead-funnels/FunnelProductsConfig.tsx`** — Passar o `id` dos produtos existentes no `onSave`:
+- Atualmente o `handleSave` faz `Omit<..., 'id'>`, precisa incluir o `id` quando existente para que o hook saiba quais são updates
 
-**2. Atualizar `FunnelProductsConfig.tsx`**
-- Adicionar um `Select` de etapa antes do botão de lixeira em cada linha de produto
-- Placeholder: "Mover p/ etapa (opcional)"
-- Receber `stages` como prop para popular o Select
-
-**3. Atualizar `LeadFunnelProduct` interface e hook**
-- Adicionar `auto_move_stage_id: string | null` no tipo e no fluxo de save
-
-**4. Botão "Atualizar Funil" na seção de produtos**
-- Ao clicar, percorre todos os leads com recontato vencido (`isOverdue`)
-- Move cada lead para a `auto_move_stage_id` do produto correspondente via `useMoveLeadStage`
-- Exibe toast com quantidade de leads movidos
-
-**5. Integrar no `LeadFunnelDetail.tsx`**
-- Passar `stages` para o `FunnelProductsConfig`
-- Criar função `handleBulkMoveOverdue` que cruza `recontactMap` com os produtos configurados e move os vencidos
-
-### Fluxo do usuário
-1. Na config de produtos, seleciona "Mover para → Para abordar hoje" em cada produto
-2. Clica "Salvar Produtos"
-3. Clica "Atualizar Funil" → leads com recontato vencido são movidos automaticamente para a etapa escolhida
+**3. `src/components/lead-funnels/FunnelConfigTab.tsx`** — Ajustar tipo do `onSaveProducts` para aceitar `id` opcional
 
