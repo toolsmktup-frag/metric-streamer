@@ -86,7 +86,6 @@ function AudioPlayer({ src, isOutbound = false }: { src: string; isOutbound?: bo
         onEnded={() => { setPlaying(false); setCurrentTime(0); }}
         onError={(e) => { console.error('[AudioPlayer] load error:', (e.target as HTMLAudioElement)?.error?.message, 'src:', src?.slice(0, 80)); }}
       />
-      />
       <button onClick={toggle} className={`h-8 w-8 shrink-0 rounded-full flex items-center justify-center transition-colors ${isOutbound ? 'bg-primary-foreground/20 hover:bg-primary-foreground/30' : 'bg-primary/10 hover:bg-primary/20'}`}>
         {playing
           ? <Pause className={`h-3.5 w-3.5 ${isOutbound ? 'text-primary-foreground' : 'text-primary'}`} />
