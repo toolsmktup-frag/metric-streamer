@@ -22,6 +22,12 @@ interface FunnelConfigTabProps {
   catalogProducts?: FunnelProduct[];
   onSaveProducts?: (products: Omit<LeadFunnelProduct, 'id' | 'lead_funnel_id' | 'created_at'>[]) => void;
   savingProducts?: boolean;
+  // Product Mappings
+  distinctLeadProducts?: string[];
+  existingMappings?: LeadProductMapping[];
+  onSaveMappings?: (mappings: { raw_product_name: string; lead_funnel_product_id: string }[]) => void;
+  savingMappings?: boolean;
+  loadingDistinctProducts?: boolean;
 }
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
