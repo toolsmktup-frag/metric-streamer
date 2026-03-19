@@ -6,6 +6,7 @@ import type { Lead, LeadStagePosition } from '@/types/leadFunnels';
 export interface PurchaseSummary {
   totalSpent: number;
   totalOrders: number;
+  firstPurchaseDate: string | null; // ISO date of earliest purchase
 }
 
 const PAGE_SIZE = 1000;
