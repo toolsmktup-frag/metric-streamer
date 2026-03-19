@@ -525,7 +525,9 @@ export default function Equipe() {
                   </div>
                 </div>
               )}
+            </div>
           );
+        })}
         })}
       </div>
 
