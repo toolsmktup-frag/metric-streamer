@@ -130,6 +130,7 @@ export default function Equipe() {
     }
   };
 
+  function startEditName(userId: string, currentName: string) {
     setEditingName(userId);
     setNameValue(currentName || '');
   }
