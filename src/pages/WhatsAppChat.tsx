@@ -34,6 +34,13 @@ export default function WhatsAppChat() {
   const [optimisticMessages, setOptimisticMessages] = useState<WhatsAppMessage[]>([]);
   const [replyInstanceId, setReplyInstanceId] = useState<string | null>(null);
 
+  // Auto-select when vendor has only one instance
+  useEffect(() => {
+    if (instances.length === 1 && selectedInstanceId === null) {
+      setSelectedInstanceId(instances[0].id);
+    }
+  }, [instances, selectedInstanceId]);
+
   // Auto-open chat from query param ?phone=
   useEffect(() => {
     const phoneParam = searchParams.get('phone');
