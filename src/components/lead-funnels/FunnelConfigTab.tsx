@@ -5,6 +5,9 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Trash2, GripVertical, ArrowRight } from 'lucide-react';
 import { toast } from 'sonner';
+import FunnelProductsConfig from './FunnelProductsConfig';
+import type { LeadFunnelProduct } from '@/hooks/useLeadFunnelProducts';
+import type { FunnelProduct } from '@/hooks/useFunnels';
 
 interface FunnelConfigTabProps {
   stages: LeadFunnelStage[];
@@ -12,6 +15,11 @@ interface FunnelConfigTabProps {
   onSaveStages: (stages: Partial<LeadFunnelStage>[]) => void;
   onSaveRules: (rules: Partial<StageTransitionRule>[]) => void;
   saving?: boolean;
+  // Products & Recontact
+  leadFunnelProducts?: LeadFunnelProduct[];
+  catalogProducts?: FunnelProduct[];
+  onSaveProducts?: (products: Omit<LeadFunnelProduct, 'id' | 'lead_funnel_id' | 'created_at'>[]) => void;
+  savingProducts?: boolean;
 }
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
