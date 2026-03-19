@@ -1,73 +1,126 @@
 
 
-## Plano: Controle de Acesso por Campanha e Funil para Vendedores
+## Plano: Integrar Controle de Acesso por Campanha/Funil
 
-### Conceito
-Criar um sistema de acesso granular onde o admin pode:
-1. **Na campanha**: dar acesso total a todos os funis da campanha para um vendedor
-2. **No funil**: dar acesso individual a funis específicos dentro de uma campanha
+Os hooks e o componente `FunnelAccessManager` já foram criados. Agora falta:
 
-Admins e gestores sempre têm acesso a tudo. O controle se aplica apenas a vendedores/suporte.
+1. **Rodar o SQL manualmente no Supabase SQL Editor** — criar a tabela e função
+2. **Integrar o componente nas páginas existentes**
+3. **Filtrar campanhas/funis para vendedores**
 
-### Modelo de Dados
+---
 
-Nova tabela `lead_funnel_access`:
+### 1. SQL para rodar no Supabase SQL Editor
 
-```text
-lead_funnel_access
-├── id (uuid, PK)
-├── user_id (uuid, FK → auth.users)
-├── campaign_id (uuid, FK → lead_campaigns, nullable)
-├── funnel_id (uuid, FK → lead_funnels, nullable)
-├── organization_id (uuid)
-├── created_at (timestamp)
-└── CONSTRAINT: campaign_id OR funnel_id must be set
+Você precisa rodar este SQL no painel do Supabase antes de eu implementar o código:
+
+```sql
+-- Tabela de acesso
+CREATE TABLE public.lead_funnel_access (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  campaign_id uuid REFERENCES public.lead_campaigns(id) ON DELETE CASCADE,
+  funnel_id uuid REFERENCES public.lead_funnels(id) ON DELETE CASCADE,
+  organization_id uuid NOT NULL,
+  created_at timestamptz DEFAULT now(),
+  CONSTRAINT access_campaign_or_funnel CHECK (campaign_id IS NOT NULL OR funnel_id IS NOT NULL),
+  UNIQUE (user_id, campaign_id, funnel_id)
+);
+
+ALTER TABLE public.lead_funnel_access ENABLE ROW LEVEL SECURITY;
+
+-- Qualquer autenticado pode ver seus próprios acessos
+CREATE POLICY "Users can view own access"
+  ON public.lead_funnel_access FOR SELECT TO authenticated
+  USING (user_id = auth.uid());
+
+-- Admins/gestors podem ver todos da org
+CREATE POLICY "Admins can view all org access"
+  ON public.lead_funnel_access FOR SELECT TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.user_profiles
+      WHERE id = auth.uid() AND role IN ('admin', 'gestor')
+      AND organization_id = lead_funnel_access.organization_id
+    )
+  );
+
+-- Admins/gestors podem inserir
+CREATE POLICY "Admins can insert access"
+  ON public.lead_funnel_access FOR INSERT TO authenticated
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.user_profiles
+      WHERE id = auth.uid() AND role IN ('admin', 'gestor')
+    )
+  );
+
+-- Admins/gestors podem deletar
+CREATE POLICY "Admins can delete access"
+  ON public.lead_funnel_access FOR DELETE TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.user_profiles
+      WHERE id = auth.uid() AND role IN ('admin', 'gestor')
+    )
+  );
+
+-- Função SECURITY DEFINER para verificar acesso
+CREATE OR REPLACE FUNCTION public.has_funnel_access(_user_id uuid, _funnel_id uuid)
+RETURNS boolean
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT
+    -- Admin/gestor: acesso total
+    EXISTS (
+      SELECT 1 FROM public.user_profiles WHERE id = _user_id AND role IN ('admin', 'gestor')
+    )
+    OR
+    -- Acesso direto ao funil
+    EXISTS (
+      SELECT 1 FROM public.lead_funnel_access WHERE user_id = _user_id AND funnel_id = _funnel_id
+    )
+    OR
+    -- Acesso via campanha
+    EXISTS (
+      SELECT 1 FROM public.lead_funnel_access a
+      JOIN public.lead_funnels f ON f.campaign_id = a.campaign_id
+      WHERE a.user_id = _user_id AND f.id = _funnel_id AND a.funnel_id IS NULL
+    )
+$$;
 ```
 
-**Lógica de acesso:**
-- Se existe registro com `campaign_id` preenchido → acesso a TODOS os funis da campanha
-- Se existe registro com `funnel_id` preenchido → acesso apenas àquele funil
-- Sem nenhum registro → sem acesso (para vendedores)
-- Admin/gestor → ignora a tabela, acesso total
+---
 
-### Componente de UI
+### 2. Integrar FunnelAccessManager nas páginas (depois do SQL)
 
-Reutilizar o padrão já existente no `InstanceAccessManager` (WhatsApp), que usa checkboxes por vendedor. Criar um componente similar `FunnelAccessManager` com duas seções:
+**`src/pages/LeadCampaigns.tsx`**
+- Adicionar botão "Gerenciar Acesso" em cada campanha (ícone Users)
+- Ao clicar, expandir/mostrar `FunnelAccessManager` com `campaignId` (acesso total à campanha)
+- **Para vendedores**: filtrar a lista de campanhas/funis mostrando apenas aqueles com acesso
 
-1. **Na página de campanhas** — checkbox "Acesso total à campanha" por vendedor
-2. **Dentro do funil (aba Config)** — checkbox por vendedor para acesso individual
+**`src/components/lead-funnels/FunnelConfigTab.tsx`**
+- Adicionar seção `FunnelAccessManager` no final da aba de configuração, passando `funnelId` (acesso individual ao funil)
+- Precisa receber `funnelId` como nova prop
 
-### Arquivos
+**`src/pages/LeadFunnelDetail.tsx`**
+- Passar `funnelId` para `FunnelConfigTab`
+- Para vendedores sem acesso: verificar com `useHasFunnelAccess` e redirecionar se não tiver permissão
 
-| Arquivo | Ação |
+### 3. Filtrar listagem para vendedores
+
+**`src/pages/LeadCampaigns.tsx`**
+- Usar `useMyFunnelAccess()` + `useCurrentUserRole()`
+- Se vendedor: filtrar `allFunnels` e `campaigns` para mostrar apenas itens com acesso
+- Admins/gestores veem tudo normalmente
+
+---
+
+### Arquivos editados
+| Arquivo | Mudança |
 |---|---|
-| **Migration** | Criar tabela `lead_funnel_access` com RLS |
-| `src/hooks/useLeadFunnelAccess.ts` | **Novo** — CRUD de acessos + hook `useMyFunnelAccess` |
-| `src/components/lead-funnels/FunnelAccessManager.tsx` | **Novo** — UI de checkboxes (similar ao WhatsApp) |
-| `src/pages/LeadCampaigns.tsx` | Adicionar botão/seção de "Gerenciar Acesso" por campanha |
-| `src/components/lead-funnels/FunnelConfigTab.tsx` | Adicionar seção de acesso por vendedor |
-| `src/pages/LeadCampaigns.tsx` | Filtrar funis/campanhas visíveis para vendedores |
-| `src/pages/LeadFunnelDetail.tsx` | Verificar acesso antes de renderizar |
-
-### Segurança (RLS)
-
-- `SELECT`: usuário vê apenas seus próprios registros de acesso
-- `INSERT/DELETE`: apenas admin/gestor pode gerenciar acessos
-- Função `has_funnel_access(user_id, funnel_id)` como SECURITY DEFINER para verificar acesso (checa tanto por campanha quanto por funil individual)
-
-### Fluxo
-
-```text
-Admin abre Campanha X
-  → Seção "Acesso de Vendedores"
-  → Checkbox por vendedor: "Todos os funis" ← insere com campaign_id
-  
-Admin abre Funil Y (dentro de Campanha X)
-  → Aba Config → Seção "Acesso de Vendedores"  
-  → Checkbox por vendedor ← insere com funnel_id
-
-Vendedor faz login
-  → Vê apenas campanhas onde tem ao menos 1 funil com acesso
-  → Dentro da campanha, vê apenas funis permitidos
-```
+| `src/pages/LeadCampaigns.tsx` | Botão acesso + filtro vendedores |
+| `src/components/lead-funnels/FunnelConfigTab.tsx` | Seção FunnelAccessManager |
+| `src/pages/LeadFunnelDetail.tsx` | Passar funnelId + verificar acesso |
 
