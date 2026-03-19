@@ -49,6 +49,18 @@ const EVENT_MAP: Record<string, EventMapping> = {
 
 const DEFAULT_EVENT: EventMapping = { label: '', icon: Activity, colorClass: 'bg-primary/10 text-primary' };
 
+function formatTimeDelta(ms: number): string {
+  const minutes = Math.floor(ms / 60000);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+  const remHours = hours % 24;
+  const remMinutes = minutes % 60;
+
+  if (days > 0) return `+${days}d ${remHours}h ${remMinutes}min`;
+  if (hours > 0) return `+${hours}h ${remMinutes}min`;
+  return `+${remMinutes}min`;
+}
+
 function getEventMapping(eventName: string): EventMapping {
   const mapping = EVENT_MAP[eventName];
   if (mapping) return mapping;
