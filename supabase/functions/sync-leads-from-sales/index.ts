@@ -6,7 +6,7 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-const ORG_ID = "00000000-0000-0000-0000-000000000001";
+// ORG_ID will be detected dynamically from existing data
 const APPROVED_STATUSES = ["authorized", "approved", "paid", "completed", "Aprovada", "aprovada"];
 const BATCH_SIZE = 500;
 const PAGE_SIZE = 1000;
@@ -91,7 +91,8 @@ async function batchInsert(supabase: any, table: string, rows: any[]): Promise<n
 /** Upsert leads in batches, building key→id map */
 async function batchUpsertLeads(
   supabase: any,
-  contactMap: Map<string, any>
+  contactMap: Map<string, any>,
+  ORG_ID: string
 ): Promise<Map<string, string>> {
   const leadIdByKey = new Map<string, string>();
   const entries = Array.from(contactMap.entries());
@@ -168,7 +169,33 @@ async function performSync() {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
   );
 
-  // ===== STEP 0: Clean existing data =====
+  // ===== STEP 0a: Detect ORG_ID dynamically =====
+  const { data: orgSample, error: orgError } = await supabase
+    .from("unified_customers")
+    .select("organization_id")
+    .limit(1)
+    .maybeSingle();
+
+  if (orgError) console.error("Error detecting org_id:", orgError.message);
+
+  const ORG_ID = orgSample?.organization_id;
+
+  if (!ORG_ID) {
+    // Try without org filter to diagnose
+    const { count: totalCustomers } = await supabase.from("unified_customers").select("id", { count: "exact", head: true });
+    const { count: totalPurchases } = await supabase.from("customer_purchases").select("id", { count: "exact", head: true });
+    console.error(`No org_id found. Total unified_customers: ${totalCustomers}, total customer_purchases: ${totalPurchases}`);
+    return {
+      success: false,
+      error: `No organization found in unified_customers. Total customers: ${totalCustomers}, purchases: ${totalPurchases}`,
+      leads_created: 0,
+      events_created: 0,
+    };
+  }
+
+  console.log(`Detected organization_id: ${ORG_ID}`);
+
+  // ===== STEP 0b: Clean existing data =====
   const orgLeads = await fetchAllPaginated(supabase, "leads", "id", { organization_id: ORG_ID });
   const leadIds = orgLeads.map((l: any) => l.id);
 
@@ -297,7 +324,7 @@ async function performSync() {
   console.log(`Unique customers with purchases: ${contactMap.size}`);
 
   // ===== STEP 4: Insert leads in batches =====
-  const leadIdByKey = await batchUpsertLeads(supabase, contactMap);
+  const leadIdByKey = await batchUpsertLeads(supabase, contactMap, ORG_ID);
 
   // ===== STEP 5: Position leads in correct stage (batch) =====
   const positions: any[] = [];
