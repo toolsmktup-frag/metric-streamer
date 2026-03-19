@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 export interface TeamMember {
   id: string;
   full_name: string | null;
+  avatar_url: string | null;
   email: string;
   role: string;
   status: string;
@@ -40,7 +41,7 @@ export function useTeamMembers() {
 
       const { data, error } = await (supabase as any)
         .from('user_profiles')
-        .select('id, full_name, role, status, created_at, updated_at')
+        .select('id, full_name, avatar_url, role, status, created_at, updated_at')
         .eq('organization_id', orgId)
         .order('created_at', { ascending: true });
 

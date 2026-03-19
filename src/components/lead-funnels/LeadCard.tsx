@@ -1,13 +1,12 @@
 import React from 'react';
 import { Lead, LeadStagePosition } from '@/types/leadFunnels';
-import { Mail, Phone, Clock, DollarSign, GripVertical, MessageCircle, ShoppingBag, CalendarClock, Timer, EyeOff, User } from 'lucide-react';
+import { Mail, Phone, Clock, DollarSign, GripVertical, MessageCircle, ShoppingBag, CalendarClock, Timer, EyeOff } from 'lucide-react';
 import { PurchaseSummary } from '@/hooks/useBulkLeadPurchases';
 import { useDraggable } from '@dnd-kit/core';
 import { formatLocalDateTime } from '@/lib/localDate';
 import { differenceInDays } from 'date-fns';
 import type { RecontactInfo } from '@/hooks/useRecontactDeadlines';
 import LeadAssignSelect from './LeadAssignSelect';
-import { useTeamMembers } from '@/hooks/useTeamMembers';
 
 interface LeadCardProps {
   position: LeadStagePosition & { lead: Lead };
@@ -37,8 +36,6 @@ function friendlyStatus(status: string): string {
 
 const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, onWhatsAppClick, isDragging, isRevenue = true, purchaseSummary, recontactInfo, hideValues }) => {
   const lead = position.lead;
-  const { data: members = [] } = useTeamMembers();
-  const assignedMember = lead.assigned_to ? members.find(m => m.id === lead.assigned_to) : null;
   // Fallback: try metadata for phone if lead.phone is empty
   const leadPhone = lead.phone || (lead.metadata?.phone as string) || (lead.metadata?.cel as string) || (lead.metadata?.telefone as string) || null;
   const { attributes, listeners, setNodeRef, transform } = useDraggable({
@@ -173,15 +170,6 @@ const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, onWhatsAppClick,
         </div>
       )}
 
-      {/* Assigned seller badge */}
-      {assignedMember && (
-        <div className="mt-1.5 ml-[42px]">
-          <span className="inline-flex items-center gap-1 text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-md truncate max-w-[180px]">
-            <User className="h-3 w-3 shrink-0" />
-            {assignedMember.full_name || 'Sem nome'}
-          </span>
-        </div>
-      )}
 
       {/* Context badges (produto/status) */}
       {(lead.metadata?.product_name || lead.metadata?.status) && (
