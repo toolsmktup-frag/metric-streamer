@@ -74,8 +74,11 @@ const LeadFunnelDetail: React.FC = () => {
   const recontactMap = useRecontactDeadlines(positions, leadFunnelProducts, productMappings, purchaseMap);
   const allCatalogProducts = paymentFunnels.flatMap(f => f.funnel_products || []);
 
-  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
-  const [timelineOpen, setTimelineOpen] = useState(false);
+  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
+  const selectedLead = useMemo(() => {
+    if (!selectedLeadId) return null;
+    return positions.find(p => p.lead_id === selectedLeadId)?.lead ?? null;
+  }, [selectedLeadId, positions]);
   const [importOpen, setImportOpen] = useState(false);
   const [clearing, setClearing] = useState(false);
 
