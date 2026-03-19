@@ -128,6 +128,7 @@ export function useUpsertStages() {
             sort_order: stages.indexOf(s),
             page_url: s.page_url || null,
             page_type: s.page_type || null,
+            hide_values: !!s.hide_values,
           })
           .eq('id', s.id);
       }
@@ -143,6 +144,7 @@ export function useUpsertStages() {
             sort_order: existingStages.length + i,
             page_url: s.page_url || null,
             page_type: s.page_type || null,
+            hide_values: !!s.hide_values,
           })));
         if (error) throw error;
       }
