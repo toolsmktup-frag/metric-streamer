@@ -108,7 +108,12 @@ BEGIN
         ORDER BY cp.purchased_at ASC
         LIMIT 1
     ) cp_first ON true
-    WHERE uc.organization_id = v_org_id;
+    WHERE uc.organization_id = v_org_id
+      AND (
+        (uc.primary_phone IS NOT NULL AND length(regexp_replace(uc.primary_phone, '\D', '', 'g')) >= 8)
+        OR
+        (uc.primary_email IS NOT NULL AND uc.primary_email LIKE '%@%')
+      );
 
     GET DIAGNOSTICS v_lead_count = ROW_COUNT;
 
