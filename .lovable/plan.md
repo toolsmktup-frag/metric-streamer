@@ -1,59 +1,29 @@
 
 
-## Redistribuição de Leads entre Vendedores
+## Mostrar nome do vendedor no card do Kanban
 
-### O que será construído
+### O que muda
 
-Um botão "Redistribuir Leads" na aba **Configuração** do funil (FunnelConfigTab) que abre um dialog permitindo:
+No `LeadCard.tsx`, ao lado do avatar compacto do vendedor (que já existe), vamos exibir o **nome** do vendedor responsável como um badge de texto. O card já carrega `lead.assigned_to` e já importa `LeadAssignSelect` que usa `useTeamMembers` — vamos reutilizar esses dados.
 
-1. **Escolher o escopo**: "Leads sem vendedor", "Leads com vendedor", ou "Todos os leads"
-2. **Filtrar por etapa** (opcional): selecionar uma ou mais etapas específicas do funil
-3. **Ver os vendedores elegíveis**: lista automática dos vendedores que têm acesso ao funil (via `lead_funnel_access`) com checkbox para incluir/excluir
-4. **Distribuição round-robin igualitária**: ao clicar "Redistribuir", o sistema distribui os leads sequencialmente entre os vendedores selecionados (ex: 3 vendedores com 100 leads = 34, 33, 33)
-5. **Preview antes de confirmar**: mostra quantos leads cada vendedor receberá antes de executar
+### Como
 
-### Arquivos a criar/editar
+**Editar: `src/components/lead-funnels/LeadCard.tsx`**
 
-**Novo: `src/components/lead-funnels/RedistributeLeadsDialog.tsx`**
-- Dialog com as opções de escopo (sem vendedor / com vendedor / todos)
-- Seletor de etapas (multi-select com checkboxes)
-- Lista de vendedores com acesso ao funil (checkboxes)
-- Preview da distribuição (ex: "João: 34 leads, Maria: 33 leads")
-- Botão de confirmar que executa updates em batch via `supabase.from('leads').update({ assigned_to })`
+1. Importar `useTeamMembers` do hook existente
+2. Buscar o nome do membro atribuído (`lead.assigned_to`) na lista de membros
+3. Exibir um badge com o nome do vendedor abaixo dos badges de LTV/recontato (na área `ml-[42px]`), com ícone de `User` e estilo similar aos outros badges
 
-**Novo: `src/hooks/useRedistributeLeads.ts`**
-- Mutation que recebe `{ funnelId, scope, stageIds[], sellerIds[] }`
-- Busca lead_ids das posições filtradas
-- Distribui round-robin e faz batch update do `assigned_to`
-- Invalida queries relevantes (`leads-by-funnel`, `all-leads`)
-
-**Editar: `src/components/lead-funnels/FunnelConfigTab.tsx`**
-- Adicionar botão "Redistribuir Leads" na seção de configuração (junto ao botão de bulk move)
-
-**Editar: `src/pages/LeadFunnelDetail.tsx`**
-- Passar `positions` e dados de acesso ao FunnelConfigTab para alimentar o dialog
-
-### Lógica de distribuição
-
+O nome aparecerá como:
 ```text
-Leads filtrados: [L1, L2, L3, L4, L5, L6, L7]
-Vendedores selecionados: [V1, V2, V3]
-
-Resultado:
-  V1 ← L1, L4, L7  (3 leads)
-  V2 ← L2, L5      (2 leads)
-  V3 ← L3, L6      (2 leads)
+👤 Maria Silva
 ```
 
-A ordem dos leads segue a entrada no funil (entered_at) para distribuição justa.
+Em badge azul/primary discreto, visível sem precisar abrir o card. Se não houver vendedor atribuído, não mostra nada (o avatar compacto já indica "sem vendedor").
 
-### Fluxo do usuário
+### Impacto
 
-1. Admin abre aba "Configuração" do funil
-2. Clica "Redistribuir Leads"
-3. Seleciona escopo (sem vendedor / com vendedor / todos)
-4. Opcionalmente filtra por etapa(s)
-5. Vê lista de vendedores com acesso ao funil, marca quais participam
-6. Vê preview: "34 leads → João, 33 → Maria, 33 → Pedro"
-7. Confirma → toast de sucesso → Kanban atualizado
+- Apenas 1 arquivo editado
+- Reutiliza o hook `useTeamMembers` que já é carregado pelo `LeadAssignSelect` (sem queries extras)
+- Sem mudanças no banco de dados
 
