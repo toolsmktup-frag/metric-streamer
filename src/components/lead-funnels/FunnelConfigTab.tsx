@@ -252,6 +252,27 @@ const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSave
         />
       )}
 
+      {/* Redistribute Leads */}
+      {funnelId && stages.length > 0 && (
+        <div>
+          <h3 className="text-lg font-semibold text-foreground mb-3">Redistribuição de Leads</h3>
+          <Button variant="outline" className="gap-2" onClick={() => setRedistributeOpen(true)}>
+            <Shuffle className="h-4 w-4" />
+            Redistribuir Leads
+          </Button>
+          <p className="text-xs text-muted-foreground mt-1.5">
+            Distribui leads igualmente entre os vendedores com acesso ao funil (round-robin).
+          </p>
+          <RedistributeLeadsDialog
+            open={redistributeOpen}
+            onOpenChange={setRedistributeOpen}
+            funnelId={funnelId}
+            stages={stages}
+            positions={positions}
+          />
+        </div>
+      )}
+
     </div>
   );
 };
