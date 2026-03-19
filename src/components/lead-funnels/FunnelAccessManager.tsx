@@ -9,7 +9,6 @@ import { useOrgFunnelAccess, useGrantFunnelAccess, useRevokeFunnelAccess } from 
 interface UserAccess {
   user_id: string;
   full_name: string;
-  email: string;
   hasCampaignAccess: boolean;
   hasFunnelAccess: boolean;
 }
@@ -39,7 +38,7 @@ export default function FunnelAccessManager({ campaignId, funnelId, title }: Fun
 
       const { data: profiles } = await (supabase as any)
         .from('user_profiles')
-        .select('id, full_name, email, role')
+        .select('id, full_name, role')
         .eq('organization_id', orgId);
 
       // Only show sellers (vendedor/suporte) — admins/gestors always have access
@@ -48,7 +47,6 @@ export default function FunnelAccessManager({ campaignId, funnelId, title }: Fun
       const mapped: UserAccess[] = sellers.map((p: any) => ({
         user_id: p.id,
         full_name: p.full_name || 'Sem nome',
-        email: p.email || '',
         hasCampaignAccess: allAccess.some(
           a => a.user_id === p.id && a.campaign_id === campaignId && !a.funnel_id
         ),
@@ -151,9 +149,6 @@ export default function FunnelAccessManager({ campaignId, funnelId, title }: Fun
               />
               <Label htmlFor={`faccess-${user.user_id}`} className="flex-1 cursor-pointer">
                 <span className="text-sm text-foreground">{user.full_name}</span>
-                {user.email && (
-                  <span className="text-xs text-muted-foreground ml-2">{user.email}</span>
-                )}
                 {disabled && (
                   <span className="text-xs text-primary ml-2">(acesso via campanha)</span>
                 )}
