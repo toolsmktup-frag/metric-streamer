@@ -24,7 +24,7 @@ interface BaseLeadsListProps {
   recontactMap?: Map<string, RecontactInfo>;
 }
 
-type SortKey = 'ltv' | 'name' | 'date' | 'orders';
+type SortKey = 'ltv' | 'name' | 'date' | 'orders' | 'recontact';
 type SortDir = 'asc' | 'desc';
 
 const PAGE_SIZE = 50;
