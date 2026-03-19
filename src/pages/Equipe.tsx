@@ -164,7 +164,6 @@ export default function Equipe() {
     updateStatus.mutate({ userId, status: 'active' });
   }
 
-  const queryClient = useQueryClient();
 
   async function handleAvatarUpload(userId: string, e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
