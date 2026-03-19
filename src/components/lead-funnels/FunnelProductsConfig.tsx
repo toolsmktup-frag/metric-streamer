@@ -21,7 +21,7 @@ interface FunnelProductsConfigProps {
   products: LeadFunnelProduct[];
   catalogProducts: FunnelProduct[];
   stages: LeadFunnelStage[];
-  onSave: (products: Omit<LeadFunnelProduct, 'id' | 'lead_funnel_id' | 'created_at'>[]) => void;
+  onSave: (products: (Omit<LeadFunnelProduct, 'lead_funnel_id' | 'created_at'> & { id?: string })[]) => void;
   saving?: boolean;
   onBulkMoveOverdue?: () => void;
   bulkMoving?: boolean;
