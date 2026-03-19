@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState, useMemo } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Check, CheckCheck, Clock, Ban, Download, Play, Pause } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 import type { WhatsAppMessage } from '@/hooks/useWhatsApp';
 import type { WhatsAppInstance } from '@/hooks/useWhatsApp';
 import { getInstanceDisplayName } from '@/hooks/useWhatsApp';
@@ -20,7 +21,7 @@ function StatusIcon({ status, direction }: { status: string; direction: string }
     case 'pending': return <Clock className="h-3 w-3 text-muted-foreground" />;
     case 'sent': return <Check className="h-3 w-3 text-muted-foreground" />;
     case 'delivered': return <CheckCheck className="h-3 w-3 text-muted-foreground" />;
-    case 'read': return <CheckCheck className="h-3 w-3 text-blue-500" />;
+    case 'read': return <CheckCheck className="h-3 w-3 text-muted-foreground" />;
     case 'failed': return <Ban className="h-3 w-3 text-destructive" />;
     default: return null;
   }
@@ -33,15 +34,58 @@ function formatTime(s: number) {
   return `${m}:${sec.toString().padStart(2, '0')}`;
 }
 
-function AudioPlayer({ src, isOutbound = false }: { src: string; isOutbound?: boolean }) {
+function needsProxyDownload(src: string | null) {
+  if (!src) return false;
+  return src.includes('mmg.whatsapp.net') || /\.enc(\?|$)/i.test(src);
+}
+
+function AudioPlayer({ message, src, isOutbound = false }: { message: WhatsAppMessage; src: string; isOutbound?: boolean }) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [resolvedSrc, setResolvedSrc] = useState<string | null>(() => needsProxyDownload(src) ? null : src);
+  const [resolving, setResolving] = useState(() => needsProxyDownload(src));
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!needsProxyDownload(src)) {
+      setResolvedSrc(src);
+      setResolving(false);
+      return;
+    }
+
+    setResolvedSrc(null);
+    setResolving(true);
+
+    supabase.functions.invoke('whatsapp-media', {
+      body: { message_id: message.id },
+    }).then(({ data, error }) => {
+      if (cancelled) return;
+      if (error) throw error;
+
+      const nextSrc = data?.dataUrl || data?.fileURL || null;
+      if (!nextSrc) throw new Error('No playable media returned');
+
+      setResolvedSrc(nextSrc);
+      setResolving(false);
+    }).catch((err) => {
+      if (cancelled) return;
+      console.error('[AudioPlayer] resolve failed:', err.message || String(err), 'message:', message.id);
+      setResolving(false);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [message.id, src]);
+
+  const playableSrc = resolvedSrc || undefined;
 
   const toggle = () => {
-    if (!audioRef.current) return;
+    if (!audioRef.current || !playableSrc || resolving) return;
     if (playing) {
       audioRef.current.pause();
       setPlaying(false);
@@ -49,7 +93,7 @@ function AudioPlayer({ src, isOutbound = false }: { src: string; isOutbound?: bo
       audioRef.current.play().then(() => {
         setPlaying(true);
       }).catch((err) => {
-        console.error('[AudioPlayer] play failed:', err.message, 'src:', src?.slice(0, 80));
+        console.error('[AudioPlayer] play failed:', err.message, 'src:', playableSrc?.slice(0, 80));
       });
     }
   };
@@ -78,15 +122,18 @@ function AudioPlayer({ src, isOutbound = false }: { src: string; isOutbound?: bo
     <div className="flex items-center gap-2 min-w-[220px] max-w-[280px]">
       <audio
         ref={audioRef}
-        src={src}
+        src={playableSrc}
         preload="metadata"
-        crossOrigin="anonymous"
         onLoadedMetadata={() => { if (audioRef.current) setDuration(audioRef.current.duration); }}
         onTimeUpdate={() => { if (audioRef.current) setCurrentTime(audioRef.current.currentTime); }}
         onEnded={() => { setPlaying(false); setCurrentTime(0); }}
-        onError={(e) => { console.error('[AudioPlayer] load error:', (e.target as HTMLAudioElement)?.error?.message, 'src:', src?.slice(0, 80)); }}
+        onError={(e) => { console.error('[AudioPlayer] load error:', (e.target as HTMLAudioElement)?.error?.message, 'src:', playableSrc?.slice(0, 80)); }}
       />
-      <button onClick={toggle} className={`h-8 w-8 shrink-0 rounded-full flex items-center justify-center transition-colors ${isOutbound ? 'bg-primary-foreground/20 hover:bg-primary-foreground/30' : 'bg-primary/10 hover:bg-primary/20'}`}>
+      <button
+        onClick={toggle}
+        disabled={!playableSrc || resolving}
+        className={`h-8 w-8 shrink-0 rounded-full flex items-center justify-center transition-colors disabled:opacity-50 ${isOutbound ? 'bg-primary-foreground/20 hover:bg-primary-foreground/30' : 'bg-primary/10 hover:bg-primary/20'}`}
+      >
         {playing
           ? <Pause className={`h-3.5 w-3.5 ${isOutbound ? 'text-primary-foreground' : 'text-primary'}`} />
           : <Play className={`h-3.5 w-3.5 ${isOutbound ? 'text-primary-foreground' : 'text-primary'}`} />}
@@ -105,8 +152,8 @@ function AudioPlayer({ src, isOutbound = false }: { src: string; isOutbound?: bo
           }}
         />
         <div className={`flex justify-between text-[10px] ${isOutbound ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
-          <span>{formatTime(currentTime)}</span>
-          <span>{formatTime(duration)}</span>
+          <span>{resolving ? '...' : formatTime(currentTime)}</span>
+          <span>{resolving ? 'carregando' : formatTime(duration)}</span>
         </div>
       </div>
       <button onClick={changeSpeed} className={`text-[10px] font-bold shrink-0 ${isOutbound ? 'text-primary-foreground/70 hover:text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
@@ -121,8 +168,7 @@ function extractMediaUrlFromPayload(message: WhatsAppMessage): string | null {
   if (message.media_url) return message.media_url;
   const raw = message.payload_raw;
   if (!raw) return null;
-  
-  // UAZAPI v2: check message.content object
+
   const v2Msg = raw.message || raw;
   if (v2Msg.mediaUrl || v2Msg.media_url || v2Msg.fileUrl || v2Msg.file_url) {
     return v2Msg.mediaUrl || v2Msg.media_url || v2Msg.fileUrl || v2Msg.file_url;
@@ -132,8 +178,7 @@ function extractMediaUrlFromPayload(message: WhatsAppMessage): string | null {
       return v2Msg.content.url || v2Msg.content.URL || v2Msg.content.mediaUrl || v2Msg.content.fileUrl;
     }
   }
-  
-  // Legacy baileys
+
   const legacyMsg = raw.message;
   if (legacyMsg) {
     return legacyMsg.audioMessage?.url || legacyMsg.imageMessage?.url || legacyMsg.videoMessage?.url || legacyMsg.documentMessage?.url || null;
@@ -167,7 +212,6 @@ function MediaRenderer({ message }: { message: WhatsAppMessage }) {
   const media_url = extractMediaUrlFromPayload(message);
 
   if (!media_url) {
-    // For audio/ptt without URL, show a placeholder
     if (message_type === 'audio' || message_type === 'ptt') {
       return (
         <div className="flex items-center gap-2 min-w-[200px] text-xs text-muted-foreground italic">
@@ -183,7 +227,7 @@ function MediaRenderer({ message }: { message: WhatsAppMessage }) {
     case 'image':
       return (
         <div className="max-w-[240px]">
-          <img src={media_url} alt="" className="rounded-lg w-full cursor-pointer" loading="lazy" />
+          <img src={media_url} alt="Imagem recebida no WhatsApp" className="rounded-lg w-full cursor-pointer" loading="lazy" />
           {body && <p className="text-sm mt-1">{body}</p>}
         </div>
       );
@@ -196,7 +240,7 @@ function MediaRenderer({ message }: { message: WhatsAppMessage }) {
       );
     case 'audio':
     case 'ptt':
-      return <AudioPlayer src={media_url} isOutbound={message.direction === 'outbound'} />;
+      return <AudioPlayer message={message} src={media_url} isOutbound={message.direction === 'outbound'} />;
     case 'document':
       return (
         <a
@@ -230,7 +274,6 @@ function InstanceBadge({ instanceName, isOutbound }: { instanceName: string; isO
 export default function ChatThread({ messages, loading, phone, instances }: ChatThreadProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // Build instance map for badge display
   const instanceMap = useMemo(() => {
     if (!instances || instances.length <= 1) return null;
     const map = new Map<string, string>();
@@ -281,7 +324,6 @@ export default function ChatThread({ messages, loading, phone, instances }: Chat
                     : 'bg-card border border-border text-foreground rounded-bl-sm'
                 } ${isDeleted ? 'opacity-50 italic' : ''}`}
               >
-                {/* Instance badge for outbound in unified mode */}
                 {instanceName && isOut && (
                   <div className="mb-1">
                     <InstanceBadge instanceName={instanceName} isOutbound={isOut} />
