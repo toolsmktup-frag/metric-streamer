@@ -6,6 +6,7 @@ import { useDraggable } from '@dnd-kit/core';
 import { formatLocalDateTime } from '@/lib/localDate';
 import { differenceInDays } from 'date-fns';
 import type { RecontactInfo } from '@/hooks/useRecontactDeadlines';
+import LeadAssignSelect from './LeadAssignSelect';
 
 interface LeadCardProps {
   position: LeadStagePosition & { lead: Lead };
