@@ -37,6 +37,7 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export default function Equipe() {
+  const queryClient = useQueryClient();
   const { data: members = [], isLoading, updateRole, updateName, updateStatus } = useTeamMembers();
   const { data: permissions = [], isLoading: loadingPerms, updatePermission } = useOrgPermissions();
   const { instances, loading: loadingInstances } = useWhatsAppInstances();
