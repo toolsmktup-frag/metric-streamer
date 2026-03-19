@@ -1,7 +1,9 @@
 import { useMemo } from 'react';
 import { differenceInDays, addDays } from 'date-fns';
+import { parseLocalDateTime } from '@/lib/localDate';
 import type { Lead, LeadStagePosition } from '@/types/leadFunnels';
 import type { LeadProductMapping } from '@/hooks/useLeadProductMappings';
+import type { PurchaseSummary } from '@/hooks/useBulkLeadPurchases';
 
 export interface RecontactProduct {
   id?: string;
@@ -26,11 +28,16 @@ export interface RecontactInfo {
  * Priority:
  * 1. Explicit mapping (lead_product_mappings table)
  * 2. Substring match (product_name_contains) as fallback
+ *
+ * Date source priority:
+ * 1. metadata.purchased_at (parsed with BR date support)
+ * 2. purchaseMap.firstPurchaseDate (from customer_purchases table)
  */
 export function useRecontactDeadlines(
   positions: (LeadStagePosition & { lead: Lead })[],
   products: RecontactProduct[] | undefined,
   mappings?: LeadProductMapping[],
+  purchaseMap?: Map<string, PurchaseSummary>,
 ): Map<string, RecontactInfo> {
   return useMemo(() => {
     const map = new Map<string, RecontactInfo>();
@@ -58,9 +65,19 @@ export function useRecontactDeadlines(
     for (const pos of positions) {
       const lead = pos.lead;
       const productName = (lead.metadata?.product_name as string) || '';
-      const purchasedAt = (lead.metadata?.purchased_at as string) || '';
 
-      if (!productName || !purchasedAt) continue;
+      if (!productName) continue;
+
+      // Resolve purchase date: metadata first, then purchaseMap fallback
+      let purchasedAtRaw = (lead.metadata?.purchased_at as string) || '';
+      if (!purchasedAtRaw && purchaseMap) {
+        const summary = purchaseMap.get(pos.lead_id);
+        if (summary?.firstPurchaseDate) {
+          purchasedAtRaw = summary.firstPurchaseDate; // ISO format from DB
+        }
+      }
+
+      if (!purchasedAtRaw) continue;
 
       // 1. Try explicit mapping first
       let matchedProduct: RecontactProduct | undefined;
@@ -78,8 +95,9 @@ export function useRecontactDeadlines(
 
       if (!matchedProduct) continue;
 
-      const purchaseDate = new Date(purchasedAt);
-      if (isNaN(purchaseDate.getTime())) continue;
+      // Use parseLocalDateTime to correctly handle BR date format (dd/MM/yyyy)
+      const purchaseDate = parseLocalDateTime(purchasedAtRaw);
+      if (!purchaseDate) continue;
 
       const deadlineDate = addDays(purchaseDate, matchedProduct.recontact_days!);
       const daysRemaining = differenceInDays(deadlineDate, today);
@@ -95,5 +113,5 @@ export function useRecontactDeadlines(
     }
 
     return map;
-  }, [positions, products, mappings]);
+  }, [positions, products, mappings, purchaseMap]);
 }

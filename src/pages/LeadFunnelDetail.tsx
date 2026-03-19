@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useLeadFunnel, useUpsertStages, useUpsertTransitionRules, useFunnelSourceNodes, useFunnelEdges, useSaveFunnelSourceNodes, useSaveFunnelEdges } from '@/hooks/useLeadFunnels';
 import { useLeadsByFunnel, useFunnelLeadCounts } from '@/hooks/useLeads';
+import { useBulkLeadPurchases } from '@/hooks/useBulkLeadPurchases';
 import { useFunnels } from '@/hooks/useFunnels';
 import { useLeadFunnelProducts, useUpsertLeadFunnelProducts } from '@/hooks/useLeadFunnelProducts';
 import { useLeadProductMappings, useDistinctLeadProducts, useSaveLeadProductMappings } from '@/hooks/useLeadProductMappings';
