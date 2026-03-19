@@ -105,9 +105,10 @@ export default function InstanceHub({ instances, open, onOpenChange, onRefetch }
     setShowAddForm(true);
   };
 
-  const handleInstanceCreated = () => {
+  const handleInstanceCreated = (newInstanceId?: string) => {
     setShowAddForm(false);
     onRefetch();
+    if (newInstanceId) setSelectedId(newInstanceId);
   };
 
   return (
