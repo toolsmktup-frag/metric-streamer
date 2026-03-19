@@ -16,6 +16,7 @@ export interface RecontactInfo {
   deadlineDate: Date;
   productName: string;
   recontactDays: number;
+  matchedProductId?: string;
 }
 
 /**
