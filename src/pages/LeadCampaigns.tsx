@@ -175,6 +175,7 @@ const LeadCampaignsPage: React.FC = () => {
                   </Button>
                 </div>
               )}
+            </div>
 
             <div className="divide-y divide-border">
               {funnels.map(funnel => (
