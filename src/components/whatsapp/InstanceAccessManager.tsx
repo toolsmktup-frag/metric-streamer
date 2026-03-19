@@ -28,14 +28,24 @@ export default function InstanceAccessManager({ instances, selectedInstanceId }:
     if (!selectedInstanceId) return;
     setLoading(true);
     try {
-      const { data: orgId } = await (supabase as any).rpc('get_user_org_id');
-      if (!orgId) return;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
 
-      // Get all org members
+      // Get current user's org
+      const { data: currentProfile } = await (supabase as any)
+        .from('user_profiles')
+        .select('organization_id')
+        .eq('id', user.id)
+        .single();
+
+      if (!currentProfile?.organization_id) return;
+
+      // Get all org members (exclude admins — they always have access)
       const { data: profiles } = await (supabase as any)
         .from('user_profiles')
-        .select('id, full_name, email')
-        .eq('organization_id', orgId);
+        .select('id, full_name, email, role')
+        .eq('organization_id', currentProfile.organization_id)
+        .neq('role', 'admin');
 
       // Get existing access records for this instance
       const { data: accessRecords } = await (supabase as any)
@@ -68,7 +78,13 @@ export default function InstanceAccessManager({ instances, selectedInstanceId }:
     if (!selectedInstanceId) return;
     setSaving(userId);
     try {
-      const { data: orgId } = await (supabase as any).rpc('get_user_org_id');
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data: currentProfile } = await (supabase as any)
+        .from('user_profiles')
+        .select('organization_id')
+        .eq('id', user?.id)
+        .single();
+      const orgId = currentProfile?.organization_id;
 
       if (grant) {
         const { error } = await (supabase as any)
