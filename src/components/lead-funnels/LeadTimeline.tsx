@@ -161,7 +161,7 @@ const LeadTimeline: React.FC<LeadTimelineProps> = ({ lead, open, onClose }) => {
 
                 <div className="space-y-2">
                   {purchaseData.purchases.slice(0, 10).map(p => {
-                    const isPaid = p.status === 'approved' || p.status === 'Aprovada';
+                    const isPaid = p.status === 'authorized';
                     return (
                       <div key={p.id} className="flex items-start gap-2 text-xs">
                         <div className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${isPaid ? 'bg-emerald-500' : 'bg-muted-foreground/40'}`} />

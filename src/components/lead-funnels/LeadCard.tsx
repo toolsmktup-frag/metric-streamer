@@ -16,7 +16,7 @@ interface LeadCardProps {
 }
 
 const STATUS_LABELS: Record<string, string> = {
-  authorized: 'Aprovado', approved: 'Aprovado', paid: 'Aprovado', aprovada: 'Aprovado',
+  authorized: 'Aprovado', approved: 'Aprovado', paid: 'Aprovado', aprovada: 'Aprovado', Aprovada: 'Aprovado',
   waiting_payment: 'Aguardando', pending: 'Aguardando', pix_created: 'PIX Gerado',
   bank_slip_created: 'Boleto', bank_slip_delayed: 'Boleto', billet_printed: 'Boleto',
   rejected: 'Rejeitado', refused: 'Rejeitado', rejeitada: 'Rejeitado',
