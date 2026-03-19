@@ -215,7 +215,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
   };
 
   const totalFiltered = filteredPositions.length;
-  const totalAll = positions.length;
+  const totalAll = visiblePositions.length;
 
   return (
     <div className="space-y-3">
