@@ -298,11 +298,22 @@ export default function FunisConfigurar() {
                       value={p.display_name}
                       onChange={e => updateProduct(idx, 'display_name', e.target.value)}
                     />
+                    <Input
+                      className="w-20"
+                      type="number"
+                      placeholder="Dias"
+                      title="Dias para recontato após compra"
+                      value={p.recontact_days ?? ''}
+                      onChange={e => {
+                        const val = e.target.value ? parseInt(e.target.value, 10) : null;
+                        setProducts(prev => prev.map((row, i) => i === idx ? { ...row, recontact_days: val } : row));
+                      }}
+                    />
                     <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => removeProduct(idx)}>
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   </div>
-                ))}
+                ))
                 {products.length === 0 && (
                   <p className="text-xs text-muted-foreground py-2">Nenhum produto. Clique em "Adicionar" para configurar.</p>
                 )}
