@@ -6,10 +6,9 @@ import { useMyFunnelAccess } from '@/hooks/useLeadFunnelAccess';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Plus, Trash2, ChevronRight, Layers, Users } from 'lucide-react';
+import { Plus, Trash2, ChevronRight, Layers } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import FunnelAccessManager from '@/components/lead-funnels/FunnelAccessManager';
 
 const LeadCampaignsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -29,7 +28,6 @@ const LeadCampaignsPage: React.FC = () => {
   const [newName, setNewName] = useState('');
   const [newColor, setNewColor] = useState('#6366f1');
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
-  const [accessCampaignId, setAccessCampaignId] = useState<string | null>(null);
 
   // Filter funnels/campaigns for sellers
   const visibleFunnels = useMemo(() => {
