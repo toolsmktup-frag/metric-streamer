@@ -117,13 +117,12 @@ export default function InstanceHub({ instances, open, onOpenChange, onRefetch }
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
 
-  // Auto-select first instance when opening
+  // Auto-select first instance when opening (only if not showing add form)
   useEffect(() => {
-    if (open && instances.length > 0 && !selectedId) {
+    if (open && instances.length > 0 && !selectedId && !showAddForm) {
       setSelectedId(instances[0].id);
-      setShowAddForm(false);
     }
-  }, [open, instances, selectedId]);
+  }, [open, instances, selectedId, showAddForm]);
 
   // Reset state when closing
   useEffect(() => {
