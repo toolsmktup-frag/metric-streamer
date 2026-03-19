@@ -1,7 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { LeadFunnelStage, Lead, LeadStagePosition } from '@/types/leadFunnels';
 import LeadCard from './LeadCard';
-import { Search, ArrowUpDown, DollarSign, TrendingDown } from 'lucide-react';
+import { Search, ArrowUpDown, DollarSign, TrendingDown, ChevronDown } from 'lucide-react';
 import { formatCurrency } from '@/lib/formatters';
 import { isRevenueStage } from '@/lib/revenueStage';
 import { Input } from '@/components/ui/input';
@@ -19,6 +19,8 @@ import {
 } from '@dnd-kit/core';
 import { useMoveLeadStage } from '@/hooks/useMoveLeadStage';
 import { useBulkLeadPurchases, type PurchaseSummary } from '@/hooks/useBulkLeadPurchases';
+
+const CARDS_PER_PAGE = 50;
 
 interface KanbanBoardProps {
   stages: LeadFunnelStage[];
@@ -59,6 +61,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
   const [sortMode, setSortMode] = useState<SortMode>('recent');
   const [activeId, setActiveId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
+  const [visibleCounts, setVisibleCounts] = useState<Record<string, number>>({});
 
   const moveLeadStage = useMoveLeadStage();
   const { data: purchaseMap } = useBulkLeadPurchases(positions);
@@ -67,7 +70,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
   );
 
-  const sortedStages = [...stages].sort((a, b) => a.sort_order - b.sort_order);
+  const sortedStages = useMemo(() => [...stages].sort((a, b) => a.sort_order - b.sort_order), [stages]);
 
   const filteredPositions = useMemo(() => {
     if (!search.trim()) return positions;
@@ -82,34 +85,47 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
     });
   }, [positions, search]);
 
-  const getPurchaseSummary = (leadId: string): PurchaseSummary | undefined => {
+  const getPurchaseSummary = useCallback((leadId: string): PurchaseSummary | undefined => {
     return purchaseMap?.get(leadId);
-  };
+  }, [purchaseMap]);
 
-  const getLeadsForStage = (stageId: string) => {
-    const stageLeads = filteredPositions.filter(p => p.stage_id === stageId);
+  // Memoize sorted leads per stage
+  const sortedLeadsByStage = useMemo(() => {
+    const map = new Map<string, (LeadStagePosition & { lead: Lead })[]>();
+    
+    // Group by stage
+    const grouped = new Map<string, (LeadStagePosition & { lead: Lead })[]>();
+    for (const p of filteredPositions) {
+      const arr = grouped.get(p.stage_id) || [];
+      arr.push(p);
+      grouped.set(p.stage_id, arr);
+    }
 
-    return [...stageLeads].sort((a, b) => {
-      switch (sortMode) {
-        case 'recent':
-          return new Date(b.entered_at).getTime() - new Date(a.entered_at).getTime();
-        case 'value':
-          return (Number(b.lead.metadata?.amount) || 0) - (Number(a.lead.metadata?.amount) || 0);
-        case 'orders': {
-          const ordersA = getPurchaseSummary(a.lead_id)?.totalOrders || 0;
-          const ordersB = getPurchaseSummary(b.lead_id)?.totalOrders || 0;
-          return ordersB - ordersA;
+    for (const [stageId, stageLeads] of grouped) {
+      const sorted = [...stageLeads].sort((a, b) => {
+        switch (sortMode) {
+          case 'recent':
+            return new Date(b.entered_at).getTime() - new Date(a.entered_at).getTime();
+          case 'value':
+            return (Number(b.lead.metadata?.amount) || 0) - (Number(a.lead.metadata?.amount) || 0);
+          case 'orders': {
+            const ordersA = purchaseMap?.get(a.lead_id)?.totalOrders || 0;
+            const ordersB = purchaseMap?.get(b.lead_id)?.totalOrders || 0;
+            return ordersB - ordersA;
+          }
+          case 'ltv': {
+            const ltvA = purchaseMap?.get(a.lead_id)?.totalSpent || 0;
+            const ltvB = purchaseMap?.get(b.lead_id)?.totalSpent || 0;
+            return ltvB - ltvA;
+          }
+          default:
+            return 0;
         }
-        case 'ltv': {
-          const ltvA = getPurchaseSummary(a.lead_id)?.totalSpent || 0;
-          const ltvB = getPurchaseSummary(b.lead_id)?.totalSpent || 0;
-          return ltvB - ltvA;
-        }
-        default:
-          return 0;
-      }
-    });
-  };
+      });
+      map.set(stageId, sorted);
+    }
+    return map;
+  }, [filteredPositions, sortMode, purchaseMap]);
 
   const getStageRevenue = (leads: (LeadStagePosition & { lead: Lead })[]) => {
     return leads.reduce((sum, p) => sum + (Number(p.lead.metadata?.amount) || 0), 0);
@@ -173,6 +189,13 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
     });
   };
 
+  const showMore = (stageId: string) => {
+    setVisibleCounts(prev => ({
+      ...prev,
+      [stageId]: (prev[stageId] || CARDS_PER_PAGE) + CARDS_PER_PAGE,
+    }));
+  };
+
   const totalFiltered = filteredPositions.length;
   const totalAll = positions.length;
 
@@ -227,7 +250,10 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
       >
         <div className="flex gap-4 overflow-x-auto pb-4">
           {sortedStages.map(stage => {
-            const stageLeads = getLeadsForStage(stage.id);
+            const stageLeads = sortedLeadsByStage.get(stage.id) || [];
+            const visibleCount = visibleCounts[stage.id] || CARDS_PER_PAGE;
+            const visibleLeads = stageLeads.slice(0, visibleCount);
+            const hasMore = stageLeads.length > visibleCount;
             const isRevenue = isRevenueStage(stage.name);
             return (
               <div
@@ -264,17 +290,28 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
                       {search ? 'Nenhum resultado' : 'Nenhum lead nesta etapa'}
                     </p>
                   ) : (
-                    stageLeads.map(pos => (
-                      <LeadCard
-                        key={pos.id}
-                        position={pos}
-                        isDragging={activeId === pos.id}
-                        isRevenue={isRevenue}
-                        purchaseSummary={getPurchaseSummary(pos.lead_id)}
-                        onClick={() => onLeadClick?.(pos.lead_id)}
-                        onWhatsAppClick={onWhatsAppClick}
-                      />
-                    ))
+                    <>
+                      {visibleLeads.map(pos => (
+                        <LeadCard
+                          key={pos.id}
+                          position={pos}
+                          isDragging={activeId === pos.id}
+                          isRevenue={isRevenue}
+                          purchaseSummary={getPurchaseSummary(pos.lead_id)}
+                          onClick={() => onLeadClick?.(pos.lead_id)}
+                          onWhatsAppClick={onWhatsAppClick}
+                        />
+                      ))}
+                      {hasMore && (
+                        <button
+                          onClick={() => showMore(stage.id)}
+                          className="w-full py-2 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/80 rounded-lg transition-colors flex items-center justify-center gap-1"
+                        >
+                          <ChevronDown className="h-3.5 w-3.5" />
+                          Mostrar mais {Math.min(CARDS_PER_PAGE, stageLeads.length - visibleCount)} de {stageLeads.length - visibleCount} restantes
+                        </button>
+                      )}
+                    </>
                   )}
                 </DroppableColumn>
               </div>

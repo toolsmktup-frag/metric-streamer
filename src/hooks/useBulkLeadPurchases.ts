@@ -30,7 +30,10 @@ async function fetchAllIn<T>(
         .select(select)
         .in(column, chunk)
         .range(from, from + PAGE_SIZE - 1);
-      if (error) throw error;
+      if (error) {
+        console.warn(`[useBulkLeadPurchases] query error on ${table}:`, error.message);
+        break;
+      }
       const batch = (data || []) as T[];
       rows.push(...batch);
       if (batch.length < PAGE_SIZE) break;
