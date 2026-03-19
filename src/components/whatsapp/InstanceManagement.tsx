@@ -73,16 +73,26 @@ export default function InstanceManagement({
       if (data?.processed?.display_name) {
         setProfileName(data.processed.display_name);
       }
+      
+      const currentStatus = data?.processed?.status || 'disconnected';
+      
       // Extract QR code / pair code from status if instance is connecting
       const qr = data?.raw?.instance?.qrcode || data?.qrcode;
       const pc = data?.raw?.instance?.paircode || data?.paircode;
-      if (qr) {
-        setQrCode(qr);
+      
+      if (currentStatus === 'connecting' || qr || pc) {
+        if (qr && qr.length > 10) setQrCode(qr);
+        if (pc && pc.length > 2) setPairCode(pc);
         setConnecting(true);
-      }
-      if (pc) {
-        setPairCode(pc);
-        setConnecting(true);
+      } else if (currentStatus === 'connected') {
+        setQrCode(null);
+        setPairCode(null);
+        setConnecting(false);
+      } else {
+        // disconnected - reset
+        setQrCode(null);
+        setPairCode(null);
+        setConnecting(false);
       }
     } catch (err: any) {
       console.error('Status fetch error:', err);
@@ -107,12 +117,10 @@ export default function InstanceManagement({
       setInstanceName(instance.instance_name);
       setNickname(instance.nickname || '');
       setProfileName(instance.display_name || '');
+      setConnectPhone('');
+      // Don't reset qrCode/pairCode/connecting here — fetchStatus will set them correctly
       fetchStatus();
       fetchPrivacy();
-      setPairCode(null);
-      setQrCode(null);
-      setConnecting(false);
-      setConnectPhone('');
     }
   }, [instance, fetchStatus, fetchPrivacy]);
 
@@ -128,11 +136,13 @@ export default function InstanceManagement({
           setPairCode(null);
           setQrCode(null);
           toast.success('WhatsApp conectado!');
+          return;
         }
-        const qr = data?.raw?.instance?.qrcode || data?.instance?.qrcode || data?.qrcode || data?.base64;
-        if (qr) setQrCode(qr);
-        const pc = data?.raw?.instance?.paircode || data?.instance?.paircode || data?.paircode;
-        if (pc) setPairCode(pc);
+        // Update QR/pair code from polling (top-level or nested)
+        const qr = data?.qrcode || data?.raw?.instance?.qrcode;
+        if (qr && qr.length > 10) setQrCode(qr);
+        const pc = data?.paircode || data?.raw?.instance?.paircode;
+        if (pc && pc.length > 2) setPairCode(pc);
       } catch {}
     }, 3000);
     return () => clearInterval(interval);
