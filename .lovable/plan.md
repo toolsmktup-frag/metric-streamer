@@ -1,42 +1,38 @@
 
 
-## Plano: Limpar todos os dados de leads (manter funis e etapas)
+## Plano: Padronizar status de compra para `authorized`
 
-### O que vai ser feito
+### Problema
 
-Executar SQL no Supabase para deletar dados das 3 tabelas de leads na ordem correta (respeitando foreign keys), e limpar o log de sync.
+O sistema usa dois padrões de status diferentes para a mesma coisa ("compra aprovada"):
 
-### SQL para rodar no SQL Editor do Supabase
+| Local | Status usado | Onde |
+|-------|-------------|------|
+| **Banco (SQL, triggers, RFM, views)** | `authorized` | 21+ arquivos, todas as RPCs e migrations |
+| **Frontend (Leads/CRM)** | `approved` / `Aprovada` | 3 arquivos TypeScript |
 
-```sql
--- 1. Eventos
-DELETE FROM public.lead_events;
+Isso causa divergência nos cálculos de LTV entre módulos.
 
--- 2. Posições no funil
-DELETE FROM public.lead_stage_positions;
+### Solução
 
--- 3. Leads
-DELETE FROM public.leads;
+Padronizar tudo para `authorized`, que já é o padrão dominante (usado em 95% do código). Apenas 3 arquivos frontend precisam de ajuste.
 
--- 4. Limpar logs de sync
-DELETE FROM public.meta_sync_log;
-```
+### Alterações
 
-Isso preserva os funis (lead_funnels) e etapas (lead_funnel_stages) configurados.
+**1. `src/hooks/useLeadPurchases.ts`** (linha 63)
+- Trocar `p.status === 'approved' || p.status === 'Aprovada'` por `p.status === 'authorized'`
+- Trocar `net_amount ?? gross_amount` por `gross_amount` (alinhar com RFM)
 
-### Sobre os créditos
+**2. `src/components/lead-funnels/LeadTimeline.tsx`** (linha 164)
+- Trocar `p.status === 'approved' || p.status === 'Aprovada'` por `p.status === 'authorized'`
 
-Lovable não oferece reembolso de créditos via chat. Para solicitar revisão de créditos, entre em contato com o suporte oficial:
-- **Discord**: https://discord.com/channels/1119885301872070706/1280461670979993613
-- **Email**: support@lovable.dev
+**3. `src/components/whatsapp/ContactPanel.tsx`** (linha 174)
+- Trocar `p.status === 'approved' || p.status === 'Aprovada'` por `p.status === 'authorized'`
 
-Explique que a sincronização consumiu créditos sem resultado funcional e peça análise.
+**4. `src/components/lead-funnels/LeadCard.tsx`** (STATUS_LABELS)
+- Adicionar `authorized: 'Aprovado'` ao mapa de labels (para exibir "Aprovado" no card)
 
-### Por que os 26k leads não apareceram no funil
+### Resultado
 
-O dashboard mostra 26.467 leads (imagem 1), mas o funil BASE DE LEADS mostra 0 (imagem 2). Isso indica que os leads foram inseridos na tabela `leads`, mas as `lead_stage_positions` não foram criadas corretamente (provavelmente o processo caiu antes de completar os inserts de posições). Sem posição, o funil não exibe o lead.
-
-### Próximo passo
-
-Após rodar o SQL, você pode importar manualmente pela funcionalidade "Importar Leads" que já existe na tela do funil.
+Após a correção, o LTV no CRM (Base de Leads) vai usar a mesma lógica do RFM (Inteligência de Cliente), eliminando a divergência.
 
