@@ -86,6 +86,12 @@ const BaseLeadsList: React.FC<BaseLeadsListProps> = ({ positions, onLeadClick, o
         case 'date':
           cmp = new Date(a.entered_at || 0).getTime() - new Date(b.entered_at || 0).getTime();
           break;
+        case 'recontact': {
+          const rA = recontactMap?.get(a.lead_id)?.daysRemaining ?? 9999;
+          const rB = recontactMap?.get(b.lead_id)?.daysRemaining ?? 9999;
+          cmp = rA - rB;
+          break;
+        }
       }
       return sortDir === 'desc' ? -cmp : cmp;
     });
