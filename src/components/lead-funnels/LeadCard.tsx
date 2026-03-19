@@ -128,6 +128,29 @@ const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, onWhatsAppClick,
         </div>
       )}
 
+      {/* Recontact countdown badge */}
+      {recontactInfo && (
+        <div className="mt-1.5 ml-[42px]">
+          <span
+            className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-md ${
+              recontactInfo.daysRemaining < 0
+                ? 'bg-destructive/15 text-destructive'
+                : recontactInfo.daysRemaining <= 7
+                ? 'bg-yellow-500/15 text-yellow-600 dark:text-yellow-400'
+                : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+            }`}
+            title={`Recontato: ${recontactInfo.productName} — ${recontactInfo.recontactDays}d ciclo`}
+          >
+            <Timer className="h-3.5 w-3.5" />
+            {recontactInfo.daysRemaining < 0
+              ? `${recontactInfo.daysRemaining}d 🔥`
+              : recontactInfo.daysRemaining <= 7
+              ? `${recontactInfo.daysRemaining}d ⚠️`
+              : `${recontactInfo.daysRemaining}d`}
+          </span>
+        </div>
+      )}
+
       {/* Context badges (produto/status) */}
       {(lead.metadata?.product_name || lead.metadata?.status) && (
         <div className="mt-1 flex items-center gap-1.5 flex-wrap ml-[42px]">
