@@ -55,6 +55,7 @@ interface CustomerPurchase {
   net_amount: number | null;
   gross_amount: number;
   status: string;
+  purchased_at: string;
 }
 
 export function useBulkLeadPurchases(
