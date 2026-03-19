@@ -105,42 +105,45 @@ const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, onWhatsAppClick,
         </div>
       </div>
 
-      <div className="mt-2 flex items-center gap-2 flex-wrap">
-        {/* Global LTV badge */}
-        {hasLTV && (
-          <>
-            <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded">
-              <DollarSign className="h-3 w-3" />
-              {purchaseSummary.totalSpent.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+      {/* LTV prominente ao lado do nome */}
+      {hasLTV && (
+        <div className="mt-1.5 flex items-center gap-2 ml-[42px]">
+          <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md">
+            <DollarSign className="h-3.5 w-3.5" />
+            {purchaseSummary!.totalSpent.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+          </span>
+          <span className="inline-flex items-center gap-1 text-[10px] font-medium text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+            <ShoppingBag className="h-3 w-3" />
+            {purchaseSummary!.totalOrders} {purchaseSummary!.totalOrders === 1 ? 'compra' : 'compras'}
+          </span>
+        </div>
+      )}
+
+      {/* Context badges (produto/status) — sempre visíveis */}
+      {(lead.metadata?.product_name || lead.metadata?.amount || lead.metadata?.status) && (
+        <div className="mt-1.5 flex items-center gap-1.5 flex-wrap ml-[42px]">
+          {lead.metadata?.product_name && (
+            <span className="text-[10px] px-1.5 py-0.5 bg-primary/10 text-primary rounded font-medium truncate max-w-[140px]">
+              {lead.metadata.product_name as string}
             </span>
-            <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-              <ShoppingBag className="h-3 w-3" />
-              ×{purchaseSummary.totalOrders}
+          )}
+          {lead.metadata?.amount && (
+            <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded ${
+              isRevenue
+                ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10'
+                : 'text-destructive bg-destructive/10'
+            }`}>
+              <DollarSign className="h-2.5 w-2.5" />
+              {isRevenue ? '' : '-'}{Number(lead.metadata.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
             </span>
-          </>
-        )}
-        {/* Context badges from metadata (product/status for this specific funnel entry) */}
-        {!hasLTV && lead.metadata?.product_name && (
-          <span className="text-[10px] px-1.5 py-0.5 bg-primary/10 text-primary rounded font-medium truncate max-w-[140px]">
-            {lead.metadata.product_name as string}
-          </span>
-        )}
-        {!hasLTV && lead.metadata?.amount && (
-          <span className={`inline-flex items-center gap-1 text-xs font-semibold px-1.5 py-0.5 rounded ${
-            isRevenue
-              ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10'
-              : 'text-destructive bg-destructive/10'
-          }`}>
-            <DollarSign className="h-3 w-3" />
-            {isRevenue ? '' : '-'}{Number(lead.metadata.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-          </span>
-        )}
-        {lead.metadata?.status && (
-          <span className="text-[10px] px-1.5 py-0.5 bg-muted rounded text-muted-foreground">
-            {friendlyStatus(lead.metadata.status as string)}
-          </span>
-        )}
-      </div>
+          )}
+          {lead.metadata?.status && (
+            <span className="text-[10px] px-1.5 py-0.5 bg-muted rounded text-muted-foreground">
+              {friendlyStatus(lead.metadata.status as string)}
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 };

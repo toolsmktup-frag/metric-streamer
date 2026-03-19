@@ -157,6 +157,7 @@ export function useBulkLeadPurchases(
         });
       });
 
+      console.log(`[useBulkLeadPurchases] Done: ${customerMap.size} customers, ${purchases.length} purchases, ${result.size} leads with LTV`);
       return result;
     },
     enabled: emails.length > 0 || phones.length > 0,
