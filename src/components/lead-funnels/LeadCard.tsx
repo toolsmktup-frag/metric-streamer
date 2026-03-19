@@ -1,7 +1,7 @@
 import React from 'react';
 import { Lead, LeadStagePosition } from '@/types/leadFunnels';
-import { Mail, Phone, Clock, DollarSign, GripVertical, MessageCircle } from 'lucide-react';
-import { useLeadPurchases } from '@/hooks/useLeadPurchases';
+import { Mail, Phone, Clock, DollarSign, GripVertical, MessageCircle, ShoppingBag } from 'lucide-react';
+import { PurchaseSummary } from '@/hooks/useBulkLeadPurchases';
 import { useDraggable } from '@dnd-kit/core';
 import { formatLocalDateTime } from '@/lib/localDate';
 
@@ -11,6 +11,7 @@ interface LeadCardProps {
   onWhatsAppClick?: (phone: string) => void;
   isDragging?: boolean;
   isRevenue?: boolean;
+  purchaseSummary?: PurchaseSummary;
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -28,9 +29,8 @@ function friendlyStatus(status: string): string {
   return STATUS_LABELS[status.toLowerCase().trim()] || status;
 }
 
-const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, onWhatsAppClick, isDragging, isRevenue = true }) => {
+const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, onWhatsAppClick, isDragging, isRevenue = true, purchaseSummary }) => {
   const lead = position.lead;
-  const { data: purchaseData } = useLeadPurchases(lead.email, lead.phone);
   const { attributes, listeners, setNodeRef, transform } = useDraggable({
     id: position.id,
   });
@@ -44,6 +44,8 @@ const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, onWhatsAppClick,
     .slice(0, 2)
     .map(w => w[0]?.toUpperCase())
     .join('');
+
+  const hasLTV = purchaseSummary && purchaseSummary.totalOrders > 0;
 
   return (
     <div
@@ -104,23 +106,26 @@ const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, onWhatsAppClick,
       </div>
 
       <div className="mt-2 flex items-center gap-2 flex-wrap">
-        {purchaseData && purchaseData.totalOrders > 0 && (
+        {/* Global LTV badge */}
+        {hasLTV && (
           <>
             <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded">
               <DollarSign className="h-3 w-3" />
-              {purchaseData.totalSpent.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+              {purchaseSummary.totalSpent.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
             </span>
-            <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-              ×{purchaseData.totalOrders}
+            <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+              <ShoppingBag className="h-3 w-3" />
+              ×{purchaseSummary.totalOrders}
             </span>
           </>
         )}
-        {!purchaseData?.totalOrders && lead.metadata?.product_name && (
+        {/* Context badges from metadata (product/status for this specific funnel entry) */}
+        {!hasLTV && lead.metadata?.product_name && (
           <span className="text-[10px] px-1.5 py-0.5 bg-primary/10 text-primary rounded font-medium truncate max-w-[140px]">
             {lead.metadata.product_name as string}
           </span>
         )}
-        {!purchaseData?.totalOrders && lead.metadata?.amount && (
+        {!hasLTV && lead.metadata?.amount && (
           <span className={`inline-flex items-center gap-1 text-xs font-semibold px-1.5 py-0.5 rounded ${
             isRevenue
               ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10'
@@ -130,7 +135,7 @@ const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, onWhatsAppClick,
             {isRevenue ? '' : '-'}{Number(lead.metadata.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
           </span>
         )}
-        {!purchaseData?.totalOrders && lead.metadata?.status && (
+        {lead.metadata?.status && (
           <span className="text-[10px] px-1.5 py-0.5 bg-muted rounded text-muted-foreground">
             {friendlyStatus(lead.metadata.status as string)}
           </span>
