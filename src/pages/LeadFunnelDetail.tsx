@@ -397,6 +397,8 @@ const LeadFunnelDetail: React.FC = () => {
               }}
               savingMappings={saveProductMappings.isPending}
               loadingDistinctProducts={loadingDistinctProducts}
+              positions={positions}
+            />
             />
           </TabsContent>
         )}
