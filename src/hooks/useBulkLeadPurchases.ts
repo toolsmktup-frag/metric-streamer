@@ -137,7 +137,7 @@ export function useBulkLeadPurchases(
       const customerIds = Array.from(customerMap.keys());
       const purchases = await fetchAllIn<CustomerPurchase>(
         'customer_purchases',
-        'unified_customer_id, net_amount, gross_amount, status',
+        'unified_customer_id, net_amount, gross_amount, status, purchased_at',
         'unified_customer_id',
         customerIds,
       );
@@ -145,16 +145,24 @@ export function useBulkLeadPurchases(
       // 3. Aggregate per lead
       const result = new Map<string, PurchaseSummary>();
 
+      // Accept all "successful" statuses
+      const APPROVED_STATUSES = new Set([
+        'approved', 'aprovada', 'authorized', 'paid', 'pago', 'completed', 'complete',
+      ]);
+
       purchases.forEach((p) => {
-        const isApproved = p.status === 'approved' || p.status === 'Aprovada';
-        if (!isApproved) return;
+        if (!APPROVED_STATUSES.has(p.status?.toLowerCase().trim())) return;
 
         const amount = p.net_amount ?? p.gross_amount;
         const leadIds = customerToLeads.get(p.unified_customer_id);
         leadIds?.forEach((leadId) => {
-          const existing = result.get(leadId) || { totalSpent: 0, totalOrders: 0 };
+          const existing = result.get(leadId) || { totalSpent: 0, totalOrders: 0, firstPurchaseDate: null };
           existing.totalSpent += amount;
           existing.totalOrders += 1;
+          // Track earliest purchase date
+          if (!existing.firstPurchaseDate || p.purchased_at < existing.firstPurchaseDate) {
+            existing.firstPurchaseDate = p.purchased_at;
+          }
           result.set(leadId, existing);
         });
       });
