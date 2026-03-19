@@ -218,8 +218,11 @@ const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSave
         <FunnelProductsConfig
           products={leadFunnelProducts}
           catalogProducts={catalogProducts}
+          stages={stages}
           onSave={onSaveProducts}
           saving={savingProducts}
+          onBulkMoveOverdue={onBulkMoveOverdue}
+          bulkMoving={bulkMoving}
         />
       )}
 
