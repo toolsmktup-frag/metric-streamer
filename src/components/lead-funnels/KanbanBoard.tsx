@@ -86,9 +86,9 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
   const sortedStages = useMemo(() => [...stages].sort((a, b) => a.sort_order - b.sort_order), [stages]);
 
   const filteredPositions = useMemo(() => {
-    if (!search.trim()) return positions;
+    if (!search.trim()) return visiblePositions;
     const q = search.toLowerCase().trim();
-    return positions.filter(p => {
+    return visiblePositions.filter(p => {
       const lead = p.lead;
       return (
         lead.name?.toLowerCase().includes(q) ||
@@ -96,7 +96,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
         lead.phone?.includes(q)
       );
     });
-  }, [positions, search]);
+  }, [visiblePositions, search]);
 
   const getPurchaseSummary = useCallback((leadId: string): PurchaseSummary | undefined => {
     return purchaseMap?.get(leadId);
