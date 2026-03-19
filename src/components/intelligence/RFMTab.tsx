@@ -58,6 +58,39 @@ export default function RFMTab() {
   const atRisk = data.bySegment.at_risk;
   const lost = data.bySegment.lost;
 
+  const handleExport = useCallback(() => {
+    if (!filteredCustomers.length) return;
+    const columns = [
+      { key: 'email', label: 'Email' },
+      { key: 'nome', label: 'Nome' },
+      { key: 'segmento', label: 'Segmento' },
+      { key: 'recencia_dias', label: 'Recência (dias)' },
+      { key: 'frequencia', label: 'Frequência' },
+      { key: 'monetario', label: 'Monetário (R$)' },
+      { key: 'score_r', label: 'Score R' },
+      { key: 'score_f', label: 'Score F' },
+      { key: 'score_m', label: 'Score M' },
+      { key: 'primeira_compra', label: 'Primeira Compra' },
+      { key: 'ultima_compra', label: 'Última Compra' },
+    ];
+    const rows = filteredCustomers.map(c => ({
+      email: c.email,
+      nome: c.name || '',
+      segmento: SEGMENT_CONFIG[c.segment].label,
+      recencia_dias: c.recencyDays,
+      frequencia: c.frequency,
+      monetario: c.monetary,
+      score_r: c.rScore,
+      score_f: c.fScore,
+      score_m: c.mScore,
+      primeira_compra: format(c.firstPurchaseAt, 'dd/MM/yyyy'),
+      ultima_compra: format(c.lastPurchaseAt, 'dd/MM/yyyy'),
+    }));
+    const seg = selectedSegment === 'all' ? 'todos' : selectedSegment;
+    const date = format(new Date(), 'yyyy-MM-dd');
+    downloadCsv(rows, columns, `clientes-rfm-${seg}-${date}.csv`);
+  }, [filteredCustomers, selectedSegment]);
+
   const toggleSort = (col: typeof sortBy) => {
     if (sortBy === col) setSortAsc(p => !p);
     else { setSortBy(col); setSortAsc(false); }
