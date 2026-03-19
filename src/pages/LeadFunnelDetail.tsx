@@ -68,6 +68,49 @@ const LeadFunnelDetail: React.FC = () => {
   const [importOpen, setImportOpen] = useState(false);
   const [clearing, setClearing] = useState(false);
 
+  const handleBulkMoveOverdue = useCallback(async () => {
+    if (!id || !funnel) return;
+    const stagesArr = funnel.lead_funnel_stages || [];
+    setBulkMoving(true);
+    let movedCount = 0;
+    try {
+      for (const product of leadFunnelProducts) {
+        if (!product.auto_move_stage_id || !product.recontact_days) continue;
+        
+        for (const pos of positions) {
+          const leadId = pos.lead_id;
+          const recontact = recontactMap[leadId];
+          if (!recontact?.isOverdue) continue;
+          // Check if this lead's recontact matches this product
+          if (recontact.productName !== product.product_name_contains && 
+              recontact.productName !== product.display_name) continue;
+          // Don't move if already in target stage
+          if (pos.stage_id === product.auto_move_stage_id) continue;
+
+          const targetStage = stagesArr.find(s => s.id === product.auto_move_stage_id);
+          await moveLeadStage.mutateAsync({
+            positionId: pos.id,
+            leadId,
+            funnelId: id,
+            fromStageId: pos.stage_id,
+            toStageId: product.auto_move_stage_id,
+            toStageName: targetStage?.name,
+          });
+          movedCount++;
+        }
+      }
+      if (movedCount > 0) {
+        toast.success(`${movedCount} lead(s) movido(s) por recontato vencido`);
+      } else {
+        toast.info('Nenhum lead vencido para mover');
+      }
+    } catch {
+      toast.error('Erro ao mover leads');
+    } finally {
+      setBulkMoving(false);
+    }
+  }, [id, funnel, leadFunnelProducts, positions, recontactMap, moveLeadStage]);
+
   const handleClearFunnel = async () => {
     if (!id) return;
     setClearing(true);
