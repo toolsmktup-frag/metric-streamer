@@ -141,8 +141,12 @@ export default function InstanceManagement({
       const body: any = {};
       if (connectPhone.trim()) body.phone = connectPhone.trim();
       const data = await callInstanceAPI(instance.id, 'connect', body);
-      if (data?.raw?.instance?.paircode) setPairCode(data.raw.instance.paircode);
-      if (data?.raw?.instance?.qrcode) setQrCode(data.raw.instance.qrcode);
+      console.log('[WhatsApp Connect] Response:', JSON.stringify(data));
+      // Check multiple possible paths for paircode/qrcode
+      const paircode = data?.raw?.instance?.paircode || data?.instance?.paircode || data?.paircode;
+      const qrcode = data?.raw?.instance?.qrcode || data?.instance?.qrcode || data?.qrcode || data?.base64;
+      if (paircode) setPairCode(paircode);
+      if (qrcode) setQrCode(qrcode);
       setStatusData(data);
       toast.info(connectPhone.trim()
         ? 'Código de pareamento gerado! Use-o no WhatsApp.'
