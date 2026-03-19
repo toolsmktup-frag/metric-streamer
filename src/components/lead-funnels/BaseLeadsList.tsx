@@ -29,7 +29,7 @@ type SortDir = 'asc' | 'desc';
 
 const PAGE_SIZE = 50;
 
-const BaseLeadsList: React.FC<BaseLeadsListProps> = ({ positions, onLeadClick, onWhatsAppClick }) => {
+const BaseLeadsList: React.FC<BaseLeadsListProps> = ({ positions, onLeadClick, onWhatsAppClick, recontactMap }) => {
   const [search, setSearch] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('ltv');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
