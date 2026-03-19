@@ -44,10 +44,14 @@ function AudioPlayer({ src, isOutbound = false }: { src: string; isOutbound?: bo
     if (!audioRef.current) return;
     if (playing) {
       audioRef.current.pause();
+      setPlaying(false);
     } else {
-      audioRef.current.play();
+      audioRef.current.play().then(() => {
+        setPlaying(true);
+      }).catch((err) => {
+        console.error('[AudioPlayer] play failed:', err.message, 'src:', src?.slice(0, 80));
+      });
     }
-    setPlaying(!playing);
   };
 
   const changeSpeed = () => {
