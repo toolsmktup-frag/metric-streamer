@@ -44,6 +44,17 @@ export default function Resumo() {
   const { data: dailyMetrics = [], isLoading: loadingDaily } = useMetaDailyInsights();
   const { totalSales, byCampaign } = useAllSalesAggregation();
   const { data: allSales = [] } = useAllSales();
+  const { data: totalCustomers = 0, isLoading: loadingCustomers } = useQuery({
+    queryKey: ['unified-customers-count'],
+    queryFn: async () => {
+      const { count, error } = await (supabase as any)
+        .from('unified_customers')
+        .select('*', { count: 'exact', head: true });
+      if (error) throw error;
+      return count ?? 0;
+    },
+    staleTime: 60 * 1000,
+  });
   const syncMeta = useSyncMeta();
   const syncStatus = useSyncPollingRefetch();
 
