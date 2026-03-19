@@ -32,7 +32,7 @@ interface FunnelConfigTabProps {
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
 
-const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSaveStages, onSaveRules, saving, leadFunnelProducts = [], catalogProducts = [], onSaveProducts, savingProducts }) => {
+const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSaveStages, onSaveRules, saving, leadFunnelProducts = [], catalogProducts = [], onSaveProducts, savingProducts, distinctLeadProducts = [], existingMappings = [], onSaveMappings, savingMappings, loadingDistinctProducts }) => {
   const [localStages, setLocalStages] = useState<Partial<LeadFunnelStage>[]>(
     stages.length ? stages : [{ name: 'Novo Lead', color: COLORS[0], sort_order: 0 }]
   );
