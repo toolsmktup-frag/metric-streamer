@@ -9,7 +9,6 @@ import { useOrgFunnelAccess, useGrantFunnelAccess, useRevokeFunnelAccess } from 
 interface UserAccess {
   user_id: string;
   full_name: string;
-  email: string;
   hasCampaignAccess: boolean;
   hasFunnelAccess: boolean;
 }
