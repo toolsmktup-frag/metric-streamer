@@ -78,7 +78,13 @@ export default function InstanceAccessManager({ instances, selectedInstanceId }:
     if (!selectedInstanceId) return;
     setSaving(userId);
     try {
-      const { data: orgId } = await (supabase as any).rpc('get_user_org_id');
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data: currentProfile } = await (supabase as any)
+        .from('user_profiles')
+        .select('organization_id')
+        .eq('id', user?.id)
+        .single();
+      const orgId = currentProfile?.organization_id;
 
       if (grant) {
         const { error } = await (supabase as any)
