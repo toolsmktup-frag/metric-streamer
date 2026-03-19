@@ -58,7 +58,6 @@ export default function InstanceAccessManager({ instances, selectedInstanceId }:
         (profiles || []).map((p: any) => ({
           user_id: p.id,
           full_name: p.full_name || 'Sem nome',
-          email: p.email || '',
           has_access: accessSet.has(p.id),
         }))
       );
