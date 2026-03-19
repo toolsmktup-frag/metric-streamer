@@ -149,6 +149,7 @@ const LeadFunnelDetail: React.FC = () => {
 
   const stages = funnel.lead_funnel_stages || [];
   const rules = funnel.stage_transition_rules || [];
+  const isBaseFunnel = /base/i.test(funnel.name) || stages.length <= 1;
 
   return (
     <div className="p-6 space-y-6">
