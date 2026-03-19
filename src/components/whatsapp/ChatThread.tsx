@@ -282,11 +282,15 @@ export default function ChatThread({ messages, loading, phone, instances }: Chat
                   </div>
                 )}
 
-                {msg.message_type !== 'text' && (msg.media_url || msg.message_type === 'audio' || msg.message_type === 'ptt') && !isDeleted ? (
-                  <MediaRenderer message={msg} />
-                ) : (
-                  <p className="whitespace-pre-wrap break-words">{msg.body || ''}</p>
-                )}
+                {(() => {
+                  const realType = detectRealMessageType(msg);
+                  const hasMedia = realType !== 'text' && (extractMediaUrlFromPayload(msg) || realType === 'audio' || realType === 'ptt');
+                  return hasMedia && !isDeleted ? (
+                    <MediaRenderer message={msg} />
+                  ) : (
+                    <p className="whitespace-pre-wrap break-words">{msg.body || ''}</p>
+                  );
+                })()}
 
                 <div className={`flex items-center gap-1 mt-1 ${isOut ? 'justify-end' : 'justify-start'}`}>
                   <span className={`text-[10px] ${isOut ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
