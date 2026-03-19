@@ -30,6 +30,7 @@ interface KanbanBoardProps {
   onWhatsAppClick?: (phone: string) => void;
   funnelId: string;
   recontactMap?: Map<string, RecontactInfo>;
+  userRole?: string;
 }
 
 type SortMode = 'recent' | 'value' | 'orders' | 'ltv' | 'recontact';
@@ -59,7 +60,8 @@ const DroppableColumn: React.FC<{ id: string; isOver: boolean; children: React.R
   );
 };
 
-const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClick, onWhatsAppClick, funnelId, recontactMap }) => {
+const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClick, onWhatsAppClick, funnelId, recontactMap, userRole }) => {
+  const isAdmin = userRole === 'admin' || userRole === 'gestor';
   const [search, setSearch] = useState('');
   const [sortMode, setSortMode] = useState<SortMode>('ltv');
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -234,13 +236,13 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
             ? `${totalAll} leads`
             : `${totalFiltered} de ${totalAll} leads`}
         </span>
-        {confirmedRevenue > 0 && (
+        {isAdmin && confirmedRevenue > 0 && (
           <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded">
             <DollarSign className="h-3 w-3" />
             {formatCurrency(confirmedRevenue)}
           </span>
         )}
-        {lostRevenue > 0 && (
+        {isAdmin && lostRevenue > 0 && (
           <span className="inline-flex items-center gap-1 text-xs font-semibold text-destructive bg-destructive/10 px-2 py-0.5 rounded">
             <TrendingDown className="h-3 w-3" />
             -{formatCurrency(lostRevenue)}
@@ -262,7 +264,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
             const visibleCount = visibleCounts[stage.id] || CARDS_PER_PAGE;
             const visibleLeads = stageLeads.slice(0, visibleCount);
             const hasMore = stageLeads.length > visibleCount;
-            const isRevenue = isRevenueStage(stage.name);
+            const shouldHideValues = !isAdmin && stage.hide_values;
             return (
               <div
                 key={stage.id}
@@ -281,12 +283,12 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
                       {stageLeads.length}
                     </span>
                   </div>
-                  {(() => {
+                  {!shouldHideValues && (() => {
                     const rev = getStageRevenue(stageLeads);
                     return rev > 0 ? (
-                      <p className={`text-xs font-medium mt-1 ${isRevenue ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}`}>
-                        {isRevenue ? '' : '- '}{formatCurrency(rev)}
-                        {!isRevenue && <span className="text-[10px] ml-1 opacity-70">perdido</span>}
+                      <p className={`text-xs font-medium mt-1 ${isRevenueStage(stage.name) ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}`}>
+                        {isRevenueStage(stage.name) ? '' : '- '}{formatCurrency(rev)}
+                        {!isRevenueStage(stage.name) && <span className="text-[10px] ml-1 opacity-70">perdido</span>}
                       </p>
                     ) : null;
                   })()}
@@ -304,11 +306,12 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
                           key={pos.id}
                           position={pos}
                           isDragging={activeId === pos.id}
-                          isRevenue={isRevenue}
+                          isRevenue={isRevenueStage(stage.name)}
                           purchaseSummary={getPurchaseSummary(pos.lead_id)}
                           recontactInfo={recontactMap?.get(pos.lead_id)}
                           onClick={() => onLeadClick?.(pos.lead_id)}
                           onWhatsAppClick={onWhatsAppClick}
+                          hideValues={shouldHideValues}
                         />
                       ))}
                       {hasMore && (

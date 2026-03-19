@@ -1,6 +1,6 @@
 import React from 'react';
 import { Lead, LeadStagePosition } from '@/types/leadFunnels';
-import { Mail, Phone, Clock, DollarSign, GripVertical, MessageCircle, ShoppingBag, CalendarClock, Timer } from 'lucide-react';
+import { Mail, Phone, Clock, DollarSign, GripVertical, MessageCircle, ShoppingBag, CalendarClock, Timer, EyeOff } from 'lucide-react';
 import { PurchaseSummary } from '@/hooks/useBulkLeadPurchases';
 import { useDraggable } from '@dnd-kit/core';
 import { formatLocalDateTime } from '@/lib/localDate';
@@ -15,6 +15,7 @@ interface LeadCardProps {
   isRevenue?: boolean;
   purchaseSummary?: PurchaseSummary;
   recontactInfo?: RecontactInfo;
+  hideValues?: boolean;
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -32,8 +33,10 @@ function friendlyStatus(status: string): string {
   return STATUS_LABELS[status.toLowerCase().trim()] || status;
 }
 
-const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, onWhatsAppClick, isDragging, isRevenue = true, purchaseSummary, recontactInfo }) => {
+const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, onWhatsAppClick, isDragging, isRevenue = true, purchaseSummary, recontactInfo, hideValues }) => {
   const lead = position.lead;
+  // Fallback: try metadata for phone if lead.phone is empty
+  const leadPhone = lead.phone || (lead.metadata?.phone as string) || (lead.metadata?.cel as string) || (lead.metadata?.telefone as string) || null;
   const { attributes, listeners, setNodeRef, transform } = useDraggable({
     id: position.id,
   });
@@ -85,19 +88,10 @@ const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, onWhatsAppClick,
                 <span className="truncate">{lead.email}</span>
               </div>
             )}
-            {lead.phone && (
+            {leadPhone && (
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <Phone className="h-3 w-3 shrink-0" />
-                <span>{lead.phone}</span>
-                {onWhatsAppClick && (
-                  <button
-                    onClick={e => { e.stopPropagation(); onWhatsAppClick(lead.phone!); }}
-                    className="ml-1 text-emerald-500 hover:text-emerald-400 transition-colors"
-                    title="Abrir chat no WhatsApp"
-                  >
-                    <MessageCircle className="h-3.5 w-3.5" />
-                  </button>
-                )}
+                <span>{leadPhone}</span>
               </div>
             )}
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -108,9 +102,9 @@ const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, onWhatsAppClick,
         </div>
 
         {/* WhatsApp shortcut */}
-        {lead.phone && onWhatsAppClick && (
+        {leadPhone && onWhatsAppClick && (
           <button
-            onClick={e => { e.stopPropagation(); onWhatsAppClick(lead.phone!); }}
+            onClick={e => { e.stopPropagation(); onWhatsAppClick(leadPhone); }}
             className="ml-auto shrink-0 p-1.5 rounded-md bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 transition-colors"
             title="Abrir chat no WhatsApp"
           >
@@ -120,7 +114,7 @@ const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, onWhatsAppClick,
       </div>
 
       {/* LTV prominente */}
-      {hasLTV && (
+      {hasLTV && !hideValues && (
         <div className="mt-1.5 flex items-center gap-2 flex-wrap ml-[42px]">
           <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md">
             <DollarSign className="h-3.5 w-3.5" />
@@ -136,6 +130,14 @@ const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, onWhatsAppClick,
               {differenceInDays(new Date(), new Date(purchaseSummary!.firstPurchaseDate))}d
             </span>
           )}
+        </div>
+      )}
+      {hasLTV && hideValues && (
+        <div className="mt-1.5 ml-[42px]">
+          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-md">
+            <EyeOff className="h-3 w-3" />
+            Valores ocultos
+          </span>
         </div>
       )}
 

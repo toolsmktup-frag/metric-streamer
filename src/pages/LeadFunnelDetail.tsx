@@ -8,6 +8,7 @@ import { useLeadFunnelProducts, useUpsertLeadFunnelProducts } from '@/hooks/useL
 import { useLeadProductMappings, useDistinctLeadProducts, useSaveLeadProductMappings } from '@/hooks/useLeadProductMappings';
 import { useRecontactDeadlines } from '@/hooks/useRecontactDeadlines';
 import { useMoveLeadStage } from '@/hooks/useMoveLeadStage';
+import { useCurrentUserRole } from '@/hooks/useCurrentUserRole';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Upload, Trash2 } from 'lucide-react';
@@ -57,6 +58,8 @@ const LeadFunnelDetail: React.FC = () => {
   const saveFunnelEdges = useSaveFunnelEdges();
   const moveLeadStage = useMoveLeadStage();
   const queryClient = useQueryClient();
+  const { data: userRole = 'vendedor' } = useCurrentUserRole();
+  const isAdmin = userRole === 'admin' || userRole === 'gestor';
   const [bulkMoving, setBulkMoving] = useState(false);
 
   // Bulk purchase data for recontact fallback
@@ -278,8 +281,8 @@ const LeadFunnelDetail: React.FC = () => {
           <TabsTrigger value="visual">Funil</TabsTrigger>
           <TabsTrigger value="flow">Flow Editor</TabsTrigger>
           <TabsTrigger value="metrics">Métricas</TabsTrigger>
-          <TabsTrigger value="config">Configuração</TabsTrigger>
-          <TabsTrigger value="webhook">Webhook</TabsTrigger>
+          {isAdmin && <TabsTrigger value="config">Configuração</TabsTrigger>}
+          {isAdmin && <TabsTrigger value="webhook">Webhook</TabsTrigger>}
         </TabsList>
 
         {isBaseFunnel ? (
@@ -300,6 +303,7 @@ const LeadFunnelDetail: React.FC = () => {
               onWhatsAppClick={handleWhatsAppClick}
               funnelId={funnel.id}
               recontactMap={recontactMap}
+              userRole={userRole}
             />
           </TabsContent>
         )}
@@ -328,58 +332,62 @@ const LeadFunnelDetail: React.FC = () => {
           <FunnelMetricsTab stages={stages} positions={positions} />
         </TabsContent>
 
-        <TabsContent value="config" className="mt-4">
-          <FunnelConfigTab
-            stages={stages}
-            rules={rules}
-            onSaveStages={async (newStages) => {
-              try {
-                await upsertStages.mutateAsync({ funnelId: funnel.id, stages: newStages });
-                toast.success('Etapas salvas!');
-              } catch {
-                toast.error('Erro ao salvar etapas');
-              }
-            }}
-            onSaveRules={async (newRules) => {
-              try {
-                await upsertRules.mutateAsync({ funnelId: funnel.id, rules: newRules });
-                toast.success('Regras salvas!');
-              } catch {
-                toast.error('Erro ao salvar regras');
-              }
-            }}
-            saving={upsertStages.isPending || upsertRules.isPending}
-            leadFunnelProducts={leadFunnelProducts}
-            catalogProducts={allCatalogProducts}
-            onSaveProducts={async (prods) => {
-              try {
-                await upsertLeadProducts.mutateAsync({ funnelId: funnel.id, products: prods });
-                toast.success('Produtos salvos!');
-              } catch {
-                toast.error('Erro ao salvar produtos');
-              }
-            }}
-            savingProducts={upsertLeadProducts.isPending}
-            onBulkMoveOverdue={handleBulkMoveOverdue}
-            bulkMoving={bulkMoving}
-            distinctLeadProducts={distinctLeadProducts}
-            existingMappings={productMappings}
-            onSaveMappings={async (mappings) => {
-              try {
-                await saveProductMappings.mutateAsync({ funnelId: funnel.id, mappings });
-                toast.success('Vínculos salvos!');
-              } catch {
-                toast.error('Erro ao salvar vínculos');
-              }
-            }}
-            savingMappings={saveProductMappings.isPending}
-            loadingDistinctProducts={loadingDistinctProducts}
-          />
-        </TabsContent>
+        {isAdmin && (
+          <TabsContent value="config" className="mt-4">
+            <FunnelConfigTab
+              stages={stages}
+              rules={rules}
+              onSaveStages={async (newStages) => {
+                try {
+                  await upsertStages.mutateAsync({ funnelId: funnel.id, stages: newStages });
+                  toast.success('Etapas salvas!');
+                } catch {
+                  toast.error('Erro ao salvar etapas');
+                }
+              }}
+              onSaveRules={async (newRules) => {
+                try {
+                  await upsertRules.mutateAsync({ funnelId: funnel.id, rules: newRules });
+                  toast.success('Regras salvas!');
+                } catch {
+                  toast.error('Erro ao salvar regras');
+                }
+              }}
+              saving={upsertStages.isPending || upsertRules.isPending}
+              leadFunnelProducts={leadFunnelProducts}
+              catalogProducts={allCatalogProducts}
+              onSaveProducts={async (prods) => {
+                try {
+                  await upsertLeadProducts.mutateAsync({ funnelId: funnel.id, products: prods });
+                  toast.success('Produtos salvos!');
+                } catch {
+                  toast.error('Erro ao salvar produtos');
+                }
+              }}
+              savingProducts={upsertLeadProducts.isPending}
+              onBulkMoveOverdue={handleBulkMoveOverdue}
+              bulkMoving={bulkMoving}
+              distinctLeadProducts={distinctLeadProducts}
+              existingMappings={productMappings}
+              onSaveMappings={async (mappings) => {
+                try {
+                  await saveProductMappings.mutateAsync({ funnelId: funnel.id, mappings });
+                  toast.success('Vínculos salvos!');
+                } catch {
+                  toast.error('Erro ao salvar vínculos');
+                }
+              }}
+              savingMappings={saveProductMappings.isPending}
+              loadingDistinctProducts={loadingDistinctProducts}
+            />
+          </TabsContent>
+        )}
 
-        <TabsContent value="webhook" className="mt-4">
-          <WebhookConfig funnel={funnel} />
-        </TabsContent>
+        {isAdmin && (
+          <TabsContent value="webhook" className="mt-4">
+            <WebhookConfig funnel={funnel} />
+          </TabsContent>
+        )}
       </Tabs>
 
       <LeadTimeline

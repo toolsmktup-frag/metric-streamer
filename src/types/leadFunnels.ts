@@ -37,6 +37,7 @@ export interface LeadFunnelStage {
   thumbnail_url: string | null;
   position_x: number;
   position_y: number;
+  hide_values: boolean;
   created_at: string;
 }
 
