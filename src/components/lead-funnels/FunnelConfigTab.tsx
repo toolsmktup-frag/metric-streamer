@@ -6,7 +6,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Plus, Trash2, GripVertical, ArrowRight } from 'lucide-react';
 import { toast } from 'sonner';
 import FunnelProductsConfig from './FunnelProductsConfig';
+import ProductMappingConfig from './ProductMappingConfig';
 import type { LeadFunnelProduct } from '@/hooks/useLeadFunnelProducts';
+import type { LeadProductMapping } from '@/hooks/useLeadProductMappings';
 import type { FunnelProduct } from '@/hooks/useFunnels';
 
 interface FunnelConfigTabProps {
