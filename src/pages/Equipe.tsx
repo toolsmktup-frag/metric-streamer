@@ -459,7 +459,72 @@ export default function Equipe() {
                   </div>
                 </div>
               )}
-            </div>
+
+              {/* Campaign / Funnel access */}
+              {campaigns.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground mb-3 flex items-center gap-1.5">
+                    <Target className="h-3.5 w-3.5" />
+                    Acesso a Campanhas / Funis de Leads
+                  </p>
+                  <p className="text-[11px] text-muted-foreground mb-3">
+                    Marque a campanha para dar acesso a todos os funis. Ou marque funis individuais.
+                  </p>
+                  <div className="space-y-3">
+                    {campaigns.map(campaign => {
+                      const hasCampaignAccess = allFunnelAccess.some(
+                        a => a.user_id === member.id && a.campaign_id === campaign.id && !a.funnel_id
+                      );
+                      const campaignSaving = savingFunnelAccess === `${member.id}-campaign-${campaign.id}`;
+                      const campaignFunnels = allFunnels.filter(f => f.campaign_id === campaign.id);
+
+                      return (
+                        <div key={campaign.id} className="rounded-md border border-border p-3 space-y-2">
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <Checkbox
+                              checked={hasCampaignAccess}
+                              onCheckedChange={(checked) =>
+                                toggleCampaignFunnelAccess(member.id, 'campaign', campaign.id, !!checked)
+                              }
+                              disabled={campaignSaving}
+                            />
+                            <span className="text-xs font-medium text-foreground">{campaign.name}</span>
+                            <span className="text-[10px] text-muted-foreground">(campanha inteira)</span>
+                            {campaignSaving && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
+                          </label>
+                          {campaignFunnels.length > 0 && (
+                            <div className="ml-6 space-y-1">
+                              {campaignFunnels.map(funnel => {
+                                const hasFunnelAccess = allFunnelAccess.some(
+                                  a => a.user_id === member.id && a.funnel_id === funnel.id
+                                );
+                                const inherited = hasCampaignAccess;
+                                const funnelSaving = savingFunnelAccess === `${member.id}-funnel-${funnel.id}`;
+                                return (
+                                  <label key={funnel.id} className="flex items-center gap-2 cursor-pointer">
+                                    <Checkbox
+                                      checked={inherited || hasFunnelAccess}
+                                      onCheckedChange={(checked) =>
+                                        toggleCampaignFunnelAccess(member.id, 'funnel', funnel.id, !!checked)
+                                      }
+                                      disabled={inherited || funnelSaving}
+                                    />
+                                    <span className="text-xs text-foreground">{funnel.name}</span>
+                                    {inherited && (
+                                      <span className="text-[10px] text-primary">(via campanha)</span>
+                                    )}
+                                    {funnelSaving && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
           );
         })}
       </div>
