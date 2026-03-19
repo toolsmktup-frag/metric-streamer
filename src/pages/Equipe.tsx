@@ -296,8 +296,32 @@ export default function Equipe() {
                         </div>
                       ) : (
                         <div className="flex items-center gap-2">
-                          <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">
-                            {(member.full_name || '?')[0].toUpperCase()}
+                          <div className="relative group">
+                            <Avatar className="h-8 w-8">
+                              {member.avatar_url ? (
+                                <AvatarImage src={member.avatar_url} alt={member.full_name || ''} />
+                              ) : null}
+                              <AvatarFallback className="text-xs font-bold bg-primary/10 text-primary">
+                                {(member.full_name || '?')[0].toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            <label
+                              className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                              title="Alterar foto"
+                            >
+                              {uploadingAvatar === member.id ? (
+                                <Loader2 className="h-3 w-3 animate-spin text-white" />
+                              ) : (
+                                <Camera className="h-3 w-3 text-white" />
+                              )}
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={e => handleAvatarUpload(member.id, e)}
+                                disabled={uploadingAvatar === member.id}
+                              />
+                            </label>
                           </div>
                           <span className="font-medium text-foreground">
                             {member.full_name || 'Sem nome'}
