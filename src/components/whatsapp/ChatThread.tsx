@@ -261,7 +261,7 @@ export default function ChatThread({ messages, loading, phone, instances }: Chat
                   </div>
                 )}
 
-                {msg.message_type !== 'text' && msg.media_url && !isDeleted ? (
+                {msg.message_type !== 'text' && (msg.media_url || msg.message_type === 'audio' || msg.message_type === 'ptt') && !isDeleted ? (
                   <MediaRenderer message={msg} />
                 ) : (
                   <p className="whitespace-pre-wrap break-words">{msg.body || ''}</p>
