@@ -279,8 +279,8 @@ const LeadFunnelDetail: React.FC = () => {
             <TabsTrigger value="kanban">Kanban</TabsTrigger>
           )}
           <TabsTrigger value="visual">Funil</TabsTrigger>
-          <TabsTrigger value="flow">Flow Editor</TabsTrigger>
-          <TabsTrigger value="metrics">Métricas</TabsTrigger>
+          {isAdmin && <TabsTrigger value="flow">Flow Editor</TabsTrigger>}
+          {isAdmin && <TabsTrigger value="metrics">Métricas</TabsTrigger>}
           {isAdmin && <TabsTrigger value="config">Configuração</TabsTrigger>}
           {isAdmin && <TabsTrigger value="webhook">Webhook</TabsTrigger>}
         </TabsList>
