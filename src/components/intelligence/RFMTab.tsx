@@ -78,6 +78,69 @@ export default function RFMTab() {
     downloadCsv(rows, columns, `clientes-rfm-${seg}-${date}.csv`);
   }, [filteredCustomers, selectedSegment]);
 
+  const handleExportDetailed = useCallback(async () => {
+    setExportingDetailed(true);
+    try {
+      const PAGE_SIZE = 1000;
+      let allRows: Record<string, string | number>[] = [];
+      let from = 0;
+      let hasMore = true;
+
+      while (hasMore) {
+        const { data: batch, error } = await supabase
+          .from('customer_purchases')
+          .select('product_name, gross_amount, net_amount, status, purchased_at, platform, offer_name, payment_method, installments, product_type, unified_customer_id, unified_customers!inner(primary_email, name)')
+          .range(from, from + PAGE_SIZE - 1)
+          .order('purchased_at', { ascending: false });
+
+        if (error) throw error;
+        if (!batch || batch.length === 0) { hasMore = false; break; }
+
+        for (const row of batch as any[]) {
+          const customer = row.unified_customers;
+          allRows.push({
+            email: customer?.primary_email || '',
+            nome: customer?.name || '',
+            produto: row.product_name || '',
+            oferta: row.offer_name || '',
+            valor_bruto: row.gross_amount ?? 0,
+            valor_liquido: row.net_amount ?? 0,
+            status: row.status || '',
+            data_compra: formatLocalDateTime(row.purchased_at, 'dd/MM/yyyy HH:mm'),
+            plataforma: row.platform || '',
+            metodo_pagamento: row.payment_method || '',
+            parcelas: row.installments ?? 0,
+            tipo_produto: row.product_type || '',
+          });
+        }
+
+        if (batch.length < PAGE_SIZE) { hasMore = false; } else { from += PAGE_SIZE; }
+      }
+
+      const columns = [
+        { key: 'email', label: 'Email' },
+        { key: 'nome', label: 'Nome' },
+        { key: 'produto', label: 'Produto' },
+        { key: 'oferta', label: 'Oferta' },
+        { key: 'valor_bruto', label: 'Valor Bruto (R$)' },
+        { key: 'valor_liquido', label: 'Valor Líquido (R$)' },
+        { key: 'status', label: 'Status' },
+        { key: 'data_compra', label: 'Data da Compra' },
+        { key: 'plataforma', label: 'Plataforma' },
+        { key: 'metodo_pagamento', label: 'Método de Pagamento' },
+        { key: 'parcelas', label: 'Parcelas' },
+        { key: 'tipo_produto', label: 'Tipo de Produto' },
+      ];
+
+      const date = format(new Date(), 'yyyy-MM-dd');
+      downloadCsv(allRows, columns, `compras-detalhadas-${date}.csv`);
+    } catch (err) {
+      console.error('Erro ao exportar compras detalhadas:', err);
+    } finally {
+      setExportingDetailed(false);
+    }
+  }, []);
+
   if (isLoading) return <LoadingState message="Calculando segmentos RFM..." />;
 
   if (!data || data.totalCustomers === 0) {
