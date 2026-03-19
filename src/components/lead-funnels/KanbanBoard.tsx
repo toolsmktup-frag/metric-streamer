@@ -31,6 +31,7 @@ interface KanbanBoardProps {
   funnelId: string;
   recontactMap?: Map<string, RecontactInfo>;
   userRole?: string;
+  currentUserId?: string | null;
 }
 
 type SortMode = 'recent' | 'value' | 'orders' | 'ltv' | 'recontact';
