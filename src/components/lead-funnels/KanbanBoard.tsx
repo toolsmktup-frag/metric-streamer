@@ -29,6 +29,7 @@ interface KanbanBoardProps {
   onLeadClick?: (leadId: string) => void;
   onWhatsAppClick?: (phone: string) => void;
   funnelId: string;
+  recontactMap?: Map<string, RecontactInfo>;
 }
 
 type SortMode = 'recent' | 'value' | 'orders' | 'ltv';
