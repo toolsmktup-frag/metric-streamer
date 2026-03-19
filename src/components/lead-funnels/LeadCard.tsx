@@ -88,19 +88,10 @@ const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, onWhatsAppClick,
                 <span className="truncate">{lead.email}</span>
               </div>
             )}
-            {lead.phone && (
+            {leadPhone && (
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <Phone className="h-3 w-3 shrink-0" />
-                <span>{lead.phone}</span>
-                {onWhatsAppClick && (
-                  <button
-                    onClick={e => { e.stopPropagation(); onWhatsAppClick(lead.phone!); }}
-                    className="ml-1 text-emerald-500 hover:text-emerald-400 transition-colors"
-                    title="Abrir chat no WhatsApp"
-                  >
-                    <MessageCircle className="h-3.5 w-3.5" />
-                  </button>
-                )}
+                <span>{leadPhone}</span>
               </div>
             )}
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -111,9 +102,9 @@ const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, onWhatsAppClick,
         </div>
 
         {/* WhatsApp shortcut */}
-        {lead.phone && onWhatsAppClick && (
+        {leadPhone && onWhatsAppClick && (
           <button
-            onClick={e => { e.stopPropagation(); onWhatsAppClick(lead.phone!); }}
+            onClick={e => { e.stopPropagation(); onWhatsAppClick(leadPhone); }}
             className="ml-auto shrink-0 p-1.5 rounded-md bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 transition-colors"
             title="Abrir chat no WhatsApp"
           >
