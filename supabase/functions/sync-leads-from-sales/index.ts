@@ -8,6 +8,8 @@ const corsHeaders = {
 
 const ORG_ID = "00000000-0000-0000-0000-000000000001";
 const APPROVED_STATUSES = ["authorized", "approved", "paid", "completed", "Aprovada", "aprovada"];
+const BATCH_SIZE = 500;
+const PAGE_SIZE = 1000;
 
 function mapStatusToEventName(status: string | null): string {
   if (!status) return "evento_desconhecido";
@@ -19,13 +21,12 @@ function mapStatusToEventName(status: string | null): string {
   if (["expired", "expirada"].includes(s)) return "expirado";
   if (["refunded", "reembolsada", "reembolsado"].includes(s)) return "reembolsado";
   if (["chargeback"].includes(s)) return "chargeback";
-  return s; // fallback: use raw status
+  return s;
 }
 
 function normalizeEmail(email: string | null): string | null {
   if (!email) return null;
   const trimmed = email.trim().toLowerCase();
-  // Only treat as email if it contains @
   return trimmed.includes("@") ? trimmed : null;
 }
 
@@ -35,6 +36,132 @@ function normalizePhone(phone: string | null): string | null {
   return digits.length >= 8 ? digits : null;
 }
 
+/** Fetch all rows from a table using paginated .range() calls */
+async function fetchAllPaginated(
+  supabase: any,
+  table: string,
+  selectCols: string,
+  filters: Record<string, any>,
+  orderCol?: string
+): Promise<any[]> {
+  const allRows: any[] = [];
+  let from = 0;
+  while (true) {
+    let query = supabase.from(table).select(selectCols).range(from, from + PAGE_SIZE - 1);
+    for (const [k, v] of Object.entries(filters)) {
+      query = query.eq(k, v);
+    }
+    if (orderCol) query = query.order(orderCol, { ascending: true });
+    const { data, error } = await query;
+    if (error) { console.error(`Paginated fetch error on ${table}:`, error.message); break; }
+    if (!data || data.length === 0) break;
+    allRows.push(...data);
+    if (data.length < PAGE_SIZE) break;
+    from += PAGE_SIZE;
+  }
+  console.log(`Fetched ${allRows.length} rows from ${table}`);
+  return allRows;
+}
+
+/** Insert rows in batches, returning count of successful inserts */
+async function batchInsert(supabase: any, table: string, rows: any[]): Promise<number> {
+  let count = 0;
+  for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+    const chunk = rows.slice(i, i + BATCH_SIZE);
+    const { error } = await supabase.from(table).insert(chunk);
+    if (!error) {
+      count += chunk.length;
+    } else {
+      console.error(`Batch insert error on ${table} (batch ${Math.floor(i / BATCH_SIZE)}):`, error.message);
+      // Fallback: try without created_at for lead_events
+      if (table === "lead_events") {
+        const fallbackChunk = chunk.map((evt: any) => {
+          const { created_at, ...rest } = evt;
+          return { ...rest, metadata: { ...rest.metadata, original_date: created_at } };
+        });
+        const { error: err2 } = await supabase.from(table).insert(fallbackChunk);
+        if (!err2) count += fallbackChunk.length;
+        else console.error(`Fallback batch also failed:`, err2.message);
+      }
+    }
+  }
+  return count;
+}
+
+/** Upsert leads in batches, building key→id map */
+async function batchUpsertLeads(
+  supabase: any,
+  contactMap: Map<string, any>
+): Promise<Map<string, string>> {
+  const leadIdByKey = new Map<string, string>();
+  const entries = Array.from(contactMap.entries());
+  let created = 0;
+
+  for (let i = 0; i < entries.length; i += BATCH_SIZE) {
+    const chunk = entries.slice(i, i + BATCH_SIZE);
+    const leadRows = chunk.map(([_, contact]) => ({
+      organization_id: ORG_ID,
+      phone: contact.phone || null,
+      email: contact.email || null,
+      name: contact.name || null,
+      utm_source: contact.utm_source || null,
+      metadata: {},
+    }));
+
+    const { data: inserted, error } = await supabase
+      .from("leads")
+      .insert(leadRows)
+      .select("id, email, phone");
+
+    if (inserted && inserted.length > 0) {
+      // Match back by position (same order)
+      for (let j = 0; j < inserted.length; j++) {
+        leadIdByKey.set(chunk[j][0], inserted[j].id);
+      }
+      created += inserted.length;
+    } else if (error) {
+      console.warn(`Batch lead insert failed (batch ${Math.floor(i / BATCH_SIZE)}), falling back to individual:`, error.message);
+      // Fallback: insert individually
+      for (const [key, contact] of chunk) {
+        const { data: single, error: sErr } = await supabase
+          .from("leads")
+          .insert({
+            organization_id: ORG_ID,
+            phone: contact.phone || null,
+            email: contact.email || null,
+            name: contact.name || null,
+            utm_source: contact.utm_source || null,
+            metadata: {},
+          })
+          .select("id")
+          .single();
+
+        if (single) {
+          leadIdByKey.set(key, single.id);
+          created++;
+        } else if (sErr) {
+          // Try to find existing
+          let existing = null;
+          if (contact.email) {
+            const { data } = await supabase.from("leads").select("id")
+              .eq("organization_id", ORG_ID).eq("email", contact.email).limit(1).maybeSingle();
+            existing = data;
+          }
+          if (!existing && contact.phone) {
+            const { data } = await supabase.from("leads").select("id")
+              .eq("organization_id", ORG_ID).eq("phone", contact.phone).limit(1).maybeSingle();
+            existing = data;
+          }
+          if (existing) leadIdByKey.set(key, existing.id);
+        }
+      }
+    }
+  }
+
+  console.log(`Leads created/found: ${leadIdByKey.size} (new inserts: ${created})`);
+  return leadIdByKey;
+}
+
 async function performSync() {
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
@@ -42,21 +169,17 @@ async function performSync() {
   );
 
   // ===== STEP 0: Clean existing data =====
-  const { data: orgLeads } = await supabase
-    .from("leads")
-    .select("id")
-    .eq("organization_id", ORG_ID);
-
-  const leadIds = (orgLeads || []).map((l: any) => l.id);
+  const orgLeads = await fetchAllPaginated(supabase, "leads", "id", { organization_id: ORG_ID });
+  const leadIds = orgLeads.map((l: any) => l.id);
 
   if (leadIds.length > 0) {
-    for (let i = 0; i < leadIds.length; i += 500) {
-      const chunk = leadIds.slice(i, i + 500);
+    for (let i = 0; i < leadIds.length; i += BATCH_SIZE) {
+      const chunk = leadIds.slice(i, i + BATCH_SIZE);
       await supabase.from("lead_events").delete().in("lead_id", chunk);
       await supabase.from("lead_stage_positions").delete().in("lead_id", chunk);
     }
-    for (let i = 0; i < leadIds.length; i += 500) {
-      const chunk = leadIds.slice(i, i + 500);
+    for (let i = 0; i < leadIds.length; i += BATCH_SIZE) {
+      const chunk = leadIds.slice(i, i + BATCH_SIZE);
       await supabase.from("leads").delete().in("id", chunk);
     }
     console.log(`Cleaned ${leadIds.length} existing leads`);
@@ -84,11 +207,8 @@ async function performSync() {
     return { success: false, error: "Could not create BASE DE LEADS funnel", leads_created: 0, events_created: 0 };
   }
 
-  // Ensure stages exist (including "Perdido")
   const { data: existingStages } = await supabase
-    .from("lead_funnel_stages")
-    .select("id, name")
-    .eq("funnel_id", baseFunnel.id);
+    .from("lead_funnel_stages").select("id, name").eq("funnel_id", baseFunnel.id);
 
   const stageNames = (existingStages || []).map((s: any) => s.name);
 
@@ -101,18 +221,14 @@ async function performSync() {
       { funnel_id: baseFunnel.id, name: "VIP", color: "#f59e0b", sort_order: 4 },
     ]);
   } else if (!stageNames.includes("Perdido")) {
-    // Add "Perdido" stage if missing
     const maxOrder = Math.max(...(existingStages || []).map((s: any) => s.sort_order || 0), 0);
     await supabase.from("lead_funnel_stages").insert({
       funnel_id: baseFunnel.id, name: "Perdido", color: "#ef4444", sort_order: maxOrder + 1,
     });
   }
 
-  // Fetch stages by name
   const { data: allStages } = await supabase
-    .from("lead_funnel_stages")
-    .select("id, name")
-    .eq("funnel_id", baseFunnel.id);
+    .from("lead_funnel_stages").select("id, name").eq("funnel_id", baseFunnel.id);
 
   const stageMap = new Map<string, string>();
   (allStages || []).forEach((s: any) => stageMap.set(s.name, s.id));
@@ -126,24 +242,18 @@ async function performSync() {
     return { success: false, error: "No stages found", leads_created: 0, events_created: 0 };
   }
 
-  // ===== STEP 2: Fetch ALL purchases (no status filter) =====
-  const { data: customers } = await supabase
-    .from("unified_customers")
-    .select("id, primary_email, primary_phone, full_name")
-    .eq("organization_id", ORG_ID);
-
-  const { data: purchases } = await supabase
-    .from("customer_purchases")
-    .select("unified_customer_id, product_name, status, gross_amount, purchased_at, utm_source, platform")
-    .eq("organization_id", ORG_ID)
-    .order("purchased_at", { ascending: true });
+  // ===== STEP 2: Fetch ALL data with pagination =====
+  const [customers, purchases] = await Promise.all([
+    fetchAllPaginated(supabase, "unified_customers", "id, primary_email, primary_phone, full_name", { organization_id: ORG_ID }),
+    fetchAllPaginated(supabase, "customer_purchases", "unified_customer_id, product_name, status, gross_amount, purchased_at, utm_source, platform", { organization_id: ORG_ID }, "purchased_at"),
+  ]);
 
   const custMap = new Map<string, { email: string | null; phone: string | null; name: string | null }>();
-  for (const c of (customers || [])) {
+  for (const c of customers) {
     custMap.set(c.id, { email: normalizeEmail(c.primary_email), phone: normalizePhone(c.primary_phone), name: c.full_name });
   }
 
-  // ===== STEP 3: Build unique contacts from ALL purchases =====
+  // ===== STEP 3: Build unique contacts =====
   const contactMap = new Map<string, {
     email: string | null; phone: string | null; name: string | null;
     utm_source: string | null;
@@ -152,7 +262,7 @@ async function performSync() {
     events: { event_name: string; metadata: Record<string, unknown>; created_at: string }[];
   }>();
 
-  for (const p of (purchases || [])) {
+  for (const p of purchases) {
     const cust = custMap.get(p.unified_customer_id);
     if (!cust) continue;
 
@@ -175,9 +285,7 @@ async function performSync() {
       }
     } else {
       contactMap.set(key, {
-        email: cust.email,
-        phone: cust.phone,
-        name: cust.name,
+        email: cust.email, phone: cust.phone, name: cust.name,
         utm_source: p.utm_source || null,
         hasApproved: isApproved,
         firstPurchaseDate: eventDate,
@@ -188,135 +296,50 @@ async function performSync() {
 
   console.log(`Unique customers with purchases: ${contactMap.size}`);
 
-  // ===== STEP 4: Insert leads one by one (resilient) =====
-  const leadIdByKey = new Map<string, string>();
-  let created = 0;
+  // ===== STEP 4: Insert leads in batches =====
+  const leadIdByKey = await batchUpsertLeads(supabase, contactMap);
 
-  for (const [key, contact] of contactMap) {
-    const leadRow = {
-      organization_id: ORG_ID,
-      phone: contact.phone || null,
-      email: contact.email || null,
-      name: contact.name || null,
-      utm_source: contact.utm_source || null,
-      metadata: {},
-    };
-
-    const { data: inserted, error } = await supabase
-      .from("leads")
-      .insert(leadRow)
-      .select("id")
-      .single();
-
-    if (inserted) {
-      leadIdByKey.set(key, inserted.id);
-      created++;
-    } else if (error) {
-      // Try to find existing lead by email or phone
-      let existingLead = null;
-      if (contact.email) {
-        const { data } = await supabase
-          .from("leads")
-          .select("id")
-          .eq("organization_id", ORG_ID)
-          .eq("email", contact.email)
-          .limit(1)
-          .maybeSingle();
-        existingLead = data;
-      }
-      if (!existingLead && contact.phone) {
-        const { data } = await supabase
-          .from("leads")
-          .select("id")
-          .eq("organization_id", ORG_ID)
-          .eq("phone", contact.phone)
-          .limit(1)
-          .maybeSingle();
-        existingLead = data;
-      }
-      if (existingLead) {
-        leadIdByKey.set(key, existingLead.id);
-      } else {
-        console.error("Failed to insert/find lead:", error.message, contact.email, contact.phone);
-      }
-    }
-  }
-
-  // ===== STEP 5: Position leads in correct stage =====
+  // ===== STEP 5: Position leads in correct stage (batch) =====
   const positions: any[] = [];
   for (const [key, contact] of contactMap) {
     const leadId = leadIdByKey.get(key);
     if (!leadId) continue;
-
     const targetStageId = contact.hasApproved
       ? (compradorStageId || fallbackStageId)
       : (perdidoStageId || fallbackStageId);
-
     positions.push({
-      lead_id: leadId,
-      funnel_id: baseFunnel.id,
-      stage_id: targetStageId,
+      lead_id: leadId, funnel_id: baseFunnel.id, stage_id: targetStageId,
       entered_at: contact.firstPurchaseDate || new Date().toISOString(),
     });
   }
 
-  let positioned = 0;
-  for (let i = 0; i < positions.length; i += 500) {
-    const chunk = positions.slice(i, i + 500);
-    const { error } = await supabase.from("lead_stage_positions").insert(chunk);
-    if (!error) positioned += chunk.length;
-    else console.error("Position insert error:", error);
-  }
+  const positioned = await batchInsert(supabase, "lead_stage_positions", positions);
 
-  // ===== STEP 6: Insert events one by one (resilient) =====
+  // ===== STEP 6: Insert events in batches =====
   const allEvents: any[] = [];
   for (const [key, contact] of contactMap) {
     const leadId = leadIdByKey.get(key);
     if (!leadId) continue;
 
-    // Always add a "lead_importado" event with the earliest date
     allEvents.push({
-      lead_id: leadId,
-      funnel_id: baseFunnel.id,
-      event_name: "lead_importado",
-      metadata: { source: "sync" },
+      lead_id: leadId, funnel_id: baseFunnel.id,
+      event_name: "lead_importado", metadata: { source: "sync" },
       created_at: contact.firstPurchaseDate || new Date().toISOString(),
     });
 
     for (const evt of contact.events) {
       allEvents.push({
-        lead_id: leadId,
-        funnel_id: baseFunnel.id,
-        event_name: evt.event_name,
-        metadata: evt.metadata,
-        created_at: evt.created_at,
+        lead_id: leadId, funnel_id: baseFunnel.id,
+        event_name: evt.event_name, metadata: evt.metadata, created_at: evt.created_at,
       });
     }
   }
 
-  let eventsCreated = 0;
-  for (const evt of allEvents) {
-    // Try with explicit created_at first
-    const { error } = await supabase.from("lead_events").insert(evt);
-    if (!error) {
-      eventsCreated++;
-    } else {
-      // Fallback: insert without created_at, store original date in metadata
-      console.warn("Event insert with date failed, retrying without created_at:", error.message);
-      const { created_at, ...rest } = evt;
-      const fallback = { ...rest, metadata: { ...rest.metadata, original_date: created_at } };
-      const { error: err2 } = await supabase.from("lead_events").insert(fallback);
-      if (!err2) {
-        eventsCreated++;
-      } else {
-        console.error("Event insert fallback also failed:", err2.message, evt.lead_id);
-      }
-    }
-  }
+  const eventsCreated = await batchInsert(supabase, "lead_events", allEvents);
 
   const result = {
     success: true,
-    leads_created: created,
+    leads_created: leadIdByKey.size,
     leads_positioned: positioned,
     events_created: eventsCreated,
     total_contacts: contactMap.size,
