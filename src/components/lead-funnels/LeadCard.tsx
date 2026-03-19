@@ -1,9 +1,10 @@
 import React from 'react';
 import { Lead, LeadStagePosition } from '@/types/leadFunnels';
-import { Mail, Phone, Clock, DollarSign, GripVertical, MessageCircle, ShoppingBag } from 'lucide-react';
+import { Mail, Phone, Clock, DollarSign, GripVertical, MessageCircle, ShoppingBag, CalendarClock } from 'lucide-react';
 import { PurchaseSummary } from '@/hooks/useBulkLeadPurchases';
 import { useDraggable } from '@dnd-kit/core';
 import { formatLocalDateTime } from '@/lib/localDate';
+import { differenceInDays } from 'date-fns';
 
 interface LeadCardProps {
   position: LeadStagePosition & { lead: Lead };
