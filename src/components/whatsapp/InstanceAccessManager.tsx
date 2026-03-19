@@ -10,7 +10,6 @@ import { getInstanceDisplayName } from '@/hooks/useWhatsApp';
 interface UserAccess {
   user_id: string;
   full_name: string;
-  email: string;
   has_access: boolean;
 }
 
@@ -43,7 +42,7 @@ export default function InstanceAccessManager({ instances, selectedInstanceId }:
       // Get all org members (exclude admins — they always have access)
       const { data: profiles } = await (supabase as any)
         .from('user_profiles')
-        .select('id, full_name, email, role')
+        .select('id, full_name, role')
         .eq('organization_id', currentProfile.organization_id)
         .neq('role', 'admin');
 
@@ -59,7 +58,6 @@ export default function InstanceAccessManager({ instances, selectedInstanceId }:
         (profiles || []).map((p: any) => ({
           user_id: p.id,
           full_name: p.full_name || 'Sem nome',
-          email: p.email || '',
           has_access: accessSet.has(p.id),
         }))
       );
@@ -157,9 +155,6 @@ export default function InstanceAccessManager({ instances, selectedInstanceId }:
             />
             <Label htmlFor={`access-${user.user_id}`} className="flex-1 cursor-pointer">
               <span className="text-sm text-foreground">{user.full_name}</span>
-              {user.email && (
-                <span className="text-xs text-muted-foreground ml-2">{user.email}</span>
-              )}
             </Label>
             {saving === user.user_id && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
           </div>
