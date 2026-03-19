@@ -212,6 +212,7 @@ export default function RFMTab() {
               </option>
             ))}
           </select>
+          </div>
         </div>
 
         <div className="overflow-x-auto">
