@@ -1,4 +1,4 @@
-// v1.0.1 - force redeploy with verify_jwt=false
+// v1.0.2 - force redeploy
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
