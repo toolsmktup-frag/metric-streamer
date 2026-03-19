@@ -244,7 +244,7 @@ const BaseLeadsList: React.FC<BaseLeadsListProps> = ({ positions, onLeadClick, o
             ) : (
               paginated.map(p => {
                 const ps = purchaseMap?.get(p.lead_id);
-                const name = ((p.lead.first_name || '') + ' ' + (p.lead.last_name || '')).trim() || '—';
+                const name = p.lead.name || '—';
 
                 return (
                   <TableRow
