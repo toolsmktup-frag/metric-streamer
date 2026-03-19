@@ -24,57 +24,27 @@ interface InstanceHubProps {
   onRefetch: () => void;
 }
 
-function AddInstanceForm({ onCreated }: { onCreated: () => void }) {
+function AddInstanceForm({ onCreated }: { onCreated: (instanceId?: string) => void }) {
   const [name, setName] = useState('');
-  const [apiUrl, setApiUrl] = useState('');
-  const [apiToken, setApiToken] = useState('');
-  const [phone, setPhone] = useState('');
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
-    if (!name || !apiUrl || !apiToken) {
-      toast.error('Preencha todos os campos obrigatórios');
+    if (!name.trim()) {
+      toast.error('Digite um nome para a instância');
       return;
     }
     setSaving(true);
     try {
-      const { data: orgId } = await (supabase as any).rpc('get_user_org_id');
-      if (!orgId) throw new Error('Organização não encontrada');
-
-      const { error } = await (supabase as any).from('whatsapp_instances').insert({
-        organization_id: orgId,
-        instance_name: name,
-        api_url: apiUrl.replace(/\/$/, ''),
-        api_token: apiToken,
-        phone_number: phone || null,
-        status: 'disconnected',
+      const { data, error } = await supabase.functions.invoke('whatsapp-instance', {
+        body: { action: 'create_instance', instance_name: name.trim() },
       });
 
-      if (error) throw error;
+      if (error) throw new Error(error.message || 'Falha ao criar instância');
+      if (data?.error) throw new Error(data.error);
 
-      const { data: instances } = await (supabase as any)
-        .from('whatsapp_instances')
-        .select('id')
-        .eq('organization_id', orgId)
-        .eq('instance_name', name)
-        .single();
-
-      if (instances?.id) {
-        try {
-          await supabase.functions.invoke('whatsapp-instance', {
-            body: { instance_id: instances.id, action: 'set_webhook' },
-          });
-        } catch (e) {
-          console.error('Auto webhook config failed:', e);
-        }
-      }
-
-      toast.success('Instância adicionada!');
+      toast.success('Instância criada! Escaneie o QR Code para conectar.');
       setName('');
-      setApiUrl('');
-      setApiToken('');
-      setPhone('');
-      onCreated();
+      onCreated(data?.instance?.id);
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -88,25 +58,21 @@ function AddInstanceForm({ onCreated }: { onCreated: () => void }) {
         <Plus className="h-5 w-5 text-primary" />
         <h3 className="text-base font-semibold text-foreground">Nova Instância</h3>
       </div>
+      <p className="text-sm text-muted-foreground">
+        A instância será criada automaticamente. Após criar, escaneie o QR Code para conectar.
+      </p>
       <div className="space-y-3">
         <div>
           <Label className="text-xs">Nome da instância *</Label>
-          <Input value={name} onChange={e => setName(e.target.value)} placeholder="Ex: Vendas" />
-        </div>
-        <div>
-          <Label className="text-xs">URL da API UAZAPI *</Label>
-          <Input value={apiUrl} onChange={e => setApiUrl(e.target.value)} placeholder="https://api.uazapi.com/instance/xxx" />
-        </div>
-        <div>
-          <Label className="text-xs">Token da API *</Label>
-          <Input value={apiToken} onChange={e => setApiToken(e.target.value)} placeholder="Seu token UAZAPI" type="password" />
-        </div>
-        <div>
-          <Label className="text-xs">Número do WhatsApp</Label>
-          <Input value={phone} onChange={e => setPhone(e.target.value)} placeholder="5511999999999" />
+          <Input
+            value={name}
+            onChange={e => setName(e.target.value)}
+            placeholder="Ex: Vendas, Suporte, Marketing"
+            onKeyDown={e => e.key === 'Enter' && handleSave()}
+          />
         </div>
         <Button onClick={handleSave} disabled={saving} className="w-full">
-          {saving ? 'Salvando...' : 'Adicionar Instância'}
+          {saving ? 'Criando instância...' : 'Criar Instância'}
         </Button>
       </div>
     </div>
