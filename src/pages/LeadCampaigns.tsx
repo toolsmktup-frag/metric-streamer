@@ -3,10 +3,11 @@ import { useLeadCampaigns, useCreateLeadCampaign, useDeleteLeadCampaign } from '
 import { useLeadFunnels, useCreateLeadFunnel, useDeleteLeadFunnel } from '@/hooks/useLeadFunnels';
 import { useCurrentUserRole } from '@/hooks/useCurrentUserRole';
 import { useMyFunnelAccess } from '@/hooks/useLeadFunnelAccess';
+import FunnelAccessManager from '@/components/lead-funnels/FunnelAccessManager';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Plus, Trash2, ChevronRight, Layers } from 'lucide-react';
+import { Plus, Trash2, ChevronRight, Layers, Users } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
@@ -28,6 +29,8 @@ const LeadCampaignsPage: React.FC = () => {
   const [newName, setNewName] = useState('');
   const [newColor, setNewColor] = useState('#6366f1');
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
+  const [accessCampaignId, setAccessCampaignId] = useState<string | null>(null);
+  const [accessFunnelId, setAccessFunnelId] = useState<string | null>(null);
 
   // Filter funnels/campaigns for sellers
   const visibleFunnels = useMemo(() => {
@@ -151,6 +154,22 @@ const LeadCampaignsPage: React.FC = () => {
         )}
       </div>
 
+      {/* Access management dialog */}
+      <Dialog
+        open={!!(accessCampaignId || accessFunnelId)}
+        onOpenChange={(open) => { if (!open) { setAccessCampaignId(null); setAccessFunnelId(null); } }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Permissões de Acesso</DialogTitle>
+          </DialogHeader>
+          <FunnelAccessManager
+            campaignId={accessCampaignId || undefined}
+            funnelId={accessFunnelId || undefined}
+          />
+        </DialogContent>
+      </Dialog>
+
       {/* Campaigns with funnels */}
       {visibleCampaigns.map(campaign => {
         const funnels = visibleFunnels.filter(f => f.campaign_id === campaign.id);
@@ -164,6 +183,14 @@ const LeadCampaignsPage: React.FC = () => {
               </div>
               {isAdmin && (
                 <div className="flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    title="Permissões de acesso"
+                    onClick={() => setAccessCampaignId(campaign.id)}
+                  >
+                    <Users className="h-4 w-4 text-muted-foreground" />
+                  </Button>
                   <Button
                     variant="ghost"
                     size="sm"
@@ -181,17 +208,31 @@ const LeadCampaignsPage: React.FC = () => {
               {funnels.map(funnel => (
                 <div
                   key={funnel.id}
-                  onClick={() => navigate(`/lead-funnels/${funnel.id}`)}
                   className="flex items-center justify-between px-4 py-3 hover:bg-muted/20 cursor-pointer transition-colors"
                 >
-                  <div className="flex items-center gap-2">
+                  <div
+                    className="flex items-center gap-2 flex-1"
+                    onClick={() => navigate(`/lead-funnels/${funnel.id}`)}
+                  >
                     <Layers className="h-4 w-4 text-muted-foreground" />
                     <span className="text-sm font-medium text-foreground">{funnel.name}</span>
                     {!funnel.is_active && (
                       <span className="text-xs bg-destructive/10 text-destructive px-1.5 py-0.5 rounded">inativo</span>
                     )}
                   </div>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                  <div className="flex items-center gap-1">
+                    {isAdmin && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        title="Permissões do funil"
+                        onClick={(e) => { e.stopPropagation(); setAccessFunnelId(funnel.id); }}
+                      >
+                        <Users className="h-3.5 w-3.5 text-muted-foreground" />
+                      </Button>
+                    )}
+                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                  </div>
                 </div>
               ))}
               {funnels.length === 0 && (
@@ -212,25 +253,37 @@ const LeadCampaignsPage: React.FC = () => {
             {orphanFunnels.map(funnel => (
               <div
                 key={funnel.id}
-                onClick={() => navigate(`/lead-funnels/${funnel.id}`)}
                 className="flex items-center justify-between px-4 py-3 hover:bg-muted/20 cursor-pointer transition-colors"
               >
-                <div className="flex items-center gap-2">
+                <div
+                  className="flex items-center gap-2 flex-1"
+                  onClick={() => navigate(`/lead-funnels/${funnel.id}`)}
+                >
                   <Layers className="h-4 w-4 text-muted-foreground" />
                   <span className="text-sm font-medium text-foreground">{funnel.name}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   {isAdmin && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={e => {
-                        e.stopPropagation();
-                        if (confirm('Excluir funil?')) deleteFunnel.mutate(funnel.id);
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        title="Permissões do funil"
+                        onClick={e => { e.stopPropagation(); setAccessFunnelId(funnel.id); }}
+                      >
+                        <Users className="h-3.5 w-3.5 text-muted-foreground" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={e => {
+                          e.stopPropagation();
+                          if (confirm('Excluir funil?')) deleteFunnel.mutate(funnel.id);
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </>
                   )}
                   <ChevronRight className="h-4 w-4 text-muted-foreground" />
                 </div>
