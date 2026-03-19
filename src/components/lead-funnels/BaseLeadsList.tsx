@@ -55,7 +55,7 @@ const BaseLeadsList: React.FC<BaseLeadsListProps> = ({ positions, onLeadClick, o
     const q = search.toLowerCase().trim();
     let list = positions.filter(p => {
       if (!q) return true;
-      const name = (p.lead.first_name || '') + ' ' + (p.lead.last_name || '');
+      const name = p.lead.name || '';
       return (
         name.toLowerCase().includes(q) ||
         (p.lead.email || '').toLowerCase().includes(q) ||
