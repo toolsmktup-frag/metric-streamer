@@ -152,7 +152,7 @@ const LeadFunnelDetail: React.FC = () => {
   const handleLeadClick = (leadId: string) => {
     const pos = positions.find(p => p.lead_id === leadId);
     if (pos?.lead) {
-      setSelectedLead(pos.lead);
+      setSelectedLeadId(leadId);
       setTimelineOpen(true);
     }
   };
