@@ -95,6 +95,11 @@ export default function InstanceManagement({
         setConnecting(false);
       }
     } catch (err: any) {
+      // Ignore 404 errors (instance was likely deleted)
+      if (err?.message?.includes('404') || err?.message?.includes('not found') || err?.message?.includes('Instance not found')) {
+        console.log('Instance not found (likely deleted), skipping status fetch');
+        return;
+      }
       console.error('Status fetch error:', err);
       setStatusData({ processed: { status: 'disconnected' } });
     } finally {
