@@ -1,38 +1,76 @@
 
 
-## Plano: Padronizar status de compra para `authorized`
+## Plano: Sistema de Recontato por Produto com Contagem Regressiva
 
-### Problema
+### Contexto
 
-O sistema usa dois padrões de status diferentes para a mesma coisa ("compra aprovada"):
+O usuário vende suplementos em potes (1 pote, 3 potes, 6 potes de ArticulaBEM). Cada quantidade dura um número diferente de dias. Ele precisa saber quando entrar em contato com cada cliente para recompra, com priorização visual.
 
-| Local | Status usado | Onde |
-|-------|-------------|------|
-| **Banco (SQL, triggers, RFM, views)** | `authorized` | 21+ arquivos, todas as RPCs e migrations |
-| **Frontend (Leads/CRM)** | `approved` / `Aprovada` | 3 arquivos TypeScript |
+### Arquitetura
 
-Isso causa divergência nos cálculos de LTV entre módulos.
-
-### Solução
-
-Padronizar tudo para `authorized`, que já é o padrão dominante (usado em 95% do código). Apenas 3 arquivos frontend precisam de ajuste.
+```text
+┌─────────────────────────────┐
+│   funnel_products (existente)│
+│ + recontact_days (novo col)  │  ← ex: "1 pote" = 25 dias, "3 potes" = 75 dias
+└──────────────┬──────────────┘
+               │ match por product_name_contains
+               ▼
+┌─────────────────────────────┐
+│   Lead Card / Base List      │
+│ • Calcula: data_compra +     │
+│   recontact_days = deadline  │
+│ • Mostra contagem regressiva │
+│ • Cor: verde/amarelo/vermelho│
+└─────────────────────────────┘
+```
 
 ### Alterações
 
-**1. `src/hooks/useLeadPurchases.ts`** (linha 63)
-- Trocar `p.status === 'approved' || p.status === 'Aprovada'` por `p.status === 'authorized'`
-- Trocar `net_amount ?? gross_amount` por `gross_amount` (alinhar com RFM)
+**1. Migration: adicionar coluna `recontact_days` em `funnel_products`**
+- `ALTER TABLE funnel_products ADD COLUMN recontact_days integer DEFAULT NULL`
+- Quando preenchido (ex: 25), indica que após X dias da compra o cliente deve ser recontactado
 
-**2. `src/components/lead-funnels/LeadTimeline.tsx`** (linha 164)
-- Trocar `p.status === 'approved' || p.status === 'Aprovada'` por `p.status === 'authorized'`
+**2. Atualizar `FunisConfigurar.tsx` (UI de configuração de produtos)**
+- Adicionar campo numérico "Dias para Recontato" ao lado de cada produto
+- Ex: "1 pote ArticulaBEM" → 25 dias, "3 potes" → 75 dias, "6 potes" → 150 dias
 
-**3. `src/components/whatsapp/ContactPanel.tsx`** (linha 174)
-- Trocar `p.status === 'approved' || p.status === 'Aprovada'` por `p.status === 'authorized'`
+**3. Atualizar `useFunnels.ts` (tipo `FunnelProduct`)**
+- Adicionar `recontact_days: number | null` ao tipo
 
-**4. `src/components/lead-funnels/LeadCard.tsx`** (STATUS_LABELS)
-- Adicionar `authorized: 'Aprovado'` ao mapa de labels (para exibir "Aprovado" no card)
+**4. Criar hook `useRecontactDeadlines`**
+- Recebe as positions (leads) e os funnel_products configurados
+- Para cada lead, faz match do `product_name` (metadata) com `product_name_contains` do funnel_product
+- Calcula: `deadline = purchased_at + recontact_days`
+- Retorna `Map<leadId, { daysRemaining: number, isOverdue: boolean, deadlineDate: Date }>`
 
-### Resultado
+**5. Atualizar `LeadCard.tsx` — Badge de Recontato**
+- Novo badge visual com contagem regressiva:
+  - 🟢 Verde: > 7 dias restantes → "18d"
+  - 🟡 Amarelo: 1-7 dias → "3d ⚠️"
+  - 🔴 Vermelho: vencido → "-5d 🔥"
+- Ícone de timer/alarme para destacar
 
-Após a correção, o LTV no CRM (Base de Leads) vai usar a mesma lógica do RFM (Inteligência de Cliente), eliminando a divergência.
+**6. Atualizar `BaseLeadsList.tsx` — Coluna e Ordenação**
+- Nova coluna "Recontato" na tabela com a contagem regressiva
+- Novo critério de ordenação: por urgência (vencidos primeiro, depois por dias restantes crescente)
+- Filtro rápido: "Mostrar apenas vencidos"
+
+**7. Atualizar `KanbanBoard` — Passar dados de recontato para os cards**
+
+### Lógica de cálculo
+
+```text
+purchased_at = lead.metadata.purchased_at (da planilha importada)
+product_name = lead.metadata.product_name
+recontact_days = funnel_product.recontact_days (onde product_name contém product_name_contains)
+deadline = purchased_at + recontact_days
+days_remaining = deadline - hoje
+```
+
+### Resultado esperado
+
+- Na configuração do funil, o usuário define "1 pote = 25 dias", "3 potes = 75 dias"
+- No Kanban e na lista, cada card mostra um badge colorido com contagem regressiva
+- O time de vendas sabe imediatamente quem precisa ser contactado primeiro
+- Ordenação por urgência permite priorizar os leads vencidos
 
