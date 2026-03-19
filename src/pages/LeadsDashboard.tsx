@@ -20,17 +20,48 @@ const LeadsDashboard: React.FC = () => {
     try {
       const { data, error } = await supabase.functions.invoke('sync-leads-from-sales');
       if (error) throw error;
-      const result = data;
-      toast.success('Sincronização concluída!', {
-        description: `${result?.leads_created ?? 0} leads criados, ${result?.events_created ?? 0} eventos registrados.`,
+      
+      const jobId = data?.job_id;
+      if (!jobId) throw new Error('No job_id returned');
+
+      toast.info('Sincronização iniciada em background...', {
+        description: 'Processando seus leads. Isso pode levar alguns minutos.',
       });
-      queryClient.invalidateQueries({ queryKey: ['lead-stats'] });
-      queryClient.invalidateQueries({ queryKey: ['all-leads'] });
-      queryClient.invalidateQueries({ queryKey: ['leads-by-funnel'] });
-      queryClient.invalidateQueries({ queryKey: ['funnel-lead-counts'] });
+
+      // Poll meta_sync_log for completion
+      const pollInterval = setInterval(async () => {
+        const { data: log } = await supabase
+          .from('meta_sync_log')
+          .select('status, records_synced, error, finished_at')
+          .eq('id', jobId)
+          .single();
+
+        if (!log) return;
+
+        if (log.status === 'completed') {
+          clearInterval(pollInterval);
+          setSyncing(false);
+          toast.success('Sincronização concluída!', {
+            description: `${log.records_synced ?? 0} leads sincronizados.`,
+          });
+          queryClient.invalidateQueries({ queryKey: ['lead-stats'] });
+          queryClient.invalidateQueries({ queryKey: ['all-leads'] });
+          queryClient.invalidateQueries({ queryKey: ['leads-by-funnel'] });
+          queryClient.invalidateQueries({ queryKey: ['funnel-lead-counts'] });
+        } else if (log.status === 'failed') {
+          clearInterval(pollInterval);
+          setSyncing(false);
+          toast.error('Erro na sincronização', { description: log.error || 'Erro desconhecido' });
+        }
+      }, 5000); // Poll every 5 seconds
+
+      // Safety timeout after 10 minutes
+      setTimeout(() => {
+        setSyncing(false);
+      }, 600000);
+
     } catch (err: any) {
-      toast.error('Erro na sincronização', { description: err.message });
-    } finally {
+      toast.error('Erro ao iniciar sincronização', { description: err.message });
       setSyncing(false);
     }
   };
