@@ -149,9 +149,6 @@ export default function FunnelAccessManager({ campaignId, funnelId, title }: Fun
               />
               <Label htmlFor={`faccess-${user.user_id}`} className="flex-1 cursor-pointer">
                 <span className="text-sm text-foreground">{user.full_name}</span>
-                {user.email && (
-                  <span className="text-xs text-muted-foreground ml-2">{user.email}</span>
-                )}
                 {disabled && (
                   <span className="text-xs text-primary ml-2">(acesso via campanha)</span>
                 )}
