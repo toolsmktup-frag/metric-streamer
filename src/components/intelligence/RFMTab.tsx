@@ -258,7 +258,15 @@ export default function RFMTab() {
             <span className="text-sm font-semibold text-foreground">Clientes</span>
             <span className="text-xs text-muted-foreground">({filteredCustomers.length.toLocaleString('pt-BR')})</span>
           </div>
-          <div className="flex items-center gap-2">
+           <div className="flex items-center gap-2">
+            <button
+              onClick={handleExportDetailed}
+              disabled={exportingDetailed}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-medium text-foreground hover:bg-accent transition-colors disabled:opacity-50"
+            >
+              {exportingDetailed ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+              {exportingDetailed ? 'Exportando...' : 'Compras Detalhadas'}
+            </button>
             <button
               onClick={handleExport}
               className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-medium text-foreground hover:bg-accent transition-colors"
