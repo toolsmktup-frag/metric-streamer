@@ -109,7 +109,27 @@ export default function Equipe() {
     }
   };
 
-  function startEditName(userId: string, currentName: string) {
+  const toggleCampaignFunnelAccess = async (userId: string, type: 'campaign' | 'funnel', targetId: string, grant: boolean) => {
+    const key = `${userId}-${type}-${targetId}`;
+    setSavingFunnelAccess(key);
+    try {
+      const { data: orgId } = await (supabase as any).rpc('get_user_org_id');
+      if (grant) {
+        const params: any = { userId, organizationId: orgId };
+        if (type === 'campaign') params.campaignId = targetId;
+        else params.funnelId = targetId;
+        await grantFunnelAccess.mutateAsync(params);
+      } else {
+        const params: any = { userId };
+        if (type === 'campaign') params.campaignId = targetId;
+        else params.funnelId = targetId;
+        await revokeFunnelAccess.mutateAsync(params);
+      }
+    } finally {
+      setSavingFunnelAccess(null);
+    }
+  };
+
     setEditingName(userId);
     setNameValue(currentName || '');
   }
