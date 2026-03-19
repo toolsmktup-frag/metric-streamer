@@ -62,6 +62,11 @@ const LeadFunnelDetail: React.FC = () => {
   const { data: userRole = 'vendedor' } = useCurrentUserRole();
   const isAdmin = userRole === 'admin' || userRole === 'gestor';
   const { data: hasAccess, isLoading: loadingAccess } = useHasFunnelAccess(id ?? null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setCurrentUserId(data.user?.id ?? null));
+  }, []);
   const [bulkMoving, setBulkMoving] = useState(false);
 
   // Bulk purchase data for recontact fallback
