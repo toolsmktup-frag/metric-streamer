@@ -7,6 +7,7 @@ export interface TeamMember {
   full_name: string | null;
   email: string;
   role: string;
+  status: string;
   created_at: string;
   updated_at: string;
 }
@@ -22,6 +23,12 @@ export const ROLE_LABELS: Record<string, string> = {
   suporte: 'Suporte',
 };
 
+export const STATUS_LABELS: Record<string, string> = {
+  pending: 'Pendente',
+  active: 'Ativo',
+  blocked: 'Bloqueado',
+};
+
 export function useTeamMembers() {
   const queryClient = useQueryClient();
 
@@ -33,16 +40,15 @@ export function useTeamMembers() {
 
       const { data, error } = await (supabase as any)
         .from('user_profiles')
-        .select('id, full_name, role, created_at, updated_at')
+        .select('id, full_name, role, status, created_at, updated_at')
         .eq('organization_id', orgId)
         .order('created_at', { ascending: true });
 
       if (error) throw error;
 
-      // Get emails from auth — we'll use the id as fallback
       return (data || []).map((p: any) => ({
         ...p,
-        email: '', // email will be populated from profile or left empty
+        email: '',
       }));
     },
   });
@@ -81,5 +87,23 @@ export function useTeamMembers() {
     },
   });
 
-  return { ...query, updateRole, updateName };
+  const updateStatus = useMutation({
+    mutationFn: async ({ userId, status }: { userId: string; status: string }) => {
+      const { error } = await (supabase as any)
+        .from('user_profiles')
+        .update({ status, updated_at: new Date().toISOString() })
+        .eq('id', userId);
+      if (error) throw error;
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['team-members'] });
+      const label = variables.status === 'active' ? 'aprovado' : variables.status === 'blocked' ? 'bloqueado' : 'atualizado';
+      toast.success(`Usuário ${label} com sucesso`);
+    },
+    onError: (err: any) => {
+      toast.error(err.message || 'Erro ao atualizar status');
+    },
+  });
+
+  return { ...query, updateRole, updateName, updateStatus };
 }
