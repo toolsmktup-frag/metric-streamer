@@ -73,6 +73,17 @@ export default function InstanceManagement({
       if (data?.processed?.display_name) {
         setProfileName(data.processed.display_name);
       }
+      // Extract QR code / pair code from status if instance is connecting
+      const qr = data?.raw?.instance?.qrcode || data?.qrcode;
+      const pc = data?.raw?.instance?.paircode || data?.paircode;
+      if (qr) {
+        setQrCode(qr);
+        setConnecting(true);
+      }
+      if (pc) {
+        setPairCode(pc);
+        setConnecting(true);
+      }
     } catch (err: any) {
       console.error('Status fetch error:', err);
       setStatusData({ processed: { status: 'disconnected' } });
