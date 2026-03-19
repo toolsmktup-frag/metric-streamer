@@ -97,7 +97,7 @@ const BaseLeadsList: React.FC<BaseLeadsListProps> = ({ positions, onLeadClick, o
     });
 
     return list;
-  }, [positions, search, sortKey, sortDir, purchaseMap]);
+  }, [positions, search, sortKey, sortDir, purchaseMap, recontactMap]);
 
   // Summary stats
   const stats = useMemo(() => {
