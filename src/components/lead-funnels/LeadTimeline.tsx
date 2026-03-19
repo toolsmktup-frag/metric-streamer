@@ -49,6 +49,18 @@ const EVENT_MAP: Record<string, EventMapping> = {
 
 const DEFAULT_EVENT: EventMapping = { label: '', icon: Activity, colorClass: 'bg-primary/10 text-primary' };
 
+function formatTimeDelta(ms: number): string {
+  const minutes = Math.floor(ms / 60000);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+  const remHours = hours % 24;
+  const remMinutes = minutes % 60;
+
+  if (days > 0) return `+${days}d ${remHours}h ${remMinutes}min`;
+  if (hours > 0) return `+${hours}h ${remMinutes}min`;
+  return `+${remMinutes}min`;
+}
+
 function getEventMapping(eventName: string): EventMapping {
   const mapping = EVENT_MAP[eventName];
   if (mapping) return mapping;
@@ -233,10 +245,29 @@ const LeadTimeline: React.FC<LeadTimelineProps> = ({ lead, open, onClose }) => {
                   <div className="absolute left-[11px] top-2 bottom-2 w-px bg-border" />
 
                   <div className="space-y-3">
-                    {sortedEvents.map((ev) => {
+                    {sortedEvents.map((ev, index) => {
                       const mapping = getEventMapping(ev.event_name);
                       const Icon = mapping.icon;
                       const eventDate = getEventDate(ev);
+                      const meta = ev.metadata as any;
+
+                      // Label with product name for purchase events
+                      const productName = meta?.product_name;
+                      const isPurchaseEvent = ['purchase', 'compra', 'pago', 'authorized'].includes(ev.event_name);
+                      const displayLabel = isPurchaseEvent && productName
+                        ? `${mapping.label}: ${productName}`
+                        : mapping.label;
+
+                      // Time delta from the chronologically previous event (next in array since sorted desc)
+                      let timeDelta: string | null = null;
+                      if (index < sortedEvents.length - 1) {
+                        const prevEvent = sortedEvents[index + 1];
+                        const prevDate = getEventDate(prevEvent);
+                        const diffMs = eventDate.getTime() - prevDate.getTime();
+                        if (diffMs >= 0) {
+                          timeDelta = formatTimeDelta(diffMs);
+                        }
+                      }
 
                       return (
                         <div key={ev.id} className="flex gap-3 relative">
@@ -245,32 +276,37 @@ const LeadTimeline: React.FC<LeadTimelineProps> = ({ lead, open, onClose }) => {
                           </div>
                           <div className="flex-1 min-w-0 pb-1">
                             <div className="flex items-center gap-2">
-                              <span className="text-xs font-medium text-foreground">{mapping.label}</span>
+                              <span className="text-xs font-medium text-foreground truncate">{displayLabel}</span>
                             </div>
                             <p className="text-[10px] text-muted-foreground mt-0.5">
                               {format(eventDate, 'dd/MM/yyyy HH:mm:ss')}
                             </p>
-                            {ev.metadata && Object.keys(ev.metadata).length > 0 && (
+                            {timeDelta && (
+                              <p className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-1">
+                                <Clock className="h-2.5 w-2.5" /> {timeDelta}
+                              </p>
+                            )}
+                            {meta && Object.keys(meta).length > 0 && (
                               <div className="flex items-center gap-2 mt-1 text-[10px] flex-wrap">
-                                {(ev.metadata as any).product_name && (
-                                  <span className="text-muted-foreground">{(ev.metadata as any).product_name}</span>
+                                {!isPurchaseEvent && productName && (
+                                  <span className="text-muted-foreground">{productName}</span>
                                 )}
-                                {(ev.metadata as any).offer_name && (
-                                  <span className="text-muted-foreground/80">({(ev.metadata as any).offer_name})</span>
+                                {meta.offer_name && (
+                                  <span className="text-muted-foreground/80">({meta.offer_name})</span>
                                 )}
-                                {(ev.metadata as any).amount && (
+                                {meta.amount && (
                                   <span className="font-semibold text-emerald-600 dark:text-emerald-400">
-                                    {formatCurrency(Number((ev.metadata as any).amount))}
+                                    {formatCurrency(Number(meta.amount))}
                                   </span>
                                 )}
-                                {(ev.metadata as any).payment_method && (
+                                {meta.payment_method && (
                                   <span className="text-muted-foreground flex items-center gap-0.5">
-                                    <CreditCard className="h-2.5 w-2.5" /> {(ev.metadata as any).payment_method}
+                                    <CreditCard className="h-2.5 w-2.5" /> {meta.payment_method}
                                   </span>
                                 )}
-                                {(ev.metadata as any).platform && (
+                                {meta.platform && (
                                   <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4">
-                                    {(ev.metadata as any).platform}
+                                    {meta.platform}
                                   </Badge>
                                 )}
                               </div>
