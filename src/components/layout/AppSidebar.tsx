@@ -154,28 +154,30 @@ const AppSidebar = React.memo(function AppSidebar({ collapsed, onToggle }: AppSi
       <nav className="flex-1 px-2 py-2 space-y-0.5 overflow-y-auto">
 
         {/* Resumo Geral */}
-        <button
-          onClick={handleResumoGeral}
-          className={`w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-            isActive('/resumo') || isActive('/')
-              ? 'bg-sidebar-active text-sidebar-theme'
-              : 'text-sidebar-theme/80 hover:bg-sidebar-hover hover:text-sidebar-theme'
-          }`}
-        >
-          <LayoutDashboard className="h-5 w-5 shrink-0" />
-          <AnimatePresence>
-            {!collapsed && (
-              <motion.span
-                initial={{ opacity: 0, width: 0 }}
-                animate={{ opacity: 1, width: 'auto' }}
-                exit={{ opacity: 0, width: 0 }}
-                className="whitespace-nowrap overflow-hidden"
-              >
-                Resumo Geral
-              </motion.span>
-            )}
-          </AnimatePresence>
-        </button>
+        {can('mod_resumo') && (
+          <button
+            onClick={handleResumoGeral}
+            className={`w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+              isActive('/resumo') || isActive('/')
+                ? 'bg-sidebar-active text-sidebar-theme'
+                : 'text-sidebar-theme/80 hover:bg-sidebar-hover hover:text-sidebar-theme'
+            }`}
+          >
+            <LayoutDashboard className="h-5 w-5 shrink-0" />
+            <AnimatePresence>
+              {!collapsed && (
+                <motion.span
+                  initial={{ opacity: 0, width: 0 }}
+                  animate={{ opacity: 1, width: 'auto' }}
+                  exit={{ opacity: 0, width: 0 }}
+                  className="whitespace-nowrap overflow-hidden"
+                >
+                  Resumo Geral
+                </motion.span>
+              )}
+            </AnimatePresence>
+          </button>
+        )}
 
         {/* Seção Funis / Tráfego */}
         {can('mod_trafego') && (
