@@ -35,6 +35,7 @@ interface ProductRow {
   product_name_contains: string;
   role: FunnelProduct['role'];
   display_name: string;
+  recontact_days: number | null;
 }
 
 interface FunnelFormData {
@@ -119,6 +120,7 @@ export default function FunisConfigurar() {
       product_name_contains: fp.product_name_contains,
       role: fp.role,
       display_name: fp.display_name || '',
+      recontact_days: fp.recontact_days,
     })));
   }
 
@@ -140,7 +142,7 @@ export default function FunisConfigurar() {
   }
 
   function addProduct() {
-    setProducts(p => [...p, { product_name_contains: '', role: 'front', display_name: '' }]);
+    setProducts(p => [...p, { product_name_contains: '', role: 'front', display_name: '', recontact_days: null }]);
   }
 
   function removeProduct(idx: number) {
@@ -188,6 +190,7 @@ export default function FunisConfigurar() {
           product_name_contains: p.product_name_contains.trim(),
           role: p.role,
           display_name: p.display_name.trim() || null,
+          recontact_days: p.recontact_days,
         })),
       });
 
@@ -272,7 +275,7 @@ export default function FunisConfigurar() {
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">
-                O <strong>fragmento</strong> é buscado dentro do nome do produto via ILIKE. Ex: "TINTURA" vai casar com "COMO PREPARAR TINTURAS...".
+                O <strong>fragmento</strong> é buscado dentro do nome do produto via ILIKE. O campo <strong>Dias</strong> define após quantos dias da compra o lead deve ser recontactado (ex: 1 pote = 25 dias).
               </p>
               <div className="space-y-2">
                 {products.map((p, idx) => (
@@ -294,6 +297,17 @@ export default function FunisConfigurar() {
                       placeholder="Nome amigável"
                       value={p.display_name}
                       onChange={e => updateProduct(idx, 'display_name', e.target.value)}
+                    />
+                    <Input
+                      className="w-20"
+                      type="number"
+                      placeholder="Dias"
+                      title="Dias para recontato após compra"
+                      value={p.recontact_days ?? ''}
+                      onChange={e => {
+                        const val = e.target.value ? parseInt(e.target.value, 10) : null;
+                        setProducts(prev => prev.map((row, i) => i === idx ? { ...row, recontact_days: val } : row));
+                      }}
                     />
                     <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => removeProduct(idx)}>
                       <Trash2 className="h-3.5 w-3.5" />

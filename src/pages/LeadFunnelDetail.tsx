@@ -2,6 +2,8 @@ import React, { useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useLeadFunnel, useUpsertStages, useUpsertTransitionRules, useFunnelSourceNodes, useFunnelEdges, useSaveFunnelSourceNodes, useSaveFunnelEdges } from '@/hooks/useLeadFunnels';
 import { useLeadsByFunnel, useFunnelLeadCounts } from '@/hooks/useLeads';
+import { useFunnels } from '@/hooks/useFunnels';
+import { useRecontactDeadlines } from '@/hooks/useRecontactDeadlines';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Upload, Trash2 } from 'lucide-react';
@@ -39,11 +41,16 @@ const LeadFunnelDetail: React.FC = () => {
   const { data: leadCounts = {} } = useFunnelLeadCounts(id ?? null);
   const { data: sourceNodes = [] } = useFunnelSourceNodes(id ?? null);
   const { data: funnelEdges = [] } = useFunnelEdges(id ?? null);
+  const { data: paymentFunnels = [] } = useFunnels();
   const upsertStages = useUpsertStages();
   const upsertRules = useUpsertTransitionRules();
   const saveSourceNodes = useSaveFunnelSourceNodes();
   const saveFunnelEdges = useSaveFunnelEdges();
   const queryClient = useQueryClient();
+
+  // Collect all funnel_products with recontact_days from payment funnels
+  const allFunnelProducts = paymentFunnels.flatMap(f => f.funnel_products || []);
+  const recontactMap = useRecontactDeadlines(positions, allFunnelProducts);
 
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [timelineOpen, setTimelineOpen] = useState(false);
@@ -224,6 +231,7 @@ const LeadFunnelDetail: React.FC = () => {
               positions={positions}
               onLeadClick={handleLeadClick}
               onWhatsAppClick={handleWhatsAppClick}
+              recontactMap={recontactMap}
             />
           </TabsContent>
         ) : (
@@ -234,6 +242,7 @@ const LeadFunnelDetail: React.FC = () => {
               onLeadClick={handleLeadClick}
               onWhatsAppClick={handleWhatsAppClick}
               funnelId={funnel.id}
+              recontactMap={recontactMap}
             />
           </TabsContent>
         )}

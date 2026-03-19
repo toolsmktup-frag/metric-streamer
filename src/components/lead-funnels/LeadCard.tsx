@@ -1,10 +1,11 @@
 import React from 'react';
 import { Lead, LeadStagePosition } from '@/types/leadFunnels';
-import { Mail, Phone, Clock, DollarSign, GripVertical, MessageCircle, ShoppingBag, CalendarClock } from 'lucide-react';
+import { Mail, Phone, Clock, DollarSign, GripVertical, MessageCircle, ShoppingBag, CalendarClock, Timer } from 'lucide-react';
 import { PurchaseSummary } from '@/hooks/useBulkLeadPurchases';
 import { useDraggable } from '@dnd-kit/core';
 import { formatLocalDateTime } from '@/lib/localDate';
 import { differenceInDays } from 'date-fns';
+import type { RecontactInfo } from '@/hooks/useRecontactDeadlines';
 
 interface LeadCardProps {
   position: LeadStagePosition & { lead: Lead };
@@ -13,6 +14,7 @@ interface LeadCardProps {
   isDragging?: boolean;
   isRevenue?: boolean;
   purchaseSummary?: PurchaseSummary;
+  recontactInfo?: RecontactInfo;
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -30,7 +32,7 @@ function friendlyStatus(status: string): string {
   return STATUS_LABELS[status.toLowerCase().trim()] || status;
 }
 
-const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, onWhatsAppClick, isDragging, isRevenue = true, purchaseSummary }) => {
+const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, onWhatsAppClick, isDragging, isRevenue = true, purchaseSummary, recontactInfo }) => {
   const lead = position.lead;
   const { attributes, listeners, setNodeRef, transform } = useDraggable({
     id: position.id,
@@ -123,6 +125,29 @@ const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, onWhatsAppClick,
               {differenceInDays(new Date(), new Date(purchaseSummary!.firstPurchaseDate))}d
             </span>
           )}
+        </div>
+      )}
+
+      {/* Recontact countdown badge */}
+      {recontactInfo && (
+        <div className="mt-1.5 ml-[42px]">
+          <span
+            className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-md ${
+              recontactInfo.daysRemaining < 0
+                ? 'bg-destructive/15 text-destructive'
+                : recontactInfo.daysRemaining <= 7
+                ? 'bg-yellow-500/15 text-yellow-600 dark:text-yellow-400'
+                : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+            }`}
+            title={`Recontato: ${recontactInfo.productName} — ${recontactInfo.recontactDays}d ciclo`}
+          >
+            <Timer className="h-3.5 w-3.5" />
+            {recontactInfo.daysRemaining < 0
+              ? `${recontactInfo.daysRemaining}d 🔥`
+              : recontactInfo.daysRemaining <= 7
+              ? `${recontactInfo.daysRemaining}d ⚠️`
+              : `${recontactInfo.daysRemaining}d`}
+          </span>
         </div>
       )}
 

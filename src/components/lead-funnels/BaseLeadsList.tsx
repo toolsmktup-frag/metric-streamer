@@ -11,23 +11,25 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from '@/components/ui/pagination';
-import { Search, Users, DollarSign, ShoppingCart, TrendingUp, MessageCircle, ChevronUp, ChevronDown } from 'lucide-react';
+import { Search, Users, DollarSign, ShoppingCart, TrendingUp, MessageCircle, ChevronUp, ChevronDown, Timer } from 'lucide-react';
 import { useBulkLeadPurchases, type PurchaseSummary } from '@/hooks/useBulkLeadPurchases';
 import { formatCurrency } from '@/lib/formatters';
 import type { Lead, LeadStagePosition } from '@/types/leadFunnels';
+import type { RecontactInfo } from '@/hooks/useRecontactDeadlines';
 
 interface BaseLeadsListProps {
   positions: (LeadStagePosition & { lead: Lead })[];
   onLeadClick: (leadId: string) => void;
   onWhatsAppClick: (phone: string) => void;
+  recontactMap?: Map<string, RecontactInfo>;
 }
 
-type SortKey = 'ltv' | 'name' | 'date' | 'orders';
+type SortKey = 'ltv' | 'name' | 'date' | 'orders' | 'recontact';
 type SortDir = 'asc' | 'desc';
 
 const PAGE_SIZE = 50;
 
-const BaseLeadsList: React.FC<BaseLeadsListProps> = ({ positions, onLeadClick, onWhatsAppClick }) => {
+const BaseLeadsList: React.FC<BaseLeadsListProps> = ({ positions, onLeadClick, onWhatsAppClick, recontactMap }) => {
   const [search, setSearch] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('ltv');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
@@ -84,12 +86,18 @@ const BaseLeadsList: React.FC<BaseLeadsListProps> = ({ positions, onLeadClick, o
         case 'date':
           cmp = new Date(a.entered_at || 0).getTime() - new Date(b.entered_at || 0).getTime();
           break;
+        case 'recontact': {
+          const rA = recontactMap?.get(a.lead_id)?.daysRemaining ?? 9999;
+          const rB = recontactMap?.get(b.lead_id)?.daysRemaining ?? 9999;
+          cmp = rA - rB;
+          break;
+        }
       }
       return sortDir === 'desc' ? -cmp : cmp;
     });
 
     return list;
-  }, [positions, search, sortKey, sortDir, purchaseMap]);
+  }, [positions, search, sortKey, sortDir, purchaseMap, recontactMap]);
 
   // Summary stats
   const stats = useMemo(() => {
@@ -225,19 +233,25 @@ const BaseLeadsList: React.FC<BaseLeadsListProps> = ({ positions, onLeadClick, o
               >
                 <span className="flex items-center gap-1">Entrada <SortIcon col="date" /></span>
               </TableHead>
+              <TableHead
+                className="cursor-pointer select-none"
+                onClick={() => toggleSort('recontact')}
+              >
+                <span className="flex items-center gap-1"><Timer className="h-3 w-3" /> Recontato <SortIcon col="recontact" /></span>
+              </TableHead>
               <TableHead className="w-10" />
             </TableRow>
           </TableHeader>
           <TableBody>
             {ltvLoading && positions.length > 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
                   Calculando LTV...
                 </TableCell>
               </TableRow>
             ) : paginated.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
                   {search ? 'Nenhum lead encontrado' : 'Nenhum lead neste funil'}
                 </TableCell>
               </TableRow>
@@ -266,6 +280,22 @@ const BaseLeadsList: React.FC<BaseLeadsListProps> = ({ positions, onLeadClick, o
                     </TableCell>
                     <TableCell className="text-muted-foreground text-xs">
                       {formatDate(p.entered_at)}
+                    </TableCell>
+                    <TableCell>
+                      {(() => {
+                        const rc = recontactMap?.get(p.lead_id);
+                        if (!rc) return <span className="text-muted-foreground">—</span>;
+                        const cls = rc.daysRemaining < 0
+                          ? 'text-destructive font-bold'
+                          : rc.daysRemaining <= 7
+                          ? 'text-yellow-600 dark:text-yellow-400 font-semibold'
+                          : 'text-emerald-600 dark:text-emerald-400';
+                        return (
+                          <span className={`text-xs ${cls}`}>
+                            {rc.daysRemaining < 0 ? `${rc.daysRemaining}d 🔥` : rc.daysRemaining <= 7 ? `${rc.daysRemaining}d ⚠️` : `${rc.daysRemaining}d`}
+                          </span>
+                        );
+                      })()}
                     </TableCell>
                     <TableCell>
                       {p.lead.phone && (

@@ -7,6 +7,7 @@ export interface FunnelProduct {
   product_name_contains: string;
   role: 'front' | 'order_bump' | 'upsell1' | 'upsell2' | 'upsell3' | 'downsell';
   display_name: string | null;
+  recontact_days: number | null;
 }
 
 export interface Funnel {

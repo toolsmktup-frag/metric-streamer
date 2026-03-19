@@ -19,6 +19,7 @@ import {
 } from '@dnd-kit/core';
 import { useMoveLeadStage } from '@/hooks/useMoveLeadStage';
 import { useBulkLeadPurchases, type PurchaseSummary } from '@/hooks/useBulkLeadPurchases';
+import type { RecontactInfo } from '@/hooks/useRecontactDeadlines';
 
 const CARDS_PER_PAGE = 50;
 
@@ -28,18 +29,20 @@ interface KanbanBoardProps {
   onLeadClick?: (leadId: string) => void;
   onWhatsAppClick?: (phone: string) => void;
   funnelId: string;
+  recontactMap?: Map<string, RecontactInfo>;
 }
 
-type SortMode = 'recent' | 'value' | 'orders' | 'ltv';
+type SortMode = 'recent' | 'value' | 'orders' | 'ltv' | 'recontact';
 
 const SORT_LABELS: Record<SortMode, string> = {
   recent: 'Mais recentes',
   value: 'Maior valor',
   orders: 'Mais compras',
   ltv: 'Maior LTV',
+  recontact: 'Recontato',
 };
 
-const SORT_CYCLE: SortMode[] = ['recent', 'value', 'orders', 'ltv'];
+const SORT_CYCLE: SortMode[] = ['recent', 'value', 'orders', 'ltv', 'recontact'];
 
 /* Droppable column wrapper */
 const DroppableColumn: React.FC<{ id: string; isOver: boolean; children: React.ReactNode }> = ({ id, isOver, children }) => {
@@ -56,7 +59,7 @@ const DroppableColumn: React.FC<{ id: string; isOver: boolean; children: React.R
   );
 };
 
-const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClick, onWhatsAppClick, funnelId }) => {
+const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClick, onWhatsAppClick, funnelId, recontactMap }) => {
   const [search, setSearch] = useState('');
   const [sortMode, setSortMode] = useState<SortMode>('ltv');
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -118,6 +121,11 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
             const ltvB = purchaseMap?.get(b.lead_id)?.totalSpent || 0;
             return ltvB - ltvA;
           }
+          case 'recontact': {
+            const rA = recontactMap?.get(a.lead_id)?.daysRemaining ?? 9999;
+            const rB = recontactMap?.get(b.lead_id)?.daysRemaining ?? 9999;
+            return rA - rB; // most urgent first
+          }
           default:
             return 0;
         }
@@ -125,7 +133,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
       map.set(stageId, sorted);
     }
     return map;
-  }, [filteredPositions, sortMode, purchaseMap]);
+  }, [filteredPositions, sortMode, purchaseMap, recontactMap]);
 
   const getStageRevenue = (leads: (LeadStagePosition & { lead: Lead })[]) => {
     return leads.reduce((sum, p) => sum + (Number(p.lead.metadata?.amount) || 0), 0);
@@ -298,6 +306,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
                           isDragging={activeId === pos.id}
                           isRevenue={isRevenue}
                           purchaseSummary={getPurchaseSummary(pos.lead_id)}
+                          recontactInfo={recontactMap?.get(pos.lead_id)}
                           onClick={() => onLeadClick?.(pos.lead_id)}
                           onWhatsAppClick={onWhatsAppClick}
                         />
@@ -328,7 +337,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
         <DragOverlay>
           {activePosition && (
             <div className="opacity-90 rotate-2 scale-105">
-              <LeadCard position={activePosition} purchaseSummary={getPurchaseSummary(activePosition.lead_id)} />
+              <LeadCard position={activePosition} purchaseSummary={getPurchaseSummary(activePosition.lead_id)} recontactInfo={recontactMap?.get(activePosition.lead_id)} />
             </div>
           )}
         </DragOverlay>
