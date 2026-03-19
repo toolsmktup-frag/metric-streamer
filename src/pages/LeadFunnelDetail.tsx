@@ -303,6 +303,7 @@ const LeadFunnelDetail: React.FC = () => {
               onWhatsAppClick={handleWhatsAppClick}
               funnelId={funnel.id}
               recontactMap={recontactMap}
+              userRole={userRole}
             />
           </TabsContent>
         )}
