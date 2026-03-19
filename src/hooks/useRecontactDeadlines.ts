@@ -1,8 +1,10 @@
 import { useMemo } from 'react';
 import { differenceInDays, addDays } from 'date-fns';
 import type { Lead, LeadStagePosition } from '@/types/leadFunnels';
+import type { LeadProductMapping } from '@/hooks/useLeadProductMappings';
 
 export interface RecontactProduct {
+  id?: string;
   product_name_contains: string;
   display_name?: string | null;
   recontact_days: number | null;
@@ -19,10 +21,15 @@ export interface RecontactInfo {
 /**
  * For each lead, match their product (from metadata) against configured products
  * with recontact_days, then calculate countdown.
+ *
+ * Priority:
+ * 1. Explicit mapping (lead_product_mappings table)
+ * 2. Substring match (product_name_contains) as fallback
  */
 export function useRecontactDeadlines(
   positions: (LeadStagePosition & { lead: Lead })[],
   products: RecontactProduct[] | undefined,
+  mappings?: LeadProductMapping[],
 ): Map<string, RecontactInfo> {
   return useMemo(() => {
     const map = new Map<string, RecontactInfo>();
@@ -33,6 +40,18 @@ export function useRecontactDeadlines(
 
     if (productsWithRecontact.length === 0) return map;
 
+    // Build mapping lookup: raw_product_name -> lead_funnel_product_id
+    const mappingLookup = new Map<string, string>();
+    for (const m of mappings || []) {
+      mappingLookup.set(m.raw_product_name, m.lead_funnel_product_id);
+    }
+
+    // Build product lookup by id
+    const productById = new Map<string, RecontactProduct>();
+    for (const p of productsWithRecontact) {
+      if (p.id) productById.set(p.id, p);
+    }
+
     const today = new Date();
 
     for (const pos of positions) {
@@ -42,9 +61,19 @@ export function useRecontactDeadlines(
 
       if (!productName || !purchasedAt) continue;
 
-      const matchedProduct = productsWithRecontact.find(fp =>
-        productName.toLowerCase().includes(fp.product_name_contains.toLowerCase()),
-      );
+      // 1. Try explicit mapping first
+      let matchedProduct: RecontactProduct | undefined;
+      const mappedProductId = mappingLookup.get(productName);
+      if (mappedProductId) {
+        matchedProduct = productById.get(mappedProductId);
+      }
+
+      // 2. Fallback to substring match
+      if (!matchedProduct) {
+        matchedProduct = productsWithRecontact.find(fp =>
+          productName.toLowerCase().includes(fp.product_name_contains.toLowerCase()),
+        );
+      }
 
       if (!matchedProduct) continue;
 
@@ -64,5 +93,5 @@ export function useRecontactDeadlines(
     }
 
     return map;
-  }, [positions, products]);
+  }, [positions, products, mappings]);
 }
