@@ -149,7 +149,7 @@ const FunnelProductsConfig: React.FC<FunnelProductsConfigProps> = ({
         {localProducts.map((prod, idx) => (
           <div key={idx} className="flex items-center gap-2 bg-muted/50 rounded-lg p-2">
             {prod.source_funnel_product_id && (
-              <Link2 className="h-4 w-4 text-primary shrink-0" title="Vinculado ao catálogo" />
+              <span title="Vinculado ao catálogo"><Link2 className="h-4 w-4 text-primary shrink-0" /></span>
             )}
             <Input
               value={prod.product_name_contains}
