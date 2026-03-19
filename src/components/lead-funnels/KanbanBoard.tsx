@@ -18,6 +18,7 @@ import {
   type DragEndEvent,
 } from '@dnd-kit/core';
 import { useMoveLeadStage } from '@/hooks/useMoveLeadStage';
+import { useBulkLeadPurchases, type PurchaseSummary } from '@/hooks/useBulkLeadPurchases';
 
 interface KanbanBoardProps {
   stages: LeadFunnelStage[];
@@ -27,7 +28,16 @@ interface KanbanBoardProps {
   funnelId: string;
 }
 
-type SortMode = 'recent' | 'value';
+type SortMode = 'recent' | 'value' | 'orders' | 'ltv';
+
+const SORT_LABELS: Record<SortMode, string> = {
+  recent: 'Mais recentes',
+  value: 'Maior valor',
+  orders: 'Mais compras',
+  ltv: 'Maior LTV',
+};
+
+const SORT_CYCLE: SortMode[] = ['recent', 'value', 'orders', 'ltv'];
 
 /* Droppable column wrapper */
 const DroppableColumn: React.FC<{ id: string; isOver: boolean; children: React.ReactNode }> = ({ id, isOver, children }) => {
@@ -51,6 +61,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
   const [overId, setOverId] = useState<string | null>(null);
 
   const moveLeadStage = useMoveLeadStage();
+  const { data: purchaseMap } = useBulkLeadPurchases(positions);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
@@ -71,12 +82,33 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
     });
   }, [positions, search]);
 
+  const getPurchaseSummary = (leadId: string): PurchaseSummary | undefined => {
+    return purchaseMap?.get(leadId);
+  };
+
   const getLeadsForStage = (stageId: string) => {
     const stageLeads = filteredPositions.filter(p => p.stage_id === stageId);
-    if (sortMode === 'recent') {
-      return stageLeads.sort((a, b) => new Date(b.entered_at).getTime() - new Date(a.entered_at).getTime());
-    }
-    return stageLeads;
+
+    return [...stageLeads].sort((a, b) => {
+      switch (sortMode) {
+        case 'recent':
+          return new Date(b.entered_at).getTime() - new Date(a.entered_at).getTime();
+        case 'value':
+          return (Number(b.lead.metadata?.amount) || 0) - (Number(a.lead.metadata?.amount) || 0);
+        case 'orders': {
+          const ordersA = getPurchaseSummary(a.lead_id)?.totalOrders || 0;
+          const ordersB = getPurchaseSummary(b.lead_id)?.totalOrders || 0;
+          return ordersB - ordersA;
+        }
+        case 'ltv': {
+          const ltvA = getPurchaseSummary(a.lead_id)?.totalSpent || 0;
+          const ltvB = getPurchaseSummary(b.lead_id)?.totalSpent || 0;
+          return ltvB - ltvA;
+        }
+        default:
+          return 0;
+      }
+    });
   };
 
   const getStageRevenue = (leads: (LeadStagePosition & { lead: Lead })[]) => {
@@ -134,6 +166,13 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
     });
   };
 
+  const cycleSortMode = () => {
+    setSortMode(current => {
+      const idx = SORT_CYCLE.indexOf(current);
+      return SORT_CYCLE[(idx + 1) % SORT_CYCLE.length];
+    });
+  };
+
   const totalFiltered = filteredPositions.length;
   const totalAll = positions.length;
 
@@ -154,10 +193,10 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
           variant="outline"
           size="sm"
           className="gap-1.5 text-xs"
-          onClick={() => setSortMode(s => s === 'recent' ? 'value' : 'recent')}
+          onClick={cycleSortMode}
         >
           <ArrowUpDown className="h-3.5 w-3.5" />
-          {sortMode === 'recent' ? 'Mais recentes' : 'Maior valor'}
+          {SORT_LABELS[sortMode]}
         </Button>
         <span className="text-xs text-muted-foreground">
           {totalFiltered === totalAll
@@ -231,6 +270,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
                         position={pos}
                         isDragging={activeId === pos.id}
                         isRevenue={isRevenue}
+                        purchaseSummary={getPurchaseSummary(pos.lead_id)}
                         onClick={() => onLeadClick?.(pos.lead_id)}
                         onWhatsAppClick={onWhatsAppClick}
                       />
@@ -251,7 +291,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
         <DragOverlay>
           {activePosition && (
             <div className="opacity-90 rotate-2 scale-105">
-              <LeadCard position={activePosition} />
+              <LeadCard position={activePosition} purchaseSummary={getPurchaseSummary(activePosition.lead_id)} />
             </div>
           )}
         </DragOverlay>
