@@ -1,68 +1,59 @@
 
 
-## Problema: Áudio inbound chega como mensagem vazia
+## Redistribuição de Leads entre Vendedores
 
-### Causa Raiz
+### O que será construído
 
-A função `extractMessageType(v2Message)` verifica `v2Message.type`, mas a UAZAPI v2 envia áudios com `type` genérico (ex: "chat" ou vazio). A informação real está no objeto `content`:
+Um botão "Redistribuir Leads" na aba **Configuração** do funil (FunnelConfigTab) que abre um dialog permitindo:
 
-```json
-"content": {
-  "PTT": true,
-  "URL": "https://mmg.whatsapp.net/...",
-  "mimetype": "audio/ogg; codecs=opus"
-}
+1. **Escolher o escopo**: "Leads sem vendedor", "Leads com vendedor", ou "Todos os leads"
+2. **Filtrar por etapa** (opcional): selecionar uma ou mais etapas específicas do funil
+3. **Ver os vendedores elegíveis**: lista automática dos vendedores que têm acesso ao funil (via `lead_funnel_access`) com checkbox para incluir/excluir
+4. **Distribuição round-robin igualitária**: ao clicar "Redistribuir", o sistema distribui os leads sequencialmente entre os vendedores selecionados (ex: 3 vendedores com 100 leads = 34, 33, 33)
+5. **Preview antes de confirmar**: mostra quantos leads cada vendedor receberá antes de executar
+
+### Arquivos a criar/editar
+
+**Novo: `src/components/lead-funnels/RedistributeLeadsDialog.tsx`**
+- Dialog com as opções de escopo (sem vendedor / com vendedor / todos)
+- Seletor de etapas (multi-select com checkboxes)
+- Lista de vendedores com acesso ao funil (checkboxes)
+- Preview da distribuição (ex: "João: 34 leads, Maria: 33 leads")
+- Botão de confirmar que executa updates em batch via `supabase.from('leads').update({ assigned_to })`
+
+**Novo: `src/hooks/useRedistributeLeads.ts`**
+- Mutation que recebe `{ funnelId, scope, stageIds[], sellerIds[] }`
+- Busca lead_ids das posições filtradas
+- Distribui round-robin e faz batch update do `assigned_to`
+- Invalida queries relevantes (`leads-by-funnel`, `all-leads`)
+
+**Editar: `src/components/lead-funnels/FunnelConfigTab.tsx`**
+- Adicionar botão "Redistribuir Leads" na seção de configuração (junto ao botão de bulk move)
+
+**Editar: `src/pages/LeadFunnelDetail.tsx`**
+- Passar `positions` e dados de acesso ao FunnelConfigTab para alimentar o dialog
+
+### Lógica de distribuição
+
+```text
+Leads filtrados: [L1, L2, L3, L4, L5, L6, L7]
+Vendedores selecionados: [V1, V2, V3]
+
+Resultado:
+  V1 ← L1, L4, L7  (3 leads)
+  V2 ← L2, L5      (2 leads)
+  V3 ← L3, L6      (2 leads)
 ```
 
-Como `type` não contém "audio"/"ptt", a função retorna `'text'`. Com body vazio, o frontend renderiza uma bolha sem conteúdo.
+A ordem dos leads segue a entrada no funil (entered_at) para distribuição justa.
 
-### Correções necessárias
+### Fluxo do usuário
 
-#### 1. Webhook `uazapi-webhook/index.ts` — `extractMessageType`
-
-Adicionar detecção baseada em `content.mimetype` e `content.PTT` como fallback antes de retornar 'text':
-
-```typescript
-// Fallback: detect from content object (v2 audio/media)
-if (typeof payload.content === 'object' && payload.content) {
-  if (payload.content.PTT || payload.content.ptt) return 'audio'
-  const mime = (payload.content.mimetype || '').toLowerCase()
-  if (mime.includes('audio')) return 'audio'
-  if (mime.includes('image')) return 'image'
-  if (mime.includes('video')) return 'video'
-  if (mime.includes('pdf') || mime.includes('document')) return 'document'
-}
-```
-
-#### 2. Frontend `ChatThread.tsx` — Detectar tipo real do payload_raw
-
-Para mensagens já salvas como 'text' mas que são realmente áudio, adicionar uma função que re-detecta o tipo a partir de `payload_raw`, e usá-la na renderização:
-
-```typescript
-function detectRealMessageType(message: WhatsAppMessage): string {
-  if (message.message_type !== 'text') return message.message_type;
-  const raw = message.payload_raw;
-  if (!raw) return 'text';
-  const v2Msg = raw.message || raw;
-  if (typeof v2Msg.content === 'object' && v2Msg.content) {
-    if (v2Msg.content.PTT || v2Msg.content.ptt) return 'audio';
-    const mime = (v2Msg.content.mimetype || '').toLowerCase();
-    if (mime.includes('audio')) return 'audio';
-    if (mime.includes('image')) return 'image';
-    if (mime.includes('video')) return 'video';
-  }
-  return 'text';
-}
-```
-
-Atualizar a condição de renderização (linha 264) e `MediaRenderer` para usar o tipo real detectado.
-
-#### 3. Deploy manual
-
-A correção do webhook precisa ser deployada no Supabase Dashboard. O código completo será fornecido.
-
-### Arquivos alterados
-
-- `supabase/functions/uazapi-webhook/index.ts` — melhorar detecção de tipo
-- `src/components/whatsapp/ChatThread.tsx` — re-detectar tipo de mensagens já salvas
+1. Admin abre aba "Configuração" do funil
+2. Clica "Redistribuir Leads"
+3. Seleciona escopo (sem vendedor / com vendedor / todos)
+4. Opcionalmente filtra por etapa(s)
+5. Vê lista de vendedores com acesso ao funil, marca quais participam
+6. Vê preview: "34 leads → João, 33 → Maria, 33 → Pedro"
+7. Confirma → toast de sucesso → Kanban atualizado
 
