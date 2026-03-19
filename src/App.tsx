@@ -64,8 +64,8 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<Login />} />
-          <Route path="/" element={<Protected><Resumo /></Protected>} />
-          <Route path="/resumo" element={<Protected><Resumo /></Protected>} />
+          <Route path="/" element={<Protected><Index /></Protected>} />
+          <Route path="/resumo" element={<Protected><PermissionRoute requiredPermission="mod_resumo"><Resumo /></PermissionRoute></Protected>} />
           <Route path="/campanhas" element={<Protected><Campanhas /></Protected>} />
           <Route path="/kpi-geral" element={<Protected><KpiGeral /></Protected>} />
           <Route path="/vendas" element={<Protected><Vendas /></Protected>} />
