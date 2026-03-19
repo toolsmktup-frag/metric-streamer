@@ -107,6 +107,9 @@ const METADATA_KEY_MAP: Record<string, string> = {
   'tráfego pago': 'is_paid_traffic',
   'código de telefone': '_phone_code',
   'código telefone': '_phone_code',
+  'codigo telefone contato': '_phone_code',
+  'código telefone contato': '_phone_code',
+  'codigo telefone': '_phone_code',
 };
 
 function parseSpreadsheet(file: File): Promise<Record<string, string>[]> {
