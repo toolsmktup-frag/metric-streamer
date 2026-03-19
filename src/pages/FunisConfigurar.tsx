@@ -275,7 +275,7 @@ export default function FunisConfigurar() {
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">
-                O <strong>fragmento</strong> é buscado dentro do nome do produto via ILIKE. Ex: "TINTURA" vai casar com "COMO PREPARAR TINTURAS...".
+                O <strong>fragmento</strong> é buscado dentro do nome do produto via ILIKE. O campo <strong>Dias</strong> define após quantos dias da compra o lead deve ser recontactado (ex: 1 pote = 25 dias).
               </p>
               <div className="space-y-2">
                 {products.map((p, idx) => (
