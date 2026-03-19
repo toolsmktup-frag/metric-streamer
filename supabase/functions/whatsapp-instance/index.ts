@@ -71,6 +71,14 @@ Deno.serve(async (req) => {
     const apiUrl = instance.api_url
     const apiToken = instance.api_token
 
+    // Validate api_url is a proper URL
+    if (!apiUrl || !apiUrl.startsWith('http')) {
+      return new Response(JSON.stringify({ error: `URL da API inválida: "${apiUrl}". Deve começar com https://` }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
     const uazHeaders = {
       'Content-Type': 'application/json',
       'token': apiToken,
