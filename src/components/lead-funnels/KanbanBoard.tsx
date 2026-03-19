@@ -19,6 +19,7 @@ import {
 } from '@dnd-kit/core';
 import { useMoveLeadStage } from '@/hooks/useMoveLeadStage';
 import { useBulkLeadPurchases, type PurchaseSummary } from '@/hooks/useBulkLeadPurchases';
+import type { RecontactInfo } from '@/hooks/useRecontactDeadlines';
 
 const CARDS_PER_PAGE = 50;
 
