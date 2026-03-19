@@ -190,6 +190,7 @@ export default function FunisConfigurar() {
           product_name_contains: p.product_name_contains.trim(),
           role: p.role,
           display_name: p.display_name.trim() || null,
+          recontact_days: p.recontact_days,
         })),
       });
 
