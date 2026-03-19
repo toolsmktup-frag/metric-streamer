@@ -136,11 +136,13 @@ export default function InstanceManagement({
           setPairCode(null);
           setQrCode(null);
           toast.success('WhatsApp conectado!');
+          return;
         }
-        const qr = data?.raw?.instance?.qrcode || data?.instance?.qrcode || data?.qrcode || data?.base64;
-        if (qr) setQrCode(qr);
-        const pc = data?.raw?.instance?.paircode || data?.instance?.paircode || data?.paircode;
-        if (pc) setPairCode(pc);
+        // Update QR/pair code from polling (top-level or nested)
+        const qr = data?.qrcode || data?.raw?.instance?.qrcode;
+        if (qr && qr.length > 10) setQrCode(qr);
+        const pc = data?.paircode || data?.raw?.instance?.paircode;
+        if (pc && pc.length > 2) setPairCode(pc);
       } catch {}
     }, 3000);
     return () => clearInterval(interval);
