@@ -202,6 +202,16 @@ const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSave
           </Button>
         )}
       </div>
+
+      {/* Products & Recontact */}
+      {onSaveProducts && (
+        <FunnelProductsConfig
+          products={leadFunnelProducts}
+          catalogProducts={catalogProducts}
+          onSave={onSaveProducts}
+          saving={savingProducts}
+        />
+      )}
     </div>
   );
 };
