@@ -36,8 +36,6 @@ function friendlyStatus(status: string): string {
 
 const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, onWhatsAppClick, isDragging, isRevenue = true, purchaseSummary, recontactInfo, hideValues }) => {
   const lead = position.lead;
-  const { data: members = [] } = useTeamMembers();
-  const assignedMember = lead.assigned_to ? members.find(m => m.id === lead.assigned_to) : null;
   // Fallback: try metadata for phone if lead.phone is empty
   const leadPhone = lead.phone || (lead.metadata?.phone as string) || (lead.metadata?.cel as string) || (lead.metadata?.telefone as string) || null;
   const { attributes, listeners, setNodeRef, transform } = useDraggable({
