@@ -16,6 +16,7 @@ const PRESETS = [
   { label: 'Últimos 14 dias', getDates: () => { const e = new Date(); const d = new Date(); d.setDate(d.getDate()-13); d.setHours(0,0,0,0); return { start: d, end: e }; }},
   { label: 'Últimos 30 dias', getDates: () => { const e = new Date(); const d = new Date(); d.setDate(d.getDate()-29); d.setHours(0,0,0,0); return { start: d, end: e }; }},
   { label: 'Este mês', getDates: () => { const d = new Date(); d.setDate(1); d.setHours(0,0,0,0); return { start: d, end: new Date() }; }},
+  { label: 'Todo o período', getDates: () => { const d = new Date(2020, 0, 1); return { start: d, end: new Date() }; }},
 ];
 
 const DateRangePicker = React.memo(function DateRangePicker() {
