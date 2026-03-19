@@ -1,6 +1,8 @@
-import React, { useState, useMemo } from 'react';
-import { Users, ChevronDown, ChevronUp, Info } from 'lucide-react';
+import React, { useState, useMemo, useCallback } from 'react';
+import { Users, ChevronDown, ChevronUp, Info, Download } from 'lucide-react';
 import { formatCurrency } from '@/lib/formatters';
+import { downloadCsv } from '@/lib/exportCsv';
+import { format } from 'date-fns';
 import {
   useRFM,
   SEGMENT_CONFIG,
