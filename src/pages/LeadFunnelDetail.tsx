@@ -357,6 +357,8 @@ const LeadFunnelDetail: React.FC = () => {
               }
             }}
             savingProducts={upsertLeadProducts.isPending}
+            onBulkMoveOverdue={handleBulkMoveOverdue}
+            bulkMoving={bulkMoving}
             distinctLeadProducts={distinctLeadProducts}
             existingMappings={productMappings}
             onSaveMappings={async (mappings) => {
