@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { LeadFunnelStage, StageTransitionRule } from '@/types/leadFunnels';
+import { LeadFunnelStage, StageTransitionRule, LeadStagePosition, Lead } from '@/types/leadFunnels';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
-import { Plus, Trash2, GripVertical, ArrowRight, EyeOff } from 'lucide-react';
+import { Plus, Trash2, GripVertical, ArrowRight, EyeOff, Shuffle } from 'lucide-react';
 import { toast } from 'sonner';
 import FunnelProductsConfig from './FunnelProductsConfig';
+import RedistributeLeadsDialog from './RedistributeLeadsDialog';
 import ProductMappingConfig from './ProductMappingConfig';
 
 import type { LeadFunnelProduct } from '@/hooks/useLeadFunnelProducts';
