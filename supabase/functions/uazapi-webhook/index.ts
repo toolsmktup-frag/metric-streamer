@@ -258,7 +258,12 @@ Deno.serve(async (req) => {
       senderName = v2Message.senderName || chat.name || chat.wa_name || null
       messageBody = v2Message.text || v2Message.content || v2Message.caption || ''
       messageType = extractMessageType(v2Message)
-      mediaUrl = v2Message.mediaUrl || v2Message.media_url || null
+      mediaUrl = v2Message.mediaUrl || v2Message.media_url || v2Message.fileUrl || v2Message.file_url || null
+      
+      // Fallback: try to extract media URL from content object (audio/image/video/document)
+      if (!mediaUrl && typeof v2Message.content === 'object' && v2Message.content) {
+        mediaUrl = v2Message.content.url || v2Message.content.mediaUrl || v2Message.content.fileUrl || null
+      }
       
       console.log('V2 extracted - phone:', phone, 'body:', messageBody?.slice(0, 50), 'fromMe:', isFromMe, 'sender:', senderName)
     } else {

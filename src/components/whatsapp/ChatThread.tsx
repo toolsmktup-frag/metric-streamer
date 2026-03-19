@@ -51,7 +51,9 @@ function AudioPlayer({ src, isOutbound = false }: { src: string; isOutbound?: bo
   };
 
   const changeSpeed = () => {
-    const next = speed === 1 ? 1.5 : speed === 1.5 ? 2 : 1;
+    const speeds = [1, 1.5, 2, 2.5, 3];
+    const idx = speeds.indexOf(speed);
+    const next = speeds[(idx + 1) % speeds.length];
     setSpeed(next);
     if (audioRef.current) audioRef.current.playbackRate = next;
   };
