@@ -60,7 +60,8 @@ const DroppableColumn: React.FC<{ id: string; isOver: boolean; children: React.R
   );
 };
 
-const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClick, onWhatsAppClick, funnelId, recontactMap }) => {
+const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClick, onWhatsAppClick, funnelId, recontactMap, userRole }) => {
+  const isAdmin = userRole === 'admin' || userRole === 'gestor';
   const [search, setSearch] = useState('');
   const [sortMode, setSortMode] = useState<SortMode>('ltv');
   const [activeId, setActiveId] = useState<string | null>(null);
