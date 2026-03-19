@@ -39,7 +39,7 @@ export default function FunnelAccessManager({ campaignId, funnelId, title }: Fun
 
       const { data: profiles } = await (supabase as any)
         .from('user_profiles')
-        .select('id, full_name, email, role')
+        .select('id, full_name, role')
         .eq('organization_id', orgId);
 
       // Only show sellers (vendedor/suporte) — admins/gestors always have access
