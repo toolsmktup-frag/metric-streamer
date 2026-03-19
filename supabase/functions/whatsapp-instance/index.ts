@@ -248,8 +248,14 @@ Deno.serve(async (req) => {
           updated_at: new Date().toISOString(),
         }).eq('id', instanceId)
         
+        // Extract QR/pair code from status response (UAZAPI returns them in instance object)
+        const statusQrCode = result?.instance?.qrcode || null
+        const statusPairCode = result?.instance?.paircode || null
+        
         result = {
           raw: result,
+          qrcode: statusQrCode,
+          paircode: statusPairCode,
           processed: {
             status: newStatus,
             display_name: finalDisplayName,
