@@ -90,10 +90,17 @@ export function useBulkLeadPurchases(
     };
   }, [positions]);
 
-  const stableKey = useMemo(
-    () => `${emails.length}-${phones.length}`,
-    [emails.length, phones.length],
-  );
+  // Build a stable hash from actual email/phone values to avoid cache collisions
+  const stableKey = useMemo(() => {
+    const sorted = [...emails, '|', ...phones].sort();
+    // Simple hash
+    let h = 0;
+    const str = sorted.join(',');
+    for (let i = 0; i < str.length; i++) {
+      h = ((h << 5) - h + str.charCodeAt(i)) | 0;
+    }
+    return `${emails.length}-${phones.length}-${h}`;
+  }, [emails, phones]);
 
   return useQuery({
     queryKey: ['bulk-lead-purchases', stableKey],
