@@ -106,6 +106,17 @@ const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, onWhatsAppClick,
             </div>
           </div>
         </div>
+
+        {/* WhatsApp shortcut */}
+        {lead.phone && onWhatsAppClick && (
+          <button
+            onClick={e => { e.stopPropagation(); onWhatsAppClick(lead.phone!); }}
+            className="ml-auto shrink-0 p-1.5 rounded-md bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 transition-colors"
+            title="Abrir chat no WhatsApp"
+          >
+            <MessageCircle className="h-4 w-4" />
+          </button>
+        )}
       </div>
 
       {/* LTV prominente */}
