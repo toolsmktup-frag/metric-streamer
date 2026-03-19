@@ -6,7 +6,7 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-const ORG_ID = "00000000-0000-0000-0000-000000000001";
+// ORG_ID will be detected dynamically from existing data
 const APPROVED_STATUSES = ["authorized", "approved", "paid", "completed", "Aprovada", "aprovada"];
 const BATCH_SIZE = 500;
 const PAGE_SIZE = 1000;
