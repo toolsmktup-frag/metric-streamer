@@ -1,0 +1,81 @@
+import React from 'react';
+import { useTeamMembers, ROLE_LABELS } from '@/hooks/useTeamMembers';
+import { useAssignLead } from '@/hooks/useAssignLead';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { UserPlus } from 'lucide-react';
+
+interface LeadAssignSelectProps {
+  leadId: string;
+  currentAssignedTo: string | null;
+  compact?: boolean;
+}
+
+const LeadAssignSelect: React.FC<LeadAssignSelectProps> = ({ leadId, currentAssignedTo, compact }) => {
+  const { data: members = [] } = useTeamMembers();
+  const assignLead = useAssignLead();
+
+  // Only show sellers/support (admins/managers always have full access)
+  const assignableMembers = members.filter(m =>
+    ['vendedor', 'vendedora', 'suporte'].includes(m.role) && m.status === 'active'
+  );
+
+  const handleChange = (value: string) => {
+    const assignedTo = value === '__none__' ? null : value;
+    assignLead.mutate({ leadId, assignedTo });
+  };
+
+  const currentMember = members.find(m => m.id === currentAssignedTo);
+
+  if (compact) {
+    return (
+      <Select value={currentAssignedTo || '__none__'} onValueChange={handleChange}>
+        <SelectTrigger className="h-6 w-6 p-0 border-0 bg-transparent [&>svg]:hidden">
+          <Avatar className="h-6 w-6">
+            <AvatarFallback className={`text-[10px] font-bold ${currentAssignedTo ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground'}`}>
+              {currentMember
+                ? (currentMember.full_name || '?').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
+                : <UserPlus className="h-3 w-3" />}
+            </AvatarFallback>
+          </Avatar>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="__none__">
+            <span className="text-muted-foreground">Sem vendedor</span>
+          </SelectItem>
+          {assignableMembers.map(m => (
+            <SelectItem key={m.id} value={m.id}>
+              <div className="flex items-center gap-2">
+                <span>{m.full_name || 'Sem nome'}</span>
+                <span className="text-[10px] text-muted-foreground">{ROLE_LABELS[m.role] || m.role}</span>
+              </div>
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    );
+  }
+
+  return (
+    <Select value={currentAssignedTo || '__none__'} onValueChange={handleChange}>
+      <SelectTrigger className="h-8 text-xs">
+        <SelectValue placeholder="Atribuir vendedor..." />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="__none__">
+          <span className="text-muted-foreground">Sem vendedor</span>
+        </SelectItem>
+        {assignableMembers.map(m => (
+          <SelectItem key={m.id} value={m.id}>
+            <div className="flex items-center gap-2">
+              <span>{m.full_name || 'Sem nome'}</span>
+              <span className="text-[10px] text-muted-foreground">{ROLE_LABELS[m.role] || m.role}</span>
+            </div>
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+};
+
+export default LeadAssignSelect;

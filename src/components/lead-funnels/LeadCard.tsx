@@ -6,6 +6,7 @@ import { useDraggable } from '@dnd-kit/core';
 import { formatLocalDateTime } from '@/lib/localDate';
 import { differenceInDays } from 'date-fns';
 import type { RecontactInfo } from '@/hooks/useRecontactDeadlines';
+import LeadAssignSelect from './LeadAssignSelect';
 
 interface LeadCardProps {
   position: LeadStagePosition & { lead: Lead };
@@ -101,16 +102,21 @@ const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, onWhatsAppClick,
           </div>
         </div>
 
-        {/* WhatsApp shortcut */}
-        {leadPhone && onWhatsAppClick && (
-          <button
-            onClick={e => { e.stopPropagation(); onWhatsAppClick(leadPhone); }}
-            className="ml-auto shrink-0 p-1.5 rounded-md bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 transition-colors"
-            title="Abrir chat no WhatsApp"
-          >
-            <MessageCircle className="h-4 w-4" />
-          </button>
-        )}
+        {/* Assign seller + WhatsApp shortcut */}
+        <div className="ml-auto flex items-center gap-1 shrink-0">
+          <div onClick={e => e.stopPropagation()}>
+            <LeadAssignSelect leadId={lead.id} currentAssignedTo={lead.assigned_to} compact />
+          </div>
+          {leadPhone && onWhatsAppClick && (
+            <button
+              onClick={e => { e.stopPropagation(); onWhatsAppClick(leadPhone); }}
+              className="p-1.5 rounded-md bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 transition-colors"
+              title="Abrir chat no WhatsApp"
+            >
+              <MessageCircle className="h-4 w-4" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* LTV prominente */}

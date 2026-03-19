@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useLeadFunnel, useUpsertStages, useUpsertTransitionRules, useFunnelSourceNodes, useFunnelEdges, useSaveFunnelSourceNodes, useSaveFunnelEdges } from '@/hooks/useLeadFunnels';
 import { useLeadsByFunnel, useFunnelLeadCounts } from '@/hooks/useLeads';
@@ -62,6 +62,11 @@ const LeadFunnelDetail: React.FC = () => {
   const { data: userRole = 'vendedor' } = useCurrentUserRole();
   const isAdmin = userRole === 'admin' || userRole === 'gestor';
   const { data: hasAccess, isLoading: loadingAccess } = useHasFunnelAccess(id ?? null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setCurrentUserId(data.user?.id ?? null));
+  }, []);
   const [bulkMoving, setBulkMoving] = useState(false);
 
   // Bulk purchase data for recontact fallback
@@ -307,6 +312,7 @@ const LeadFunnelDetail: React.FC = () => {
               funnelId={funnel.id}
               recontactMap={recontactMap}
               userRole={userRole}
+              currentUserId={currentUserId}
             />
           </TabsContent>
         )}

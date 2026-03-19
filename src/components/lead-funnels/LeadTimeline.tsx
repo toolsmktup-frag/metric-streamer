@@ -7,9 +7,10 @@ import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { Lead } from '@/types/leadFunnels';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Mail, Phone, ShoppingCart, DollarSign, MapPin, Activity, UserPlus, CreditCard, CheckCircle2, XCircle, Clock, RotateCcw, AlertTriangle, Eye, FileText, LucideIcon } from 'lucide-react';
+import { Mail, Phone, ShoppingCart, DollarSign, MapPin, Activity, UserPlus, CreditCard, CheckCircle2, XCircle, Clock, RotateCcw, AlertTriangle, Eye, FileText, LucideIcon, User } from 'lucide-react';
 import { formatCurrency } from '@/lib/formatters';
 import { parseLocalDateTime } from '@/lib/localDate';
+import LeadAssignSelect from './LeadAssignSelect';
 
 interface LeadTimelineProps {
   lead: Lead | null;
@@ -117,6 +118,15 @@ const LeadTimeline: React.FC<LeadTimelineProps> = ({ lead, open, onClose }) => {
               </div>
 
               <div className="flex flex-wrap gap-1.5 mt-3">
+                {/* Seller assignment */}
+                <div className="flex items-center gap-1.5 w-full mb-1">
+                  <User className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="text-xs text-muted-foreground">Vendedor:</span>
+                  <div className="flex-1 max-w-[200px]">
+                    <LeadAssignSelect leadId={lead.id} currentAssignedTo={lead.assigned_to} />
+                  </div>
+                </div>
+
                 {journey.length > 0 && (
                   <Badge variant="outline" className="text-[10px] px-2 py-0.5">
                     {(journey[0] as any)?.funnel?.name || 'Funil'}

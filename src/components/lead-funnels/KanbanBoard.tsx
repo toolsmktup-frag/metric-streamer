@@ -31,6 +31,7 @@ interface KanbanBoardProps {
   funnelId: string;
   recontactMap?: Map<string, RecontactInfo>;
   userRole?: string;
+  currentUserId?: string | null;
 }
 
 type SortMode = 'recent' | 'value' | 'orders' | 'ltv' | 'recontact';
@@ -60,8 +61,15 @@ const DroppableColumn: React.FC<{ id: string; isOver: boolean; children: React.R
   );
 };
 
-const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClick, onWhatsAppClick, funnelId, recontactMap, userRole }) => {
+const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClick, onWhatsAppClick, funnelId, recontactMap, userRole, currentUserId }) => {
+  const isSeller = userRole === 'vendedor' || userRole === 'vendedora' || userRole === 'suporte';
   const isAdmin = userRole === 'admin' || userRole === 'gestor';
+
+  // Filter positions: sellers only see leads assigned to them or unassigned
+  const visiblePositions = useMemo(() => {
+    if (!isSeller || !currentUserId) return positions;
+    return positions.filter(p => !p.lead.assigned_to || p.lead.assigned_to === currentUserId);
+  }, [positions, isSeller, currentUserId]);
   const [search, setSearch] = useState('');
   const [sortMode, setSortMode] = useState<SortMode>('ltv');
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -78,9 +86,9 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
   const sortedStages = useMemo(() => [...stages].sort((a, b) => a.sort_order - b.sort_order), [stages]);
 
   const filteredPositions = useMemo(() => {
-    if (!search.trim()) return positions;
+    if (!search.trim()) return visiblePositions;
     const q = search.toLowerCase().trim();
-    return positions.filter(p => {
+    return visiblePositions.filter(p => {
       const lead = p.lead;
       return (
         lead.name?.toLowerCase().includes(q) ||
@@ -88,7 +96,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
         lead.phone?.includes(q)
       );
     });
-  }, [positions, search]);
+  }, [visiblePositions, search]);
 
   const getPurchaseSummary = useCallback((leadId: string): PurchaseSummary | undefined => {
     return purchaseMap?.get(leadId);
@@ -145,7 +153,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
     let confirmed = 0;
     let lost = 0;
     const stageMap = new Map(stages.map(s => [s.id, s]));
-    for (const p of positions) {
+    for (const p of visiblePositions) {
       const amount = Number(p.lead.metadata?.amount) || 0;
       const stage = stageMap.get(p.stage_id);
       if (stage && isRevenueStage(stage.name)) {
@@ -155,9 +163,9 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
       }
     }
     return { confirmedRevenue: confirmed, lostRevenue: lost };
-  }, [positions, stages]);
+  }, [visiblePositions, stages]);
 
-  const activePosition = activeId ? positions.find(p => p.id === activeId) : null;
+  const activePosition = activeId ? visiblePositions.find(p => p.id === activeId) : null;
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as string);
@@ -177,7 +185,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
     const positionId = active.id as string;
     const toStageId = over.id as string;
 
-    const position = positions.find(p => p.id === positionId);
+    const position = visiblePositions.find(p => p.id === positionId);
     if (!position || position.stage_id === toStageId) return;
 
     const toStage = stages.find(s => s.id === toStageId);
@@ -207,7 +215,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
   };
 
   const totalFiltered = filteredPositions.length;
-  const totalAll = positions.length;
+  const totalAll = visiblePositions.length;
 
   return (
     <div className="space-y-3">

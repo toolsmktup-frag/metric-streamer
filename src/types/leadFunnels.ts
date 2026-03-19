@@ -56,6 +56,7 @@ export interface Lead {
   phone: string | null;
   email: string | null;
   name: string | null;
+  assigned_to: string | null;
   utm_source: string | null;
   utm_medium: string | null;
   utm_campaign: string | null;
