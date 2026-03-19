@@ -306,11 +306,12 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
                           key={pos.id}
                           position={pos}
                           isDragging={activeId === pos.id}
-                          isRevenue={isRevenue}
+                          isRevenue={isRevenueStage(stage.name)}
                           purchaseSummary={getPurchaseSummary(pos.lead_id)}
                           recontactInfo={recontactMap?.get(pos.lead_id)}
                           onClick={() => onLeadClick?.(pos.lead_id)}
                           onWhatsAppClick={onWhatsAppClick}
+                          hideValues={shouldHideValues}
                         />
                       ))}
                       {hasMore && (
