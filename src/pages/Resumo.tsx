@@ -93,7 +93,6 @@ export default function Resumo() {
   const ticketMedio = approved.length > 0
     ? approved.reduce((s, t) => s + t.revenue, 0) / approved.length
     : 0;
-  const uniqueCustomers = new Set(approved.filter(t => t.customer_email).map(t => t.customer_email!.toLowerCase().trim())).size;
 
   const daily = dailyMetrics.map(d => {
     const dayTx = allSales.filter(t => t.status === 'authorized' && t.purchased_at?.startsWith(d.date));
