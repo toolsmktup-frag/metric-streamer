@@ -11,15 +11,17 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from '@/components/ui/pagination';
-import { Search, Users, DollarSign, ShoppingCart, TrendingUp, MessageCircle, ChevronUp, ChevronDown } from 'lucide-react';
+import { Search, Users, DollarSign, ShoppingCart, TrendingUp, MessageCircle, ChevronUp, ChevronDown, Timer } from 'lucide-react';
 import { useBulkLeadPurchases, type PurchaseSummary } from '@/hooks/useBulkLeadPurchases';
 import { formatCurrency } from '@/lib/formatters';
 import type { Lead, LeadStagePosition } from '@/types/leadFunnels';
+import type { RecontactInfo } from '@/hooks/useRecontactDeadlines';
 
 interface BaseLeadsListProps {
   positions: (LeadStagePosition & { lead: Lead })[];
   onLeadClick: (leadId: string) => void;
   onWhatsAppClick: (phone: string) => void;
+  recontactMap?: Map<string, RecontactInfo>;
 }
 
 type SortKey = 'ltv' | 'name' | 'date' | 'orders';
