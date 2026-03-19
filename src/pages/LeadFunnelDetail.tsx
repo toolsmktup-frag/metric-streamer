@@ -54,7 +54,9 @@ const LeadFunnelDetail: React.FC = () => {
   const saveProductMappings = useSaveLeadProductMappings();
   const saveSourceNodes = useSaveFunnelSourceNodes();
   const saveFunnelEdges = useSaveFunnelEdges();
+  const moveLeadStage = useMoveLeadStage();
   const queryClient = useQueryClient();
+  const [bulkMoving, setBulkMoving] = useState(false);
 
   // Use lead funnel products for recontact with explicit mappings
   const recontactMap = useRecontactDeadlines(positions, leadFunnelProducts, productMappings);
