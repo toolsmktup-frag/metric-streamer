@@ -50,6 +50,7 @@ export default function Equipe() {
   const [instanceAccess, setInstanceAccess] = useState<Record<string, Set<string>>>({});
   const [savingAccess, setSavingAccess] = useState<string | null>(null);
   const [savingFunnelAccess, setSavingFunnelAccess] = useState<string | null>(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState<string | null>(null);
 
   const pendingMembers = members.filter(m => m.status === 'pending');
   const activeMembers = members.filter(m => m.status !== 'pending');
