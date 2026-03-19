@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useTeamMembers, ROLES, ROLE_LABELS } from '@/hooks/useTeamMembers';
+import { useTeamMembers, ROLES, ROLE_LABELS, STATUS_LABELS } from '@/hooks/useTeamMembers';
 import { useOrgPermissions, MODULE_KEYS, MODULE_LABELS, type ModuleKey } from '@/hooks/useUserPermissions';
 import { useWhatsAppInstances, getInstanceDisplayName } from '@/hooks/useWhatsApp';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2, Users, Pencil, Check, X, Shield, ChevronDown, ChevronUp, MessageSquare } from 'lucide-react';
+import { Loader2, Users, Pencil, Check, X, Shield, ChevronDown, ChevronUp, MessageSquare, UserCheck, UserX, Clock } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -25,8 +25,14 @@ const ROLE_COLORS: Record<string, string> = {
   suporte: 'bg-accent text-accent-foreground border-border',
 };
 
+const STATUS_COLORS: Record<string, string> = {
+  active: 'bg-chart-2/15 text-chart-2 border-chart-2/30',
+  pending: 'bg-amber-500/15 text-amber-600 border-amber-500/30',
+  blocked: 'bg-destructive/15 text-destructive border-destructive/30',
+};
+
 export default function Equipe() {
-  const { data: members = [], isLoading, updateRole, updateName } = useTeamMembers();
+  const { data: members = [], isLoading, updateRole, updateName, updateStatus } = useTeamMembers();
   const { data: permissions = [], isLoading: loadingPerms, updatePermission } = useOrgPermissions();
   const { instances, loading: loadingInstances } = useWhatsAppInstances();
   const [editingName, setEditingName] = useState<string | null>(null);
@@ -34,6 +40,9 @@ export default function Equipe() {
   const [expandedPerms, setExpandedPerms] = useState<string | null>(null);
   const [instanceAccess, setInstanceAccess] = useState<Record<string, Set<string>>>({});
   const [savingAccess, setSavingAccess] = useState<string | null>(null);
+
+  const pendingMembers = members.filter(m => m.status === 'pending');
+  const activeMembers = members.filter(m => m.status !== 'pending');
 
   // Fetch instance access for all members
   const fetchInstanceAccess = useCallback(async () => {
@@ -109,6 +118,18 @@ export default function Equipe() {
     setExpandedPerms(prev => prev === userId ? null : userId);
   }
 
+  function handleApprove(userId: string) {
+    updateStatus.mutate({ userId, status: 'active' });
+  }
+
+  function handleBlock(userId: string) {
+    updateStatus.mutate({ userId, status: 'blocked' });
+  }
+
+  function handleUnblock(userId: string) {
+    updateStatus.mutate({ userId, status: 'active' });
+  }
+
   if (isLoading || loadingPerms) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -144,7 +165,59 @@ export default function Equipe() {
         ))}
       </div>
 
-      {/* Table */}
+      {/* Pending approval section */}
+      {pendingMembers.length > 0 && (
+        <div className="rounded-xl border-2 border-amber-500/30 bg-amber-500/5 overflow-hidden">
+          <div className="px-4 py-3 border-b border-amber-500/20 flex items-center gap-2">
+            <Clock className="h-4 w-4 text-amber-500" />
+            <span className="text-sm font-semibold text-foreground">Pendentes de aprovação</span>
+            <Badge className="bg-amber-500/20 text-amber-600 border-amber-500/30 text-xs ml-1">
+              {pendingMembers.length}
+            </Badge>
+          </div>
+          <div className="divide-y divide-amber-500/10">
+            {pendingMembers.map(member => (
+              <div key={member.id} className="flex items-center justify-between px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <div className="h-9 w-9 rounded-full bg-amber-500/10 flex items-center justify-center text-sm font-bold text-amber-600">
+                    {(member.full_name || '?')[0].toUpperCase()}
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-foreground">{member.full_name || 'Sem nome'}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Cadastro em {new Date(member.created_at).toLocaleDateString('pt-BR')}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 gap-1.5 text-chart-2 border-chart-2/30 hover:bg-chart-2/10"
+                    onClick={() => handleApprove(member.id)}
+                    disabled={updateStatus.isPending}
+                  >
+                    <UserCheck className="h-3.5 w-3.5" />
+                    Aprovar
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/10"
+                    onClick={() => handleBlock(member.id)}
+                    disabled={updateStatus.isPending}
+                  >
+                    <UserX className="h-3.5 w-3.5" />
+                    Rejeitar
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Active members table */}
       <div className="rounded-xl border border-border bg-card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -152,13 +225,14 @@ export default function Equipe() {
               <tr className="border-b border-border bg-muted/30">
                 <th className="text-left py-3 px-4 font-medium text-muted-foreground">Nome</th>
                 <th className="text-left py-3 px-4 font-medium text-muted-foreground">Role</th>
+                <th className="text-left py-3 px-4 font-medium text-muted-foreground">Status</th>
                 <th className="text-left py-3 px-4 font-medium text-muted-foreground">Desde</th>
                 <th className="text-center py-3 px-4 font-medium text-muted-foreground">Módulos</th>
                 <th className="text-right py-3 px-4 font-medium text-muted-foreground">Ações</th>
               </tr>
             </thead>
             <tbody>
-              {members.map(member => {
+              {activeMembers.map(member => {
                 const perm = getPermission(member.id);
                 const isExpanded = expandedPerms === member.id;
                 const enabledCount = perm
@@ -167,7 +241,7 @@ export default function Equipe() {
 
                 return (
                   <tr key={member.id} className="border-b border-border last:border-0">
-                    {/* Row */}
+                    {/* Name */}
                     <td className="py-3 px-4">
                       {editingName === member.id ? (
                         <div className="flex items-center gap-1.5">
@@ -222,6 +296,13 @@ export default function Equipe() {
                       </Select>
                     </td>
 
+                    {/* Status */}
+                    <td className="py-3 px-4">
+                      <Badge variant="outline" className={`text-xs ${STATUS_COLORS[member.status] || ''}`}>
+                        {STATUS_LABELS[member.status] || member.status}
+                      </Badge>
+                    </td>
+
                     {/* Since */}
                     <td className="py-3 px-4 text-muted-foreground text-xs">
                       {new Date(member.created_at).toLocaleDateString('pt-BR')}
@@ -242,16 +323,40 @@ export default function Equipe() {
 
                     {/* Actions */}
                     <td className="py-3 px-4 text-right">
-                      {editingName !== member.id && (
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-7 w-7"
-                          onClick={() => startEditName(member.id, member.full_name || '')}
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                      )}
+                      <div className="flex items-center justify-end gap-1">
+                        {editingName !== member.id && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7"
+                            onClick={() => startEditName(member.id, member.full_name || '')}
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                        {member.status === 'active' && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7 text-destructive hover:text-destructive"
+                            onClick={() => handleBlock(member.id)}
+                            title="Bloquear usuário"
+                          >
+                            <UserX className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                        {member.status === 'blocked' && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7 text-chart-2 hover:text-chart-2"
+                            onClick={() => handleUnblock(member.id)}
+                            title="Desbloquear usuário"
+                          >
+                            <UserCheck className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -260,8 +365,8 @@ export default function Equipe() {
           </table>
         </div>
 
-        {/* Expanded permissions panel (rendered outside table for layout) */}
-        {members.map(member => {
+        {/* Expanded permissions panel */}
+        {activeMembers.map(member => {
           const perm = getPermission(member.id);
           const isExpanded = expandedPerms === member.id;
           if (!isExpanded || !perm) return null;
@@ -331,7 +436,7 @@ export default function Equipe() {
       </div>
 
       <p className="text-xs text-muted-foreground">
-        💡 Para adicionar novos membros, peça para eles criarem uma conta no login. Eles serão vinculados automaticamente à sua organização.
+        💡 Para adicionar novos membros, peça para eles criarem uma conta no login. Eles aparecerão como "pendentes" para sua aprovação.
       </p>
     </div>
   );
