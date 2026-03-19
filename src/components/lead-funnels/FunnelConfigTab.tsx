@@ -220,6 +220,18 @@ const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSave
           saving={savingProducts}
         />
       )}
+
+      {/* Product Mapping */}
+      {onSaveMappings && leadFunnelProducts.length > 0 && (
+        <ProductMappingConfig
+          distinctProducts={distinctLeadProducts}
+          leadFunnelProducts={leadFunnelProducts}
+          existingMappings={existingMappings}
+          onSave={onSaveMappings}
+          saving={savingMappings}
+          loading={loadingDistinctProducts}
+        />
+      )}
     </div>
   );
 };
