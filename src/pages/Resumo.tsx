@@ -71,7 +71,7 @@ export default function Resumo() {
   const prevRoas = prevSpend > 0 ? prevRevenue / prevSpend : 0;
   const prevProfit = prevRevenue - prevSpend;
   const prevCpa = prevSalesCount > 0 ? prevSpend / prevSalesCount : 0;
-  const prevUniqueCustomers = new Set(prevApproved.filter(t => t.customer_email).map(t => t.customer_email!.toLowerCase().trim())).size;
+  
 
   function calcVar(current: number, prev: number): number | undefined {
     if (!compareEnabled || prev === 0) return undefined;
