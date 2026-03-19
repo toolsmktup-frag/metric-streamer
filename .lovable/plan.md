@@ -1,29 +1,29 @@
 
 
-## Plano: Restringir abas do funil para vendedor + flag "Resumo Geral"
+## Plano: Corrigir restrição do Resumo Geral para vendedor
 
-### Contexto
-Atualmente o vendedor vê as abas Kanban, Funil, Flow Editor e Métricas. Apenas Configuração e Webhook estão ocultas. O usuário quer que o vendedor veja **somente Kanban e Funil**. Além disso, quer uma flag na configuração de permissões para controlar se o vendedor pode acessar o "Resumo Geral".
+### Problema
+Duas causas:
+1. **Sidebar esconde o link, mas não bloqueia a rota** — o vendedor pode acessar `/resumo` diretamente pela URL
+2. **A rota padrão `/` redireciona para `/resumo`** — mesmo sem o link no sidebar, o vendedor cai no Resumo Geral ao fazer login
 
-### Mudanças
+### Solução
 
-**1. Ocultar abas Flow Editor e Métricas para vendedor**
-- Arquivo: `src/pages/LeadFunnelDetail.tsx`
-- Condicionar as `TabsTrigger` e `TabsContent` de "flow" e "metrics" com `isAdmin`, igual já é feito para "config" e "webhook"
+**1. Criar componente de rota protegida por permissão**
+- Arquivo: `src/components/PermissionRoute.tsx`
+- Componente wrapper que verifica `useMyPermissions()` antes de renderizar a página
+- Se o módulo não estiver habilitado, redireciona para a primeira rota disponível
 
-**2. Adicionar permissão `mod_resumo` na tabela e no frontend**
-- SQL: `ALTER TABLE user_permissions ADD COLUMN IF NOT EXISTS mod_resumo boolean DEFAULT true;`
-- Arquivo: `src/hooks/useUserPermissions.ts` — adicionar `mod_resumo` ao `MODULE_KEYS`, `MODULE_LABELS` e interface `UserPermissions`
-- Arquivo: `src/components/layout/AppSidebar.tsx` — condicionar o botão "Resumo Geral" com `can('mod_resumo')`, e redirecionar para a primeira rota disponível caso não tenha permissão
+**2. Proteger a rota `/resumo` com permissão**
+- Arquivo: `src/App.tsx`
+- Envolver a rota `/resumo` com `PermissionRoute` verificando `mod_resumo`
 
-### SQL necessário
-```sql
-ALTER TABLE public.user_permissions
-ADD COLUMN IF NOT EXISTS mod_resumo boolean DEFAULT true;
-```
+**3. Ajustar rota padrão `/`**
+- Arquivo: `src/pages/Index.tsx`
+- Em vez de redirecionar cegamente para `/resumo`, verificar permissões e redirecionar para a primeira rota acessível (ex: se não tem `mod_resumo`, vai para o primeiro funil ou `/leads`)
 
 ### Arquivos editados
-- `src/pages/LeadFunnelDetail.tsx` — ocultar abas flow/metrics para vendedor
-- `src/hooks/useUserPermissions.ts` — adicionar `mod_resumo`
-- `src/components/layout/AppSidebar.tsx` — condicionar Resumo Geral
+- `src/components/PermissionRoute.tsx` (novo)
+- `src/App.tsx` — usar PermissionRoute nas rotas
+- `src/pages/Index.tsx` — redirecionar inteligente baseado em permissões
 
