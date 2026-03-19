@@ -1,68 +1,94 @@
 
+Sim — pelo código atual, o comportamento principal de vendas reais + ads reais é mantido.
 
-## Corrigir view `v_all_sales` para incluir dados Guru
+## O que confirmei no código
+- `useAllSalesAggregation` agrupa vendas por:
+  - `meta_campaign_id`
+  - `meta_adset_id`
+  - `meta_ad_id`
+- As vendas orgânicas são definidas por `!is_paid_traffic`
+- O `Resumo`, `Campanhas`, `Conjuntos`, `Anúncios`, `Criativos` e páginas de funil consomem essa mesma agregação
 
-### Problema
-O Resumo Geral mostra menos dados que a Inteligência de Cliente porque `v_all_sales` consulta apenas `ticto_transactions`, enquanto a Inteligência consulta também `customer_purchases` (Guru).
+## O que isso significa
+- A parte de Ticto continua alimentando os números “reais” de Ads, porque é dela que vêm:
+  - `meta_campaign_id`
+  - `meta_adset_id`
+  - `meta_ad_id`
+  - `utm_*`
+  - `is_paid_traffic`
+- As linhas de `customer_purchases` entram para completar o faturamento total, mas sem quebrar o match com Meta Ads
+- Na prática:
+  - vendas Ticto atribuídas continuam indo para campanhas/conjuntos/anúncios
+  - vendas Guru/outras plataformas entram como orgânicas ou não atribuídas
 
-### Solução
-Atualizar a view `v_all_sales` via migration para fazer `UNION ALL` de:
-1. `customer_purchases` (platform != 'ticto') -- dados Guru
-2. `ticto_transactions` -- dados Ticto brutos com UTMs e Meta IDs
+## Ponto importante
+O erro que apareceu mostra que ainda há tipos diferentes no `UNION`. Não é só `id`: o `funnel_id` também precisa bater.
 
-### O que muda
-- **Migration SQL**: `CREATE OR REPLACE VIEW v_all_sales` com os dois branches
-- **Frontend**: Nenhuma alteração necessária. O hook `useAllSales` já consome `v_all_sales` com as mesmas colunas
-
-### O que se mantém
-- Todas as vendas Ticto com UTMs, meta_campaign_id, meta_adset_id, meta_ad_id
-- Cruzamento com campanhas Meta Ads funciona igual
-- Dados Guru entram como vendas orgânicas (sem meta IDs)
-
-### SQL da migration
-
+## SQL final correto
 ```sql
 CREATE OR REPLACE VIEW public.v_all_sales AS
-  -- Guru (customer_purchases excluindo ticto para não duplicar)
+
+  -- Ticto (mantém ads/utm reais)
   SELECT
-    cp.id::text AS id,
-    cp.platform::text AS platform,
-    NULL::text AS funnel_id,
+    id::text                         AS id,
+    'ticto'::text                    AS platform,
+    funnel_id::text                  AS funnel_id,
+    status,
+    order_date::timestamptz          AS purchased_at,
+    (paid_amount / 100.0)::numeric   AS revenue,
+    product_name,
+    offer_name,
+    payment_method,
+    customer_name,
+    customer_email,
+    meta_campaign_id,
+    meta_adset_id,
+    meta_ad_id,
+    meta_campaign_name,
+    meta_adset_name,
+    meta_ad_name,
+    utm_source,
+    utm_campaign,
+    utm_medium,
+    utm_content,
+    is_paid_traffic
+  FROM public.ticto_transactions
+
+  UNION ALL
+
+  -- Guru + outras plataformas
+  SELECT
+    cp.id::text                      AS id,
+    cp.platform::text                AS platform,
+    NULL::text                       AS funnel_id,
     cp.status,
-    cp.purchased_at::timestamptz AS purchased_at,
-    cp.gross_amount::numeric AS revenue,
+    cp.purchased_at::timestamptz     AS purchased_at,
+    cp.gross_amount::numeric         AS revenue,
     cp.product_name,
     cp.offer_name,
     cp.payment_method,
-    NULL::text AS customer_name,
-    NULL::text AS customer_email,
-    NULL::text AS meta_campaign_id,
-    NULL::text AS meta_adset_id,
-    NULL::text AS meta_ad_id,
-    NULL::text AS meta_campaign_name,
-    NULL::text AS meta_adset_name,
-    NULL::text AS meta_ad_name,
+    NULL::text                       AS customer_name,
+    NULL::text                       AS customer_email,
+    NULL::text                       AS meta_campaign_id,
+    NULL::text                       AS meta_adset_id,
+    NULL::text                       AS meta_ad_id,
+    NULL::text                       AS meta_campaign_name,
+    NULL::text                       AS meta_adset_name,
+    NULL::text                       AS meta_ad_name,
     cp.utm_source,
     cp.utm_campaign,
     cp.utm_medium,
     cp.utm_content,
-    false AS is_paid_traffic
+    false                            AS is_paid_traffic
   FROM public.customer_purchases cp
-  WHERE cp.platform <> 'ticto'
+  WHERE cp.platform <> 'ticto';
 
-  UNION ALL
-
-  -- Ticto (fonte bruta com UTMs e Meta IDs)
-  SELECT
-    id, 'ticto'::text AS platform, funnel_id, status,
-    order_date::timestamptz AS purchased_at,
-    (paid_amount / 100.0)::numeric AS revenue,
-    product_name, offer_name, payment_method,
-    customer_name, customer_email,
-    meta_campaign_id, meta_adset_id, meta_ad_id,
-    meta_campaign_name, meta_adset_name, meta_ad_name,
-    utm_source, utm_campaign, utm_medium, utm_content,
-    is_paid_traffic
-  FROM public.ticto_transactions;
+GRANT SELECT ON public.v_all_sales TO authenticated;
+GRANT SELECT ON public.v_all_sales TO service_role;
 ```
 
+## Resultado esperado depois disso
+- mantém o cruzamento atual com campanhas Meta Ads
+- mantém vendas reais do Ticto com atribuição
+- adiciona Guru/outras plataformas ao total do resumo
+- aproxima o Resumo Geral dos números da Inteligência do Cliente
