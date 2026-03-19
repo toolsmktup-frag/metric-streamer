@@ -117,12 +117,10 @@ export default function InstanceManagement({
       setInstanceName(instance.instance_name);
       setNickname(instance.nickname || '');
       setProfileName(instance.display_name || '');
+      setConnectPhone('');
+      // Don't reset qrCode/pairCode/connecting here — fetchStatus will set them correctly
       fetchStatus();
       fetchPrivacy();
-      setPairCode(null);
-      setQrCode(null);
-      setConnecting(false);
-      setConnectPhone('');
     }
   }, [instance, fetchStatus, fetchPrivacy]);
 
