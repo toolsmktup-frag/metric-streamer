@@ -133,7 +133,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
       map.set(stageId, sorted);
     }
     return map;
-  }, [filteredPositions, sortMode, purchaseMap]);
+  }, [filteredPositions, sortMode, purchaseMap, recontactMap]);
 
   const getStageRevenue = (leads: (LeadStagePosition & { lead: Lead })[]) => {
     return leads.reduce((sum, p) => sum + (Number(p.lead.metadata?.amount) || 0), 0);
