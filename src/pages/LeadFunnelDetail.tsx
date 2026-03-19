@@ -399,7 +399,6 @@ const LeadFunnelDetail: React.FC = () => {
               loadingDistinctProducts={loadingDistinctProducts}
               positions={positions}
             />
-            />
           </TabsContent>
         )}
 
