@@ -1,9 +1,35 @@
-// v1.0.3 - use service role for DB ops
+// v1.0.4 - fix UAZAPI base URL usage for instance endpoints
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
+}
+
+const normalizeBaseUrl = (rawUrl?: string | null, fallbackUrl?: string | null) => {
+  const candidate = (rawUrl || fallbackUrl || '').trim()
+  if (!candidate) return ''
+
+  const withoutTrailingSlash = candidate.replace(/\/+$/, '')
+
+  return withoutTrailingSlash.replace(/\/instance(?:\/.*)?$/i, '')
+}
+
+const buildUazUrl = (baseUrl: string, path: string) => {
+  const normalizedBase = baseUrl.replace(/\/+$/, '')
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`
+  return `${normalizedBase}${normalizedPath}`
+}
+
+const readJsonSafely = async (response: Response) => {
+  const text = await response.text()
+  if (!text) return null
+
+  try {
+    return JSON.parse(text)
+  } catch {
+    return { raw: text }
+  }
 }
 
 Deno.serve(async (req) => {
@@ -20,7 +46,6 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Auth client just for user validation
     const authClient = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_ANON_KEY')!,
@@ -35,13 +60,11 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Service role client for DB operations (bypasses RLS)
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     )
 
-    // Parse action from query or body
     const url = new URL(req.url)
     let action = url.searchParams.get('action')
     let instanceId = url.searchParams.get('instance_id')
@@ -60,7 +83,6 @@ Deno.serve(async (req) => {
       })
     }
 
-    // === CREATE INSTANCE (no instance_id needed) ===
     if (action === 'create_instance') {
       const instanceName = body.instance_name
       if (!instanceName) {
@@ -79,7 +101,14 @@ Deno.serve(async (req) => {
         })
       }
 
-      // Get user org_id
+      const uazBaseUrl = normalizeBaseUrl(UAZAPI_BASE_URL)
+      if (!uazBaseUrl.startsWith('http')) {
+        return new Response(JSON.stringify({ error: `UAZAPI_BASE_URL inválida: "${UAZAPI_BASE_URL}"` }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
       const userId = user.id
       const { data: profile } = await supabase
         .from('user_profiles')
@@ -94,9 +123,8 @@ Deno.serve(async (req) => {
         })
       }
 
-      // 1. Create instance on UAZAPI
       const sanitizedName = instanceName.toLowerCase().replace(/[^a-z0-9_-]/g, '-')
-      const uazCreateRes = await fetch(`${UAZAPI_BASE_URL}/instance/init`, {
+      const uazCreateRes = await fetch(buildUazUrl(uazBaseUrl, '/instance/init'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -104,7 +132,7 @@ Deno.serve(async (req) => {
         },
         body: JSON.stringify({ name: sanitizedName }),
       })
-      const uazCreateData = await uazCreateRes.json()
+      const uazCreateData = await readJsonSafely(uazCreateRes)
       console.log('[create_instance] UAZAPI response:', JSON.stringify(uazCreateData))
 
       if (!uazCreateRes.ok) {
@@ -114,17 +142,14 @@ Deno.serve(async (req) => {
         })
       }
 
-      // Extract instance URL and token from UAZAPI response
-      const instanceApiUrl = uazCreateData?.instance?.instanceUrl || uazCreateData?.instanceUrl || `${UAZAPI_BASE_URL}/instance/${sanitizedName}`
       const instanceApiToken = uazCreateData?.instance?.token || uazCreateData?.token || uazCreateData?.instance?.apitoken || ''
 
-      // 2. Save to database
       const { data: newInstance, error: insertErr } = await supabase
         .from('whatsapp_instances')
         .insert({
           organization_id: profile.organization_id,
           instance_name: instanceName,
-          api_url: instanceApiUrl.replace(/\/$/, ''),
+          api_url: uazBaseUrl,
           api_token: instanceApiToken,
           status: 'connecting',
         })
@@ -138,10 +163,9 @@ Deno.serve(async (req) => {
         })
       }
 
-      // 3. Configure webhook
       const webhookUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/uazapi-webhook`
       try {
-        await fetch(`${instanceApiUrl}/webhook`, {
+        await fetch(buildUazUrl(uazBaseUrl, '/webhook'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'token': instanceApiToken },
           body: JSON.stringify({ url: webhookUrl, enabled: true, events: ['messages', 'messages_update', 'connection'] }),
@@ -150,16 +174,15 @@ Deno.serve(async (req) => {
         console.error('Webhook config failed:', e.message)
       }
 
-      // 4. Connect to get QR code
       let qrcode = null
       let paircode = null
       try {
-        const connectRes = await fetch(`${instanceApiUrl}/instance/connect`, {
+        const connectRes = await fetch(buildUazUrl(uazBaseUrl, '/instance/connect'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'token': instanceApiToken },
           body: JSON.stringify({}),
         })
-        const connectData = await connectRes.json()
+        const connectData = await readJsonSafely(connectRes)
         console.log('[create_instance] connect response:', JSON.stringify(connectData))
         qrcode = connectData?.qrcode || connectData?.base64 || connectData?.instance?.qrcode || null
         paircode = connectData?.paircode || connectData?.instance?.paircode || null
@@ -176,7 +199,6 @@ Deno.serve(async (req) => {
       })
     }
 
-    // All other actions require instance_id
     if (!instanceId) {
       return new Response(JSON.stringify({ error: 'instance_id required' }), {
         status: 400,
@@ -184,7 +206,6 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Get instance
     const { data: instance, error: instErr } = await supabase
       .from('whatsapp_instances')
       .select('*')
@@ -198,16 +219,24 @@ Deno.serve(async (req) => {
       })
     }
 
-    const apiUrl = instance.api_url
+    const uazBaseUrl = normalizeBaseUrl(instance.api_url, Deno.env.get('UAZAPI_BASE_URL'))
     const apiToken = instance.api_token
 
-    // Validate api_url is a proper URL
-    if (!apiUrl || !apiUrl.startsWith('http')) {
-      return new Response(JSON.stringify({ error: `URL da API inválida: "${apiUrl}". Deve começar com https://` }), {
+    if (!uazBaseUrl || !uazBaseUrl.startsWith('http')) {
+      return new Response(JSON.stringify({ error: `URL da API inválida: "${instance.api_url}". Deve apontar para a base da UAZAPI.` }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
+
+    if (instance.api_url !== uazBaseUrl) {
+      await supabase
+        .from('whatsapp_instances')
+        .update({ api_url: uazBaseUrl, updated_at: new Date().toISOString() })
+        .eq('id', instanceId)
+    }
+
+    console.log('[whatsapp-instance] action:', action, 'instanceId:', instanceId, 'uazBaseUrl:', uazBaseUrl)
 
     const uazHeaders = {
       'Content-Type': 'application/json',
@@ -217,25 +246,23 @@ Deno.serve(async (req) => {
     let result: any = null
 
     switch (action) {
-      // GET /instance/status
       case 'status': {
-        const res = await fetch(`${apiUrl}/instance/status`, { headers: uazHeaders })
-        result = await res.json()
-        
-        // Detect real status - UAZAPI can return various formats
+        const res = await fetch(buildUazUrl(uazBaseUrl, '/instance/status'), { headers: uazHeaders })
+        result = await readJsonSafely(res)
+
         let newStatus = 'disconnected'
         if (result?.instance?.status === 'connected' || result?.instance?.state === 'open') {
           newStatus = 'connected'
-        } else if (result?.status?.connected === true) {
+        } else if (result?.status?.connected === true || result?.connected === true) {
           newStatus = 'connected'
         } else if (result?.instance?.status) {
           newStatus = result.instance.status
         }
-        
+
         const profileName = result?.instance?.profileName || result?.instance?.pushName || null
         const profilePicUrl = result?.instance?.profilePicUrl || null
         const phoneNumber = result?.instance?.phone || instance.phone_number
-        
+
         const finalDisplayName = profileName || instance.display_name
         const finalProfilePic = profilePicUrl || instance.profile_pic_url
         const finalPhone = phoneNumber || instance.phone_number
@@ -247,11 +274,10 @@ Deno.serve(async (req) => {
           phone_number: finalPhone,
           updated_at: new Date().toISOString(),
         }).eq('id', instanceId)
-        
-        // Extract QR/pair code from status response (UAZAPI returns them in instance object)
-        const statusQrCode = result?.instance?.qrcode || null
-        const statusPairCode = result?.instance?.paircode || null
-        
+
+        const statusQrCode = result?.instance?.qrcode || result?.qrcode || null
+        const statusPairCode = result?.instance?.paircode || result?.paircode || null
+
         result = {
           raw: result,
           qrcode: statusQrCode,
@@ -263,46 +289,43 @@ Deno.serve(async (req) => {
             phone_number: finalPhone,
           }
         }
-        
+
         break
       }
 
-      // POST /instance/connect
       case 'connect': {
         const connectBody: any = {}
         if (body.phone) connectBody.phone = body.phone
-        
-        const res = await fetch(`${apiUrl}/instance/connect`, {
+
+        const connectUrl = buildUazUrl(uazBaseUrl, '/instance/connect')
+        const res = await fetch(connectUrl, {
           method: 'POST',
           headers: uazHeaders,
           body: JSON.stringify(connectBody),
         })
-        const rawConnect = await res.json()
+        const rawConnect = await readJsonSafely(res)
         console.log('[UAZAPI connect] raw response:', JSON.stringify(rawConnect))
-        
-        // Extract qrcode/paircode from various possible response structures
+
         const qrcode = rawConnect?.qrcode || rawConnect?.base64 || rawConnect?.instance?.qrcode || rawConnect?.data?.qrcode || null
         const paircode = rawConnect?.paircode || rawConnect?.instance?.paircode || rawConnect?.data?.paircode || null
-        
+
         console.log('[UAZAPI connect] extracted qrcode:', qrcode ? `${String(qrcode).substring(0, 50)}...` : 'null')
         console.log('[UAZAPI connect] extracted paircode:', paircode)
-        
+
         result = {
           raw: rawConnect,
           qrcode,
           paircode,
         }
-        
-        // Update status
+
         await supabase.from('whatsapp_instances').update({
           status: 'connecting',
           updated_at: new Date().toISOString(),
         }).eq('id', instanceId)
 
-        // Auto-configure webhook after connect (UAZAPI v2)
         const webhookUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/uazapi-webhook`
         try {
-          await fetch(`${apiUrl}/webhook`, {
+          await fetch(buildUazUrl(uazBaseUrl, '/webhook'), {
             method: 'POST',
             headers: uazHeaders,
             body: JSON.stringify({
@@ -315,27 +338,25 @@ Deno.serve(async (req) => {
         } catch (e) {
           console.error('Failed to auto-configure webhook:', e.message)
         }
-        
+
         break
       }
 
-      // POST /instance/disconnect
       case 'disconnect': {
-        const res = await fetch(`${apiUrl}/instance/disconnect`, {
+        const res = await fetch(buildUazUrl(uazBaseUrl, '/instance/disconnect'), {
           method: 'POST',
           headers: uazHeaders,
         })
-        result = await res.json()
-        
+        result = await readJsonSafely(res)
+
         await supabase.from('whatsapp_instances').update({
           status: 'disconnected',
           updated_at: new Date().toISOString(),
         }).eq('id', instanceId)
-        
+
         break
       }
 
-      // POST /profile/name
       case 'update_name': {
         if (!body.name) {
           return new Response(JSON.stringify({ error: 'name required' }), {
@@ -343,23 +364,21 @@ Deno.serve(async (req) => {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           })
         }
-        const res = await fetch(`${apiUrl}/profile/name`, {
+        const res = await fetch(buildUazUrl(uazBaseUrl, '/profile/name'), {
           method: 'POST',
           headers: uazHeaders,
           body: JSON.stringify({ name: body.name }),
         })
-        result = await res.json()
-        
-        // Update local
+        result = await readJsonSafely(res)
+
         await supabase.from('whatsapp_instances').update({
           display_name: body.name,
           updated_at: new Date().toISOString(),
         }).eq('id', instanceId)
-        
+
         break
       }
 
-      // POST /profile/image
       case 'update_image': {
         if (!body.image) {
           return new Response(JSON.stringify({ error: 'image required (URL, base64, or "remove")' }), {
@@ -367,69 +386,62 @@ Deno.serve(async (req) => {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           })
         }
-        const res = await fetch(`${apiUrl}/profile/image`, {
+        const res = await fetch(buildUazUrl(uazBaseUrl, '/profile/image'), {
           method: 'POST',
           headers: uazHeaders,
           body: JSON.stringify({ image: body.image }),
         })
-        result = await res.json()
+        result = await readJsonSafely(res)
         break
       }
 
-      // GET /instance/privacy
       case 'get_privacy': {
-        const res = await fetch(`${apiUrl}/instance/privacy`, { headers: uazHeaders })
-        result = await res.json()
+        const res = await fetch(buildUazUrl(uazBaseUrl, '/instance/privacy'), { headers: uazHeaders })
+        result = await readJsonSafely(res)
         break
       }
 
-      // POST /instance/privacy
       case 'set_privacy': {
-        const res = await fetch(`${apiUrl}/instance/privacy`, {
+        const res = await fetch(buildUazUrl(uazBaseUrl, '/instance/privacy'), {
           method: 'POST',
           headers: uazHeaders,
           body: JSON.stringify(body.settings || {}),
         })
-        result = await res.json()
+        result = await readJsonSafely(res)
         break
       }
 
-      // POST /instance/presence
       case 'set_presence': {
-        const res = await fetch(`${apiUrl}/instance/presence`, {
+        const res = await fetch(buildUazUrl(uazBaseUrl, '/instance/presence'), {
           method: 'POST',
           headers: uazHeaders,
           body: JSON.stringify({ presence: body.presence || 'available' }),
         })
-        result = await res.json()
+        result = await readJsonSafely(res)
         break
       }
 
-      // DELETE /instance (delete from UAZAPI + local DB)
       case 'delete': {
-        // Delete from UAZAPI first
         try {
-          await fetch(`${apiUrl}/instance`, {
+          await fetch(buildUazUrl(uazBaseUrl, '/instance'), {
             method: 'DELETE',
             headers: uazHeaders,
           })
         } catch (e) {
           console.log('UAZAPI delete failed (may not exist):', e.message)
         }
-        
-        // Delete from local DB
+
         const { error: delErr } = await supabase
           .from('whatsapp_instances')
           .delete()
           .eq('id', instanceId)
-        
+
         if (delErr) throw delErr
-        
+
         result = { success: true, message: 'Instance deleted' }
         break
       }
 
-      // POST /instance/updateInstanceName
       case 'update_instance_name': {
         if (!body.name) {
           return new Response(JSON.stringify({ error: 'name required' }), {
@@ -437,30 +449,27 @@ Deno.serve(async (req) => {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           })
         }
-        
-        // Update UAZAPI
-        const res = await fetch(`${apiUrl}/instance/updateInstanceName`, {
+
+        const res = await fetch(buildUazUrl(uazBaseUrl, '/instance/updateInstanceName'), {
           method: 'POST',
           headers: uazHeaders,
           body: JSON.stringify({ name: body.name }),
         })
-        result = await res.json()
-        
-        // Update local
+        result = await readJsonSafely(res)
+
         await supabase.from('whatsapp_instances').update({
           instance_name: body.name,
           updated_at: new Date().toISOString(),
         }).eq('id', instanceId)
-        
+
         break
       }
 
-      // POST /webhook/set - configure webhook URL and events
       case 'set_webhook': {
         const webhookUrl = body.url || `${Deno.env.get('SUPABASE_URL')}/functions/v1/uazapi-webhook`
         const events = body.events || ['messages', 'messages_update', 'connection']
-        
-        const res = await fetch(`${apiUrl}/webhook`, {
+
+        const res = await fetch(buildUazUrl(uazBaseUrl, '/webhook'), {
           method: 'POST',
           headers: uazHeaders,
           body: JSON.stringify({
@@ -469,14 +478,13 @@ Deno.serve(async (req) => {
             events,
           }),
         })
-        result = await res.json()
-        
-        // Save webhook URL locally
+        result = await readJsonSafely(res)
+
         await supabase.from('whatsapp_instances').update({
           webhook_url: webhookUrl,
           updated_at: new Date().toISOString(),
         }).eq('id', instanceId)
-        
+
         break
       }
 
