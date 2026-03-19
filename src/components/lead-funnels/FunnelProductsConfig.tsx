@@ -76,6 +76,7 @@ const FunnelProductsConfig: React.FC<FunnelProductsConfigProps> = ({
     }
     onSave(
       localProducts.map(p => ({
+        ...(p.id ? { id: p.id } : {}),
         source_funnel_product_id: p.source_funnel_product_id,
         product_name_contains: p.product_name_contains.trim(),
         display_name: p.display_name.trim() || null,

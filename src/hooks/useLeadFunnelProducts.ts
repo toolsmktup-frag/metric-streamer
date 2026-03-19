@@ -36,17 +36,58 @@ export function useUpsertLeadFunnelProducts() {
       products,
     }: {
       funnelId: string;
-      products: Omit<LeadFunnelProduct, 'id' | 'lead_funnel_id' | 'created_at'>[];
+      products: (Omit<LeadFunnelProduct, 'lead_funnel_id' | 'created_at'> & { id?: string })[];
     }) => {
-      // Delete existing and re-insert
-      await (supabase as any).from('lead_funnel_products').delete().eq('lead_funnel_id', funnelId);
-      if (products.length === 0) return [];
-      const { data, error } = await (supabase as any)
+      // Fetch current products to diff
+      const { data: existing } = await (supabase as any)
         .from('lead_funnel_products')
-        .insert(products.map(p => ({ ...p, lead_funnel_id: funnelId })))
-        .select();
-      if (error) throw error;
-      return data;
+        .select('id')
+        .eq('lead_funnel_id', funnelId);
+      const existingIds = new Set((existing || []).map((e: any) => e.id));
+
+      const toUpdate = products.filter(p => p.id && existingIds.has(p.id));
+      const toInsert = products.filter(p => !p.id);
+      const keepIds = new Set(products.filter(p => p.id).map(p => p.id));
+      const toDeleteIds = [...existingIds].filter(id => !keepIds.has(id));
+
+      // Delete only removed products
+      if (toDeleteIds.length > 0) {
+        await (supabase as any)
+          .from('lead_funnel_products')
+          .delete()
+          .in('id', toDeleteIds);
+      }
+
+      // Update existing
+      for (const p of toUpdate) {
+        await (supabase as any)
+          .from('lead_funnel_products')
+          .update({
+            source_funnel_product_id: p.source_funnel_product_id,
+            product_name_contains: p.product_name_contains,
+            display_name: p.display_name,
+            recontact_days: p.recontact_days,
+            auto_move_stage_id: p.auto_move_stage_id,
+          })
+          .eq('id', p.id);
+      }
+
+      // Insert new
+      if (toInsert.length > 0) {
+        const { error } = await (supabase as any)
+          .from('lead_funnel_products')
+          .insert(toInsert.map(p => ({
+            lead_funnel_id: funnelId,
+            source_funnel_product_id: p.source_funnel_product_id,
+            product_name_contains: p.product_name_contains,
+            display_name: p.display_name,
+            recontact_days: p.recontact_days,
+            auto_move_stage_id: p.auto_move_stage_id,
+          })));
+        if (error) throw error;
+      }
+
+      return [];
     },
     onSuccess: (_, { funnelId }) => {
       queryClient.invalidateQueries({ queryKey: ['lead-funnel-products', funnelId] });

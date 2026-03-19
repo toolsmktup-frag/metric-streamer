@@ -20,7 +20,7 @@ interface FunnelConfigTabProps {
   // Products & Recontact
   leadFunnelProducts?: LeadFunnelProduct[];
   catalogProducts?: FunnelProduct[];
-  onSaveProducts?: (products: Omit<LeadFunnelProduct, 'id' | 'lead_funnel_id' | 'created_at'>[]) => void;
+  onSaveProducts?: (products: (Omit<LeadFunnelProduct, 'lead_funnel_id' | 'created_at'> & { id?: string })[]) => void;
   savingProducts?: boolean;
   onBulkMoveOverdue?: () => void;
   bulkMoving?: boolean;
