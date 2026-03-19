@@ -1,0 +1,103 @@
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+
+interface RedistributeParams {
+  funnelId: string;
+  scope: 'unassigned' | 'assigned' | 'all';
+  stageIds: string[]; // empty = all stages
+  sellerIds: string[];
+}
+
+export function useRedistributeLeads() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ funnelId, scope, stageIds, sellerIds }: RedistributeParams) => {
+      if (!sellerIds.length) throw new Error('Selecione ao menos um vendedor');
+
+      // 1. Fetch positions
+      let query = (supabase as any)
+        .from('lead_stage_positions')
+        .select('id, lead_id, stage_id, entered_at')
+        .eq('funnel_id', funnelId)
+        .order('entered_at', { ascending: true });
+
+      if (stageIds.length > 0) {
+        query = query.in('stage_id', stageIds);
+      }
+
+      const { data: positions, error: posErr } = await query;
+      if (posErr) throw posErr;
+      if (!positions?.length) throw new Error('Nenhum lead encontrado com os filtros selecionados');
+
+      // 2. Fetch leads to filter by scope
+      const leadIds = [...new Set(positions.map((p: any) => p.lead_id))] as string[];
+      
+      // Fetch in batches of 500
+      const leads: any[] = [];
+      for (let i = 0; i < leadIds.length; i += 500) {
+        const batch = leadIds.slice(i, i + 500);
+        const { data, error } = await (supabase as any)
+          .from('leads')
+          .select('id, assigned_to')
+          .in('id', batch);
+        if (error) throw error;
+        leads.push(...(data || []));
+      }
+
+      // 3. Filter by scope
+      const leadsMap = new Map(leads.map((l: any) => [l.id, l]));
+      let filteredLeadIds: string[];
+
+      if (scope === 'unassigned') {
+        filteredLeadIds = leadIds.filter(id => {
+          const lead = leadsMap.get(id);
+          return !lead?.assigned_to;
+        });
+      } else if (scope === 'assigned') {
+        filteredLeadIds = leadIds.filter(id => {
+          const lead = leadsMap.get(id);
+          return !!lead?.assigned_to;
+        });
+      } else {
+        filteredLeadIds = leadIds;
+      }
+
+      if (!filteredLeadIds.length) throw new Error('Nenhum lead encontrado com o escopo selecionado');
+
+      // 4. Round-robin distribution
+      const updates: { leadId: string; sellerId: string }[] = [];
+      filteredLeadIds.forEach((leadId, idx) => {
+        updates.push({
+          leadId,
+          sellerId: sellerIds[idx % sellerIds.length],
+        });
+      });
+
+      // 5. Batch update in chunks
+      for (let i = 0; i < updates.length; i += 100) {
+        const batch = updates.slice(i, i + 100);
+        const promises = batch.map(u =>
+          (supabase as any)
+            .from('leads')
+            .update({ assigned_to: u.sellerId, updated_at: new Date().toISOString() })
+            .eq('id', u.leadId)
+        );
+        const results = await Promise.all(promises);
+        const err = results.find(r => r.error);
+        if (err?.error) throw err.error;
+      }
+
+      return updates.length;
+    },
+    onSuccess: (count, { funnelId }) => {
+      toast.success(`${count} lead(s) redistribuído(s) com sucesso!`);
+      qc.invalidateQueries({ queryKey: ['leads-by-funnel', funnelId] });
+      qc.invalidateQueries({ queryKey: ['all-leads'] });
+    },
+    onError: (err: any) => {
+      toast.error(err.message || 'Erro ao redistribuir leads');
+    },
+  });
+}
