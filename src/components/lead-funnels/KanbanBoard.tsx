@@ -185,7 +185,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
     const positionId = active.id as string;
     const toStageId = over.id as string;
 
-    const position = positions.find(p => p.id === positionId);
+    const position = visiblePositions.find(p => p.id === positionId);
     if (!position || position.stage_id === toStageId) return;
 
     const toStage = stages.find(s => s.id === toStageId);
