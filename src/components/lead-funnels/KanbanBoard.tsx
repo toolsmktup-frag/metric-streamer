@@ -264,7 +264,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
             const visibleCount = visibleCounts[stage.id] || CARDS_PER_PAGE;
             const visibleLeads = stageLeads.slice(0, visibleCount);
             const hasMore = stageLeads.length > visibleCount;
-            const isRevenue = isRevenueStage(stage.name);
+            const shouldHideValues = !isAdmin && stage.hide_values;
             return (
               <div
                 key={stage.id}
