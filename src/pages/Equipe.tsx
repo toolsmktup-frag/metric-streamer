@@ -38,11 +38,17 @@ export default function Equipe() {
   const { data: members = [], isLoading, updateRole, updateName, updateStatus } = useTeamMembers();
   const { data: permissions = [], isLoading: loadingPerms, updatePermission } = useOrgPermissions();
   const { instances, loading: loadingInstances } = useWhatsAppInstances();
+  const { data: campaigns = [] } = useLeadCampaigns();
+  const { data: allFunnels = [] } = useLeadFunnels();
+  const { data: allFunnelAccess = [] } = useOrgFunnelAccess();
+  const grantFunnelAccess = useGrantFunnelAccess();
+  const revokeFunnelAccess = useRevokeFunnelAccess();
   const [editingName, setEditingName] = useState<string | null>(null);
   const [nameValue, setNameValue] = useState('');
   const [expandedPerms, setExpandedPerms] = useState<string | null>(null);
   const [instanceAccess, setInstanceAccess] = useState<Record<string, Set<string>>>({});
   const [savingAccess, setSavingAccess] = useState<string | null>(null);
+  const [savingFunnelAccess, setSavingFunnelAccess] = useState<string | null>(null);
 
   const pendingMembers = members.filter(m => m.status === 'pending');
   const activeMembers = members.filter(m => m.status !== 'pending');
