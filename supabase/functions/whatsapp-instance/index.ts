@@ -133,7 +133,21 @@ Deno.serve(async (req) => {
           headers: uazHeaders,
           body: JSON.stringify(connectBody),
         })
-        result = await res.json()
+        const rawConnect = await res.json()
+        console.log('[UAZAPI connect] raw response:', JSON.stringify(rawConnect))
+        
+        // Extract qrcode/paircode from various possible response structures
+        const qrcode = rawConnect?.qrcode || rawConnect?.base64 || rawConnect?.instance?.qrcode || rawConnect?.data?.qrcode || null
+        const paircode = rawConnect?.paircode || rawConnect?.instance?.paircode || rawConnect?.data?.paircode || null
+        
+        console.log('[UAZAPI connect] extracted qrcode:', qrcode ? `${String(qrcode).substring(0, 50)}...` : 'null')
+        console.log('[UAZAPI connect] extracted paircode:', paircode)
+        
+        result = {
+          raw: rawConnect,
+          qrcode,
+          paircode,
+        }
         
         // Update status
         await supabase.from('whatsapp_instances').update({

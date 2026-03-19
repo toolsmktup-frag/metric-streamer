@@ -139,10 +139,12 @@ export default function InstanceManagement({
       const body: any = {};
       if (connectPhone.trim()) body.phone = connectPhone.trim();
       const data = await callInstanceAPI(instance.id, 'connect', body);
-      console.log('[WhatsApp Connect] Response:', JSON.stringify(data));
-      // Check multiple possible paths for paircode/qrcode
-      const paircode = data?.raw?.instance?.paircode || data?.instance?.paircode || data?.paircode;
-      const qrcode = data?.raw?.instance?.qrcode || data?.instance?.qrcode || data?.qrcode || data?.base64;
+      console.log('[WhatsApp Connect] Full response:', JSON.stringify(data));
+      // Check top-level first (normalized by edge function), then fallback paths
+      const paircode = data?.paircode || data?.raw?.instance?.paircode || data?.instance?.paircode;
+      const qrcode = data?.qrcode || data?.raw?.instance?.qrcode || data?.instance?.qrcode || data?.raw?.qrcode || data?.base64;
+      console.log('[WhatsApp Connect] qrcode found:', qrcode ? `${String(qrcode).substring(0, 50)}...` : 'null');
+      console.log('[WhatsApp Connect] paircode found:', paircode || 'null');
       if (paircode) setPairCode(paircode);
       if (qrcode) setQrCode(qrcode);
       setStatusData(data);
