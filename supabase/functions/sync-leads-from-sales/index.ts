@@ -168,7 +168,33 @@ async function performSync() {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
   );
 
-  // ===== STEP 0: Clean existing data =====
+  // ===== STEP 0a: Detect ORG_ID dynamically =====
+  const { data: orgSample, error: orgError } = await supabase
+    .from("unified_customers")
+    .select("organization_id")
+    .limit(1)
+    .maybeSingle();
+
+  if (orgError) console.error("Error detecting org_id:", orgError.message);
+
+  const ORG_ID = orgSample?.organization_id;
+
+  if (!ORG_ID) {
+    // Try without org filter to diagnose
+    const { count: totalCustomers } = await supabase.from("unified_customers").select("id", { count: "exact", head: true });
+    const { count: totalPurchases } = await supabase.from("customer_purchases").select("id", { count: "exact", head: true });
+    console.error(`No org_id found. Total unified_customers: ${totalCustomers}, total customer_purchases: ${totalPurchases}`);
+    return {
+      success: false,
+      error: `No organization found in unified_customers. Total customers: ${totalCustomers}, purchases: ${totalPurchases}`,
+      leads_created: 0,
+      events_created: 0,
+    };
+  }
+
+  console.log(`Detected organization_id: ${ORG_ID}`);
+
+  // ===== STEP 0b: Clean existing data =====
   const orgLeads = await fetchAllPaginated(supabase, "leads", "id", { organization_id: ORG_ID });
   const leadIds = orgLeads.map((l: any) => l.id);
 
