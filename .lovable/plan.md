@@ -1,29 +1,25 @@
 
 
-## Plano: Corrigir restrição do Resumo Geral para vendedor
+## Plano: Corrigir Resumo Geral e redirecionar para Dashboard de Leads
 
 ### Problema
-Duas causas:
-1. **Sidebar esconde o link, mas não bloqueia a rota** — o vendedor pode acessar `/resumo` diretamente pela URL
-2. **A rota padrão `/` redireciona para `/resumo`** — mesmo sem o link no sidebar, o vendedor cai no Resumo Geral ao fazer login
+1. O "Resumo Geral" pode ainda aparecer por cache de permissões (staleTime de 2 min) ou possível falha na verificação
+2. O fallback atual redireciona para `/leads` ao invés de `/leads/dashboard`
 
-### Solução
+### Mudanças
 
-**1. Criar componente de rota protegida por permissão**
-- Arquivo: `src/components/PermissionRoute.tsx`
-- Componente wrapper que verifica `useMyPermissions()` antes de renderizar a página
-- Se o módulo não estiver habilitado, redireciona para a primeira rota disponível
+**1. Alterar fallback de redirecionamento para `/leads/dashboard`**
+- `src/components/PermissionRoute.tsx` — mudar fallbackPath default de `/leads` para `/leads/dashboard`
+- `src/pages/Index.tsx` — mudar todos os fallbacks de `/leads` para `/leads/dashboard`
 
-**2. Proteger a rota `/resumo` com permissão**
-- Arquivo: `src/App.tsx`
-- Envolver a rota `/resumo` com `PermissionRoute` verificando `mod_resumo`
+**2. Reduzir cache de permissões para evitar dados stale**
+- `src/hooks/useUserPermissions.ts` — reduzir `staleTime` de 2 minutos para 30 segundos na query `my-permissions`
 
-**3. Ajustar rota padrão `/`**
-- Arquivo: `src/pages/Index.tsx`
-- Em vez de redirecionar cegamente para `/resumo`, verificar permissões e redirecionar para a primeira rota acessível (ex: se não tem `mod_resumo`, vai para o primeiro funil ou `/leads`)
+**3. Garantir invalidação ao trocar de usuário**
+- Adicionar `refetchOnMount: true` na query de permissões para sempre revalidar ao montar
 
 ### Arquivos editados
-- `src/components/PermissionRoute.tsx` (novo)
-- `src/App.tsx` — usar PermissionRoute nas rotas
-- `src/pages/Index.tsx` — redirecionar inteligente baseado em permissões
+- `src/components/PermissionRoute.tsx`
+- `src/pages/Index.tsx`
+- `src/hooks/useUserPermissions.ts`
 
