@@ -10,7 +10,6 @@ import { getInstanceDisplayName } from '@/hooks/useWhatsApp';
 interface UserAccess {
   user_id: string;
   full_name: string;
-  email: string;
   has_access: boolean;
 }
 
