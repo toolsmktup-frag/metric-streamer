@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useLeadFunnel, useUpsertStages, useUpsertTransitionRules, useFunnelSourceNodes, useFunnelEdges, useSaveFunnelSourceNodes, useSaveFunnelEdges } from '@/hooks/useLeadFunnels';
 import { useLeadsByFunnel, useFunnelLeadCounts } from '@/hooks/useLeads';
+import { useBulkLeadPurchases } from '@/hooks/useBulkLeadPurchases';
 import { useFunnels } from '@/hooks/useFunnels';
 import { useLeadFunnelProducts, useUpsertLeadFunnelProducts } from '@/hooks/useLeadFunnelProducts';
 import { useLeadProductMappings, useDistinctLeadProducts, useSaveLeadProductMappings } from '@/hooks/useLeadProductMappings';
@@ -58,8 +59,11 @@ const LeadFunnelDetail: React.FC = () => {
   const queryClient = useQueryClient();
   const [bulkMoving, setBulkMoving] = useState(false);
 
-  // Use lead funnel products for recontact with explicit mappings
-  const recontactMap = useRecontactDeadlines(positions, leadFunnelProducts, productMappings);
+  // Bulk purchase data for recontact fallback
+  const { data: purchaseMap } = useBulkLeadPurchases(positions);
+
+  // Use lead funnel products for recontact with explicit mappings + purchase fallback
+  const recontactMap = useRecontactDeadlines(positions, leadFunnelProducts, productMappings, purchaseMap);
   // Catalog products for sync dropdown
   const allCatalogProducts = paymentFunnels.flatMap(f => f.funnel_products || []);
 
