@@ -4,6 +4,7 @@ import { useLeadFunnel, useUpsertStages, useUpsertTransitionRules, useFunnelSour
 import { useLeadsByFunnel, useFunnelLeadCounts } from '@/hooks/useLeads';
 import { useFunnels } from '@/hooks/useFunnels';
 import { useLeadFunnelProducts, useUpsertLeadFunnelProducts } from '@/hooks/useLeadFunnelProducts';
+import { useLeadProductMappings, useDistinctLeadProducts, useSaveLeadProductMappings } from '@/hooks/useLeadProductMappings';
 import { useRecontactDeadlines } from '@/hooks/useRecontactDeadlines';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -44,15 +45,18 @@ const LeadFunnelDetail: React.FC = () => {
   const { data: funnelEdges = [] } = useFunnelEdges(id ?? null);
   const { data: paymentFunnels = [] } = useFunnels();
   const { data: leadFunnelProducts = [] } = useLeadFunnelProducts(id ?? null);
+  const { data: productMappings = [] } = useLeadProductMappings(id ?? null);
+  const { data: distinctLeadProducts = [], isLoading: loadingDistinctProducts } = useDistinctLeadProducts(id ?? null);
   const upsertStages = useUpsertStages();
   const upsertRules = useUpsertTransitionRules();
   const upsertLeadProducts = useUpsertLeadFunnelProducts();
+  const saveProductMappings = useSaveLeadProductMappings();
   const saveSourceNodes = useSaveFunnelSourceNodes();
   const saveFunnelEdges = useSaveFunnelEdges();
   const queryClient = useQueryClient();
 
-  // Use lead funnel products for recontact (not payment funnel products)
-  const recontactMap = useRecontactDeadlines(positions, leadFunnelProducts);
+  // Use lead funnel products for recontact with explicit mappings
+  const recontactMap = useRecontactDeadlines(positions, leadFunnelProducts, productMappings);
   // Catalog products for sync dropdown
   const allCatalogProducts = paymentFunnels.flatMap(f => f.funnel_products || []);
 
@@ -307,6 +311,18 @@ const LeadFunnelDetail: React.FC = () => {
               }
             }}
             savingProducts={upsertLeadProducts.isPending}
+            distinctLeadProducts={distinctLeadProducts}
+            existingMappings={productMappings}
+            onSaveMappings={async (mappings) => {
+              try {
+                await saveProductMappings.mutateAsync({ funnelId: funnel.id, mappings });
+                toast.success('Vínculos salvos!');
+              } catch {
+                toast.error('Erro ao salvar vínculos');
+              }
+            }}
+            savingMappings={saveProductMappings.isPending}
+            loadingDistinctProducts={loadingDistinctProducts}
           />
         </TabsContent>
 
