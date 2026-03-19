@@ -79,11 +79,10 @@ const LeadFunnelDetail: React.FC = () => {
         
         for (const pos of positions) {
           const leadId = pos.lead_id;
-          const recontact = recontactMap[leadId];
+          const recontact = recontactMap.get(leadId);
           if (!recontact?.isOverdue) continue;
-          // Check if this lead's recontact matches this product
-          if (recontact.productName !== product.product_name_contains && 
-              recontact.productName !== product.display_name) continue;
+          // Match by product id
+          if (recontact.matchedProductId !== product.id) continue;
           // Don't move if already in target stage
           if (pos.stage_id === product.auto_move_stage_id) continue;
 
