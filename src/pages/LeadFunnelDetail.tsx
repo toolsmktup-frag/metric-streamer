@@ -231,6 +231,7 @@ const LeadFunnelDetail: React.FC = () => {
               positions={positions}
               onLeadClick={handleLeadClick}
               onWhatsAppClick={handleWhatsAppClick}
+              recontactMap={recontactMap}
             />
           </TabsContent>
         ) : (
