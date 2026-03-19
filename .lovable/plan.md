@@ -1,76 +1,39 @@
 
 
-## Plano: Aba de Vinculação de Produtos (Mapeamento)
+## Plano: Auto-mover leads vencidos para etapa configurada
 
-### Problema
-Os nomes dos produtos nos metadados dos leads (ex: "6 potes ArticulaBEM - S...") não batem com os `product_name_contains` configurados nos produtos do funil. O recontato não funciona porque o match por substring falha.
+### O que muda
 
-### Solução
-Adicionar uma nova seção/aba **"Vincular Produtos"** na configuração do funil de leads que:
-
-1. **Lista os produtos reais** encontrados nos metadados dos leads daquele funil (extraídos de `lead.metadata.product_name` via a query de positions)
-2. **Permite vincular cada produto real** a um dos `lead_funnel_products` configurados (com recontact_days)
-3. **Persiste os mapeamentos** numa nova tabela `lead_product_mappings`
-4. **Atualiza o cálculo de recontato** para usar os mapeamentos em vez do match por substring
+Adicionar um campo **"Mover para etapa"** em cada produto configurado na seção "Produtos & Recontato". Quando o recontato vence, o sistema pode mover automaticamente os leads para a etapa selecionada. Um botão **"Atualizar Funil"** dispara a movimentação em lote.
 
 ### Mudanças
 
-**1. Nova tabela `lead_product_mappings`**
-- `id`, `lead_funnel_id`, `raw_product_name` (texto exato do metadata), `lead_funnel_product_id` (FK para lead_funnel_products)
-- RLS usando `get_user_org_id()` via join com lead_funnels
-
-**2. Novo componente `ProductMappingConfig.tsx`**
-- Busca todos os `product_name` distintos dos leads daquele funil
-- Exibe cada um com um Select para vincular a um lead_funnel_product configurado
-- Botão "Salvar Vínculos"
-
-**3. Novo hook `useLeadProductMappings.ts`**
-- Query para buscar/salvar os mapeamentos
-- Query para buscar nomes de produtos distintos dos leads do funil
-
-**4. Atualizar `useRecontactDeadlines.ts`**
-- Primeiro tenta match via mapeamento explícito (tabela `lead_product_mappings`)
-- Fallback para match por substring (`product_name_contains`) para compatibilidade
-
-**5. Integrar na `FunnelConfigTab.tsx`**
-- Adicionar o `ProductMappingConfig` abaixo do `FunnelProductsConfig` existente
-- Só aparece quando já existem produtos configurados
-
-### SQL Migration
+**1. Coluna `auto_move_stage_id` na tabela `lead_funnel_products`**
 
 ```sql
-CREATE TABLE public.lead_product_mappings (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  lead_funnel_id uuid NOT NULL REFERENCES public.lead_funnels(id) ON DELETE CASCADE,
-  raw_product_name text NOT NULL,
-  lead_funnel_product_id uuid NOT NULL REFERENCES public.lead_funnel_products(id) ON DELETE CASCADE,
-  created_at timestamptz DEFAULT now(),
-  UNIQUE(lead_funnel_id, raw_product_name)
-);
-
-ALTER TABLE public.lead_product_mappings ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "lead_product_mappings_all" ON public.lead_product_mappings
-FOR ALL TO authenticated
-USING (
-  EXISTS (
-    SELECT 1 FROM public.lead_funnels lf
-    WHERE lf.id = lead_product_mappings.lead_funnel_id
-    AND lf.organization_id = public.get_user_org_id()
-  )
-)
-WITH CHECK (
-  EXISTS (
-    SELECT 1 FROM public.lead_funnels lf
-    WHERE lf.id = lead_product_mappings.lead_funnel_id
-    AND lf.organization_id = public.get_user_org_id()
-  )
-);
+ALTER TABLE public.lead_funnel_products 
+ADD COLUMN auto_move_stage_id uuid REFERENCES public.lead_funnel_stages(id) ON DELETE SET NULL;
 ```
 
-### Fluxo do Usuário
-1. Configura produtos com recontact_days na seção "Produtos & Recontato" (já existe)
-2. Na seção "Vincular Produtos" abaixo, vê todos os nomes reais dos leads (ex: "Pote Grátis ArticulaBEM...", "6 potes ArticulaBEM - S...")
-3. Para cada nome, seleciona qual produto configurado ele representa
-4. Salva — o recontato passa a funcionar corretamente
+**2. Atualizar `FunnelProductsConfig.tsx`**
+- Adicionar um `Select` de etapa antes do botão de lixeira em cada linha de produto
+- Placeholder: "Mover p/ etapa (opcional)"
+- Receber `stages` como prop para popular o Select
+
+**3. Atualizar `LeadFunnelProduct` interface e hook**
+- Adicionar `auto_move_stage_id: string | null` no tipo e no fluxo de save
+
+**4. Botão "Atualizar Funil" na seção de produtos**
+- Ao clicar, percorre todos os leads com recontato vencido (`isOverdue`)
+- Move cada lead para a `auto_move_stage_id` do produto correspondente via `useMoveLeadStage`
+- Exibe toast com quantidade de leads movidos
+
+**5. Integrar no `LeadFunnelDetail.tsx`**
+- Passar `stages` para o `FunnelProductsConfig`
+- Criar função `handleBulkMoveOverdue` que cruza `recontactMap` com os produtos configurados e move os vencidos
+
+### Fluxo do usuário
+1. Na config de produtos, seleciona "Mover para → Para abordar hoje" em cada produto
+2. Clica "Salvar Produtos"
+3. Clica "Atualizar Funil" → leads com recontato vencido são movidos automaticamente para a etapa escolhida
 
