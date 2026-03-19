@@ -170,15 +170,6 @@ const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, onWhatsAppClick,
         </div>
       )}
 
-      {/* Assigned seller badge */}
-      {assignedMember && (
-        <div className="mt-1.5 ml-[42px]">
-          <span className="inline-flex items-center gap-1 text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-md truncate max-w-[180px]">
-            <User className="h-3 w-3 shrink-0" />
-            {assignedMember.full_name || 'Sem nome'}
-          </span>
-        </div>
-      )}
 
       {/* Context badges (produto/status) */}
       {(lead.metadata?.product_name || lead.metadata?.status) && (
