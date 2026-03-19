@@ -332,58 +332,62 @@ const LeadFunnelDetail: React.FC = () => {
           <FunnelMetricsTab stages={stages} positions={positions} />
         </TabsContent>
 
-        {isAdmin && <TabsContent value="config" className="mt-4">
-          <FunnelConfigTab
-            stages={stages}
-            rules={rules}
-            onSaveStages={async (newStages) => {
-              try {
-                await upsertStages.mutateAsync({ funnelId: funnel.id, stages: newStages });
-                toast.success('Etapas salvas!');
-              } catch {
-                toast.error('Erro ao salvar etapas');
-              }
-            }}
-            onSaveRules={async (newRules) => {
-              try {
-                await upsertRules.mutateAsync({ funnelId: funnel.id, rules: newRules });
-                toast.success('Regras salvas!');
-              } catch {
-                toast.error('Erro ao salvar regras');
-              }
-            }}
-            saving={upsertStages.isPending || upsertRules.isPending}
-            leadFunnelProducts={leadFunnelProducts}
-            catalogProducts={allCatalogProducts}
-            onSaveProducts={async (prods) => {
-              try {
-                await upsertLeadProducts.mutateAsync({ funnelId: funnel.id, products: prods });
-                toast.success('Produtos salvos!');
-              } catch {
-                toast.error('Erro ao salvar produtos');
-              }
-            }}
-            savingProducts={upsertLeadProducts.isPending}
-            onBulkMoveOverdue={handleBulkMoveOverdue}
-            bulkMoving={bulkMoving}
-            distinctLeadProducts={distinctLeadProducts}
-            existingMappings={productMappings}
-            onSaveMappings={async (mappings) => {
-              try {
-                await saveProductMappings.mutateAsync({ funnelId: funnel.id, mappings });
-                toast.success('Vínculos salvos!');
-              } catch {
-                toast.error('Erro ao salvar vínculos');
-              }
-            }}
-            savingMappings={saveProductMappings.isPending}
-            loadingDistinctProducts={loadingDistinctProducts}
-          />
-        </TabsContent>
+        {isAdmin && (
+          <TabsContent value="config" className="mt-4">
+            <FunnelConfigTab
+              stages={stages}
+              rules={rules}
+              onSaveStages={async (newStages) => {
+                try {
+                  await upsertStages.mutateAsync({ funnelId: funnel.id, stages: newStages });
+                  toast.success('Etapas salvas!');
+                } catch {
+                  toast.error('Erro ao salvar etapas');
+                }
+              }}
+              onSaveRules={async (newRules) => {
+                try {
+                  await upsertRules.mutateAsync({ funnelId: funnel.id, rules: newRules });
+                  toast.success('Regras salvas!');
+                } catch {
+                  toast.error('Erro ao salvar regras');
+                }
+              }}
+              saving={upsertStages.isPending || upsertRules.isPending}
+              leadFunnelProducts={leadFunnelProducts}
+              catalogProducts={allCatalogProducts}
+              onSaveProducts={async (prods) => {
+                try {
+                  await upsertLeadProducts.mutateAsync({ funnelId: funnel.id, products: prods });
+                  toast.success('Produtos salvos!');
+                } catch {
+                  toast.error('Erro ao salvar produtos');
+                }
+              }}
+              savingProducts={upsertLeadProducts.isPending}
+              onBulkMoveOverdue={handleBulkMoveOverdue}
+              bulkMoving={bulkMoving}
+              distinctLeadProducts={distinctLeadProducts}
+              existingMappings={productMappings}
+              onSaveMappings={async (mappings) => {
+                try {
+                  await saveProductMappings.mutateAsync({ funnelId: funnel.id, mappings });
+                  toast.success('Vínculos salvos!');
+                } catch {
+                  toast.error('Erro ao salvar vínculos');
+                }
+              }}
+              savingMappings={saveProductMappings.isPending}
+              loadingDistinctProducts={loadingDistinctProducts}
+            />
+          </TabsContent>
+        )}
 
-        <TabsContent value="webhook" className="mt-4">
-          <WebhookConfig funnel={funnel} />
-        </TabsContent>
+        {isAdmin && (
+          <TabsContent value="webhook" className="mt-4">
+            <WebhookConfig funnel={funnel} />
+          </TabsContent>
+        )}
       </Tabs>
 
       <LeadTimeline
