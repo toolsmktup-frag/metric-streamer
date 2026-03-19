@@ -80,7 +80,7 @@ Deno.serve(async (req) => {
       }
 
       // Get user org_id
-      const userId = claimsData.claims.sub
+      const userId = user.id
       const { data: profile } = await supabase
         .from('user_profiles')
         .select('organization_id')
