@@ -35,6 +35,7 @@ interface ProductRow {
   product_name_contains: string;
   role: FunnelProduct['role'];
   display_name: string;
+  recontact_days: number | null;
 }
 
 interface FunnelFormData {
