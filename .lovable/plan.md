@@ -1,76 +1,76 @@
 
 
-## Plano: Sistema de Recontato por Produto com Contagem Regressiva
+## Plano: Aba de Vinculação de Produtos (Mapeamento)
 
-### Contexto
+### Problema
+Os nomes dos produtos nos metadados dos leads (ex: "6 potes ArticulaBEM - S...") não batem com os `product_name_contains` configurados nos produtos do funil. O recontato não funciona porque o match por substring falha.
 
-O usuário vende suplementos em potes (1 pote, 3 potes, 6 potes de ArticulaBEM). Cada quantidade dura um número diferente de dias. Ele precisa saber quando entrar em contato com cada cliente para recompra, com priorização visual.
+### Solução
+Adicionar uma nova seção/aba **"Vincular Produtos"** na configuração do funil de leads que:
 
-### Arquitetura
+1. **Lista os produtos reais** encontrados nos metadados dos leads daquele funil (extraídos de `lead.metadata.product_name` via a query de positions)
+2. **Permite vincular cada produto real** a um dos `lead_funnel_products` configurados (com recontact_days)
+3. **Persiste os mapeamentos** numa nova tabela `lead_product_mappings`
+4. **Atualiza o cálculo de recontato** para usar os mapeamentos em vez do match por substring
 
-```text
-┌─────────────────────────────┐
-│   funnel_products (existente)│
-│ + recontact_days (novo col)  │  ← ex: "1 pote" = 25 dias, "3 potes" = 75 dias
-└──────────────┬──────────────┘
-               │ match por product_name_contains
-               ▼
-┌─────────────────────────────┐
-│   Lead Card / Base List      │
-│ • Calcula: data_compra +     │
-│   recontact_days = deadline  │
-│ • Mostra contagem regressiva │
-│ • Cor: verde/amarelo/vermelho│
-└─────────────────────────────┘
+### Mudanças
+
+**1. Nova tabela `lead_product_mappings`**
+- `id`, `lead_funnel_id`, `raw_product_name` (texto exato do metadata), `lead_funnel_product_id` (FK para lead_funnel_products)
+- RLS usando `get_user_org_id()` via join com lead_funnels
+
+**2. Novo componente `ProductMappingConfig.tsx`**
+- Busca todos os `product_name` distintos dos leads daquele funil
+- Exibe cada um com um Select para vincular a um lead_funnel_product configurado
+- Botão "Salvar Vínculos"
+
+**3. Novo hook `useLeadProductMappings.ts`**
+- Query para buscar/salvar os mapeamentos
+- Query para buscar nomes de produtos distintos dos leads do funil
+
+**4. Atualizar `useRecontactDeadlines.ts`**
+- Primeiro tenta match via mapeamento explícito (tabela `lead_product_mappings`)
+- Fallback para match por substring (`product_name_contains`) para compatibilidade
+
+**5. Integrar na `FunnelConfigTab.tsx`**
+- Adicionar o `ProductMappingConfig` abaixo do `FunnelProductsConfig` existente
+- Só aparece quando já existem produtos configurados
+
+### SQL Migration
+
+```sql
+CREATE TABLE public.lead_product_mappings (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  lead_funnel_id uuid NOT NULL REFERENCES public.lead_funnels(id) ON DELETE CASCADE,
+  raw_product_name text NOT NULL,
+  lead_funnel_product_id uuid NOT NULL REFERENCES public.lead_funnel_products(id) ON DELETE CASCADE,
+  created_at timestamptz DEFAULT now(),
+  UNIQUE(lead_funnel_id, raw_product_name)
+);
+
+ALTER TABLE public.lead_product_mappings ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "lead_product_mappings_all" ON public.lead_product_mappings
+FOR ALL TO authenticated
+USING (
+  EXISTS (
+    SELECT 1 FROM public.lead_funnels lf
+    WHERE lf.id = lead_product_mappings.lead_funnel_id
+    AND lf.organization_id = public.get_user_org_id()
+  )
+)
+WITH CHECK (
+  EXISTS (
+    SELECT 1 FROM public.lead_funnels lf
+    WHERE lf.id = lead_product_mappings.lead_funnel_id
+    AND lf.organization_id = public.get_user_org_id()
+  )
+);
 ```
 
-### Alterações
-
-**1. Migration: adicionar coluna `recontact_days` em `funnel_products`**
-- `ALTER TABLE funnel_products ADD COLUMN recontact_days integer DEFAULT NULL`
-- Quando preenchido (ex: 25), indica que após X dias da compra o cliente deve ser recontactado
-
-**2. Atualizar `FunisConfigurar.tsx` (UI de configuração de produtos)**
-- Adicionar campo numérico "Dias para Recontato" ao lado de cada produto
-- Ex: "1 pote ArticulaBEM" → 25 dias, "3 potes" → 75 dias, "6 potes" → 150 dias
-
-**3. Atualizar `useFunnels.ts` (tipo `FunnelProduct`)**
-- Adicionar `recontact_days: number | null` ao tipo
-
-**4. Criar hook `useRecontactDeadlines`**
-- Recebe as positions (leads) e os funnel_products configurados
-- Para cada lead, faz match do `product_name` (metadata) com `product_name_contains` do funnel_product
-- Calcula: `deadline = purchased_at + recontact_days`
-- Retorna `Map<leadId, { daysRemaining: number, isOverdue: boolean, deadlineDate: Date }>`
-
-**5. Atualizar `LeadCard.tsx` — Badge de Recontato**
-- Novo badge visual com contagem regressiva:
-  - 🟢 Verde: > 7 dias restantes → "18d"
-  - 🟡 Amarelo: 1-7 dias → "3d ⚠️"
-  - 🔴 Vermelho: vencido → "-5d 🔥"
-- Ícone de timer/alarme para destacar
-
-**6. Atualizar `BaseLeadsList.tsx` — Coluna e Ordenação**
-- Nova coluna "Recontato" na tabela com a contagem regressiva
-- Novo critério de ordenação: por urgência (vencidos primeiro, depois por dias restantes crescente)
-- Filtro rápido: "Mostrar apenas vencidos"
-
-**7. Atualizar `KanbanBoard` — Passar dados de recontato para os cards**
-
-### Lógica de cálculo
-
-```text
-purchased_at = lead.metadata.purchased_at (da planilha importada)
-product_name = lead.metadata.product_name
-recontact_days = funnel_product.recontact_days (onde product_name contém product_name_contains)
-deadline = purchased_at + recontact_days
-days_remaining = deadline - hoje
-```
-
-### Resultado esperado
-
-- Na configuração do funil, o usuário define "1 pote = 25 dias", "3 potes = 75 dias"
-- No Kanban e na lista, cada card mostra um badge colorido com contagem regressiva
-- O time de vendas sabe imediatamente quem precisa ser contactado primeiro
-- Ordenação por urgência permite priorizar os leads vencidos
+### Fluxo do Usuário
+1. Configura produtos com recontact_days na seção "Produtos & Recontato" (já existe)
+2. Na seção "Vincular Produtos" abaixo, vê todos os nomes reais dos leads (ex: "Pote Grátis ArticulaBEM...", "6 potes ArticulaBEM - S...")
+3. Para cada nome, seleciona qual produto configurado ele representa
+4. Salva — o recontato passa a funcionar corretamente
 
