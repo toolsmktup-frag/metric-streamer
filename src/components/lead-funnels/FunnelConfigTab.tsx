@@ -63,7 +63,7 @@ const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSave
     setLocalStages(prev => prev.filter((_, i) => i !== idx));
   };
 
-  const updateStage = (idx: number, field: string, value: string) => {
+  const updateStage = (idx: number, field: string, value: string | boolean) => {
     setLocalStages(prev => prev.map((s, i) => i === idx ? { ...s, [field]: value } : s));
   };
 
