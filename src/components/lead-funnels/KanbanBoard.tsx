@@ -331,7 +331,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
         <DragOverlay>
           {activePosition && (
             <div className="opacity-90 rotate-2 scale-105">
-              <LeadCard position={activePosition} purchaseSummary={getPurchaseSummary(activePosition.lead_id)} />
+              <LeadCard position={activePosition} purchaseSummary={getPurchaseSummary(activePosition.lead_id)} recontactInfo={recontactMap?.get(activePosition.lead_id)} />
             </div>
           )}
         </DragOverlay>
