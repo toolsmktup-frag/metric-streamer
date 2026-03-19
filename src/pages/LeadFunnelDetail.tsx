@@ -204,9 +204,13 @@ const LeadFunnelDetail: React.FC = () => {
       )}
 
       {/* Tabs */}
-      <Tabs defaultValue="kanban">
+      <Tabs defaultValue={isBaseFunnel ? 'leads' : 'kanban'}>
         <TabsList>
-          <TabsTrigger value="kanban">Kanban</TabsTrigger>
+          {isBaseFunnel ? (
+            <TabsTrigger value="leads">Base de Leads</TabsTrigger>
+          ) : (
+            <TabsTrigger value="kanban">Kanban</TabsTrigger>
+          )}
           <TabsTrigger value="visual">Funil</TabsTrigger>
           <TabsTrigger value="flow">Flow Editor</TabsTrigger>
           <TabsTrigger value="metrics">Métricas</TabsTrigger>
@@ -214,15 +218,25 @@ const LeadFunnelDetail: React.FC = () => {
           <TabsTrigger value="webhook">Webhook</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="kanban" className="mt-4">
-          <KanbanBoard
-            stages={stages}
-            positions={positions}
-            onLeadClick={handleLeadClick}
-            onWhatsAppClick={handleWhatsAppClick}
-            funnelId={funnel.id}
-          />
-        </TabsContent>
+        {isBaseFunnel ? (
+          <TabsContent value="leads" className="mt-4">
+            <BaseLeadsList
+              positions={positions}
+              onLeadClick={handleLeadClick}
+              onWhatsAppClick={handleWhatsAppClick}
+            />
+          </TabsContent>
+        ) : (
+          <TabsContent value="kanban" className="mt-4">
+            <KanbanBoard
+              stages={stages}
+              positions={positions}
+              onLeadClick={handleLeadClick}
+              onWhatsAppClick={handleWhatsAppClick}
+              funnelId={funnel.id}
+            />
+          </TabsContent>
+        )}
 
         <TabsContent value="visual" className="mt-4">
           <FunnelVisual stages={stages} leadCounts={leadCounts} />
