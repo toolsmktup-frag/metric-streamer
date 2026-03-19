@@ -283,12 +283,12 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
                       {stageLeads.length}
                     </span>
                   </div>
-                  {(() => {
+                  {!shouldHideValues && (() => {
                     const rev = getStageRevenue(stageLeads);
                     return rev > 0 ? (
-                      <p className={`text-xs font-medium mt-1 ${isRevenue ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}`}>
-                        {isRevenue ? '' : '- '}{formatCurrency(rev)}
-                        {!isRevenue && <span className="text-[10px] ml-1 opacity-70">perdido</span>}
+                      <p className={`text-xs font-medium mt-1 ${isRevenueStage(stage.name) ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}`}>
+                        {isRevenueStage(stage.name) ? '' : '- '}{formatCurrency(rev)}
+                        {!isRevenueStage(stage.name) && <span className="text-[10px] ml-1 opacity-70">perdido</span>}
                       </p>
                     ) : null;
                   })()}
