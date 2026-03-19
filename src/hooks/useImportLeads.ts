@@ -220,6 +220,8 @@ export function useImportLeads() {
                 .from('leads')
                 .update({
                   name: lead.name || undefined,
+                  phone: lead.phone || undefined,
+                  email: lead.email || undefined,
                   utm_source: lead.utm_source || undefined,
                   utm_medium: lead.utm_medium || undefined,
                   utm_campaign: lead.utm_campaign || undefined,
