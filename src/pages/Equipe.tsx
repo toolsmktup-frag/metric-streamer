@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useTeamMembers, ROLES, ROLE_LABELS, STATUS_LABELS } from '@/hooks/useTeamMembers';
 import { useOrgPermissions, MODULE_KEYS, MODULE_LABELS, type ModuleKey } from '@/hooks/useUserPermissions';
 import { useWhatsAppInstances, getInstanceDisplayName } from '@/hooks/useWhatsApp';
