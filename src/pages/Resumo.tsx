@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   DollarSign,
   TrendingUp,
@@ -44,6 +45,17 @@ export default function Resumo() {
   const { data: dailyMetrics = [], isLoading: loadingDaily } = useMetaDailyInsights();
   const { totalSales, byCampaign } = useAllSalesAggregation();
   const { data: allSales = [] } = useAllSales();
+  const { data: totalCustomers = 0, isLoading: loadingCustomers } = useQuery({
+    queryKey: ['unified-customers-count'],
+    queryFn: async () => {
+      const { count, error } = await (supabase as any)
+        .from('unified_customers')
+        .select('*', { count: 'exact', head: true });
+      if (error) throw error;
+      return count ?? 0;
+    },
+    staleTime: 60 * 1000,
+  });
   const syncMeta = useSyncMeta();
   const syncStatus = useSyncPollingRefetch();
 
@@ -59,7 +71,7 @@ export default function Resumo() {
   const prevRoas = prevSpend > 0 ? prevRevenue / prevSpend : 0;
   const prevProfit = prevRevenue - prevSpend;
   const prevCpa = prevSalesCount > 0 ? prevSpend / prevSalesCount : 0;
-  const prevUniqueCustomers = new Set(prevApproved.filter(t => t.customer_email).map(t => t.customer_email!.toLowerCase().trim())).size;
+  
 
   function calcVar(current: number, prev: number): number | undefined {
     if (!compareEnabled || prev === 0) return undefined;
@@ -81,7 +93,6 @@ export default function Resumo() {
   const ticketMedio = approved.length > 0
     ? approved.reduce((s, t) => s + t.revenue, 0) / approved.length
     : 0;
-  const uniqueCustomers = new Set(approved.filter(t => t.customer_email).map(t => t.customer_email!.toLowerCase().trim())).size;
 
   const daily = dailyMetrics.map(d => {
     const dayTx = allSales.filter(t => t.status === 'authorized' && t.purchased_at?.startsWith(d.date));
@@ -307,7 +318,7 @@ export default function Resumo() {
           <KPICard label="Ticket Médio" value={formatCurrency(ticketMedio)} icon={Receipt} tooltip="Valor médio por venda aprovada" />
           <KPICard label="CPA" value={formatCurrency(kpi.cpa)} variation={calcVar(kpi.cpa, prevCpa)} icon={Target} tooltip="Custo por aquisição" />
           <KPICard label="Impressões" value={formatNumber(kpi.impressions)} variation={calcVar(kpi.impressions, prevMetaInsights?.impressions ?? 0)} icon={Eye} tooltip="Número total de impressões" />
-          <KPICard label="Clientes" value={formatNumber(uniqueCustomers)} variation={calcVar(uniqueCustomers, prevUniqueCustomers)} icon={Users} tooltip="Clientes únicos com vendas aprovadas" />
+          <KPICard label="Clientes" value={formatNumber(totalCustomers)} icon={Users} tooltip="Total de clientes únicos na base" />
         </div>
       )}
 
