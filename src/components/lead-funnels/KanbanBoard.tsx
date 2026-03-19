@@ -58,7 +58,7 @@ const DroppableColumn: React.FC<{ id: string; isOver: boolean; children: React.R
   );
 };
 
-const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClick, onWhatsAppClick, funnelId }) => {
+const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClick, onWhatsAppClick, funnelId, recontactMap }) => {
   const [search, setSearch] = useState('');
   const [sortMode, setSortMode] = useState<SortMode>('ltv');
   const [activeId, setActiveId] = useState<string | null>(null);
