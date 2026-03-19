@@ -8,7 +8,7 @@ import { Plus, Trash2, GripVertical, ArrowRight, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 import FunnelProductsConfig from './FunnelProductsConfig';
 import ProductMappingConfig from './ProductMappingConfig';
-import FunnelAccessManager from './FunnelAccessManager';
+
 import type { LeadFunnelProduct } from '@/hooks/useLeadFunnelProducts';
 import type { LeadProductMapping } from '@/hooks/useLeadProductMappings';
 import type { FunnelProduct } from '@/hooks/useFunnels';
