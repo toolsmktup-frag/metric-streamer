@@ -8,6 +8,7 @@ import { useLeadFunnelProducts, useUpsertLeadFunnelProducts } from '@/hooks/useL
 import { useLeadProductMappings, useDistinctLeadProducts, useSaveLeadProductMappings } from '@/hooks/useLeadProductMappings';
 import { useRecontactDeadlines } from '@/hooks/useRecontactDeadlines';
 import { useMoveLeadStage } from '@/hooks/useMoveLeadStage';
+import { useCurrentUserRole } from '@/hooks/useCurrentUserRole';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Upload, Trash2 } from 'lucide-react';
