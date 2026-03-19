@@ -76,8 +76,8 @@ const BaseLeadsList: React.FC<BaseLeadsListProps> = ({ positions, onLeadClick, o
           cmp = (pA?.totalOrders || 0) - (pB?.totalOrders || 0);
           break;
         case 'name': {
-          const nA = ((a.lead.first_name || '') + ' ' + (a.lead.last_name || '')).trim().toLowerCase();
-          const nB = ((b.lead.first_name || '') + ' ' + (b.lead.last_name || '')).trim().toLowerCase();
+          const nA = (a.lead.name || '').toLowerCase();
+          const nB = (b.lead.name || '').toLowerCase();
           cmp = nA.localeCompare(nB);
           break;
         }
