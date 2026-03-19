@@ -40,6 +40,9 @@ export function useWhatsAppMultiChats(instances: WhatsAppInstance[]) {
   const [loading, setLoading] = useState(true);
   const initialLoad = useRef(true);
 
+  // Stabilize dependency on instance list by ID string
+  const instanceIds = JSON.stringify(instances.map(i => i.id));
+
   const fetchAllChats = useCallback(async () => {
     if (instances.length === 0) {
       setChats([]);
@@ -87,7 +90,8 @@ export function useWhatsAppMultiChats(instances: WhatsAppInstance[]) {
       setLoading(false);
       initialLoad.current = false;
     }
-  }, [instances]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [instanceIds]);
 
   useEffect(() => {
     fetchAllChats();

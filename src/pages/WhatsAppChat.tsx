@@ -79,7 +79,7 @@ export default function WhatsAppChat() {
 
   const { chats: singleChats, loading: loadingSingleChats, refetch: refetchSingleChats } = useWhatsAppChats(singleInstanceId);
   const { chats: multiChats, loading: loadingMultiChats, refetch: refetchMultiChats } = useWhatsAppMultiChats(
-    isAllMode ? instances : []
+    isAllMode ? instances : EMPTY_INSTANCES
   );
 
   const activeChats = isAllMode ? multiChats : singleChats;
