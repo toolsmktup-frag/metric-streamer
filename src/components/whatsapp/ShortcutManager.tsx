@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, Search, BookOpen } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, BookOpen, Paperclip, X, Image, Video, FileAudio, FileText, ChevronDown, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -14,6 +14,8 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 
 interface Shortcut {
   id: string;
@@ -21,6 +23,100 @@ interface Shortcut {
   category: string;
   title: string;
   body: string;
+  media_url?: string | null;
+  media_type?: string | null;
+  media_filename?: string | null;
+}
+
+function getMediaIcon(type: string | null | undefined) {
+  if (!type) return null;
+  if (type.startsWith('image')) return <Image className="h-3 w-3 text-blue-500" />;
+  if (type.startsWith('video')) return <Video className="h-3 w-3 text-purple-500" />;
+  if (type.startsWith('audio')) return <FileAudio className="h-3 w-3 text-orange-500" />;
+  return <FileText className="h-3 w-3 text-muted-foreground" />;
+}
+
+function CategoryCombobox({
+  value,
+  onChange,
+  categories,
+  onDeleteCategory,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  categories: string[];
+  onDeleteCategory: (cat: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+
+  const filtered = categories.filter(c =>
+    c.toLowerCase().includes(search.toLowerCase())
+  );
+  const showCreate = search.trim() && !categories.some(c => c.toLowerCase() === search.trim().toLowerCase());
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="flex items-center justify-between w-full h-8 px-3 text-xs rounded-md border border-input bg-background hover:bg-accent/50 transition-colors"
+        >
+          <span className="truncate">{value || 'Selecionar...'}</span>
+          <ChevronDown className="h-3 w-3 opacity-50 shrink-0 ml-1" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="p-0 w-[220px]" align="start" side="bottom">
+        <Command shouldFilter={false}>
+          <CommandInput
+            placeholder="Buscar ou criar..."
+            value={search}
+            onValueChange={setSearch}
+            className="h-8 text-xs"
+          />
+          <CommandList>
+            <CommandEmpty className="py-2 text-xs text-center text-muted-foreground">
+              {search.trim() ? 'Nenhuma encontrada' : 'Sem categorias'}
+            </CommandEmpty>
+            <CommandGroup>
+              {filtered.map(cat => (
+                <CommandItem
+                  key={cat}
+                  value={cat}
+                  onSelect={() => { onChange(cat); setOpen(false); setSearch(''); }}
+                  className="flex items-center justify-between text-xs"
+                >
+                  <div className="flex items-center gap-1.5">
+                    {value === cat && <Check className="h-3 w-3 text-primary" />}
+                    <span>{cat}</span>
+                  </div>
+                  {cat !== 'Geral' && (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); onDeleteCategory(cat); }}
+                      className="h-5 w-5 flex items-center justify-center rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                    >
+                      <Trash2 className="h-2.5 w-2.5" />
+                    </button>
+                  )}
+                </CommandItem>
+              ))}
+              {showCreate && (
+                <CommandItem
+                  value={`create-${search.trim()}`}
+                  onSelect={() => { onChange(search.trim()); setOpen(false); setSearch(''); }}
+                  className="text-xs text-primary"
+                >
+                  <Plus className="h-3 w-3 mr-1.5" />
+                  Criar "{search.trim()}"
+                </CommandItem>
+              )}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 export default function ShortcutManager() {
@@ -31,7 +127,12 @@ export default function ShortcutManager() {
   const [formCategory, setFormCategory] = useState('Geral');
   const [formTitle, setFormTitle] = useState('');
   const [formBody, setFormBody] = useState('');
+  const [formMediaFile, setFormMediaFile] = useState<File | null>(null);
+  const [formMediaUrl, setFormMediaUrl] = useState<string | null>(null);
+  const [formMediaType, setFormMediaType] = useState<string | null>(null);
+  const [formMediaFilename, setFormMediaFilename] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const fetchShortcuts = useCallback(async () => {
     const { data } = await (supabase as any)
@@ -51,6 +152,10 @@ export default function ShortcutManager() {
     setFormCategory('Geral');
     setFormTitle('');
     setFormBody('');
+    setFormMediaFile(null);
+    setFormMediaUrl(null);
+    setFormMediaType(null);
+    setFormMediaFilename(null);
   };
 
   const startEdit = (s: Shortcut) => {
@@ -58,19 +163,69 @@ export default function ShortcutManager() {
     setFormCategory(s.category);
     setFormTitle(s.title);
     setFormBody(s.body);
+    setFormMediaFile(null);
+    setFormMediaUrl(s.media_url || null);
+    setFormMediaType(s.media_type || null);
+    setFormMediaFilename(s.media_filename || null);
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 20 * 1024 * 1024) {
+      toast.error('Arquivo muito grande (máx 20MB)');
+      return;
+    }
+    setFormMediaFile(file);
+    setFormMediaType(file.type);
+    setFormMediaFilename(file.name);
+    setFormMediaUrl(null);
+  };
+
+  const removeMedia = () => {
+    setFormMediaFile(null);
+    setFormMediaUrl(null);
+    setFormMediaType(null);
+    setFormMediaFilename(null);
   };
 
   const handleSave = async () => {
-    if (!formTitle.trim() || !formBody.trim()) {
-      toast.error('Preencha título e corpo');
+    if (!formTitle.trim() || (!formBody.trim() && !formMediaFile && !formMediaUrl)) {
+      toast.error('Preencha título e corpo ou anexe uma mídia');
       return;
     }
     setSaving(true);
     try {
+      let mediaUrl = formMediaUrl;
+      let mediaType = formMediaType;
+      let mediaFilename = formMediaFilename;
+
+      // Upload new file if selected
+      if (formMediaFile) {
+        const ext = formMediaFile.name.split('.').pop();
+        const path = `shortcuts/${Date.now()}.${ext}`;
+        const { error: uploadErr } = await supabase.storage
+          .from('whatsapp-media')
+          .upload(path, formMediaFile);
+        if (uploadErr) throw uploadErr;
+        const { data: urlData } = supabase.storage.from('whatsapp-media').getPublicUrl(path);
+        mediaUrl = urlData.publicUrl;
+        mediaType = formMediaFile.type;
+        mediaFilename = formMediaFile.name;
+      }
+
       if (editing) {
         const { error } = await (supabase as any)
           .from('whatsapp_shortcuts')
-          .update({ category: formCategory, title: formTitle.trim(), body: formBody.trim(), updated_at: new Date().toISOString() })
+          .update({
+            category: formCategory,
+            title: formTitle.trim(),
+            body: formBody.trim(),
+            media_url: mediaUrl,
+            media_type: mediaType,
+            media_filename: mediaFilename,
+            updated_at: new Date().toISOString(),
+          })
           .eq('id', editing.id);
         if (error) throw error;
         toast.success('Atalho atualizado');
@@ -84,6 +239,9 @@ export default function ShortcutManager() {
             category: formCategory,
             title: formTitle.trim(),
             body: formBody.trim(),
+            media_url: mediaUrl,
+            media_type: mediaType,
+            media_filename: mediaFilename,
           });
         if (error) throw error;
         toast.success('Atalho criado');
@@ -110,6 +268,20 @@ export default function ShortcutManager() {
     }
   };
 
+  const handleDeleteCategory = async (cat: string) => {
+    const { error } = await (supabase as any)
+      .from('whatsapp_shortcuts')
+      .update({ category: 'Geral', updated_at: new Date().toISOString() })
+      .eq('category', cat);
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success(`Categoria "${cat}" removida`);
+      if (formCategory === cat) setFormCategory('Geral');
+      fetchShortcuts();
+    }
+  };
+
   const filtered = shortcuts.filter(s => {
     if (!search) return true;
     const q = search.toLowerCase();
@@ -123,6 +295,9 @@ export default function ShortcutManager() {
   });
 
   const categories = [...new Set(shortcuts.map(s => s.category))];
+  if (!categories.includes('Geral')) categories.unshift('Geral');
+
+  const hasMedia = formMediaFile || formMediaUrl;
 
   return (
     <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>
@@ -146,16 +321,12 @@ export default function ShortcutManager() {
           <div className="grid grid-cols-2 gap-2">
             <div>
               <Label className="text-[10px]">Categoria</Label>
-              <Input
+              <CategoryCombobox
                 value={formCategory}
-                onChange={e => setFormCategory(e.target.value)}
-                placeholder="Geral"
-                className="h-8 text-xs"
-                list="shortcut-categories"
+                onChange={setFormCategory}
+                categories={categories}
+                onDeleteCategory={handleDeleteCategory}
               />
-              <datalist id="shortcut-categories">
-                {categories.map(c => <option key={c} value={c} />)}
-              </datalist>
             </div>
             <div>
               <Label className="text-[10px]">Título (comando)</Label>
@@ -176,6 +347,37 @@ export default function ShortcutManager() {
               className="text-xs min-h-[60px]"
             />
           </div>
+
+          {/* Media attach */}
+          <div>
+            <Label className="text-[10px]">Mídia (opcional)</Label>
+            <input
+              ref={fileRef}
+              type="file"
+              className="hidden"
+              onChange={handleFileSelect}
+              accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx"
+            />
+            {hasMedia ? (
+              <div className="flex items-center gap-2 px-2 py-1.5 bg-background border border-border rounded text-xs">
+                {getMediaIcon(formMediaType)}
+                <span className="truncate flex-1">{formMediaFilename || 'Arquivo'}</span>
+                <button onClick={removeMedia} className="text-muted-foreground hover:text-foreground">
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                className="flex items-center gap-1.5 px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted rounded border border-dashed border-border transition-colors w-full"
+              >
+                <Paperclip className="h-3 w-3" />
+                Anexar imagem, vídeo, áudio ou documento
+              </button>
+            )}
+          </div>
+
           <div className="flex gap-2">
             <Button onClick={handleSave} disabled={saving} size="sm" className="text-xs">
               {saving ? 'Salvando...' : editing ? 'Atualizar' : 'Criar'}
@@ -217,8 +419,14 @@ export default function ShortcutManager() {
                     className="flex items-start gap-2 px-2 py-1.5 rounded hover:bg-muted transition-colors group"
                   >
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium text-foreground">/{item.title}</p>
+                      <div className="flex items-center gap-1.5">
+                        {getMediaIcon(item.media_type)}
+                        <p className="text-xs font-medium text-foreground">/{item.title}</p>
+                      </div>
                       <p className="text-[11px] text-muted-foreground truncate">{item.body}</p>
+                      {item.media_filename && (
+                        <p className="text-[10px] text-muted-foreground/70 truncate">📎 {item.media_filename}</p>
+                      )}
                     </div>
                     <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                       <button

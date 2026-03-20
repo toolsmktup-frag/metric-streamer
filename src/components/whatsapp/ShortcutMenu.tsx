@@ -1,19 +1,30 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Zap } from 'lucide-react';
+import { Zap, Image, Video, FileAudio, FileText } from 'lucide-react';
 
 interface Shortcut {
   id: string;
   category: string;
   title: string;
   body: string;
+  media_url?: string | null;
+  media_type?: string | null;
+  media_filename?: string | null;
 }
 
 interface ShortcutMenuProps {
-  query: string; // text after "/"
-  onSelect: (body: string) => void;
+  query: string;
+  onSelect: (body: string, shortcut?: Shortcut) => void;
   onClose: () => void;
+}
+
+function getMediaIcon(type: string | null | undefined) {
+  if (!type) return null;
+  if (type.startsWith('image')) return <Image className="h-3 w-3 text-blue-500" />;
+  if (type.startsWith('video')) return <Video className="h-3 w-3 text-purple-500" />;
+  if (type.startsWith('audio')) return <FileAudio className="h-3 w-3 text-orange-500" />;
+  return <FileText className="h-3 w-3 text-muted-foreground" />;
 }
 
 export default function ShortcutMenu({ query, onSelect, onClose }: ShortcutMenuProps) {
@@ -24,7 +35,7 @@ export default function ShortcutMenu({ query, onSelect, onClose }: ShortcutMenuP
   const fetchShortcuts = useCallback(async () => {
     const { data } = await (supabase as any)
       .from('whatsapp_shortcuts')
-      .select('id, category, title, body')
+      .select('id, category, title, body, media_url, media_type, media_filename')
       .order('category')
       .order('title');
     if (data) setShortcuts(data);
@@ -41,12 +52,10 @@ export default function ShortcutMenu({ query, onSelect, onClose }: ShortcutMenuP
     return s.title.toLowerCase().includes(q) || s.body.toLowerCase().includes(q) || s.category.toLowerCase().includes(q);
   });
 
-  // Reset selection when filter changes
   useEffect(() => {
     setSelectedIndex(0);
   }, [query]);
 
-  // Keyboard navigation
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === 'ArrowDown') {
@@ -57,7 +66,8 @@ export default function ShortcutMenu({ query, onSelect, onClose }: ShortcutMenuP
         setSelectedIndex(i => Math.max(i - 1, 0));
       } else if (e.key === 'Enter' && filtered.length > 0) {
         e.preventDefault();
-        onSelect(filtered[selectedIndex]?.body || '');
+        const s = filtered[selectedIndex];
+        onSelect(s?.body || '', s);
       } else if (e.key === 'Escape') {
         e.preventDefault();
         onClose();
@@ -83,7 +93,6 @@ export default function ShortcutMenu({ query, onSelect, onClose }: ShortcutMenuP
     );
   }
 
-  // Group by category
   const grouped: Record<string, Shortcut[]> = {};
   filtered.forEach(s => {
     if (!grouped[s.category]) grouped[s.category] = [];
@@ -110,15 +119,18 @@ export default function ShortcutMenu({ query, onSelect, onClose }: ShortcutMenuP
                 return (
                   <button
                     key={item.id}
-                    onClick={() => onSelect(item.body)}
+                    onClick={() => onSelect(item.body, item)}
                     className={`w-full text-left px-2 py-1.5 rounded text-xs transition-colors ${
                       idx === selectedIndex ? 'bg-accent text-accent-foreground' : 'hover:bg-muted'
                     }`}
                   >
-                    <span className="font-medium text-foreground">/{item.title}</span>
-                    <span className="text-muted-foreground ml-2 truncate">
-                      {item.body.slice(0, 60)}{item.body.length > 60 ? '...' : ''}
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      {getMediaIcon(item.media_type)}
+                      <span className="font-medium text-foreground">/{item.title}</span>
+                      <span className="text-muted-foreground ml-1 truncate">
+                        {item.body.slice(0, 60)}{item.body.length > 60 ? '...' : ''}
+                      </span>
+                    </div>
                   </button>
                 );
               })}
