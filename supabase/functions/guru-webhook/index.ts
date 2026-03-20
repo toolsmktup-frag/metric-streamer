@@ -149,6 +149,13 @@ Deno.serve(async (req) => {
     };
     const normalizedStatus = statusMap[status] || status;
 
+    // Ignorar status que não representam venda (ex: PIX pendente)
+    const ignoredStatuses = ["pending", "expired", "canceled", "waiting_payment"];
+    if (ignoredStatuses.includes(normalizedStatus)) {
+      console.log(`Ignoring transaction with status "${status}" (normalized: "${normalizedStatus}")`);
+      return jsonResponse({ status: "ignored", reason: `status ${normalizedStatus} is not actionable` });
+    }
+
     // UTMs
     const utmSource   = tracking.utm_source   || null;
     const utmMedium   = tracking.utm_medium   || null;
