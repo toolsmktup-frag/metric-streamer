@@ -97,8 +97,17 @@ export default function ChatInput({
   // The actual instance to send from: reply selector or prop
   const sendInstanceId = replyInstanceId || instanceId;
 
+  const autoResize = useCallback(() => {
+    const el = textareaRef.current;
+    if (el) {
+      el.style.height = 'auto';
+      el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
+    }
+  }, []);
+
   const handleTextChange = (value: string) => {
     setText(value);
+    requestAnimationFrame(autoResize);
 
     if (value.startsWith('/')) {
       setShowShortcuts(true);
