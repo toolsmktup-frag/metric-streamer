@@ -267,7 +267,7 @@ Deno.serve(async (req) => {
       gross_amount:           parseAmount(sale.amount || sale.paid_amount || sale.value || payment.gross || payment.total),
       net_amount:             parseAmount(sale.net_amount || sale.commission || payment.net || null),
       payment_method:         sale.payment_method || payment.method || payload.payment_method || null,
-      installments:           Number(sale.installments || payment.installments?.qty || 1),
+      installments:           Number(payment.installments?.qty || sale.installments_count || 1),
       status:                 normalizedStatus,
       purchased_at:           new Date(purchasedAt).toISOString(),
       utm_source:             utmSource,
