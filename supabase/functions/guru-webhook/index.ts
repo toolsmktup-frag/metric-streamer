@@ -142,6 +142,10 @@ Deno.serve(async (req) => {
       sale_chargeback: "chargeback",
       approved:        "authorized",
       paid:            "authorized",
+      waiting_payment: "pending",
+      pending:         "pending",
+      expired:         "expired",
+      canceled:        "canceled",
     };
     const normalizedStatus = statusMap[status] || status;
 
