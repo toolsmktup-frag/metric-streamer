@@ -125,10 +125,12 @@ Deno.serve(async (req) => {
 
     // Guru envia diferentes formatos — normalizar aqui
     // Estrutura comum: { event, sale, product, customer, tracking }
-    const sale     = payload.sale     || payload.order    || {};
-    const product  = payload.product  || payload.item     || {};
-    const customer = payload.customer || payload.buyer    || {};
-    const tracking = payload.tracking || payload.utm_data || {};
+    const sale     = payload.sale     || payload.order    || payload.payment || {};
+    const product  = payload.product  || payload.item     || payload.items?.[0] || {};
+    const customer = payload.customer || payload.buyer    || payload.contact || {};
+    const tracking = payload.tracking || payload.utm_data || payload.source || {};
+    const payment  = payload.payment  || {};
+    const dates    = payload.dates    || {};
 
     const productName = product.name || product.product_name || payload.product_name || "";
     const status      = payload.event || payload.status || sale.status || "authorized";
@@ -149,7 +151,7 @@ Deno.serve(async (req) => {
     };
     const normalizedStatus = statusMap[status] || status;
 
-    // Ignorar status que não representam venda (ex: PIX pendente)
+    // Ignorar status que não representam venda concluída
     const ignoredStatuses = ["pending", "expired", "canceled", "waiting_payment"];
     if (ignoredStatuses.includes(normalizedStatus)) {
       console.log(`Ignoring transaction with status "${status}" (normalized: "${normalizedStatus}")`);
@@ -162,6 +164,25 @@ Deno.serve(async (req) => {
     const utmCampaign = tracking.utm_campaign || null;
     const utmContent  = tracking.utm_content  || null;
     const utmTerm     = tracking.utm_term     || null;
+
+    function inferProductType() {
+      const explicitType = String(product.type || payload.product_type || "").toLowerCase();
+      const productText = `${productName} ${product.offer?.name || ""}`.toLowerCase();
+
+      if (explicitType.includes("sub") || productText.includes("assinatura") || productText.includes("mensal")) {
+        return "assinatura";
+      }
+
+      if (
+        explicitType === "product" ||
+        !!payload.shipment ||
+        ["pote", "potes", "frasco", "frascos", "cápsula", "capsula", "capsulas", "cápsulas", "kit"].some(term => productText.includes(term))
+      ) {
+        return "fisico";
+      }
+
+      return "digital";
+    }
 
     // Meta Ads IDs — Guru pode enviar diretamente ou via UTM "Name|id"
     function parseUtmPair(value: string | null): { name: string | null; id: string | null } {
@@ -206,37 +227,41 @@ Deno.serve(async (req) => {
       funnelId = data || null;
     }
 
+    const customerPhone = customer.phone || customer.telephone || customer.phone_number
+      ? `${customer.phone_local_code || ""}${customer.phone || customer.telephone || customer.phone_number || ""}`
+      : null;
+
     // Resolve or create unified customer
     let unifiedCustomerId: string | null = null;
-    if (customer.email || customer.cpf || customer.phone) {
+    if (customer.email || customer.cpf || customer.doc || customer.document || customerPhone) {
       const { data } = await supabase.rpc("resolve_or_create_customer", {
         p_org_id: "00000000-0000-0000-0000-000000000001",
-        p_email:  customer.email  || null,
-        p_cpf:    customer.cpf    || customer.document || null,
-        p_phone:  customer.phone  || customer.telephone || null,
-        p_name:   customer.name   || customer.full_name || null,
+        p_email:  customer.email || null,
+        p_cpf:    customer.cpf || customer.doc || customer.document || null,
+        p_phone:  customerPhone,
+        p_name:   customer.name || customer.full_name || null,
       });
       unifiedCustomerId = data || null;
     }
 
-    const transactionId = sale.transaction_id || sale.id || sale.order_id || null;
-    const purchasedAt   = sale.approved_date  || sale.created_at || payload.created_at || new Date().toISOString();
+    const transactionId = sale.transaction_id || payment.marketplace_id || sale.id || payload.id || sale.order_id || null;
+    const purchasedAt   = sale.approved_date || sale.created_at || dates.ordered_at || dates.created_at || payload.created_at || new Date().toISOString();
 
     const record = {
       organization_id:        "00000000-0000-0000-0000-000000000001",
       unified_customer_id:    unifiedCustomerId,
       platform:               "guru",
       platform_transaction_id: String(transactionId || ""),
-      platform_order_id:      String(sale.order_id || sale.id || ""),
+      platform_order_id:      String(sale.order_id || payload.id || sale.id || ""),
       product_name:           productName,
-      product_id:             String(product.id || product.product_id || ""),
-      offer_name:             product.offer_name || product.plan_name || null,
-      offer_id:               String(product.offer_id || product.plan_id || ""),
-      product_type:           "digital",
-      gross_amount:           parseAmount(sale.amount || sale.paid_amount || sale.value),
-      net_amount:             parseAmount(sale.net_amount || sale.commission || null),
-      payment_method:         sale.payment_method || payload.payment_method || null,
-      installments:           Number(sale.installments || 1),
+      product_id:             String(product.id || product.product_id || product.marketplace_id || ""),
+      offer_name:             product.offer?.name || product.offer_name || product.plan_name || null,
+      offer_id:               String(product.offer?.id || product.offer_id || product.plan_id || ""),
+      product_type:           inferProductType(),
+      gross_amount:           parseAmount(sale.amount || sale.paid_amount || sale.value || payment.gross || payment.total),
+      net_amount:             parseAmount(sale.net_amount || sale.commission || payment.net || null),
+      payment_method:         sale.payment_method || payment.method || payload.payment_method || null,
+      installments:           Number(sale.installments || payment.installments?.qty || 1),
       status:                 normalizedStatus,
       purchased_at:           new Date(purchasedAt).toISOString(),
       utm_source:             utmSource,
