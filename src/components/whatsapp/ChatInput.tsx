@@ -126,9 +126,23 @@ export default function ChatInput({
     setEmojiOpen(false);
   };
 
-  const handleShortcutSelect = (body: string) => {
+  const handleShortcutSelect = async (body: string, shortcut?: any) => {
     setText(body);
     setShowShortcuts(false);
+
+    // If shortcut has media, fetch and set as attachment
+    if (shortcut?.media_url) {
+      try {
+        const response = await fetch(shortcut.media_url);
+        const blob = await response.blob();
+        const filename = shortcut.media_filename || 'arquivo';
+        const file = new File([blob], filename, { type: shortcut.media_type || blob.type });
+        setAttachment(file);
+      } catch (err) {
+        console.error('Erro ao carregar mídia do atalho:', err);
+        toast.error('Não foi possível carregar a mídia do atalho');
+      }
+    }
   };
 
   const handleSend = useCallback(async () => {
@@ -239,7 +253,7 @@ export default function ChatInput({
       {showShortcuts && (
         <ShortcutMenu
           query={text.slice(1)}
-          onSelect={handleShortcutSelect}
+          onSelect={(body, shortcut) => handleShortcutSelect(body, shortcut)}
           onClose={() => setShowShortcuts(false)}
         />
       )}
