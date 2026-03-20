@@ -253,7 +253,7 @@ export default function ChatInput({
       {showShortcuts && (
         <ShortcutMenu
           query={text.slice(1)}
-          onSelect={handleShortcutSelect}
+          onSelect={(body, shortcut) => handleShortcutSelect(body, shortcut)}
           onClose={() => setShowShortcuts(false)}
         />
       )}
