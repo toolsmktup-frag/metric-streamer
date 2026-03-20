@@ -1,38 +1,49 @@
 
 
-## Mostrar foto do vendedor no card (em vez do nome)
+## Correção de 2 bugs: página caindo + mensagens duplicadas
 
-### Problema atual
-- O badge com nome do vendedor está aparecendo, mas o email do lead também aparece (bug: o badge do vendedor ficou junto ao email)
-- O usuário quer **foto** do vendedor no avatar compacto (que já existe no canto do card), em vez de um badge de texto com o nome
+### Bug 1: Página cai para Dani (e possivelmente outros vendedores)
 
-### O que será feito
+**Causa**: Na screenshot da Dani, a página cai quando ela clica em opções do menu lateral. Isso provavelmente é causado pela query do `useTeamMembers` falhando quando a coluna `avatar_url` não existe no banco — o erro propaga para componentes que usam esse hook (como `LeadCard` via `LeadAssignSelect`). Qualquer página que renderiza cards de leads quebra.
 
-**1. Adicionar coluna `avatar_url` na tabela `user_profiles`**
-- Nova migration: `ALTER TABLE user_profiles ADD COLUMN avatar_url text;`
-- Permitirá armazenar URL da foto de cada membro da equipe
+**Correção**: Já foi feito o fallback no `useTeamMembers`, mas o SQL da migration ainda não foi rodado. No entanto, o fallback pode não estar funcionando corretamente porque o Supabase pode retornar erro de coluna inexistente de forma diferente. Vamos melhorar o tratamento de erro.
 
-**2. Configurar Storage bucket para avatares**
-- Criar bucket `avatars` no Supabase (via migration)
-- Políticas: usuário autenticado pode fazer upload do próprio avatar; leitura pública
+Além disso, o `useWhatsAppInstances` (dentro de `useWhatsApp.ts`) tem um risco de loop: o efeito de validação de status chama `setInstances` que pode re-triggar o efeito. Vamos estabilizar com um ref.
 
-**3. Atualizar `useTeamMembers` para incluir `avatar_url`**
-- Adicionar `avatar_url` ao select e à interface `TeamMember`
+**Arquivos**:
+- `src/hooks/useTeamMembers.ts` — melhorar fallback de avatar_url
+- `src/hooks/useWhatsApp.ts` — estabilizar validação de status com ref para evitar loops
 
-**4. Upload de foto na página de Equipe**
-- Na listagem de membros (ou no perfil), adicionar botão de upload de foto
-- Faz upload ao bucket `avatars`, salva URL em `user_profiles.avatar_url`
+### Bug 2: Mensagens duplicadas ao enviar
 
-**5. Atualizar `LeadAssignSelect` (avatar compacto no card)**
-- Se o vendedor tem `avatar_url`, mostrar `<AvatarImage>` em vez de iniciais
-- Mantém fallback de iniciais quando não há foto
+**Causa**: Quando o usuário envia uma mensagem:
+1. Msg otimista é adicionada a `optimisticMessages`
+2. O `whatsapp-send` salva no banco
+3. O Realtime INSERT dispara e adiciona a mesma msg ao array `messages`
+4. O `mergedMessages` tenta filtrar duplicatas comparando `body + phone + tempo < 30s`
 
-**6. Remover badge de nome do vendedor do `LeadCard.tsx`**
-- Remover o bloco `{assignedMember && ...}` que mostra o badge com nome
-- O avatar compacto com foto já identifica o vendedor; ao passar o mouse mostra tooltip com nome
+O problema: para mensagens de **mídia** (imagens, áudio), o `body` pode ser vazio em ambos, mas o `message_type` do otimista é `'text'` (pois é setado antes do upload) enquanto o real é `'image'`. A comparação de `body === body` (ambos null/vazio) **deveria** funcionar, mas o check `real.body === opt.body` falha quando um é `null` e outro é `''`.
 
-### Resultado
-- No card: avatar compacto com **foto** do vendedor (ou iniciais como fallback)
-- Sem badge de texto extra com nome/email
-- Cada vendedor pode ter foto configurada na página de equipe
+**Correção**: Melhorar a deduplicação no `mergedMessages`:
+- Normalizar body para comparação (`null` → `''`)
+- Também limpar otimistas antigos (>60s) no callback do send, não só no interval
+
+**Arquivo**: `src/pages/WhatsAppChat.tsx` — melhorar lógica de `mergedMessages`
+
+### Resumo das mudanças
+
+| Arquivo | Mudança |
+|---|---|
+| `src/hooks/useWhatsApp.ts` | Usar ref para evitar loop na validação de status |
+| `src/hooks/useTeamMembers.ts` | Melhorar fallback quando avatar_url não existe |
+| `src/pages/WhatsAppChat.tsx` | Melhorar deduplicação de mensagens otimistas |
+
+### SQL necessário no Supabase
+
+Nenhum novo SQL. Mas o SQL pendente da sessão anterior **precisa ser executado**:
+```sql
+ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS avatar_url text;
+```
+
+Sem isso, o fallback do `useTeamMembers` continuará ativo e pode causar lentidão.
 
