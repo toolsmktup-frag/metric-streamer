@@ -179,10 +179,17 @@ export default function Equipe() {
       });
       if (error) throw error;
       if (data?.url) {
-        // Replace base URL from Supabase site config with current origin
-        const parsed = new URL(data.url);
-        const correctedUrl = `${window.location.origin}${parsed.pathname}${parsed.search}${parsed.hash}`;
-        window.open(correctedUrl, '_blank');
+        // Fix redirect URL - Supabase may use localhost as site URL
+        let finalUrl = data.url;
+        try {
+          const u = new URL(finalUrl);
+          const redirectTo = u.searchParams.get('redirect_to');
+          if (redirectTo && redirectTo.includes('localhost')) {
+            u.searchParams.set('redirect_to', window.location.origin);
+            finalUrl = u.toString();
+          }
+        } catch {}
+        window.open(finalUrl, '_blank');
         toast.success('Nova aba aberta com a sessão do usuário');
       } else {
         toast.error('Não foi possível gerar o link');
