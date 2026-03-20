@@ -90,6 +90,7 @@ export default function ChatInput({
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const typingTimeout = useRef<ReturnType<typeof setTimeout>>();
   const isSending = useRef(false);
 
