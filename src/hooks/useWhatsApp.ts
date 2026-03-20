@@ -119,9 +119,11 @@ export function useWhatsAppInstances() {
     fetchInstances();
   }, [fetchInstances]);
 
-  // Validate real status from UAZAPI on mount
+  // Validate real status from UAZAPI on mount (once)
+  const statusValidated = useRef(false);
   useEffect(() => {
-    if (instances.length === 0) return;
+    if (instances.length === 0 || statusValidated.current) return;
+    statusValidated.current = true;
     const validateStatuses = async () => {
       for (const inst of instances) {
         try {
@@ -129,8 +131,6 @@ export function useWhatsAppInstances() {
             body: { instance_id: inst.id, action: 'status' },
           });
           if (error) {
-            console.error('Status validation error for', inst.id, error);
-            // On failure, mark as unverified/disconnected
             setInstances(prev => prev.map(i =>
               i.id === inst.id ? { ...i, status: 'disconnected' } : i
             ));
@@ -150,7 +150,6 @@ export function useWhatsAppInstances() {
             ));
           }
         } catch {
-          // On network failure, mark as disconnected
           setInstances(prev => prev.map(i =>
             i.id === inst.id ? { ...i, status: 'disconnected' } : i
           ));

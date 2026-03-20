@@ -110,11 +110,12 @@ export default function WhatsAppChat() {
 
   const mergedMessages = useMemo(() => {
     const realIds = new Set(messages.map(m => m.id));
+    const norm = (s: string | null | undefined) => (s || '').trim();
     const filtered = optimisticMessages.filter(opt => {
       if (realIds.has(opt.id)) return false;
       return !messages.some(
         real => real.direction === 'outbound' &&
-          real.body === opt.body &&
+          norm(real.body) === norm(opt.body) &&
           real.phone === opt.phone &&
           Math.abs(new Date(real.created_at).getTime() - new Date(opt.created_at).getTime()) < 30000
       );
