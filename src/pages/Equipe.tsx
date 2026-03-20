@@ -471,6 +471,22 @@ export default function Equipe() {
                             <UserCheck className="h-3.5 w-3.5" />
                           </Button>
                         )}
+                        {isAdmin && member.status === 'active' && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7 text-primary hover:text-primary"
+                            onClick={() => handleImpersonate(member.id)}
+                            title="Acessar como este usuário"
+                            disabled={impersonating === member.id}
+                          >
+                            {impersonating === member.id ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <LogIn className="h-3.5 w-3.5" />
+                            )}
+                          </Button>
+                        )}
                       </div>
                     </td>
                   </tr>
