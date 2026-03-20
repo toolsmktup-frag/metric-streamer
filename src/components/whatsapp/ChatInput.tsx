@@ -241,7 +241,7 @@ export default function ChatInput({
         </div>
       )}
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-end gap-2">
         {/* Instance selector for unified mode */}
         {showInstanceSelector && (
           <InstanceSelector
@@ -282,12 +282,15 @@ export default function ChatInput({
 
         <ShortcutManager />
 
-        <Input
+        <textarea
+          ref={textareaRef}
           value={text}
           onChange={e => handleTextChange(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Digite uma mensagem... (/ para atalhos)"
-          className="flex-1 h-9 text-sm"
+          rows={1}
+          className="flex-1 min-h-[36px] max-h-[120px] resize-none rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          style={{ overflow: 'auto' }}
         />
 
         {hasContent ? (
