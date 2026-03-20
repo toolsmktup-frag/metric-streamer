@@ -179,7 +179,10 @@ export default function Equipe() {
       });
       if (error) throw error;
       if (data?.url) {
-        window.open(data.url, '_blank');
+        // Replace base URL from Supabase site config with current origin
+        const parsed = new URL(data.url);
+        const correctedUrl = `${window.location.origin}${parsed.pathname}${parsed.search}${parsed.hash}`;
+        window.open(correctedUrl, '_blank');
         toast.success('Nova aba aberta com a sessão do usuário');
       } else {
         toast.error('Não foi possível gerar o link');
