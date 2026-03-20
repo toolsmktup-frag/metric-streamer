@@ -1,49 +1,37 @@
 
 
-## Correção de 2 bugs: página caindo + mensagens duplicadas
+## 3 melhorias no chat WhatsApp
 
-### Bug 1: Página cai para Dani (e possivelmente outros vendedores)
+### A) Aumentar campo de mensagem (input expandível)
 
-**Causa**: Na screenshot da Dani, a página cai quando ela clica em opções do menu lateral. Isso provavelmente é causado pela query do `useTeamMembers` falhando quando a coluna `avatar_url` não existe no banco — o erro propaga para componentes que usam esse hook (como `LeadCard` via `LeadAssignSelect`). Qualquer página que renderiza cards de leads quebra.
+O input atual usa `<Input>` (single line). Trocar por `<textarea>` auto-expansível que cresce conforme o texto, até um máximo (ex: 6 linhas), permitindo ver mensagens longas antes de enviar.
 
-**Correção**: Já foi feito o fallback no `useTeamMembers`, mas o SQL da migration ainda não foi rodado. No entanto, o fallback pode não estar funcionando corretamente porque o Supabase pode retornar erro de coluna inexistente de forma diferente. Vamos melhorar o tratamento de erro.
+**Arquivo**: `src/components/whatsapp/ChatInput.tsx`
+- Substituir `<Input>` por `<textarea>` com `rows={1}` e auto-resize via `onInput`
+- Max height de ~120px (aprox 6 linhas)
+- Manter Enter para enviar, Shift+Enter para nova linha
 
-Além disso, o `useWhatsAppInstances` (dentro de `useWhatsApp.ts`) tem um risco de loop: o efeito de validação de status chama `setInstances` que pode re-triggar o efeito. Vamos estabilizar com um ref.
+### B) Imagens aparecerem no chat
 
-**Arquivos**:
-- `src/hooks/useTeamMembers.ts` — melhorar fallback de avatar_url
-- `src/hooks/useWhatsApp.ts` — estabilizar validação de status com ref para evitar loops
+O código já tem `MediaRenderer` com suporte a imagens (linha 227-233 do ChatThread). O problema é que **imagens enviadas por você** (outbound) ou recebidas podem não ter `media_url` preenchido, ou a URL pode precisar de proxy (como os áudios).
 
-### Bug 2: Mensagens duplicadas ao enviar
+**Arquivo**: `src/components/whatsapp/ChatThread.tsx`
+- Na `MediaRenderer`, para imagens com URL encriptada (`.enc` / `mmg.whatsapp.net`), usar o mesmo proxy `whatsapp-media` que já funciona para áudios
+- Criar componente `ProxiedImage` que resolve via edge function quando necessário
+- Para outbound: garantir que o `media_url` salvo pelo `whatsapp-send` é acessível (geralmente já é uma URL pública do storage)
 
-**Causa**: Quando o usuário envia uma mensagem:
-1. Msg otimista é adicionada a `optimisticMessages`
-2. O `whatsapp-send` salva no banco
-3. O Realtime INSERT dispara e adiciona a mesma msg ao array `messages`
-4. O `mergedMessages` tenta filtrar duplicatas comparando `body + phone + tempo < 30s`
+### C) Vídeos aparecerem no chat
 
-O problema: para mensagens de **mídia** (imagens, áudio), o `body` pode ser vazio em ambos, mas o `message_type` do otimista é `'text'` (pois é setado antes do upload) enquanto o real é `'image'`. A comparação de `body === body` (ambos null/vazio) **deveria** funcionar, mas o check `real.body === opt.body` falha quando um é `null` e outro é `''`.
+Mesma lógica das imagens — o código já renderiza `<video>` (linha 236-239), mas URLs encriptadas não carregam no browser.
 
-**Correção**: Melhorar a deduplicação no `mergedMessages`:
-- Normalizar body para comparação (`null` → `''`)
-- Também limpar otimistas antigos (>60s) no callback do send, não só no interval
+**Arquivo**: `src/components/whatsapp/ChatThread.tsx`
+- Criar componente `ProxiedVideo` similar ao `ProxiedImage`
+- Para vídeos grandes, mostrar thumbnail + botão play que resolve via proxy sob demanda
 
-**Arquivo**: `src/pages/WhatsAppChat.tsx` — melhorar lógica de `mergedMessages`
-
-### Resumo das mudanças
+### Resumo de mudanças
 
 | Arquivo | Mudança |
 |---|---|
-| `src/hooks/useWhatsApp.ts` | Usar ref para evitar loop na validação de status |
-| `src/hooks/useTeamMembers.ts` | Melhorar fallback quando avatar_url não existe |
-| `src/pages/WhatsAppChat.tsx` | Melhorar deduplicação de mensagens otimistas |
-
-### SQL necessário no Supabase
-
-Nenhum novo SQL. Mas o SQL pendente da sessão anterior **precisa ser executado**:
-```sql
-ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS avatar_url text;
-```
-
-Sem isso, o fallback do `useTeamMembers` continuará ativo e pode causar lentidão.
+| `src/components/whatsapp/ChatInput.tsx` | Trocar Input por textarea auto-expansível |
+| `src/components/whatsapp/ChatThread.tsx` | Adicionar ProxiedImage e ProxiedVideo para resolver URLs encriptadas via edge function |
 
