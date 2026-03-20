@@ -51,13 +51,15 @@ export function useTeamMembers() {
         result = await (supabase as any)
           .from('user_profiles')
           .select('id, full_name, role, status, created_at, updated_at')
-        .eq('organization_id', orgId)
-        .order('created_at', { ascending: true });
+          .eq('organization_id', orgId)
+          .order('created_at', { ascending: true });
+      }
 
-      if (error) throw error;
+      if (result.error) throw result.error;
 
-      return (data || []).map((p: any) => ({
+      return (result.data || []).map((p: any) => ({
         ...p,
+        avatar_url: p.avatar_url || null,
         email: '',
       }));
     },
