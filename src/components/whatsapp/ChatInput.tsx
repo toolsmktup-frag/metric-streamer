@@ -168,6 +168,9 @@ export default function ChatInput({
     setText('');
     setAttachment(null);
     setShowShortcuts(false);
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+    }
 
     try {
       if (currentAttachment) {
