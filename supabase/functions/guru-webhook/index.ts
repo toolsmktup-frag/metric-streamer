@@ -133,7 +133,8 @@ Deno.serve(async (req) => {
     const dates    = payload.dates    || {};
 
     const productName = product.name || product.product_name || payload.product_name || "";
-    const status      = payload.event || payload.status || sale.status || "authorized";
+    const rawStatus   = payload.event || payload.status || sale.status || "authorized";
+    const status      = String(rawStatus).toLowerCase();
 
     // Normalizar status Guru → padrão interno
     const statusMap: Record<string, string> = {
@@ -146,16 +147,21 @@ Deno.serve(async (req) => {
       paid:            "authorized",
       waiting_payment: "pending",
       pending:         "pending",
-      expired:         "expired",
+      expired:         "canceled",
       canceled:        "canceled",
     };
-    const normalizedStatus = statusMap[status] || status;
+    const normalizedStatus = statusMap[status];
 
-    // Ignorar status que não representam venda concluída
-    const ignoredStatuses = ["pending", "expired", "canceled", "waiting_payment"];
-    if (ignoredStatuses.includes(normalizedStatus)) {
-      console.log(`Ignoring transaction with status "${status}" (normalized: "${normalizedStatus}")`);
-      return jsonResponse({ status: "ignored", reason: `status ${normalizedStatus} is not actionable` });
+    // PIX pendente não deve gerar erro nem salvar, para a Guru não retentar à toa
+    if (normalizedStatus === "pending") {
+      console.log(`Skipping pending Guru transaction with status "${status}"`);
+      return jsonResponse({ success: true, message: "pending order, skipping" }, 200);
+    }
+
+    // Status desconhecido nunca deve quebrar o webhook
+    if (!normalizedStatus) {
+      console.log(`Skipping unknown Guru transaction status "${status}"`);
+      return jsonResponse({ success: true, message: `unknown status ${status}, skipping` }, 200);
     }
 
     // UTMs
