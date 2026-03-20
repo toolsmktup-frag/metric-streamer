@@ -1,35 +1,60 @@
 
 
-## Impersonar Usuário (Acessar como vendedor)
+## Melhorias nos Atalhos: Mídia + Gestão de Categorias
 
-### O que será construído
+### O que será feito
 
-Na página **Equipe**, cada membro terá um botão **"Acessar como"** (visível apenas para admins). Ao clicar, o sistema gera um magic link via Edge Function e abre numa **nova aba**, permitindo ao admin navegar como aquele usuário sem precisar da senha. A sessão original do admin permanece intacta na aba atual.
+**1. Suporte a mídia nos atalhos (áudio, vídeo, documento)**
 
-### Como funciona
+Cada atalho poderá ter um arquivo anexo opcional. Ao usar o atalho, o sistema envia o texto + mídia automaticamente.
 
-1. Admin clica "Acessar como" no membro desejado
-2. Frontend chama Edge Function `impersonate-user` com o `user_id`
-3. Edge Function valida que o caller é admin, então usa `supabase.auth.admin.generateLink({ type: 'magiclink', email })` para gerar um link de login
-4. Frontend abre o link numa nova aba → usuário é logado automaticamente
-5. Admin testa na nova aba, fecha quando terminar
+**Banco de dados** (SQL para executar no Supabase):
+```sql
+ALTER TABLE public.whatsapp_shortcuts
+  ADD COLUMN IF NOT EXISTS media_url text,
+  ADD COLUMN IF NOT EXISTS media_type text,
+  ADD COLUMN IF NOT EXISTS media_filename text;
+```
 
-### Arquivos
+**ShortcutManager.tsx**:
+- Adicionar botão de upload de arquivo no formulário (aceita imagem, vídeo, áudio, PDF/doc)
+- Upload vai para o bucket `whatsapp-media` (já existe)
+- Salva `media_url`, `media_type` e `media_filename` junto com o atalho
+- Na lista, mostrar ícone indicando o tipo de mídia (🖼️ 🎥 🎵 📄)
 
-**Novo: `supabase/functions/impersonate-user/index.ts`**
-- Valida que o caller é admin (via user_profiles.role)
-- Busca o email do user_id alvo
-- Gera magic link com `auth.admin.generateLink`
-- Retorna a URL de login
+**ShortcutMenu.tsx** (popup do `/`):
+- Mostrar ícone de mídia ao lado do título quando o atalho tem anexo
 
-**Editar: `src/pages/Equipe.tsx`**
-- Adicionar botão "Acessar como" (ícone `LogIn`) na linha de cada membro
-- Visível apenas para admins
-- Ao clicar: chama a edge function, abre o link retornado em `window.open(url, '_blank')`
+**ChatInput.tsx**:
+- Quando um atalho com mídia é selecionado, além de preencher o texto, setar o `attachment` automaticamente (baixar o arquivo da URL e criar um File object, ou passar a URL diretamente para o `sendWhatsAppMessage`)
 
-### Segurança
+**2. Gestão de categorias (select + criar nova + excluir)**
 
-- Apenas usuários com `role = 'admin'` podem usar
-- A verificação é feita no servidor (Edge Function), não no client
-- O magic link é single-use e expira em minutos
+Trocar o campo de texto livre por um **Select/Combobox** que:
+- Lista categorias existentes (extraídas dos atalhos já cadastrados)
+- Permite digitar para criar uma nova categoria na hora
+- Botão de "X" ao lado de cada categoria no select para excluí-la (o que remove a categoria de todos os atalhos que a usam, movendo-os para "Geral")
+
+**Implementação no ShortcutManager.tsx**:
+- Substituir o `<Input>` + `<datalist>` por um `Popover`/`Command` combo (padrão shadcn Combobox)
+- Input de texto filtra categorias existentes; se digitar algo novo, aparece opção "Criar: [nome]"
+- Cada categoria no dropdown tem um botão de lixeira para excluir
+- Ao excluir uma categoria, faz `UPDATE whatsapp_shortcuts SET category = 'Geral' WHERE category = [excluída]`
+
+### Arquivos editados
+
+| Arquivo | Mudança |
+|---|---|
+| `src/components/whatsapp/ShortcutManager.tsx` | Upload de mídia no form + combobox de categorias |
+| `src/components/whatsapp/ShortcutMenu.tsx` | Mostrar ícone de mídia nos atalhos |
+| `src/components/whatsapp/ChatInput.tsx` | Ao selecionar atalho com mídia, enviar mídia junto |
+
+### SQL para executar
+
+```sql
+ALTER TABLE public.whatsapp_shortcuts
+  ADD COLUMN IF NOT EXISTS media_url text,
+  ADD COLUMN IF NOT EXISTS media_type text,
+  ADD COLUMN IF NOT EXISTS media_filename text;
+```
 
