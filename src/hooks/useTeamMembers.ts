@@ -39,16 +39,27 @@ export function useTeamMembers() {
       const { data: orgId } = await (supabase as any).rpc('get_user_org_id');
       if (!orgId) throw new Error('Organização não encontrada');
 
-      const { data, error } = await (supabase as any)
+      // Try with avatar_url first, fallback without it if column doesn't exist yet
+      let result = await (supabase as any)
         .from('user_profiles')
         .select('id, full_name, avatar_url, role, status, created_at, updated_at')
         .eq('organization_id', orgId)
         .order('created_at', { ascending: true });
 
-      if (error) throw error;
+      if (result.error) {
+        // Fallback: avatar_url column may not exist yet
+        result = await (supabase as any)
+          .from('user_profiles')
+          .select('id, full_name, role, status, created_at, updated_at')
+          .eq('organization_id', orgId)
+          .order('created_at', { ascending: true });
+      }
 
-      return (data || []).map((p: any) => ({
+      if (result.error) throw result.error;
+
+      return (result.data || []).map((p: any) => ({
         ...p,
+        avatar_url: p.avatar_url || null,
         email: '',
       }));
     },
