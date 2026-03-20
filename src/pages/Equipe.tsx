@@ -191,6 +191,7 @@ export default function Equipe() {
     }
   }
 
+  async function handleAvatarUpload(userId: string, e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploadingAvatar(userId);
