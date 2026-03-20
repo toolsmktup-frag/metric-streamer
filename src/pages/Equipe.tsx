@@ -169,7 +169,28 @@ export default function Equipe() {
   }
 
 
-  async function handleAvatarUpload(userId: string, e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleImpersonate(userId: string) {
+    setImpersonating(userId);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) { toast.error('Sessão expirada'); return; }
+      const { data, error } = await supabase.functions.invoke('impersonate-user', {
+        body: { user_id: userId },
+      });
+      if (error) throw error;
+      if (data?.url) {
+        window.open(data.url, '_blank');
+        toast.success('Nova aba aberta com a sessão do usuário');
+      } else {
+        toast.error('Não foi possível gerar o link');
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao acessar como usuário');
+    } finally {
+      setImpersonating(null);
+    }
+  }
+
     const file = e.target.files?.[0];
     if (!file) return;
     setUploadingAvatar(userId);
