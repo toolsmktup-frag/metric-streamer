@@ -206,6 +206,86 @@ function detectRealMessageType(message: WhatsAppMessage): string {
   return 'text';
 }
 
+function ProxiedImage({ message, fallbackUrl, caption }: { message: WhatsAppMessage; fallbackUrl: string; caption?: string | null }) {
+  const [resolvedUrl, setResolvedUrl] = useState<string | null>(() => needsProxyDownload(fallbackUrl) ? null : fallbackUrl);
+  const [loading, setLoading] = useState(() => needsProxyDownload(fallbackUrl));
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    if (!needsProxyDownload(fallbackUrl)) {
+      setResolvedUrl(fallbackUrl);
+      setLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    supabase.functions.invoke('whatsapp-media', {
+      body: { message_id: message.id },
+    }).then(({ data, error: err }) => {
+      if (cancelled) return;
+      if (err) { setError(true); setLoading(false); return; }
+      const url = data?.dataUrl || data?.fileURL || null;
+      if (url) setResolvedUrl(url);
+      else setError(true);
+      setLoading(false);
+    }).catch(() => { if (!cancelled) { setError(true); setLoading(false); } });
+    return () => { cancelled = true; };
+  }, [message.id, fallbackUrl]);
+
+  if (error) return <div className="text-xs text-muted-foreground italic">Imagem não disponível</div>;
+
+  return (
+    <div className="max-w-[240px]">
+      {loading ? (
+        <div className="w-[200px] h-[150px] rounded-lg bg-muted animate-pulse flex items-center justify-center text-xs text-muted-foreground">Carregando...</div>
+      ) : (
+        <img src={resolvedUrl!} alt="Imagem WhatsApp" className="rounded-lg w-full cursor-pointer" loading="lazy" onClick={() => window.open(resolvedUrl!, '_blank')} />
+      )}
+      {caption && <p className="text-sm mt-1">{caption}</p>}
+    </div>
+  );
+}
+
+function ProxiedVideo({ message, fallbackUrl, caption }: { message: WhatsAppMessage; fallbackUrl: string; caption?: string | null }) {
+  const [resolvedUrl, setResolvedUrl] = useState<string | null>(() => needsProxyDownload(fallbackUrl) ? null : fallbackUrl);
+  const [loading, setLoading] = useState(() => needsProxyDownload(fallbackUrl));
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    if (!needsProxyDownload(fallbackUrl)) {
+      setResolvedUrl(fallbackUrl);
+      setLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    supabase.functions.invoke('whatsapp-media', {
+      body: { message_id: message.id },
+    }).then(({ data, error: err }) => {
+      if (cancelled) return;
+      if (err) { setError(true); setLoading(false); return; }
+      const url = data?.dataUrl || data?.fileURL || null;
+      if (url) setResolvedUrl(url);
+      else setError(true);
+      setLoading(false);
+    }).catch(() => { if (!cancelled) { setError(true); setLoading(false); } });
+    return () => { cancelled = true; };
+  }, [message.id, fallbackUrl]);
+
+  if (error) return <div className="text-xs text-muted-foreground italic">Vídeo não disponível</div>;
+
+  return (
+    <div className="max-w-[280px]">
+      {loading ? (
+        <div className="w-[240px] h-[180px] rounded-lg bg-muted animate-pulse flex items-center justify-center text-xs text-muted-foreground">Carregando...</div>
+      ) : (
+        <video src={resolvedUrl!} controls className="rounded-lg w-full" preload="metadata" />
+      )}
+      {caption && <p className="text-sm mt-1">{caption}</p>}
+    </div>
+  );
+}
+
 function MediaRenderer({ message }: { message: WhatsAppMessage }) {
   const message_type = detectRealMessageType(message);
   const { body } = message;
@@ -220,24 +300,20 @@ function MediaRenderer({ message }: { message: WhatsAppMessage }) {
         </div>
       );
     }
+    if (message_type === 'image') {
+      return <div className="text-xs text-muted-foreground italic">Imagem não disponível</div>;
+    }
+    if (message_type === 'video') {
+      return <div className="text-xs text-muted-foreground italic">Vídeo não disponível</div>;
+    }
     return null;
   }
 
   switch (message_type) {
     case 'image':
-      return (
-        <div className="max-w-[240px]">
-          <img src={media_url} alt="Imagem recebida no WhatsApp" className="rounded-lg w-full cursor-pointer" loading="lazy" />
-          {body && <p className="text-sm mt-1">{body}</p>}
-        </div>
-      );
+      return <ProxiedImage message={message} fallbackUrl={media_url} caption={body} />;
     case 'video':
-      return (
-        <div className="max-w-[280px]">
-          <video src={media_url} controls className="rounded-lg w-full" preload="metadata" />
-          {body && <p className="text-sm mt-1">{body}</p>}
-        </div>
-      );
+      return <ProxiedVideo message={message} fallbackUrl={media_url} caption={body} />;
     case 'audio':
     case 'ptt':
       return <AudioPlayer message={message} src={media_url} isOutbound={message.direction === 'outbound'} />;

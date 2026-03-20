@@ -1,6 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
 import { Send, Paperclip, X, Smile, ChevronDown } from 'lucide-react';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { sendWhatsAppMessage, sendPresence } from '@/hooks/useWhatsApp';
@@ -91,14 +90,24 @@ export default function ChatInput({
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const typingTimeout = useRef<ReturnType<typeof setTimeout>>();
   const isSending = useRef(false);
 
   // The actual instance to send from: reply selector or prop
   const sendInstanceId = replyInstanceId || instanceId;
 
+  const autoResize = useCallback(() => {
+    const el = textareaRef.current;
+    if (el) {
+      el.style.height = 'auto';
+      el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
+    }
+  }, []);
+
   const handleTextChange = (value: string) => {
     setText(value);
+    requestAnimationFrame(autoResize);
 
     if (value.startsWith('/')) {
       setShowShortcuts(true);
@@ -159,6 +168,9 @@ export default function ChatInput({
     setText('');
     setAttachment(null);
     setShowShortcuts(false);
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+    }
 
     try {
       if (currentAttachment) {
@@ -242,7 +254,7 @@ export default function ChatInput({
         </div>
       )}
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-end gap-2">
         {/* Instance selector for unified mode */}
         {showInstanceSelector && (
           <InstanceSelector
@@ -283,12 +295,15 @@ export default function ChatInput({
 
         <ShortcutManager />
 
-        <Input
+        <textarea
+          ref={textareaRef}
           value={text}
           onChange={e => handleTextChange(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Digite uma mensagem... (/ para atalhos)"
-          className="flex-1 h-9 text-sm"
+          rows={1}
+          className="flex-1 min-h-[36px] max-h-[120px] resize-none rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          style={{ overflow: 'auto' }}
         />
 
         {hasContent ? (
