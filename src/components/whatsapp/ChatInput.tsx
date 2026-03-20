@@ -1,6 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
 import { Send, Paperclip, X, Smile, ChevronDown } from 'lucide-react';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { sendWhatsAppMessage, sendPresence } from '@/hooks/useWhatsApp';
