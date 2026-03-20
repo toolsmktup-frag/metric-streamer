@@ -53,6 +53,9 @@ export default function Equipe() {
   const [instanceAccess, setInstanceAccess] = useState<Record<string, Set<string>>>({});
   const [savingAccess, setSavingAccess] = useState<string | null>(null);
   const [savingFunnelAccess, setSavingFunnelAccess] = useState<string | null>(null);
+  const { data: currentRole } = useCurrentUserRole();
+  const isAdmin = currentRole === 'admin';
+  const [impersonating, setImpersonating] = useState<string | null>(null);
   const [uploadingAvatar, setUploadingAvatar] = useState<string | null>(null);
 
   const pendingMembers = members.filter(m => m.status === 'pending');
