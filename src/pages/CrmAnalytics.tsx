@@ -60,11 +60,13 @@ export default function CrmAnalytics() {
     queryFn: async () => {
       const { data: orgId } = await (supabase as any).rpc('get_user_org_id');
       if (!orgId) return [];
-      const { data } = await supabase
+      const { data, error } = await (supabase as any)
         .from('user_profiles')
-        .select('id, full_name, role')
+        .select('id, full_name, role, status')
         .eq('organization_id', orgId)
-        .in('role', ['vendedora', 'vendedor', 'Vendedor', 'Vendedora']);
+        .eq('status', 'active')
+        .in('role', ['vendedora', 'vendedor', 'Vendedor', 'Vendedora', 'suporte', 'Suporte']);
+      console.log('CRM sellers query result:', { data, error });
       return data || [];
     },
   });
