@@ -81,6 +81,7 @@ const App = () => (
           <Route path="/importar" element={<Protected><Importar /></Protected>} />
           <Route path="/escada-valor" element={<Protected><EscadaValor /></Protected>} />
           <Route path="/ecommerce" element={<Protected><Ecommerce /></Protected>} />
+          <Route path="/crm-analytics" element={<Protected><CrmAnalytics /></Protected>} />
           {/* Rotas de funis */}
           <Route path="/funis/configurar" element={<Protected><FunisConfigurar /></Protected>} />
           <Route path="/funis/:id/resumo" element={<Protected><FunilResumo /></Protected>} />
