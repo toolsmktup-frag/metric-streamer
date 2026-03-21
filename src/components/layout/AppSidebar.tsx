@@ -23,6 +23,7 @@ import {
   Settings,
   Plus,
   Pencil,
+  BarChart3,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useFunnels } from '@/hooks/useFunnels';
