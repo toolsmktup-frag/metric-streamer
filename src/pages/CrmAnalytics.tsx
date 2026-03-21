@@ -64,7 +64,7 @@ export default function CrmAnalytics() {
         .from('user_profiles')
         .select('id, full_name, role')
         .eq('organization_id', orgId)
-        .eq('role', 'vendedora');
+        .in('role', ['vendedora', 'vendedor', 'Vendedor', 'Vendedora']);
       return data || [];
     },
   });
