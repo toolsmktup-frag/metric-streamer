@@ -64,10 +64,10 @@ export default function CrmAnalytics() {
         .from('user_profiles')
         .select('id, full_name, role, status')
         .eq('organization_id', orgId)
-        .eq('status', 'active')
-        .in('role', ['vendedora', 'vendedor', 'Vendedor', 'Vendedora', 'suporte', 'Suporte']);
-      console.log('CRM sellers query result:', { data, error });
-      return data || [];
+        .eq('status', 'active');
+      if (error) { console.error('CRM sellers error:', error); return []; }
+      const sellerRoles = ['vendedor', 'vendedora', 'suporte'];
+      return (data || []).filter((u: any) => sellerRoles.includes((u.role || '').toLowerCase()));
     },
   });
 
