@@ -21,6 +21,21 @@ function parseAmount(value: unknown): number {
   return n > 1000 && Number.isInteger(n) ? n / 100 : n;
 }
 
+function normalizePaymentMethod(value: unknown): string | null {
+  const method = String(value || "").trim().toLowerCase();
+  if (!method) return null;
+  if (method.includes("pix")) return "pix";
+  if (method.includes("boleto") || method.includes("bank_slip") || method.includes("billet")) return "bank_slip";
+  if (method.includes("card") || method.includes("cart")) return "credit_card";
+  return method;
+}
+
+function clampInstallments(value: unknown): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 1) return 1;
+  return Math.round(parsed);
+}
+
 /** Sync a sale as a lead into the "BASE DE LEADS" funnel */
 async function syncLeadFromSale(
   supabase: ReturnType<typeof createClient>,
@@ -253,6 +268,13 @@ Deno.serve(async (req) => {
     const transactionId = sale.transaction_id || payment.marketplace_id || sale.id || payload.id || sale.order_id || null;
     const purchasedAt   = sale.approved_date || sale.created_at || dates.ordered_at || dates.created_at || payload.created_at || new Date().toISOString();
 
+    const totalAmount = parseAmount(payment.total ?? sale.total_amount ?? sale.total);
+    const grossAmount = parseAmount(
+      payment.total ?? sale.amount ?? sale.paid_amount ?? sale.value ?? payment.gross ?? sale.total_amount
+    );
+    const parsedNetAmount = parseAmount(sale.net_amount ?? sale.commission ?? payment.net ?? null);
+    const netAmount = parsedNetAmount > grossAmount ? grossAmount : parsedNetAmount;
+
     const record = {
       organization_id:        "00000000-0000-0000-0000-000000000001",
       unified_customer_id:    unifiedCustomerId,
@@ -264,10 +286,10 @@ Deno.serve(async (req) => {
       offer_name:             product.offer?.name || product.offer_name || product.plan_name || null,
       offer_id:               String(product.offer?.id || product.offer_id || product.plan_id || ""),
       product_type:           inferProductType(),
-      gross_amount:           parseAmount(sale.amount || sale.paid_amount || sale.value || payment.gross || payment.total),
-      net_amount:             parseAmount(sale.net_amount || sale.commission || payment.net || null),
-      payment_method:         sale.payment_method || payment.method || payload.payment_method || null,
-      installments:           Number(payment.installments?.qty || sale.installments_count || 1),
+      gross_amount:           grossAmount || totalAmount || 0,
+      net_amount:             netAmount || null,
+      payment_method:         normalizePaymentMethod(sale.payment_method || payment.method || payload.payment_method),
+      installments:           clampInstallments(payment.installments?.qty || sale.installments_count || 1),
       status:                 normalizedStatus,
       purchased_at:           new Date(purchasedAt).toISOString(),
       utm_source:             utmSource,
@@ -288,7 +310,14 @@ Deno.serve(async (req) => {
       .upsert(record, { onConflict: "platform,platform_transaction_id" });
 
     if (error) {
-      console.error("DB error:", error);
+      console.error("DB error:", error, {
+        transactionId,
+        status: normalizedStatus,
+        grossAmount: record.gross_amount,
+        netAmount: record.net_amount,
+        paymentMethod: record.payment_method,
+        installments: record.installments,
+      });
       return jsonResponse({ error: "Failed to save transaction", detail: error.message }, 500);
     }
 
