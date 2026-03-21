@@ -23,6 +23,7 @@ import {
   Settings,
   Plus,
   Pencil,
+  BarChart3,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useFunnels } from '@/hooks/useFunnels';
@@ -42,6 +43,7 @@ const AD_ANALYSIS_ITEMS = [
 
 const INTELLIGENCE_ITEMS = [
   { path: '/escada-valor', label: 'Inteligência de Cliente', icon: TrendingUp },
+  { path: '/crm-analytics', label: 'Análise de CRM', icon: BarChart3 },
   { path: '/ecommerce',    label: 'Ecommerce',               icon: ShoppingBag },
 ];
 

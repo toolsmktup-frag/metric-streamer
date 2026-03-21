@@ -21,6 +21,7 @@ import AgenteIA from "./pages/AgenteIA";
 import ImportCSV from "./pages/ImportCSV";
 import Importar from "./pages/Importar";
 import EscadaValor from "./pages/EscadaValor";
+import CrmAnalytics from "./pages/CrmAnalytics";
 import PermissionRoute from "./components/PermissionRoute";
 import FunilResumo from "./pages/FunilResumo";
 import FunilKpi from "./pages/FunilKpi";
@@ -80,6 +81,7 @@ const App = () => (
           <Route path="/importar" element={<Protected><Importar /></Protected>} />
           <Route path="/escada-valor" element={<Protected><EscadaValor /></Protected>} />
           <Route path="/ecommerce" element={<Protected><Ecommerce /></Protected>} />
+          <Route path="/crm-analytics" element={<Protected><CrmAnalytics /></Protected>} />
           {/* Rotas de funis */}
           <Route path="/funis/configurar" element={<Protected><FunisConfigurar /></Protected>} />
           <Route path="/funis/:id/resumo" element={<Protected><FunilResumo /></Protected>} />
