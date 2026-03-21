@@ -75,8 +75,8 @@ export default function CrmAnalytics() {
     queryFn: async () => {
       const { data: orgId } = await (supabase as any).rpc('get_user_org_id');
       if (!orgId) return [];
-      const { data } = await supabase
-        .from('leads' as any)
+      const { data } = await (supabase as any)
+        .from('leads')
         .select('id, assigned_to, created_at')
         .eq('organization_id', orgId)
         .gte('created_at', dateFrom)
