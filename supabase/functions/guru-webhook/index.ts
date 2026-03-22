@@ -179,12 +179,21 @@ Deno.serve(async (req) => {
       return jsonResponse({ success: true, message: `unknown status ${status}, skipping` }, 200);
     }
 
-    // UTMs
-    const utmSource   = tracking.utm_source   || null;
-    const utmMedium   = tracking.utm_medium   || null;
-    const utmCampaign = tracking.utm_campaign || null;
-    const utmContent  = tracking.utm_content  || null;
-    const utmTerm     = tracking.utm_term     || null;
+    // UTMs — fallback: parse checkout_source que a Guru codifica como
+    // "{utm_source}hQwK21wXxR{utm_campaign}hQwK21wXxR{utm_medium}hQwK21wXxR{utm_content}hQwK21wXxR{utm_term}"
+    const GURU_SEP = "hQwK21wXxR";
+    let csUtms: string[] = [];
+    const checkoutSource = tracking.checkout_source || payload.infrastructure?.checkout_source || "";
+    if (checkoutSource && checkoutSource.includes(GURU_SEP)) {
+      csUtms = checkoutSource.split(GURU_SEP);
+      console.log("Parsed checkout_source UTMs:", csUtms);
+    }
+
+    const utmSource   = tracking.utm_source   || (csUtms[0] || null) || null;
+    const utmCampaign = tracking.utm_campaign || (csUtms[1] || null) || null;
+    const utmMedium   = tracking.utm_medium   || (csUtms[2] || null) || null;
+    const utmContent  = tracking.utm_content  || (csUtms[3] || null) || null;
+    const utmTerm     = tracking.utm_term     || (csUtms[4] || null) || null;
 
     function inferProductType() {
       const explicitType = String(product.type || payload.product_type || "").toLowerCase();
