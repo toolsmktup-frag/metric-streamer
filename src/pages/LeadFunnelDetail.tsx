@@ -205,7 +205,7 @@ const LeadFunnelDetail: React.FC = () => {
     });
   }, [id, saveFunnelEdges]);
 
-  if (isLoading || loadingAccess) {
+  if ((isLoading || loadingAccess) && !funnel) {
     return <div className="p-6 text-muted-foreground">Carregando funil...</div>;
   }
 

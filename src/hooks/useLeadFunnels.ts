@@ -38,13 +38,21 @@ export function useLeadFunnel(id: string | null) {
     queryKey: ['lead-funnel', id],
     queryFn: async () => {
       if (!id) return null;
-      const { data, error } = await (supabase as any)
-        .from('lead_funnels')
-        .select('*, lead_funnel_stages(*), stage_transition_rules(*)')
-        .eq('id', id)
-        .single();
-      if (error) throw error;
-      return data as LeadFunnel;
+      try {
+        const { data, error } = await (supabase as any)
+          .from('lead_funnels')
+          .select('*, lead_funnel_stages(*), stage_transition_rules(*)')
+          .eq('id', id)
+          .single();
+        if (error) {
+          console.warn('[useLeadFunnel] query error:', error.message);
+          return null;
+        }
+        return data as LeadFunnel;
+      } catch (err) {
+        console.warn('[useLeadFunnel] unexpected error:', err);
+        return null;
+      }
     },
     enabled: !!id,
   });
