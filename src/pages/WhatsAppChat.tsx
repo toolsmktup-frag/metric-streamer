@@ -29,7 +29,7 @@ export default function WhatsAppChat() {
   const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null);
   const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
   const [showPanel, setShowPanel] = useState(true);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  
   const [hubOpen, setHubOpen] = useState(false);
   const [optimisticMessages, setOptimisticMessages] = useState<WhatsAppMessage[]>([]);
   const [replyInstanceId, setReplyInstanceId] = useState<string | null>(null);
