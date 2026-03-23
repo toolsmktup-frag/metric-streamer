@@ -46,9 +46,13 @@ export default function WhatsAppChat() {
     }
   }, [instances, selectedInstanceId]);
 
-  // Auto-open chat from query param ?phone=
+  // Auto-open chat from query param ?phone= and capture ?from= for back navigation
   useEffect(() => {
     const phoneParam = searchParams.get('phone');
+    const fromParam = searchParams.get('from');
+    if (fromParam) {
+      backRoute.current = fromParam;
+    }
     if (phoneParam && !loadingInstances && instances.length > 0) {
       const cleanPhone = phoneParam.replace(/\D/g, '');
       setSelectedPhone(cleanPhone);
