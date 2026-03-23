@@ -1,7 +1,7 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import type { WhatsAppMessage } from '@/hooks/useWhatsApp';
-import { MessageCircle, Settings, Plus, Wifi, WifiOff } from 'lucide-react';
+import { MessageCircle, Settings, Plus, Wifi, WifiOff, ArrowLeft } from 'lucide-react';
 import { useWhatsAppInstances, useWhatsAppChats, useWhatsAppMessages, getInstanceDisplayName } from '@/hooks/useWhatsApp';
 import { useWhatsAppMultiChats } from '@/hooks/useWhatsAppMultiChat';
 import InstanceHub from '@/components/whatsapp/InstanceHub';
@@ -24,11 +24,13 @@ import { toast } from 'sonner';
 const EMPTY_INSTANCES: import('@/hooks/useWhatsApp').WhatsAppInstance[] = [];
 
 export default function WhatsAppChat() {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { instances, loading: loadingInstances, refetch: refetchInstances } = useWhatsAppInstances();
   const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null);
   const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
   const [showPanel, setShowPanel] = useState(true);
+  const backRoute = useRef<string | null>(null);
   
   const [hubOpen, setHubOpen] = useState(false);
   const [optimisticMessages, setOptimisticMessages] = useState<WhatsAppMessage[]>([]);
@@ -44,9 +46,13 @@ export default function WhatsAppChat() {
     }
   }, [instances, selectedInstanceId]);
 
-  // Auto-open chat from query param ?phone=
+  // Auto-open chat from query param ?phone= and capture ?from= for back navigation
   useEffect(() => {
     const phoneParam = searchParams.get('phone');
+    const fromParam = searchParams.get('from');
+    if (fromParam) {
+      backRoute.current = fromParam;
+    }
     if (phoneParam && !loadingInstances && instances.length > 0) {
       const cleanPhone = phoneParam.replace(/\D/g, '');
       setSelectedPhone(cleanPhone);
@@ -211,6 +217,17 @@ export default function WhatsAppChat() {
       {/* Top bar */}
       <div className="h-12 border-b border-border bg-card flex items-center justify-between px-3 shrink-0">
         <div className="flex items-center gap-2">
+          {backRoute.current && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 shrink-0"
+              title="Voltar ao Funil"
+              onClick={() => navigate(backRoute.current!)}
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+          )}
           <MessageCircle className="h-4 w-4 text-primary" />
           <span className="font-semibold text-sm text-foreground">WhatsApp</span>
           <Select value={selectorValue} onValueChange={handleInstanceChange}>
