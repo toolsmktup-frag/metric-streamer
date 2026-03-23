@@ -158,7 +158,8 @@ const LeadFunnelDetail: React.FC = () => {
   };
 
   const handleWhatsAppClick = (phone: string) => {
-    navigate(`/whatsapp?phone=${encodeURIComponent(phone)}`);
+    const backPath = `/lead-funnels/${id}`;
+    navigate(`/whatsapp?phone=${encodeURIComponent(phone)}&from=${encodeURIComponent(backPath)}`);
   };
 
   const handleAutoSaveNodes = useCallback(async (nodes: Node[]) => {
