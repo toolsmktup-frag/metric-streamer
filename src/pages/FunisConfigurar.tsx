@@ -268,58 +268,14 @@ export default function FunisConfigurar() {
             </div>
 
             {/* Produtos */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label>Produtos do Funil</Label>
-                <Button variant="ghost" size="sm" onClick={addProduct}>
-                  <Plus className="h-3.5 w-3.5 mr-1" /> Adicionar
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                O <strong>fragmento</strong> é buscado dentro do nome do produto via ILIKE. O campo <strong>Dias</strong> define após quantos dias da compra o lead deve ser recontactado (ex: 1 pote = 25 dias).
-              </p>
-              <div className="space-y-2">
-                {products.map((p, idx) => (
-                  <div key={idx} className="flex gap-2 items-center">
-                    <Input
-                      className="flex-1"
-                      placeholder="Fragmento do nome (ex: TINTURA)"
-                      value={p.product_name_contains}
-                      onChange={e => updateProduct(idx, 'product_name_contains', e.target.value)}
-                    />
-                    <Select value={p.role} onValueChange={v => updateProduct(idx, 'role', v)}>
-                      <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {ROLE_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                    <Input
-                      className="w-40"
-                      placeholder="Nome amigável"
-                      value={p.display_name}
-                      onChange={e => updateProduct(idx, 'display_name', e.target.value)}
-                    />
-                    <Input
-                      className="w-20"
-                      type="number"
-                      placeholder="Dias"
-                      title="Dias para recontato após compra"
-                      value={p.recontact_days ?? ''}
-                      onChange={e => {
-                        const val = e.target.value ? parseInt(e.target.value, 10) : null;
-                        setProducts(prev => prev.map((row, i) => i === idx ? { ...row, recontact_days: val } : row));
-                      }}
-                    />
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => removeProduct(idx)}>
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                ))}
-                {products.length === 0 && (
-                  <p className="text-xs text-muted-foreground py-2">Nenhum produto. Clique em "Adicionar" para configurar.</p>
-                )}
-              </div>
-            </div>
+            <ProductsEditor
+              products={products}
+              funnelId={editingId !== 'new' ? editingId : null}
+              onAdd={addProduct}
+              onRemove={removeProduct}
+              onUpdate={updateProduct}
+              onUpdateRecontact={(idx, val) => setProducts(prev => prev.map((row, i) => i === idx ? { ...row, recontact_days: val } : row))}
+            />
 
             {/* Ações */}
             <div className="flex gap-2 pt-2">
