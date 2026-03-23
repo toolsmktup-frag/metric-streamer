@@ -67,7 +67,8 @@ export function useAllSales(funnelId?: string | null) {
         query = query.eq('funnel_id', funnelId);
       }
 
-      const { data, error } = await query;
+      const { data, error, count } = await query;
+      console.log('[useAllSales] funnelId:', funnelId, 'dateFrom:', dateFrom, 'dateTo:', dateTo, 'rows:', data?.length, 'error:', error);
       if (error) throw error;
       return (data || []) as UnifiedSale[];
     },
