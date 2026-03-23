@@ -135,8 +135,11 @@ Deno.serve(async (req) => {
   try {
     const payload = await req.json();
 
-    // Se não tem os campos mínimos, provavelmente é um ping/teste da plataforma — retorna 200
-    if (!payload.version || !payload.status || !payload.order) {
+    // Aceita formatos antigos e novos da Ticto sem quebrar o webhook
+    const hasSale = payload.sale || payload.order || payload.payment;
+    const hasProduct = payload.product || payload.item || payload.items?.[0] || payload.product_name;
+    const hasEvent = payload.event || payload.status;
+    if (!hasSale && !hasProduct && !hasEvent) {
       console.log("Ping or test payload received, ignoring:", JSON.stringify(payload).slice(0, 200));
       return new Response(JSON.stringify({ success: true, message: "ping ok" }), {
         status: 200,
@@ -144,10 +147,12 @@ Deno.serve(async (req) => {
       });
     }
 
-    const tracking = payload.tracking || {};
-    const order = payload.order || {};
-    const item = payload.item || {};
-    const customer = payload.customer || {};
+    const tracking = payload.tracking || payload.utm_data || payload.source || {};
+    const order = payload.order || payload.sale || payload.payment || {};
+    const item = payload.item || payload.product || payload.items?.[0] || {};
+    const customer = payload.customer || payload.buyer || payload.contact || {};
+    const payment = payload.payment || {};
+    const dates = payload.dates || {};
 
     // Parse UTMs to extract Meta Ads IDs
     // utm_campaign = "Campaign Name|campaign_id"
@@ -157,22 +162,65 @@ Deno.serve(async (req) => {
     const adsetParsed = parseUtmPair(tracking.utm_medium);
     const adParsed = parseUtmPair(tracking.utm_content);
 
-    const utmSource = tracking.utm_source !== "Não Informado" ? tracking.utm_source : null;
-    const utmMedium = tracking.utm_medium !== "Não Informado" ? tracking.utm_medium : null;
-    const utmCampaign = tracking.utm_campaign !== "Não Informado" ? tracking.utm_campaign : null;
-    const utmContent = tracking.utm_content !== "Não Informado" ? tracking.utm_content : null;
-    const utmTerm = tracking.utm_term !== "Não Informado" ? tracking.utm_term : null;
-    const src = tracking.src !== "Não Informado" ? tracking.src : null;
-    const sck = tracking.sck !== "Não Informado" ? tracking.sck : null;
+    const clean = (value: unknown) => {
+      if (value === undefined || value === null) return null;
+      const text = String(value).trim();
+      return !text || text === "Não Informado" ? null : text;
+    };
+
+    const utmSource = clean(tracking.utm_source);
+    const utmMedium = clean(tracking.utm_medium);
+    const utmCampaign = clean(tracking.utm_campaign);
+    const utmContent = clean(tracking.utm_content);
+    const utmTerm = clean(tracking.utm_term);
+    const src = clean(tracking.src);
+    const sck = clean(tracking.sck);
 
     // Build phone string
     const phone = customer.phone
-      ? `${customer.phone.ddi || ""}${customer.phone.ddd || ""}${customer.phone.number || ""}`
-      : null;
+      ? `${customer.phone.ddi || customer.phone_local_code || ""}${customer.phone.ddd || ""}${customer.phone.number || customer.phone_number || ""}`
+      : clean(customer.phone_number);
 
     // Parse dates
-    const statusDate = payload.status_date ? new Date(payload.status_date).toISOString() : null;
-    const orderDate = order.order_date ? new Date(order.order_date).toISOString() : null;
+    const statusDateRaw = payload.status_date || dates.confirmed_at || dates.updated_at || dates.created_at || null;
+    const orderDateRaw = order.order_date || dates.ordered_at || dates.confirmed_at || dates.created_at || null;
+    const statusDate = statusDateRaw ? new Date(statusDateRaw).toISOString() : null;
+    const orderDate = orderDateRaw ? new Date(orderDateRaw).toISOString() : null;
+
+    const rawStatus = String(payload.event || payload.status || order.status || "").toLowerCase();
+    const statusMap: Record<string, string> = {
+      approved: "authorized",
+      authorized: "authorized",
+      paid: "authorized",
+      open: "open",
+      pending: "pending",
+      waiting_payment: "waiting_payment",
+      refunded: "refunded",
+      refund: "refunded",
+      chargeback: "chargeback",
+      canceled: "canceled",
+      cancelled: "canceled",
+      expired: "expired",
+      refused: "refused",
+    };
+    const normalizedStatus = statusMap[rawStatus] || rawStatus || "open";
+
+    const paidAmount = Number(
+      order.paid_amount ??
+      payment.paid_amount ??
+      payment.total ??
+      payment.gross ??
+      item.total_value ??
+      item.unit_value ??
+      0
+    );
+    const amountInCents = paidAmount > 0 && paidAmount < 1000 ? Math.round(paidAmount * 100) : Math.round(paidAmount);
+
+    const productName = clean(item.product_name || item.name || payload.product_name) || "";
+    const offerName = clean(item.offer_name || item.offer?.name || payload.offer_name);
+    const offerId = clean(item.offer_id || item.offer?.id || payload.offer_id) || "";
+    const orderId = Number(order.id || payload.order_id || 0) || null;
+    const installments = Number(order.installments || payment.installments?.qty || 1) || 1;
 
     // Use service role to bypass RLS
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -200,24 +248,24 @@ Deno.serve(async (req) => {
     }
 
     const record = {
-      order_id: order.id,
-      order_hash: order.hash,
-      transaction_hash: order.transaction_hash,
-      status: payload.status,
+      order_id: orderId,
+      order_hash: clean(order.hash || order.marketplace_id || payload.id),
+      transaction_hash: clean(order.transaction_hash || payment.marketplace_id || payload.id),
+      status: normalizedStatus,
       status_date: statusDate,
-      payment_method: payload.payment_method,
-      paid_amount: order.paid_amount || 0, // centavos
-      installments: order.installments,
+      payment_method: clean(payload.payment_method || payment.method),
+      paid_amount: amountInCents,
+      installments,
       order_date: orderDate,
-      product_name: item.product_name,
-      product_id: item.product_id,
-      offer_name: item.offer_name,
-      offer_id: String(item.offer_id || ""),
-      offer_code: item.offer_code,
-      customer_name: customer.name,
-      customer_email: customer.email,
+      product_name: productName,
+      product_id: Number(item.product_id || item.id || 0) || null,
+      offer_name: offerName,
+      offer_id: offerId,
+      offer_code: clean(item.offer_code),
+      customer_name: clean(customer.name),
+      customer_email: clean(customer.email),
       customer_phone: phone,
-      customer_code: customer.code,
+      customer_code: clean(customer.code || customer.doc),
       utm_source: utmSource,
       utm_medium: utmMedium,
       utm_campaign: utmCampaign,
