@@ -9,7 +9,7 @@ import ChatList from '@/components/whatsapp/ChatList';
 import ChatThread from '@/components/whatsapp/ChatThread';
 import ChatInput from '@/components/whatsapp/ChatInput';
 import ContactPanel from '@/components/whatsapp/ContactPanel';
-import AppSidebar from '@/components/layout/AppSidebar';
+
 import {
   Select,
   SelectContent,
@@ -29,7 +29,7 @@ export default function WhatsAppChat() {
   const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null);
   const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
   const [showPanel, setShowPanel] = useState(true);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  
   const [hubOpen, setHubOpen] = useState(false);
   const [optimisticMessages, setOptimisticMessages] = useState<WhatsAppMessage[]>([]);
   const [replyInstanceId, setReplyInstanceId] = useState<string | null>(null);
@@ -153,26 +153,17 @@ export default function WhatsAppChat() {
     setReplyInstanceId(null);
   };
 
-  const wrapWithSidebar = (content: React.ReactNode) => (
-    <div className="flex min-h-screen w-full bg-background">
-      <AppSidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} />
-      <div className="flex-1 flex flex-col min-w-0 h-screen">
-        {content}
-      </div>
-    </div>
-  );
-
   if (loadingInstances) {
-    return wrapWithSidebar(
-      <div className="flex items-center justify-center h-full text-muted-foreground">
+    return (
+      <div className="flex items-center justify-center h-[calc(100vh-3.5rem)] -m-6 text-muted-foreground">
         Carregando...
       </div>
     );
   }
 
   if (instances.length === 0) {
-    return wrapWithSidebar(
-      <div className="flex flex-col items-center justify-center h-full gap-4 text-center">
+    return (
+      <div className="flex flex-col items-center justify-center h-[calc(100vh-3.5rem)] -m-6 gap-4 text-center">
         <MessageCircle className="h-12 w-12 text-muted-foreground" />
         <div>
           <h2 className="text-lg font-semibold text-foreground">Nenhuma instância configurada</h2>
@@ -195,8 +186,8 @@ export default function WhatsAppChat() {
 
   const selectorValue = isAllMode ? 'all' : (singleInstanceId || '');
 
-  return wrapWithSidebar(
-    <>
+  return (
+    <div className="flex flex-col h-[calc(100vh-3.5rem)] -m-6">
       {/* Top bar */}
       <div className="h-12 border-b border-border bg-card flex items-center justify-between px-3 shrink-0">
         <div className="flex items-center gap-2">
@@ -303,6 +294,6 @@ export default function WhatsAppChat() {
         onOpenChange={setHubOpen}
         onRefetch={refetchInstances}
       />
-    </>
+    </div>
   );
 }
