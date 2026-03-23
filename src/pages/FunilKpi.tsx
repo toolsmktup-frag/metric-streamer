@@ -499,7 +499,7 @@ export default function FunilKpi() {
             {/* Principal */}
             <div className="rounded-lg bg-primary/5 p-3 border border-primary/20">
               <div className="flex justify-between items-center">
-                <span className="text-sm font-semibold text-foreground">{PRODUCTS.principal.label}</span>
+                <span className="text-sm font-semibold text-foreground">{slotLabels.principal}</span>
                 <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium">Principal</span>
               </div>
               <div className="flex items-baseline gap-3 mt-2">
