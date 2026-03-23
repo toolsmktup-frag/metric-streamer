@@ -77,8 +77,91 @@ function WebhookUrl({ token, platform }: { token: string; platform: string }) {
     </div>
   );
 }
+function ProductsEditor({ products, funnelId, onAdd, onRemove, onUpdate, onUpdateRecontact }: {
+  products: ProductRow[];
+  funnelId: string | null;
+  onAdd: () => void;
+  onRemove: (idx: number) => void;
+  onUpdate: (idx: number, field: keyof ProductRow, value: string) => void;
+  onUpdateRecontact: (idx: number, val: number | null) => void;
+}) {
+  const { data: productNames = [], isLoading } = useDistinctProductNames(funnelId);
 
-export default function FunisConfigurar() {
+  // Combine product names from DB with any already-configured names not in the list
+  const allOptions = [...new Set([
+    ...productNames,
+    ...products.map(p => p.product_name_contains).filter(Boolean),
+  ])].sort();
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <Label>Produtos do Funil</Label>
+        <Button variant="ghost" size="sm" onClick={onAdd}>
+          <Plus className="h-3.5 w-3.5 mr-1" /> Adicionar
+        </Button>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Selecione o <strong>produto</strong> que chega via webhook, defina o <strong>papel</strong> no funil (Front-end, Bump, Upsell) e um <strong>nome amigável</strong> para exibição.
+      </p>
+      <div className="space-y-2">
+        {products.map((p, idx) => (
+          <div key={idx} className="flex gap-2 items-center">
+            {/* Product name selector */}
+            {allOptions.length > 0 ? (
+              <Select value={p.product_name_contains} onValueChange={v => onUpdate(idx, 'product_name_contains', v)}>
+                <SelectTrigger className="flex-1 text-xs"><SelectValue placeholder="Selecione o produto..." /></SelectTrigger>
+                <SelectContent>
+                  {allOptions.map(name => (
+                    <SelectItem key={name} value={name} className="text-xs">{name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <Input
+                className="flex-1"
+                placeholder={isLoading ? "Carregando produtos..." : "Nome do produto"}
+                value={p.product_name_contains}
+                onChange={e => onUpdate(idx, 'product_name_contains', e.target.value)}
+              />
+            )}
+            <Select value={p.role} onValueChange={v => onUpdate(idx, 'role', v)}>
+              <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {ROLE_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Input
+              className="w-40"
+              placeholder="Nome amigável"
+              value={p.display_name}
+              onChange={e => onUpdate(idx, 'display_name', e.target.value)}
+            />
+            <Input
+              className="w-20"
+              type="number"
+              placeholder="Dias"
+              title="Dias para recontato após compra"
+              value={p.recontact_days ?? ''}
+              onChange={e => {
+                const val = e.target.value ? parseInt(e.target.value, 10) : null;
+                onUpdateRecontact(idx, val);
+              }}
+            />
+            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => onRemove(idx)}>
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        ))}
+        {products.length === 0 && (
+          <p className="text-xs text-muted-foreground py-2">Nenhum produto. Clique em "Adicionar" para configurar.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
   const [searchParams] = useSearchParams();
   const { data: funnels = [], isLoading } = useFunnels();
   const createFunnel = useCreateFunnel();
