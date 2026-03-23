@@ -79,12 +79,12 @@ async function fetchAllSalesRows(dateFrom: string, dateTo: string, funnelId?: st
  * Passe funnelId para filtrar por funil específico.
  */
 export function useAllSales(funnelId?: string | null) {
-  const { dateRange } = useFilterStore();
+  const { dateRange, lastUpdated } = useFilterStore();
   const dateFrom = toLocalDate(dateRange.start);
   const dateTo = toLocalDate(dateRange.end);
 
   return useQuery({
-    queryKey: ['all-sales', dateFrom, dateTo, funnelId ?? 'all'],
+    queryKey: ['all-sales', dateFrom, dateTo, funnelId ?? 'all', lastUpdated.getTime()],
     queryFn: async () => fetchAllSalesRows(dateFrom, dateTo, funnelId),
     ...SHARED_QUERY_OPTIONS,
   });
@@ -152,7 +152,7 @@ export function useAllSalesAggregation(funnelId?: string | null) {
 
 /** Retorna vendas do período anterior (mesma duração) */
 export function usePrevPeriodAllSales(funnelId?: string | null) {
-  const { dateRange, compareEnabled } = useFilterStore();
+  const { dateRange, compareEnabled, lastUpdated } = useFilterStore();
   const durationDays = Math.round((dateRange.end.getTime() - dateRange.start.getTime()) / (24 * 60 * 60 * 1000));
   const prevEnd = new Date(dateRange.start);
   prevEnd.setDate(prevEnd.getDate() - 1); // day before current start
@@ -162,7 +162,7 @@ export function usePrevPeriodAllSales(funnelId?: string | null) {
   const dateTo = toLocalDate(prevEnd);
 
   return useQuery({
-    queryKey: ['all-sales-prev', dateFrom, dateTo, funnelId ?? 'all'],
+    queryKey: ['all-sales-prev', dateFrom, dateTo, funnelId ?? 'all', lastUpdated.getTime()],
     queryFn: async () => {
       let query = (supabase as any)
         .from('v_all_sales')

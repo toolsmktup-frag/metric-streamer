@@ -183,12 +183,12 @@ async function fetchAllRows(table: string, orderBy = 'name') {
 
 
 export function useMetaCampaigns(funnelId?: string | null) {
-  const { dateRange } = useFilterStore();
+  const { dateRange, lastUpdated } = useFilterStore();
   const dateFrom = toLocalDate(dateRange.start);
   const dateTo = toLocalDate(dateRange.end);
 
   return useQuery({
-    queryKey: ['meta-campaigns', dateFrom, dateTo, funnelId ?? 'all'],
+    queryKey: ['meta-campaigns', dateFrom, dateTo, funnelId ?? 'all', lastUpdated.getTime()],
     queryFn: async () => {
       // Buscar campanhas com filtro de funil quando aplicável
       const all: any[] = [];
@@ -228,12 +228,12 @@ export function useMetaCampaigns(funnelId?: string | null) {
 }
 
 export function useMetaAdsets(funnelId?: string | null) {
-  const { dateRange } = useFilterStore();
+  const { dateRange, lastUpdated } = useFilterStore();
   const dateFrom = toLocalDate(dateRange.start);
   const dateTo = toLocalDate(dateRange.end);
 
   return useQuery({
-    queryKey: ['meta-adsets', dateFrom, dateTo, funnelId ?? 'all'],
+    queryKey: ['meta-adsets', dateFrom, dateTo, funnelId ?? 'all', lastUpdated.getTime()],
     queryFn: async () => {
       const all: any[] = [];
       let from = 0;
@@ -274,12 +274,12 @@ export function useMetaAdsets(funnelId?: string | null) {
 }
 
 export function useMetaAds(funnelId?: string | null) {
-  const { dateRange } = useFilterStore();
+  const { dateRange, lastUpdated } = useFilterStore();
   const dateFrom = toLocalDate(dateRange.start);
   const dateTo = toLocalDate(dateRange.end);
 
   return useQuery({
-    queryKey: ['meta-ads', dateFrom, dateTo, funnelId ?? 'all'],
+    queryKey: ['meta-ads', dateFrom, dateTo, funnelId ?? 'all', lastUpdated.getTime()],
     queryFn: async () => {
       const all: any[] = [];
       let from = 0;
@@ -321,12 +321,12 @@ export function useMetaAds(funnelId?: string | null) {
 }
 
 export function useMetaDailyInsights(funnelId?: string | null) {
-  const { dateRange } = useFilterStore();
+  const { dateRange, lastUpdated } = useFilterStore();
   const dateFrom = toLocalDate(dateRange.start);
   const dateTo = toLocalDate(dateRange.end);
 
   return useQuery({
-    queryKey: ['meta-daily-insights', dateFrom, dateTo, funnelId ?? 'all'],
+    queryKey: ['meta-daily-insights', dateFrom, dateTo, funnelId ?? 'all', lastUpdated.getTime()],
     queryFn: async () => {
       const campaignIds = funnelId ? await fetchCampaignIdsForFunnel(funnelId) : undefined;
       const insights = await fetchInsightsByType('campaign', dateFrom, dateTo, campaignIds);
@@ -357,12 +357,12 @@ export function useMetaDailyInsights(funnelId?: string | null) {
 }
 
 export function useMetaKPISummary(funnelId?: string | null) {
-  const { dateRange } = useFilterStore();
+  const { dateRange, lastUpdated } = useFilterStore();
   const dateFrom = toLocalDate(dateRange.start);
   const dateTo = toLocalDate(dateRange.end);
 
   return useQuery({
-    queryKey: ['meta-kpi', dateFrom, dateTo, funnelId ?? 'all'],
+    queryKey: ['meta-kpi', dateFrom, dateTo, funnelId ?? 'all', lastUpdated.getTime()],
     queryFn: async () => {
       const campaignIds = funnelId ? await fetchCampaignIdsForFunnel(funnelId) : undefined;
       const insights = await fetchInsightsByType('campaign', dateFrom, dateTo, campaignIds);
@@ -402,13 +402,13 @@ export function getPrevPeriod(dateRange: { start: Date; end: Date }): { start: D
 }
 
 export function usePrevPeriodMetaInsights(funnelId?: string | null) {
-  const { dateRange, compareEnabled } = useFilterStore();
+  const { dateRange, compareEnabled, lastUpdated } = useFilterStore();
   const prev = getPrevPeriod(dateRange);
   const dateFrom = toLocalDate(prev.start);
   const dateTo = toLocalDate(prev.end);
 
   return useQuery({
-    queryKey: ['meta-kpi-prev', dateFrom, dateTo, funnelId ?? 'all'],
+    queryKey: ['meta-kpi-prev', dateFrom, dateTo, funnelId ?? 'all', lastUpdated.getTime()],
     queryFn: async () => {
       const campaignIds = funnelId ? await fetchCampaignIdsForFunnel(funnelId) : undefined;
       const insights = await fetchInsightsByType('campaign', dateFrom, dateTo, campaignIds);
@@ -589,6 +589,7 @@ export function useSyncMeta() {
         'meta-campaigns', 'meta-adsets', 'meta-ads',
         'meta-daily-insights', 'meta-kpi',
         'meta-demographics', 'meta-geo', 'meta-devices',
+        'all-sales', 'all-sales-prev',
       ];
       keys.forEach(k => queryClient.invalidateQueries({ queryKey: [k] }));
     },
@@ -635,6 +636,7 @@ export function useSyncPollingRefetch() {
         'meta-campaigns', 'meta-adsets', 'meta-ads',
         'meta-daily-insights', 'meta-kpi',
         'meta-demographics', 'meta-geo', 'meta-devices',
+        'all-sales', 'all-sales-prev',
       ];
       keys.forEach(k => queryClient.invalidateQueries({ queryKey: [k] }));
     }
