@@ -303,6 +303,6 @@ export default function WhatsAppChat() {
         onOpenChange={setHubOpen}
         onRefetch={refetchInstances}
       />
-    </>
+    </div>
   );
 }
