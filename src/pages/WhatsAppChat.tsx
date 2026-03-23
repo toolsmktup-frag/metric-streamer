@@ -24,11 +24,13 @@ import { toast } from 'sonner';
 const EMPTY_INSTANCES: import('@/hooks/useWhatsApp').WhatsAppInstance[] = [];
 
 export default function WhatsAppChat() {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { instances, loading: loadingInstances, refetch: refetchInstances } = useWhatsAppInstances();
   const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null);
   const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
   const [showPanel, setShowPanel] = useState(true);
+  const backRoute = useRef<string | null>(null);
   
   const [hubOpen, setHubOpen] = useState(false);
   const [optimisticMessages, setOptimisticMessages] = useState<WhatsAppMessage[]>([]);
