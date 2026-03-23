@@ -13,11 +13,12 @@ import { toast } from 'sonner';
 
 const LeadCampaignsPage: React.FC = () => {
   const navigate = useNavigate();
-  const { data: campaigns = [], isLoading } = useLeadCampaigns();
-  const { data: allFunnels = [] } = useLeadFunnels();
-  const { data: userRole = 'vendedor' } = useCurrentUserRole();
-  const { data: myAccess = [] } = useMyFunnelAccess();
+  const { data: campaigns = [], isLoading, isError: campaignsError } = useLeadCampaigns();
+  const { data: allFunnels = [], isError: funnelsError } = useLeadFunnels();
+  const { data: userRole = 'vendedor', isError: roleError } = useCurrentUserRole();
+  const { data: myAccess = [], isError: accessError } = useMyFunnelAccess();
   const isAdmin = userRole === 'admin' || userRole === 'gestor';
+  const hasError = campaignsError || funnelsError || roleError || accessError;
 
   const createCampaign = useCreateLeadCampaign();
   const deleteCampaign = useDeleteLeadCampaign();
