@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import type { WhatsAppMessage } from '@/hooks/useWhatsApp';
-import { MessageCircle, Settings, Plus, Wifi, WifiOff } from 'lucide-react';
+import { MessageCircle, Settings, Plus, Wifi, WifiOff, ArrowLeft } from 'lucide-react';
 import { useWhatsAppInstances, useWhatsAppChats, useWhatsAppMessages, getInstanceDisplayName } from '@/hooks/useWhatsApp';
 import { useWhatsAppMultiChats } from '@/hooks/useWhatsAppMultiChat';
 import InstanceHub from '@/components/whatsapp/InstanceHub';
