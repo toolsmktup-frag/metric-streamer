@@ -227,9 +227,7 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Resolve funnel_id: first try token from query param, then fallback to product name ILIKE
     const urlToken = new URL(req.url).searchParams.get("token");
-    const productName = item.product_name || "";
     let funnelId: string | null = null;
 
     if (urlToken) {
