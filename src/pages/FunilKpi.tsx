@@ -312,11 +312,12 @@ export default function FunilKpi() {
 
       let vp = 0, vb1 = 0, vu1 = 0, rp = 0, rb1 = 0, ru1 = 0;
       for (const tx of dayTx) {
-        const type = classifyTransaction(tx);
+        const role = classifyByFunnelProducts(tx, funnelProducts);
+        const slot = role ? roleToSlot(role) : null;
         const rev = tx.paid_amount / 100;
-        if (type === 'principal') { vp++; rp += rev; }
-        else if (type === 'bump1') { vb1++; rb1 += rev; }
-        else if (type === 'upsell1') { vu1++; ru1 += rev; }
+        if (slot === 'principal') { vp++; rp += rev; }
+        else if (slot === 'bump1') { vb1++; rb1 += rev; }
+        else if (slot === 'upsell1') { vu1++; ru1 += rev; }
       }
 
       return {
