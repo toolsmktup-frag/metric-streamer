@@ -297,7 +297,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log(`Ticto webhook processed: ${payload.status} - order ${order.hash} - tx ${order.transaction_hash}`);
+    console.log(`Ticto webhook processed: status=${record.status} product="${record.product_name}" amount=${record.paid_amount} funnel=${funnelId} order=${record.order_id}`);
 
     // ── Sincronizar lead na "BASE DE LEADS" ──
     try {
