@@ -1,60 +1,49 @@
 
 
-## Melhorias nos Atalhos: Mídia + Gestão de Categorias
+## Issues Found
 
-### O que será feito
+### Issue 1: `/lead-campaigns` blank page (production)
+The page renders completely white -- no sidebar, no content. This indicates the component is crashing during render. The `LeadCampaignsPage` uses `useCurrentUserRole` which queries `user_profiles.role`, `useMyFunnelAccess` which queries `lead_funnel_access`, and `useLeadCampaigns` which queries `lead_campaigns`. If any of these tables/columns are missing or RLS blocks access, the hook throws and the entire page crashes with no error boundary to catch it.
 
-**1. Suporte a mídia nos atalhos (áudio, vídeo, documento)**
+### Issue 2: WhatsApp navigation crash
+When navigating from `/whatsapp` (uses `ProtectedFullscreen` -- no `AppLayout`) back to a funnel page (uses `Protected` -- with `AppLayout`), the full re-mount of `AppLayout` and its dependent hooks can cause a brief crash, resulting in a blank page that requires a manual refresh.
 
-Cada atalho poderá ter um arquivo anexo opcional. Ao usar o atalho, o sistema envia o texto + mídia automaticamente.
+---
 
-**Banco de dados** (SQL para executar no Supabase):
-```sql
-ALTER TABLE public.whatsapp_shortcuts
-  ADD COLUMN IF NOT EXISTS media_url text,
-  ADD COLUMN IF NOT EXISTS media_type text,
-  ADD COLUMN IF NOT EXISTS media_filename text;
-```
+## Plan
 
-**ShortcutManager.tsx**:
-- Adicionar botão de upload de arquivo no formulário (aceita imagem, vídeo, áudio, PDF/doc)
-- Upload vai para o bucket `whatsapp-media` (já existe)
-- Salva `media_url`, `media_type` e `media_filename` junto com o atalho
-- Na lista, mostrar ícone indicando o tipo de mídia (🖼️ 🎥 🎵 📄)
+### Step 1: Add error boundary protection to LeadCampaignsPage
+Wrap the page content in a try/catch-safe pattern. Add fallback error states to the hooks (`useLeadCampaigns`, `useMyFunnelAccess`, `useCurrentUserRole`) so that if any query fails, the page still renders with a meaningful error message instead of going blank.
 
-**ShortcutMenu.tsx** (popup do `/`):
-- Mostrar ícone de mídia ao lado do título quando o atalho tem anexo
+**File:** `src/pages/LeadCampaigns.tsx`
+- Add error handling: check `isError` from each hook and display an error message
+- Ensure the page renders the layout (header, empty state) even when queries fail
 
-**ChatInput.tsx**:
-- Quando um atalho com mídia é selecionado, além de preencher o texto, setar o `attachment` automaticamente (baixar o arquivo da URL e criar um File object, ou passar a URL diretamente para o `sendWhatsAppMessage`)
+### Step 2: Fix WhatsApp back-navigation crash
+The WhatsApp page uses `ProtectedFullscreen` (no layout), while funnel pages use `Protected` (with `AppLayout`). When React re-mounts `AppLayout` after it was unmounted, hooks inside may fail transiently.
 
-**2. Gestão de categorias (select + criar nova + excluir)**
+**File:** `src/pages/WhatsAppChat.tsx`
+- Add `AppLayout` wrapper (with sidebar) to the WhatsApp page via the `Protected` route instead of `ProtectedFullscreen`, or
+- Use `window.location.href` for navigation back to funnel pages to force a clean load
 
-Trocar o campo de texto livre por um **Select/Combobox** que:
-- Lista categorias existentes (extraídas dos atalhos já cadastrados)
-- Permite digitar para criar uma nova categoria na hora
-- Botão de "X" ao lado de cada categoria no select para excluí-la (o que remove a categoria de todos os atalhos que a usam, movendo-os para "Geral")
+**File:** `src/App.tsx`
+- Change WhatsApp route from `ProtectedFullscreen` to `Protected` so it shares the same layout shell, preventing unmount/remount issues
 
-**Implementação no ShortcutManager.tsx**:
-- Substituir o `<Input>` + `<datalist>` por um `Popover`/`Command` combo (padrão shadcn Combobox)
-- Input de texto filtra categorias existentes; se digitar algo novo, aparece opção "Criar: [nome]"
-- Cada categoria no dropdown tem um botão de lixeira para excluir
-- Ao excluir uma categoria, faz `UPDATE whatsapp_shortcuts SET category = 'Geral' WHERE category = [excluída]`
+### Step 3: Add global React Error Boundary
+Create a reusable `ErrorBoundary` component to prevent blank screens across the app.
 
-### Arquivos editados
+**File:** `src/components/ErrorBoundary.tsx` (new)
+- Class component that catches render errors
+- Shows a "Something went wrong" message with a retry button
 
-| Arquivo | Mudança |
-|---|---|
-| `src/components/whatsapp/ShortcutManager.tsx` | Upload de mídia no form + combobox de categorias |
-| `src/components/whatsapp/ShortcutMenu.tsx` | Mostrar ícone de mídia nos atalhos |
-| `src/components/whatsapp/ChatInput.tsx` | Ao selecionar atalho com mídia, enviar mídia junto |
+**File:** `src/App.tsx`
+- Wrap route contents with the ErrorBoundary
 
-### SQL para executar
+---
 
-```sql
-ALTER TABLE public.whatsapp_shortcuts
-  ADD COLUMN IF NOT EXISTS media_url text,
-  ADD COLUMN IF NOT EXISTS media_type text,
-  ADD COLUMN IF NOT EXISTS media_filename text;
-```
+### Technical Details
+
+The blank page is almost certainly caused by an unhandled promise rejection in one of the hooks. React Query's default behavior when `throwOnError` is not set is to NOT throw during render, so the issue is more likely in the `useMemo` blocks that process `myAccess` or `visibleFunnels` -- if the data shape is unexpected (e.g., missing `campaign_id` column), the `.filter()` or `.some()` calls could throw.
+
+The WhatsApp navigation issue happens because `ProtectedFullscreen` completely unmounts `AppLayout`, and when navigating back, `AppLayout` remounts and re-runs all its initialization hooks simultaneously, which can cause a race condition.
 
