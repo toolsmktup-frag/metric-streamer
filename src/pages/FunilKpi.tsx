@@ -290,6 +290,8 @@ export default function FunilKpi() {
   });
 
   const approved = useMemo(() => transactions.filter((t: any) => t.status === 'authorized'), [transactions]);
+  const funnelProducts = funnel?.funnel_products || [];
+  const slotLabels = useMemo(() => getSlotLabels(funnelProducts), [funnelProducts]);
 
   // ─── Build daily data ───
   const dailyRows = useMemo(() => {
