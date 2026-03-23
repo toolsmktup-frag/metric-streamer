@@ -543,7 +543,7 @@ export default function FunilKpi() {
             {/* Upsell 1 */}
             <div className="rounded-lg bg-blue-500/5 p-3 border border-blue-500/20">
               <div className="flex justify-between items-center">
-                <span className="text-sm font-semibold text-foreground">{PRODUCTS.upsell1.label}</span>
+                <span className="text-sm font-semibold text-foreground">{slotLabels.upsell1}</span>
                 <span className="text-[10px] bg-blue-500/10 text-blue-500 px-2 py-0.5 rounded-full font-medium">Upsell</span>
               </div>
               <div className="flex items-baseline gap-3 mt-2">
