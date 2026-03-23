@@ -13,14 +13,22 @@ export function useLeadFunnels(campaignId?: string | null) {
   return useQuery({
     queryKey: ['lead-funnels', campaignId],
     queryFn: async () => {
-      let query = (supabase as any)
-        .from('lead_funnels')
-        .select('*, lead_funnel_stages(*), stage_transition_rules(*)')
-        .order('sort_order', { ascending: true });
-      if (campaignId) query = query.eq('campaign_id', campaignId);
-      const { data, error } = await query;
-      if (error) throw error;
-      return (data || []) as LeadFunnel[];
+      try {
+        let query = (supabase as any)
+          .from('lead_funnels')
+          .select('*, lead_funnel_stages(*), stage_transition_rules(*)')
+          .order('sort_order', { ascending: true });
+        if (campaignId) query = query.eq('campaign_id', campaignId);
+        const { data, error } = await query;
+        if (error) {
+          console.warn('[useLeadFunnels] query error:', error.message);
+          return [];
+        }
+        return (data || []) as LeadFunnel[];
+      } catch (err) {
+        console.warn('[useLeadFunnels] unexpected error:', err);
+        return [];
+      }
     },
   });
 }
@@ -98,12 +106,10 @@ export function useUpsertStages() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ funnelId, stages }: { funnelId: string; stages: Partial<LeadFunnelStage>[] }) => {
-      // Separate existing stages (have id) from new ones
       const existingStages = stages.filter(s => s.id);
       const newStages = stages.filter(s => !s.id);
       const keepIds = existingStages.map(s => s.id!);
 
-      // Delete stages that were removed (not in keepIds)
       if (keepIds.length > 0) {
         await (supabase as any)
           .from('lead_funnel_stages')
@@ -117,7 +123,6 @@ export function useUpsertStages() {
           .eq('funnel_id', funnelId);
       }
 
-      // Update existing stages
       for (let i = 0; i < existingStages.length; i++) {
         const s = existingStages[i];
         await (supabase as any)
@@ -133,7 +138,6 @@ export function useUpsertStages() {
           .eq('id', s.id);
       }
 
-      // Insert new stages
       if (newStages.length > 0) {
         const { error } = await (supabase as any)
           .from('lead_funnel_stages')
@@ -149,7 +153,6 @@ export function useUpsertStages() {
         if (error) throw error;
       }
 
-      // Fetch final result
       const { data, error } = await (supabase as any)
         .from('lead_funnel_stages')
         .select()

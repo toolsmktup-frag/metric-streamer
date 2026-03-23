@@ -13,12 +13,20 @@ export function useLeadCampaigns() {
   return useQuery({
     queryKey: ['lead-campaigns'],
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from('lead_campaigns')
-        .select('*')
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      return (data || []) as LeadCampaign[];
+      try {
+        const { data, error } = await (supabase as any)
+          .from('lead_campaigns')
+          .select('*')
+          .order('created_at', { ascending: false });
+        if (error) {
+          console.warn('[useLeadCampaigns] query error:', error.message);
+          return [];
+        }
+        return (data || []) as LeadCampaign[];
+      } catch (err) {
+        console.warn('[useLeadCampaigns] unexpected error:', err);
+        return [];
+      }
     },
   });
 }
