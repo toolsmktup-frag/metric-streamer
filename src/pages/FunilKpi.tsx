@@ -12,11 +12,54 @@ import {
   CheckCircle2, XCircle, Info, Lightbulb,
 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { useFunnel } from '@/hooks/useFunnels';
+import { useFunnel, type FunnelProduct } from '@/hooks/useFunnels';
+import { avgUnitPrice } from '@/lib/classifyTransaction';
 
-import { classifyTransaction, FUNNEL_PRODUCTS, avgUnitPrice } from '@/lib/classifyTransaction';
+type FunnelRole = FunnelProduct['role'];
 
-const PRODUCTS = FUNNEL_PRODUCTS;
+/**
+ * Classifica uma transação usando os funnel_products configurados no funil.
+ * Faz match por ILIKE (case-insensitive contains) do product_name.
+ */
+function classifyByFunnelProducts(
+  tx: { product_name?: string | null },
+  funnelProducts: FunnelProduct[]
+): FunnelRole | null {
+  const name = (tx.product_name || '').toLowerCase();
+  if (!name) return null;
+  for (const fp of funnelProducts) {
+    if (name.includes(fp.product_name_contains.toLowerCase())) {
+      return fp.role;
+    }
+  }
+  return null;
+}
+
+/** Map funnel_products roles to our 3-slot system */
+function roleToSlot(role: FunnelRole): 'principal' | 'bump1' | 'upsell1' | null {
+  if (role === 'front') return 'principal';
+  if (role === 'order_bump') return 'bump1';
+  if (role === 'upsell1') return 'upsell1';
+  return null; // upsell2, upsell3, downsell — could be expanded later
+}
+
+/** Get display info for each slot from funnel_products */
+function getSlotLabels(funnelProducts: FunnelProduct[]) {
+  const front = funnelProducts.filter(p => p.role === 'front');
+  const bump = funnelProducts.filter(p => p.role === 'order_bump');
+  const upsell = funnelProducts.filter(p => p.role === 'upsell1');
+  return {
+    principal: front.length > 0
+      ? front.map(p => p.display_name || p.product_name_contains).join(', ')
+      : 'Produto Principal',
+    bump1: bump.length > 0
+      ? bump.map(p => p.display_name || p.product_name_contains).join(', ')
+      : 'Order Bump',
+    upsell1: upsell.length > 0
+      ? upsell.map(p => p.display_name || p.product_name_contains).join(', ')
+      : 'Upsell',
+  };
+}
 
 function getActionValue(actions: any[] | null, actionType: string): number {
   if (!actions || !Array.isArray(actions)) return 0;
