@@ -33,21 +33,29 @@ const LeadCampaignsPage: React.FC = () => {
   const [accessCampaignId, setAccessCampaignId] = useState<string | null>(null);
   const [accessFunnelId, setAccessFunnelId] = useState<string | null>(null);
 
-  // Filter funnels/campaigns for sellers
+  // Filter funnels/campaigns for sellers (with safety catch)
   const visibleFunnels = useMemo(() => {
-    if (isAdmin) return allFunnels;
-    return allFunnels.filter(f => {
-      if (myAccess.some(a => a.funnel_id === f.id)) return true;
-      if (f.campaign_id && myAccess.some(a => a.campaign_id === f.campaign_id && !a.funnel_id)) return true;
-      return false;
-    });
+    try {
+      if (isAdmin) return allFunnels;
+      return allFunnels.filter(f => {
+        if (myAccess.some(a => a.funnel_id === f.id)) return true;
+        if (f.campaign_id && myAccess.some(a => a.campaign_id === f.campaign_id && !a.funnel_id)) return true;
+        return false;
+      });
+    } catch {
+      return [];
+    }
   }, [allFunnels, myAccess, isAdmin]);
 
   const visibleCampaigns = useMemo(() => {
-    if (isAdmin) return campaigns;
-    const campaignIds = new Set(visibleFunnels.map(f => f.campaign_id).filter(Boolean));
-    myAccess.forEach(a => { if (a.campaign_id) campaignIds.add(a.campaign_id); });
-    return campaigns.filter(c => campaignIds.has(c.id));
+    try {
+      if (isAdmin) return campaigns;
+      const campaignIds = new Set(visibleFunnels.map(f => f.campaign_id).filter(Boolean));
+      myAccess.forEach(a => { if (a.campaign_id) campaignIds.add(a.campaign_id); });
+      return campaigns.filter(c => campaignIds.has(c.id));
+    } catch {
+      return [];
+    }
   }, [campaigns, visibleFunnels, myAccess, isAdmin]);
 
   const orphanFunnels = visibleFunnels.filter(f => !f.campaign_id);
