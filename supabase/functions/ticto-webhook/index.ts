@@ -187,7 +187,9 @@ Deno.serve(async (req) => {
     const statusDate = statusDateRaw ? new Date(statusDateRaw).toISOString() : null;
     const orderDate = orderDateRaw ? new Date(orderDateRaw).toISOString() : null;
 
-    const rawStatus = String(payload.event || payload.status || order.status || "").toLowerCase();
+    // payload.status is the canonical status field from Ticto.
+    // payload.event can be "PageView" from tracking — must NOT override status.
+    const rawStatus = String(payload.status || order.status || payload.event || "").toLowerCase();
     const statusMap: Record<string, string> = {
       approved: "authorized",
       authorized: "authorized",
@@ -205,16 +207,12 @@ Deno.serve(async (req) => {
     };
     const normalizedStatus = statusMap[rawStatus] || rawStatus || "open";
 
-    const paidAmount = Number(
-      order.paid_amount ??
-      payment.paid_amount ??
-      payment.total ??
-      payment.gross ??
-      item.total_value ??
-      item.unit_value ??
-      0
-    );
-    const amountInCents = paidAmount > 0 && paidAmount < 1000 ? Math.round(paidAmount * 100) : Math.round(paidAmount);
+    // Ticto v2.0: order.paid_amount and item.amount are already in centavos.
+    // item.amount = preço unitário do item (ex: 4700 = R$47,00)
+    // order.paid_amount = valor total pago (ex: 7400 = R$74,00 com bump)
+    const paidAmount = Number(order.paid_amount ?? item.amount ?? item.total_value ?? item.unit_value ?? 0);
+    // Ticto always sends centavos; no heuristic needed
+    const amountInCents = Math.round(paidAmount);
 
     const productName = clean(item.product_name || item.name || payload.product_name) || "";
     const offerName = clean(item.offer_name || item.offer?.name || payload.offer_name);
@@ -227,9 +225,7 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Resolve funnel_id: first try token from query param, then fallback to product name ILIKE
     const urlToken = new URL(req.url).searchParams.get("token");
-    const productName = item.product_name || "";
     let funnelId: string | null = null;
 
     if (urlToken) {
@@ -301,7 +297,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log(`Ticto webhook processed: ${payload.status} - order ${order.hash} - tx ${order.transaction_hash}`);
+    console.log(`Ticto webhook processed: status=${record.status} product="${record.product_name}" amount=${record.paid_amount} funnel=${funnelId} order=${record.order_id}`);
 
     // ── Sincronizar lead na "BASE DE LEADS" ──
     try {
