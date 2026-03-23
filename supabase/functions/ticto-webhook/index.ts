@@ -196,7 +196,13 @@ Deno.serve(async (req) => {
       paid: "authorized",
       open: "open",
       pending: "pending",
-      waiting_payment: "waiting_payment",
+      waiting_payment: "pending",
+      pix_created: "pending",
+      pix_pending: "pending",
+      pix_expired: "expired",
+      bank_slip_created: "pending",
+      bank_slip_delayed: "pending",
+      bank_slip_expired: "expired",
       refunded: "refunded",
       refund: "refunded",
       chargeback: "chargeback",
@@ -226,13 +232,15 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     const urlToken = new URL(req.url).searchParams.get("token");
+    const bodyToken = clean(payload.token);
+    const webhookToken = urlToken || bodyToken;
     let funnelId: string | null = null;
 
-    if (urlToken) {
+    if (webhookToken) {
       const { data: funnelByToken } = await supabase
         .from("funnels")
         .select("id")
-        .eq("webhook_token", urlToken)
+        .eq("webhook_token", webhookToken)
         .single();
       funnelId = funnelByToken?.id ?? null;
     }
