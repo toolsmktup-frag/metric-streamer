@@ -71,6 +71,70 @@
     --font-mono: 'JetBrains Mono', monospace;
     --font-sans: 'Inter', system-ui, sans-serif;
   }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --background: 222 47% 11%;
+      --foreground: 210 40% 98%;
+
+      --card: 222 47% 14%;
+      --card-foreground: 210 40% 98%;
+
+      --popover: 222 47% 14%;
+      --popover-foreground: 210 40% 98%;
+
+      --primary: 152 60% 42%;
+      --primary-foreground: 0 0% 100%;
+
+      --secondary: 217 33% 17%;
+      --secondary-foreground: 210 40% 98%;
+
+      --muted: 217 33% 17%;
+      --muted-foreground: 215 20% 65%;
+
+      --accent: 217 33% 17%;
+      --accent-foreground: 210 40% 98%;
+
+      --destructive: 0 72% 51%;
+      --destructive-foreground: 0 0% 100%;
+
+      --border: 217 33% 22%;
+      --input: 217 33% 22%;
+      --ring: 152 60% 42%;
+
+      /* Custom tokens - dark */
+      --sidebar-bg: 152 55% 30%;
+      --sidebar-fg: 0 0% 100%;
+      --sidebar-hover: 152 55% 25%;
+      --sidebar-active: 152 55% 22%;
+
+      --kpi-positive: 152 60% 50%;
+      --kpi-negative: 0 72% 58%;
+      --kpi-warning: 38 92% 55%;
+      --kpi-neutral: 215 20% 65%;
+
+      --roas-good: 152 60% 50%;
+      --roas-mid: 38 92% 55%;
+      --roas-bad: 0 72% 58%;
+
+      --table-header: 217 33% 17%;
+      --table-row-hover: 222 47% 14%;
+      --table-border: 217 33% 22%;
+      --table-selected: 152 60% 15%;
+
+      --skeleton-from: 217 33% 17%;
+      --skeleton-to: 217 33% 22%;
+
+      --sidebar-background: 152 55% 30%;
+      --sidebar-foreground: 0 0% 100%;
+      --sidebar-primary: 0 0% 100%;
+      --sidebar-primary-foreground: 152 55% 30%;
+      --sidebar-accent: 152 55% 25%;
+      --sidebar-accent-foreground: 0 0% 100%;
+      --sidebar-border: 152 55% 25%;
+      --sidebar-ring: 152 60% 42%;
+    }
+  }
 }
 
 @layer base {
