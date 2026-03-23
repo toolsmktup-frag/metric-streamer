@@ -317,13 +317,13 @@ export default function FunilKpi() {
 
     return allDays.map(date => {
       const meta = metaByDate[date] || { spend: 0, impressions: 0, link_clicks: 0, landing_page_views: 0, checkouts: 0 };
-      const dayTx = approved.filter((t: any) => t.order_date?.startsWith(date));
+      const dayTx = approved.filter((t: any) => t.purchased_at?.startsWith(date));
 
       let vp = 0, vb1 = 0, vu1 = 0, rp = 0, rb1 = 0, ru1 = 0;
       for (const tx of dayTx) {
         const role = classifyByFunnelProducts(tx, funnelProducts);
         const slot = role ? roleToSlot(role) : null;
-        const rev = tx.paid_amount / 100;
+        const rev = Number(tx.revenue) || 0;
         if (slot === 'principal') { vp++; rp += rev; }
         else if (slot === 'bump1') { vb1++; rb1 += rev; }
         else if (slot === 'upsell1') { vu1++; ru1 += rev; }
