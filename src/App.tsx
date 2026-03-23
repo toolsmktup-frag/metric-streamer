@@ -98,7 +98,7 @@ const App = () => (
           {/* Equipe */}
           <Route path="/equipe" element={<Protected><Equipe /></Protected>} />
           {/* WhatsApp Chat - fullscreen layout */}
-          <Route path="/whatsapp" element={<ProtectedFullscreen><WhatsAppChat /></ProtectedFullscreen>} />
+          <Route path="/whatsapp" element={<Protected><WhatsAppChat /></Protected>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
         </ErrorBoundary>

@@ -16,14 +16,22 @@ export function useOrgFunnelAccess() {
   return useQuery({
     queryKey: ['org-funnel-access'],
     queryFn: async (): Promise<FunnelAccessRecord[]> => {
-      const { data: orgId } = await (supabase as any).rpc('get_user_org_id');
-      if (!orgId) return [];
-      const { data, error } = await (supabase as any)
-        .from('lead_funnel_access')
-        .select('*')
-        .eq('organization_id', orgId);
-      if (error) throw error;
-      return data || [];
+      try {
+        const { data: orgId } = await (supabase as any).rpc('get_user_org_id');
+        if (!orgId) return [];
+        const { data, error } = await (supabase as any)
+          .from('lead_funnel_access')
+          .select('*')
+          .eq('organization_id', orgId);
+        if (error) {
+          console.warn('[useOrgFunnelAccess] query error:', error.message);
+          return [];
+        }
+        return data || [];
+      } catch (err) {
+        console.warn('[useOrgFunnelAccess] unexpected error:', err);
+        return [];
+      }
     },
   });
 }
@@ -33,14 +41,22 @@ export function useMyFunnelAccess() {
   return useQuery({
     queryKey: ['my-funnel-access'],
     queryFn: async (): Promise<FunnelAccessRecord[]> => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return [];
-      const { data, error } = await (supabase as any)
-        .from('lead_funnel_access')
-        .select('*')
-        .eq('user_id', user.id);
-      if (error) throw error;
-      return data || [];
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return [];
+        const { data, error } = await (supabase as any)
+          .from('lead_funnel_access')
+          .select('*')
+          .eq('user_id', user.id);
+        if (error) {
+          console.warn('[useMyFunnelAccess] query error:', error.message);
+          return [];
+        }
+        return data || [];
+      } catch (err) {
+        console.warn('[useMyFunnelAccess] unexpected error:', err);
+        return [];
+      }
     },
     staleTime: 30_000,
   });
@@ -94,14 +110,22 @@ export function useHasFunnelAccess(funnelId: string | null) {
     queryKey: ['has-funnel-access', funnelId],
     queryFn: async (): Promise<boolean> => {
       if (!funnelId) return false;
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return false;
-      const { data, error } = await (supabase as any).rpc('has_funnel_access', {
-        _user_id: user.id,
-        _funnel_id: funnelId,
-      });
-      if (error) throw error;
-      return !!data;
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return false;
+        const { data, error } = await (supabase as any).rpc('has_funnel_access', {
+          _user_id: user.id,
+          _funnel_id: funnelId,
+        });
+        if (error) {
+          console.warn('[useHasFunnelAccess] error:', error.message);
+          return true; // Fallback: allow access if check fails
+        }
+        return !!data;
+      } catch (err) {
+        console.warn('[useHasFunnelAccess] unexpected error:', err);
+        return true; // Fallback: allow access
+      }
     },
     enabled: !!funnelId,
     staleTime: 30_000,
