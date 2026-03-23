@@ -187,7 +187,9 @@ Deno.serve(async (req) => {
     const statusDate = statusDateRaw ? new Date(statusDateRaw).toISOString() : null;
     const orderDate = orderDateRaw ? new Date(orderDateRaw).toISOString() : null;
 
-    const rawStatus = String(payload.event || payload.status || order.status || "").toLowerCase();
+    // payload.status is the canonical status field from Ticto.
+    // payload.event can be "PageView" from tracking — must NOT override status.
+    const rawStatus = String(payload.status || order.status || payload.event || "").toLowerCase();
     const statusMap: Record<string, string> = {
       approved: "authorized",
       authorized: "authorized",
