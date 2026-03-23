@@ -93,7 +93,7 @@ const App = () => (
           <Route path="/leads/dashboard" element={<Protected><LeadsDashboard /></Protected>} />
           <Route path="/leads" element={<Protected><LeadsList /></Protected>} />
           <Route path="/leads/fontes" element={<Protected><LeadsSources /></Protected>} />
-          <Route path="/lead-campaigns" element={<Protected><LeadCampaigns /></Protected>} />
+          <Route path="/lead-campaigns" element={<Protected><PermissionRoute requiredPermission="mod_leads"><LeadCampaigns /></PermissionRoute></Protected>} />
           <Route path="/lead-funnels/:id" element={<Protected><LeadFunnelDetail /></Protected>} />
           {/* Equipe */}
           <Route path="/equipe" element={<Protected><Equipe /></Protected>} />
