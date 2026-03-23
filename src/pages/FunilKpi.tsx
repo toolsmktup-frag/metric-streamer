@@ -266,24 +266,33 @@ export default function FunilKpi() {
     gcTime: 10 * 60 * 1000,
   });
 
-  // ─── Fetch Ticto transactions for the month, filtered by funnel ───
+  // ─── Fetch ALL sales for the month via v_all_sales (unifies Ticto + Guru + others) ───
   const { data: transactions = [], isLoading: loadingTicto } = useQuery({
-    queryKey: ['kpi-ticto', dateFrom, dateTo, id],
+    queryKey: ['kpi-sales', dateFrom, dateTo, id],
     queryFn: async () => {
-      let query = supabase
-        .from('ticto_transactions')
-        .select('*')
-        .gte('order_date', `${dateFrom}T00:00:00`)
-        .lte('order_date', `${dateTo}T23:59:59`)
-        .order('order_date', { ascending: false });
+      let all: any[] = [];
+      let from = 0;
+      const pageSize = 1000;
+      while (true) {
+        let query = supabase
+          .from('v_all_sales')
+          .select('*')
+          .gte('purchased_at', `${dateFrom}T00:00:00`)
+          .lte('purchased_at', `${dateTo}T23:59:59`)
+          .order('purchased_at', { ascending: false });
 
-      if (id) {
-        query = query.eq('funnel_id', id);
+        if (id) {
+          query = query.eq('funnel_id', id);
+        }
+
+        const { data, error } = await query.range(from, from + pageSize - 1);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        all.push(...data);
+        if (data.length < pageSize) break;
+        from += pageSize;
       }
-
-      const { data, error } = await query;
-      if (error) throw error;
-      return data || [];
+      return all;
     },
     staleTime: 2 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
@@ -308,13 +317,13 @@ export default function FunilKpi() {
 
     return allDays.map(date => {
       const meta = metaByDate[date] || { spend: 0, impressions: 0, link_clicks: 0, landing_page_views: 0, checkouts: 0 };
-      const dayTx = approved.filter((t: any) => t.order_date?.startsWith(date));
+      const dayTx = approved.filter((t: any) => t.purchased_at?.startsWith(date));
 
       let vp = 0, vb1 = 0, vu1 = 0, rp = 0, rb1 = 0, ru1 = 0;
       for (const tx of dayTx) {
         const role = classifyByFunnelProducts(tx, funnelProducts);
         const slot = role ? roleToSlot(role) : null;
-        const rev = tx.paid_amount / 100;
+        const rev = Number(tx.revenue) || 0;
         if (slot === 'principal') { vp++; rp += rev; }
         else if (slot === 'bump1') { vb1++; rb1 += rev; }
         else if (slot === 'upsell1') { vu1++; ru1 += rev; }
