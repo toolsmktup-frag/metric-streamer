@@ -52,12 +52,6 @@ const Protected = ({ children }: { children: React.ReactNode }) => (
   </ProtectedRoute>
 );
 
-// WhatsApp uses its own layout with sidebar but no DateRangePicker header
-const ProtectedFullscreen = ({ children }: { children: React.ReactNode }) => (
-  <ProtectedRoute>
-    {children}
-  </ProtectedRoute>
-);
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
