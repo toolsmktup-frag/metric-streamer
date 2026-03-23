@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useFunnels, useCreateFunnel, useUpdateFunnel, useDeleteFunnel, useUpsertFunnelProducts, type Funnel, type FunnelProduct } from '@/hooks/useFunnels';
+import { useDistinctProductNames } from '@/hooks/useDistinctProductNames';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
