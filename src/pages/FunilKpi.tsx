@@ -335,7 +335,7 @@ export default function FunilKpi() {
         rev_upsell1: ru1,
       };
     });
-  }, [metaInsights, approved, allDays]);
+  }, [metaInsights, approved, allDays, funnelProducts]);
 
   // ─── Totals ───
   const totals = useMemo(() => {
