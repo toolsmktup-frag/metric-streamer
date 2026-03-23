@@ -13,11 +13,12 @@ import { toast } from 'sonner';
 
 const LeadCampaignsPage: React.FC = () => {
   const navigate = useNavigate();
-  const { data: campaigns = [], isLoading } = useLeadCampaigns();
-  const { data: allFunnels = [] } = useLeadFunnels();
-  const { data: userRole = 'vendedor' } = useCurrentUserRole();
-  const { data: myAccess = [] } = useMyFunnelAccess();
+  const { data: campaigns = [], isLoading, isError: campaignsError } = useLeadCampaigns();
+  const { data: allFunnels = [], isError: funnelsError } = useLeadFunnels();
+  const { data: userRole = 'vendedor', isError: roleError } = useCurrentUserRole();
+  const { data: myAccess = [], isError: accessError } = useMyFunnelAccess();
   const isAdmin = userRole === 'admin' || userRole === 'gestor';
+  const hasError = campaignsError || funnelsError || roleError || accessError;
 
   const createCampaign = useCreateLeadCampaign();
   const deleteCampaign = useDeleteLeadCampaign();
@@ -32,21 +33,29 @@ const LeadCampaignsPage: React.FC = () => {
   const [accessCampaignId, setAccessCampaignId] = useState<string | null>(null);
   const [accessFunnelId, setAccessFunnelId] = useState<string | null>(null);
 
-  // Filter funnels/campaigns for sellers
+  // Filter funnels/campaigns for sellers (with safety catch)
   const visibleFunnels = useMemo(() => {
-    if (isAdmin) return allFunnels;
-    return allFunnels.filter(f => {
-      if (myAccess.some(a => a.funnel_id === f.id)) return true;
-      if (f.campaign_id && myAccess.some(a => a.campaign_id === f.campaign_id && !a.funnel_id)) return true;
-      return false;
-    });
+    try {
+      if (isAdmin) return allFunnels;
+      return allFunnels.filter(f => {
+        if (myAccess.some(a => a.funnel_id === f.id)) return true;
+        if (f.campaign_id && myAccess.some(a => a.campaign_id === f.campaign_id && !a.funnel_id)) return true;
+        return false;
+      });
+    } catch {
+      return [];
+    }
   }, [allFunnels, myAccess, isAdmin]);
 
   const visibleCampaigns = useMemo(() => {
-    if (isAdmin) return campaigns;
-    const campaignIds = new Set(visibleFunnels.map(f => f.campaign_id).filter(Boolean));
-    myAccess.forEach(a => { if (a.campaign_id) campaignIds.add(a.campaign_id); });
-    return campaigns.filter(c => campaignIds.has(c.id));
+    try {
+      if (isAdmin) return campaigns;
+      const campaignIds = new Set(visibleFunnels.map(f => f.campaign_id).filter(Boolean));
+      myAccess.forEach(a => { if (a.campaign_id) campaignIds.add(a.campaign_id); });
+      return campaigns.filter(c => campaignIds.has(c.id));
+    } catch {
+      return [];
+    }
   }, [campaigns, visibleFunnels, myAccess, isAdmin]);
 
   const orphanFunnels = visibleFunnels.filter(f => !f.campaign_id);
@@ -82,6 +91,18 @@ const LeadCampaignsPage: React.FC = () => {
 
   if (isLoading) {
     return <div className="p-6 text-muted-foreground">Carregando...</div>;
+  }
+
+  if (hasError) {
+    return (
+      <div className="p-6 text-center py-20 text-muted-foreground">
+        <p className="text-lg font-medium text-foreground">Erro ao carregar dados</p>
+        <p className="text-sm mt-1">Não foi possível carregar os funis. Tente recarregar a página.</p>
+        <button onClick={() => window.location.reload()} className="mt-4 px-4 py-2 rounded-md border border-border text-sm hover:bg-muted transition-colors">
+          Recarregar
+        </button>
+      </div>
+    );
   }
 
   return (
