@@ -18,6 +18,8 @@ const SHARED_QUERY_OPTIONS = {
   refetchOnMount: true,
 } as const;
 
+const SALES_PAGE_SIZE = 1000;
+
 /** Linha normalizada da view v_all_sales — revenue em reais, sem centavos */
 export interface UnifiedSale {
   id: string;
@@ -44,6 +46,34 @@ export interface UnifiedSale {
   is_paid_traffic: boolean;
 }
 
+async function fetchAllSalesRows(dateFrom: string, dateTo: string, funnelId?: string | null) {
+  const rows: UnifiedSale[] = [];
+
+  for (let from = 0; ; from += SALES_PAGE_SIZE) {
+    let query = (supabase as any)
+      .from('v_all_sales')
+      .select('*')
+      .gte('purchased_at', `${dateFrom}T00:00:00`)
+      .lte('purchased_at', `${dateTo}T23:59:59`)
+      .order('purchased_at', { ascending: false })
+      .range(from, from + SALES_PAGE_SIZE - 1);
+
+    if (funnelId) {
+      query = query.eq('funnel_id', funnelId);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    const batch = (data || []) as UnifiedSale[];
+    rows.push(...batch);
+
+    if (batch.length < SALES_PAGE_SIZE) break;
+  }
+
+  return rows;
+}
+
 /**
  * Busca todas as vendas (Ticto + Guru + Eduzz + ...) via view v_all_sales.
  * Passe funnelId para filtrar por funil específico.
@@ -55,23 +85,7 @@ export function useAllSales(funnelId?: string | null) {
 
   return useQuery({
     queryKey: ['all-sales', dateFrom, dateTo, funnelId ?? 'all'],
-    queryFn: async () => {
-      let query = (supabase as any)
-        .from('v_all_sales')
-        .select('*')
-        .gte('purchased_at', `${dateFrom}T00:00:00`)
-        .lte('purchased_at', `${dateTo}T23:59:59`)
-        .order('purchased_at', { ascending: false });
-
-      if (funnelId) {
-        query = query.eq('funnel_id', funnelId);
-      }
-
-      const { data, error, count } = await query;
-      console.log('[useAllSales] funnelId:', funnelId, 'dateFrom:', dateFrom, 'dateTo:', dateTo, 'rows:', data?.length, 'error:', error);
-      if (error) throw error;
-      return (data || []) as UnifiedSale[];
-    },
+    queryFn: async () => fetchAllSalesRows(dateFrom, dateTo, funnelId),
     ...SHARED_QUERY_OPTIONS,
   });
 }
