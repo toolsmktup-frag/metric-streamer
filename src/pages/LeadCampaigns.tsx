@@ -85,6 +85,18 @@ const LeadCampaignsPage: React.FC = () => {
     return <div className="p-6 text-muted-foreground">Carregando...</div>;
   }
 
+  if (hasError) {
+    return (
+      <div className="p-6 text-center py-20 text-muted-foreground">
+        <p className="text-lg font-medium text-foreground">Erro ao carregar dados</p>
+        <p className="text-sm mt-1">Não foi possível carregar os funis. Tente recarregar a página.</p>
+        <button onClick={() => window.location.reload()} className="mt-4 px-4 py-2 rounded-md border border-border text-sm hover:bg-muted transition-colors">
+          Recarregar
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="p-6 space-y-8">
       <div className="flex items-center justify-between">
