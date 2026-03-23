@@ -66,8 +66,46 @@ const LeadsDashboard: React.FC = () => {
     }
   };
 
-  if (isLoading) return <div className="p-6 text-muted-foreground">Carregando...</div>;
-  if (!stats) return <div className="p-6 text-muted-foreground">Sem dados disponíveis.</div>;
+  const kpiPlaceholders = [
+    { label: 'Total de Leads', icon: Users, color: 'text-primary' },
+    { label: 'Novos Hoje', icon: UserPlus, color: 'text-emerald-500' },
+    { label: 'Novos (7 dias)', icon: TrendingUp, color: 'text-amber-500' },
+    { label: 'Funis Ativos', icon: Target, color: 'text-primary' },
+  ];
+
+  if (isLoading || !stats) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">Dashboard de Leads</h1>
+            <p className="text-sm text-muted-foreground mt-1 animate-pulse">Carregando dados...</p>
+          </div>
+          <Button variant="outline" size="sm" disabled className="gap-1.5 opacity-50">
+            <RefreshCw className="h-4 w-4" /> Sincronizar Leads
+          </Button>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {kpiPlaceholders.map((kpi, i) => (
+            <Card key={i}>
+              <CardContent className="flex items-center gap-3 p-4">
+                <kpi.icon className={`h-8 w-8 ${kpi.color} opacity-40`} />
+                <div>
+                  <p className="text-xs text-muted-foreground">{kpi.label}</p>
+                  <div className="h-6 w-16 rounded animate-pulse bg-muted mt-1" />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Card><CardHeader><CardTitle className="text-sm">Leads por Funil</CardTitle></CardHeader><CardContent><div className="h-[250px] rounded animate-pulse bg-muted" /></CardContent></Card>
+          <Card><CardHeader><CardTitle className="text-sm">Leads por Dia (30d)</CardTitle></CardHeader><CardContent><div className="h-[250px] rounded animate-pulse bg-muted" /></CardContent></Card>
+        </div>
+      </div>
+    );
+  }
+
 
   const kpis = [
     { label: 'Total de Leads', value: stats.total, icon: Users, color: 'text-primary' },

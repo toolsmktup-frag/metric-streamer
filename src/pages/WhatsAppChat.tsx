@@ -155,8 +155,28 @@ export default function WhatsAppChat() {
 
   if (loadingInstances) {
     return (
-      <div className="flex items-center justify-center h-[calc(100vh-3.5rem)] -m-6 text-muted-foreground">
-        Carregando...
+      <div className="flex flex-col h-[calc(100vh-3.5rem)] -m-6">
+        <div className="h-12 border-b border-border bg-card flex items-center px-3 gap-2 shrink-0">
+          <MessageCircle className="h-4 w-4 text-primary" />
+          <span className="font-semibold text-sm text-foreground">WhatsApp</span>
+          <span className="text-xs text-muted-foreground animate-pulse ml-2">Conectando...</span>
+        </div>
+        <div className="flex-1 flex min-h-0">
+          <div className="w-[280px] shrink-0 border-r border-border p-3 space-y-3">
+            {[1, 2, 3, 4, 5].map(i => (
+              <div key={i} className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-full animate-pulse bg-muted shrink-0" />
+                <div className="flex-1 space-y-1.5">
+                  <div className="h-3.5 w-24 rounded animate-pulse bg-muted" />
+                  <div className="h-3 w-36 rounded animate-pulse bg-muted/60" />
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm animate-pulse">
+            Carregando conversas...
+          </div>
+        </div>
       </div>
     );
   }

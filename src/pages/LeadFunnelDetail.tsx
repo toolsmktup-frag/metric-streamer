@@ -206,7 +206,27 @@ const LeadFunnelDetail: React.FC = () => {
   }, [id, saveFunnelEdges]);
 
   if ((isLoading || loadingAccess) && !funnel) {
-    return <div className="p-6 text-muted-foreground">Carregando funil...</div>;
+    return (
+      <div className="p-6 space-y-6">
+        <div className="flex items-center gap-3">
+          <div className="h-8 w-8 rounded animate-pulse bg-muted" />
+          <div>
+            <div className="h-6 w-48 rounded animate-pulse bg-muted" />
+            <p className="text-sm text-muted-foreground mt-1 animate-pulse">Carregando dados do funil...</p>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          {['Kanban', 'Funil', 'Métricas', 'Configuração'].map(tab => (
+            <div key={tab} className="h-9 w-24 rounded-md animate-pulse bg-muted" />
+          ))}
+        </div>
+        <div className="grid grid-cols-3 gap-4">
+          {[1, 2, 3, 4, 5, 6].map(i => (
+            <div key={i} className="h-[200px] rounded-lg border border-border animate-pulse bg-muted/30" />
+          ))}
+        </div>
+      </div>
+    );
   }
 
   if (!funnel) {
