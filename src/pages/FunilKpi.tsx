@@ -12,11 +12,54 @@ import {
   CheckCircle2, XCircle, Info, Lightbulb,
 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { useFunnel } from '@/hooks/useFunnels';
+import { useFunnel, type FunnelProduct } from '@/hooks/useFunnels';
+import { avgUnitPrice } from '@/lib/classifyTransaction';
 
-import { classifyTransaction, FUNNEL_PRODUCTS, avgUnitPrice } from '@/lib/classifyTransaction';
+type FunnelRole = FunnelProduct['role'];
 
-const PRODUCTS = FUNNEL_PRODUCTS;
+/**
+ * Classifica uma transação usando os funnel_products configurados no funil.
+ * Faz match por ILIKE (case-insensitive contains) do product_name.
+ */
+function classifyByFunnelProducts(
+  tx: { product_name?: string | null },
+  funnelProducts: FunnelProduct[]
+): FunnelRole | null {
+  const name = (tx.product_name || '').toLowerCase();
+  if (!name) return null;
+  for (const fp of funnelProducts) {
+    if (name.includes(fp.product_name_contains.toLowerCase())) {
+      return fp.role;
+    }
+  }
+  return null;
+}
+
+/** Map funnel_products roles to our 3-slot system */
+function roleToSlot(role: FunnelRole): 'principal' | 'bump1' | 'upsell1' | null {
+  if (role === 'front') return 'principal';
+  if (role === 'order_bump') return 'bump1';
+  if (role === 'upsell1') return 'upsell1';
+  return null; // upsell2, upsell3, downsell — could be expanded later
+}
+
+/** Get display info for each slot from funnel_products */
+function getSlotLabels(funnelProducts: FunnelProduct[]) {
+  const front = funnelProducts.filter(p => p.role === 'front');
+  const bump = funnelProducts.filter(p => p.role === 'order_bump');
+  const upsell = funnelProducts.filter(p => p.role === 'upsell1');
+  return {
+    principal: front.length > 0
+      ? front.map(p => p.display_name || p.product_name_contains).join(', ')
+      : 'Produto Principal',
+    bump1: bump.length > 0
+      ? bump.map(p => p.display_name || p.product_name_contains).join(', ')
+      : 'Order Bump',
+    upsell1: upsell.length > 0
+      ? upsell.map(p => p.display_name || p.product_name_contains).join(', ')
+      : 'Upsell',
+  };
+}
 
 function getActionValue(actions: any[] | null, actionType: string): number {
   if (!actions || !Array.isArray(actions)) return 0;
@@ -247,6 +290,8 @@ export default function FunilKpi() {
   });
 
   const approved = useMemo(() => transactions.filter((t: any) => t.status === 'authorized'), [transactions]);
+  const funnelProducts = funnel?.funnel_products || [];
+  const slotLabels = useMemo(() => getSlotLabels(funnelProducts), [funnelProducts]);
 
   // ─── Build daily data ───
   const dailyRows = useMemo(() => {
@@ -267,11 +312,12 @@ export default function FunilKpi() {
 
       let vp = 0, vb1 = 0, vu1 = 0, rp = 0, rb1 = 0, ru1 = 0;
       for (const tx of dayTx) {
-        const type = classifyTransaction(tx);
+        const role = classifyByFunnelProducts(tx, funnelProducts);
+        const slot = role ? roleToSlot(role) : null;
         const rev = tx.paid_amount / 100;
-        if (type === 'principal') { vp++; rp += rev; }
-        else if (type === 'bump1') { vb1++; rb1 += rev; }
-        else if (type === 'upsell1') { vu1++; ru1 += rev; }
+        if (slot === 'principal') { vp++; rp += rev; }
+        else if (slot === 'bump1') { vb1++; rb1 += rev; }
+        else if (slot === 'upsell1') { vu1++; ru1 += rev; }
       }
 
       return {
@@ -289,7 +335,7 @@ export default function FunilKpi() {
         rev_upsell1: ru1,
       };
     });
-  }, [metaInsights, approved, allDays]);
+  }, [metaInsights, approved, allDays, funnelProducts]);
 
   // ─── Totals ───
   const totals = useMemo(() => {
@@ -453,7 +499,7 @@ export default function FunilKpi() {
             {/* Principal */}
             <div className="rounded-lg bg-primary/5 p-3 border border-primary/20">
               <div className="flex justify-between items-center">
-                <span className="text-sm font-semibold text-foreground">{PRODUCTS.principal.label}</span>
+                <span className="text-sm font-semibold text-foreground">{slotLabels.principal}</span>
                 <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium">Principal</span>
               </div>
               <div className="flex items-baseline gap-3 mt-2">
@@ -472,7 +518,7 @@ export default function FunilKpi() {
             {/* Bump 1 */}
             <div className="rounded-lg bg-kpi-warning/5 p-3 border border-kpi-warning/20">
               <div className="flex justify-between items-center">
-                <span className="text-sm font-semibold text-foreground">{PRODUCTS.bump1.label}</span>
+                <span className="text-sm font-semibold text-foreground">{slotLabels.bump1}</span>
                 <span className="text-[10px] bg-kpi-warning/10 text-kpi-warning px-2 py-0.5 rounded-full font-medium">Bump</span>
               </div>
               <div className="flex items-baseline gap-3 mt-2">
@@ -497,7 +543,7 @@ export default function FunilKpi() {
             {/* Upsell 1 */}
             <div className="rounded-lg bg-blue-500/5 p-3 border border-blue-500/20">
               <div className="flex justify-between items-center">
-                <span className="text-sm font-semibold text-foreground">{PRODUCTS.upsell1.label}</span>
+                <span className="text-sm font-semibold text-foreground">{slotLabels.upsell1}</span>
                 <span className="text-[10px] bg-blue-500/10 text-blue-500 px-2 py-0.5 rounded-full font-medium">Upsell</span>
               </div>
               <div className="flex items-baseline gap-3 mt-2">
