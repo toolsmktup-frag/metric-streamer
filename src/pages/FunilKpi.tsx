@@ -518,7 +518,7 @@ export default function FunilKpi() {
             {/* Bump 1 */}
             <div className="rounded-lg bg-kpi-warning/5 p-3 border border-kpi-warning/20">
               <div className="flex justify-between items-center">
-                <span className="text-sm font-semibold text-foreground">{PRODUCTS.bump1.label}</span>
+                <span className="text-sm font-semibold text-foreground">{slotLabels.bump1}</span>
                 <span className="text-[10px] bg-kpi-warning/10 text-kpi-warning px-2 py-0.5 rounded-full font-medium">Bump</span>
               </div>
               <div className="flex items-baseline gap-3 mt-2">
