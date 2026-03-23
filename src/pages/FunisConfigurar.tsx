@@ -161,7 +161,7 @@ function ProductsEditor({ products, funnelId, onAdd, onRemove, onUpdate, onUpdat
   );
 }
 
-
+export default function FunisConfigurar() {
   const [searchParams] = useSearchParams();
   const { data: funnels = [], isLoading } = useFunnels();
   const createFunnel = useCreateFunnel();
