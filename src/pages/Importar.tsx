@@ -12,6 +12,7 @@ interface ImportResult {
   total: number;
   inserted: number;
   skipped: number;
+  invalid: number;
   errors: number;
   errorDetails: string[];
 }
@@ -169,30 +170,39 @@ function parseLine(line: string, sep: string): string[] {
   return result;
 }
 
+function cleanId(val: string | undefined | null): string | null {
+  if (!val) return null;
+  // Remove BOM, quotes, ="..." wrappers, whitespace
+  const cleaned = String(val).replace(/^\uFEFF/, '').replace(/^="?|"?$/g, '').trim();
+  return cleaned || null;
+}
+
 function normalizeGuruRow(cols: string[]): any {
-  const phone_code = cols[GURU_COLS.phone_code] || '55';
-  const phone = cols[GURU_COLS.phone] || '';
+  const phone_code = c(cols, GURU_COLS.phone_code) || '55';
+  const phone = c(cols, GURU_COLS.phone);
   const full_phone = phone ? `${phone_code}${phone}` : null;
+  // Primary: transaction_id (col 0). Fallback: product_id + email + date as composite key
+  const txId = cleanId(cols[GURU_COLS.transaction_id]);
   return {
     platform: 'guru',
-    platform_transaction_id: cols[GURU_COLS.transaction_id] || null,
-    product_name: cols[GURU_COLS.product_name] || '',
-    product_id: cols[GURU_COLS.product_id] || null,
-    offer_name: cols[GURU_COLS.offer_name] || null,
-    gross_amount: parseGuruCentavos(cols[GURU_COLS.gross_amount]),
-    net_amount: parseGuruCentavos(cols[GURU_COLS.net_amount]),
-    payment_method: mapPayment(cols[GURU_COLS.payment_method]),
-    installments: parseInt(cols[GURU_COLS.installments]) || 1,
-    status: mapGuruStatus(cols[GURU_COLS.status]),
-    purchased_at: parseBRDate(cols[GURU_COLS.purchased_at]),
-    customer_name: cols[GURU_COLS.name] || null,
-    customer_email: cols[GURU_COLS.email] || null,
-    customer_cpf: cols[GURU_COLS.cpf] || null,
+    platform_transaction_id: txId,
+    product_name: c(cols, GURU_COLS.product_name) || '',
+    product_id: c(cols, GURU_COLS.product_id) || null,
+    offer_name: c(cols, GURU_COLS.offer_name) || null,
+    gross_amount: parseGuruCentavos(c(cols, GURU_COLS.gross_amount)),
+    net_amount: parseGuruCentavos(c(cols, GURU_COLS.net_amount)),
+    payment_method: mapPayment(c(cols, GURU_COLS.payment_method)),
+    installments: parseInt(c(cols, GURU_COLS.installments)) || 1,
+    status: mapGuruStatus(c(cols, GURU_COLS.status)),
+    purchased_at: parseBRDate(c(cols, GURU_COLS.purchased_at)),
+    customer_name: c(cols, GURU_COLS.name) || null,
+    customer_email: c(cols, GURU_COLS.email) || null,
+    customer_cpf: c(cols, GURU_COLS.cpf) || null,
     customer_phone: full_phone,
-    utm_source: cols[GURU_COLS.utm_source] || null,
-    utm_campaign: cols[GURU_COLS.utm_campaign] || null,
-    utm_medium: cols[GURU_COLS.utm_medium] || null,
-    utm_content: cols[GURU_COLS.utm_content] || null,
+    utm_source: c(cols, GURU_COLS.utm_source) || null,
+    utm_campaign: c(cols, GURU_COLS.utm_campaign) || null,
+    utm_medium: c(cols, GURU_COLS.utm_medium) || null,
+    utm_content: c(cols, GURU_COLS.utm_content) || null,
   };
 }
 
@@ -326,7 +336,12 @@ export default function Importar() {
       setParsedRows(rows);
       setPreviewHeaders(headers);
       setPreviewRows(preview);
+      const missingId = rows.filter((r: any) => !r.platform_transaction_id).length;
       addLog(`✅ ${rows.length} linhas encontradas no arquivo`);
+      if (missingId > 0) {
+        addLog(`⚠️ ${missingId} linhas sem ID de transação — serão ignoradas na importação`);
+        toast.warning(`${missingId} de ${rows.length} linhas sem ID de transação`);
+      }
     } catch (err) {
       toast.error('Erro ao ler o arquivo: ' + String(err));
       setStatus('idle');
@@ -342,6 +357,7 @@ export default function Importar() {
     const total = parsedRows.length;
     let inserted = 0;
     let skipped = 0;
+    let invalid = 0;
     let errors = 0;
     const errorDetails: string[] = [];
 
@@ -365,9 +381,13 @@ export default function Importar() {
         } else {
           inserted += data?.inserted || 0;
           skipped += data?.skipped || 0;
+          invalid += data?.invalid || 0;
           errors += data?.errors || 0;
           if (data?.errorDetails?.length) errorDetails.push(...data.errorDetails);
-          addLog(`✅ Batch ${batchNum}/${totalBatches}: ${data?.inserted || 0} inseridos, ${data?.skipped || 0} pulados`);
+          const parts = [`${data?.inserted || 0} inseridos`];
+          if (data?.skipped) parts.push(`${data.skipped} duplicados`);
+          if (data?.invalid) parts.push(`${data.invalid} sem ID`);
+          addLog(`✅ Batch ${batchNum}/${totalBatches}: ${parts.join(', ')}`);
         }
       } catch (err) {
         addLog(`❌ Batch ${batchNum}/${totalBatches}: ${String(err)}`);
@@ -377,7 +397,7 @@ export default function Importar() {
       setProgress(Math.round(((i + BATCH) / total) * 100));
     }
 
-    setResult({ total, inserted, skipped, errors, errorDetails });
+    setResult({ total, inserted, skipped, invalid, errors, errorDetails });
     setStatus('done');
     toast.success(`Importação concluída! ${inserted} registros inseridos.`);
   };
@@ -518,7 +538,7 @@ export default function Importar() {
 
       {/* Result */}
       {status === 'done' && result && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
           <div className="rounded-lg border border-border bg-card p-4 text-center">
             <div className="text-2xl font-bold text-foreground">{result.total}</div>
             <div className="text-xs text-muted-foreground mt-1">Total no arquivo</div>
@@ -529,8 +549,14 @@ export default function Importar() {
           </div>
           <div className="rounded-lg border border-yellow-200 bg-yellow-50 dark:bg-yellow-950/20 p-4 text-center">
             <div className="text-2xl font-bold text-yellow-600">{result.skipped}</div>
-            <div className="text-xs text-muted-foreground mt-1">Duplicados (pulados)</div>
+            <div className="text-xs text-muted-foreground mt-1">Duplicados</div>
           </div>
+          {result.invalid > 0 && (
+            <div className="rounded-lg border border-orange-200 bg-orange-50 dark:bg-orange-950/20 p-4 text-center">
+              <div className="text-2xl font-bold text-orange-600">{result.invalid}</div>
+              <div className="text-xs text-muted-foreground mt-1">Sem ID (inválidos)</div>
+            </div>
+          )}
           <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-950/20 p-4 text-center">
             <div className="text-2xl font-bold text-red-600">{result.errors}</div>
             <div className="text-xs text-muted-foreground mt-1">Erros</div>
