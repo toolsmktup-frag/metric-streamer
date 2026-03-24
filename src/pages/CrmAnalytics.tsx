@@ -87,34 +87,23 @@ export default function CrmAnalytics() {
     },
   });
 
-  // Fetch sales (customer_purchases + ticto_transactions) in period
+  // Fetch sales from unified view v_all_sales
   const { data: sales = [], isLoading: loadingSales } = useQuery({
     queryKey: ['crm-sales', dateFrom, dateTo],
     queryFn: async () => {
-      const { data: orgId } = await (supabase as any).rpc('get_user_org_id');
-      if (!orgId) return [];
-
-      const [{ data: cp }, { data: tt }] = await Promise.all([
-        supabase
-          .from('customer_purchases')
-          .select('id, gross_amount, product_name, purchased_at, status')
-          .eq('organization_id', orgId)
-          .eq('status', 'authorized')
-          .gte('purchased_at', dateFrom)
-          .lte('purchased_at', dateTo),
-        supabase
-          .from('ticto_transactions')
-          .select('id, paid_amount, product_name, order_date, status')
-          .eq('organization_id', orgId)
-          .eq('status', 'authorized')
-          .gte('order_date', dateFrom)
-          .lte('order_date', dateTo),
-      ]);
-
-      const combined: Array<{ id: string; revenue: number; product_name: string; date: string }> = [];
-      (cp || []).forEach(s => combined.push({ id: s.id, revenue: s.gross_amount, product_name: s.product_name, date: s.purchased_at }));
-      (tt || []).forEach(s => combined.push({ id: s.id, revenue: (s.paid_amount || 0) / 100, product_name: s.product_name || '', date: s.order_date || '' }));
-      return combined;
+      const { data, error } = await (supabase as any)
+        .from('v_all_sales')
+        .select('id, revenue, product_name, purchased_at, status')
+        .eq('status', 'authorized')
+        .gte('purchased_at', dateFrom)
+        .lte('purchased_at', dateTo);
+      if (error) { console.error('CRM sales error:', error); return []; }
+      return (data || []).map((s: any) => ({
+        id: s.id,
+        revenue: Number(s.revenue) || 0,
+        product_name: s.product_name || '',
+        date: s.purchased_at || '',
+      }));
     },
   });
 

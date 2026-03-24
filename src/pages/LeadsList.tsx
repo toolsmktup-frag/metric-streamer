@@ -19,17 +19,19 @@ const LeadsList: React.FC = () => {
   const [selectedLead, setSelectedLead] = useState<LeadWithPosition | null>(null);
   const [timelineOpen, setTimelineOpen] = useState(false);
 
-  // Fetch total spent per email from ticto_transactions
+  // Fetch total spent per email from v_all_sales (unified view)
   const { data: spentMap = {} } = useQuery({
     queryKey: ['leads-total-spent'],
     queryFn: async () => {
       const { data: txs } = await (supabase as any)
-        .from('ticto_transactions')
-        .select('customer_email, paid_amount');
+        .from('v_all_sales')
+        .select('customer_email, revenue')
+        .eq('status', 'authorized');
       const map: Record<string, number> = {};
       (txs || []).forEach((tx: any) => {
         if (tx.customer_email) {
-          map[tx.customer_email] = (map[tx.customer_email] || 0) + (tx.paid_amount || 0);
+          // spentMap stores in centavos for backward compat with formatCurrency
+          map[tx.customer_email] = (map[tx.customer_email] || 0) + Math.round((Number(tx.revenue) || 0) * 100);
         }
       });
       return map;

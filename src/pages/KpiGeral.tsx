@@ -89,16 +89,26 @@ export default function KpiGeral() {
   });
 
   const { data: transactions = [], isLoading: loadingTicto } = useQuery({
-    queryKey: ['kpi-ticto', dateFrom, dateTo],
+    queryKey: ['kpi-all-sales', dateFrom, dateTo],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('ticto_transactions')
-        .select('*')
-        .gte('order_date', `${dateFrom}T00:00:00`)
-        .lte('order_date', `${dateTo}T23:59:59`)
-        .order('order_date', { ascending: false });
-      if (error) throw error;
-      return data || [];
+      let all: any[] = [];
+      let from = 0;
+      const pageSize = 1000;
+      while (true) {
+        const { data, error } = await (supabase as any)
+          .from('v_all_sales')
+          .select('*')
+          .gte('purchased_at', `${dateFrom}T00:00:00`)
+          .lte('purchased_at', `${dateTo}T23:59:59`)
+          .order('purchased_at', { ascending: false })
+          .range(from, from + pageSize - 1);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        all.push(...data);
+        if (data.length < pageSize) break;
+        from += pageSize;
+      }
+      return all;
     },
     staleTime: 2 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
@@ -120,12 +130,12 @@ export default function KpiGeral() {
 
     return allDays.map(date => {
       const meta = metaByDate[date] || { spend: 0, impressions: 0, link_clicks: 0, landing_page_views: 0, checkouts: 0 };
-      const dayTx = approved.filter((t: any) => t.order_date?.startsWith(date));
+      const dayTx = approved.filter((t: any) => t.purchased_at?.startsWith(date));
 
       let vp = 0, vb1 = 0, vu1 = 0, rp = 0, rb1 = 0, ru1 = 0;
       for (const tx of dayTx) {
         const type = classifyTransaction(tx);
-        const rev = tx.paid_amount / 100;
+        const rev = Number(tx.revenue) || 0;
         if (type === 'principal') { vp++; rp += rev; }
         else if (type === 'bump1') { vb1++; rb1 += rev; }
         else if (type === 'upsell1') { vu1++; ru1 += rev; }
