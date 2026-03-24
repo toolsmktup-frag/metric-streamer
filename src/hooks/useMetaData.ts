@@ -120,6 +120,9 @@ async function fetchAdIdsForFunnel(funnelId: string): Promise<string[]> {
 // ─── Shared insight fetcher with pagination (avoids 1000-row limit) ───
 // objectIds?: quando passado, filtra por esses IDs (two-step fetch para isolamento por funil).
 // Se objectIds = [] (funil sem campanhas), retorna imediatamente sem fazer query desnecessária.
+// IDs são divididos em chunks para evitar erro 400 por URL muito longa no PostgREST.
+const MAX_IDS_PER_QUERY = 150;
+
 async function fetchInsightsByType(
   objectType: string,
   dateFrom: string,
@@ -128,6 +131,17 @@ async function fetchInsightsByType(
 ): Promise<InsightRow[]> {
   // Funil existe mas não tem campanhas/adsets/ads → retorna vazio diretamente
   if (objectIds !== undefined && objectIds.length === 0) return [];
+
+  // Se temos muitos IDs, dividir em chunks para evitar URL overflow (PostgREST 400)
+  if (objectIds && objectIds.length > MAX_IDS_PER_QUERY) {
+    const results: InsightRow[] = [];
+    for (let i = 0; i < objectIds.length; i += MAX_IDS_PER_QUERY) {
+      const chunk = objectIds.slice(i, i + MAX_IDS_PER_QUERY);
+      const chunkResults = await fetchInsightsByType(objectType, dateFrom, dateTo, chunk);
+      results.push(...chunkResults);
+    }
+    return results;
+  }
 
   const all: InsightRow[] = [];
   let from = 0;
