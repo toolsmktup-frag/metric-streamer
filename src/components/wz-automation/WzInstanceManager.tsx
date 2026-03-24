@@ -9,7 +9,7 @@ import { useWzInstances, useCreateWzInstance, useUpdateWzInstance, useDeleteWzIn
 import type { WzInstance } from '@/types/wz-automation';
 import { toast } from 'sonner';
 
-export default function WzInstanceManager() {
+export default function WzInstanceManager({ embedded = false }: { embedded?: boolean }) {
   const { data: instances = [], isLoading } = useWzInstances();
   const createInstance = useCreateWzInstance();
   const updateInstance = useUpdateWzInstance();
@@ -62,19 +62,29 @@ export default function WzInstanceManager() {
   };
 
   return (
-    <div className="p-6 space-y-6 max-w-4xl mx-auto">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Instâncias UAZAPI</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Gerencie as conexões WhatsApp usadas nas automações
-          </p>
+    <div className={embedded ? 'space-y-6' : 'p-6 space-y-6 max-w-4xl mx-auto'}>
+      {!embedded && (
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">Instâncias UAZAPI</h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Gerencie as conexões WhatsApp usadas nas automações
+            </p>
+          </div>
+          <Button onClick={openNew} className="gap-2">
+            <Plus className="h-4 w-4" />
+            Nova Instância
+          </Button>
         </div>
-        <Button onClick={openNew} className="gap-2">
-          <Plus className="h-4 w-4" />
-          Nova Instância
-        </Button>
-      </div>
+      )}
+      {embedded && (
+        <div className="flex justify-end">
+          <Button onClick={openNew} className="gap-2">
+            <Plus className="h-4 w-4" />
+            Nova Instância
+          </Button>
+        </div>
+      )}
 
       {isLoading ? (
         <div className="space-y-3">
