@@ -154,7 +154,7 @@ const PerformanceTable = React.memo(function PerformanceTable({ data, level = 'c
       {
         id: 'conv_pagina',
         header: 'Conv. Pág.',
-        accessorFn: (row) => row.landing_page_views > 0 ? (((row as any).front_sales || 0) / row.landing_page_views) * 100 : 0,
+        accessorFn: (row) => row.landing_page_views > 0 ? (row.sales / row.landing_page_views) * 100 : 0,
         cell: ({ getValue }) => {
           const v = getValue() as number;
           const color = v >= 2.5 ? 'text-kpi-positive' : v >= 1.5 ? 'text-kpi-warning' : v > 0 ? 'text-destructive' : 'text-muted-foreground';
@@ -165,7 +165,7 @@ const PerformanceTable = React.memo(function PerformanceTable({ data, level = 'c
       {
         id: 'conv_checkout',
         header: 'Conv. Chk.',
-        accessorFn: (row) => row.initiate_checkout > 0 ? (((row as any).front_sales || 0) / row.initiate_checkout) * 100 : 0,
+        accessorFn: (row) => row.initiate_checkout > 0 ? (row.sales / row.initiate_checkout) * 100 : 0,
         cell: ({ getValue }) => {
           const v = getValue() as number;
           const color = v >= 16 ? 'text-kpi-positive' : v >= 10 ? 'text-kpi-warning' : v > 0 ? 'text-destructive' : 'text-muted-foreground';
@@ -192,6 +192,18 @@ const PerformanceTable = React.memo(function PerformanceTable({ data, level = 'c
           return <span className="font-mono-value">{v > 0 ? `${v.toFixed(2)}%` : '—'}</span>;
         },
         size: 80,
+      },
+      {
+        accessorKey: 'landing_page_views',
+        header: 'Vis. Pág.',
+        cell: ({ getValue }) => <span className="font-mono-value">{formatNumber(getValue() as number)}</span>,
+        size: 90,
+      },
+      {
+        accessorKey: 'initiate_checkout',
+        header: 'Init. Chk.',
+        cell: ({ getValue }) => <span className="font-mono-value">{formatNumber(getValue() as number)}</span>,
+        size: 90,
       },
       {
         accessorKey: 'link_clicks',
