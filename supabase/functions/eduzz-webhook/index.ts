@@ -32,42 +32,49 @@ function isPaidTraffic(utmSource: string | null): boolean {
   return paid.some((s) => utmSource.toLowerCase().includes(s));
 }
 
-/** Normaliza status da Eduzz para padrão interno */
+/** Normaliza status da Eduzz para padrão canônico (alinhado com process-import) */
 function mapStatus(status: string): string {
   const map: Record<string, string> = {
-    // invoice.status values
     paid:                            "authorized",
     pago:                            "authorized",
     approved:                        "authorized",
     aprovado:                        "authorized",
     uptodade:                        "authorized",
     uptodate:                        "authorized",
-    unpaid:                          "waiting_payment",
-    pending:                         "waiting_payment",
-    pendente:                        "waiting_payment",
-    waitingpayment:                  "waiting_payment",
+    unpaid:                          "pending",
+    pending:                         "pending",
+    pendente:                        "pending",
+    waitingpayment:                  "pending",
     refunded:                        "refunded",
     reembolsado:                     "refunded",
-    cancelled:                       "refunded",
-    cancelado:                       "refunded",
+    cancelled:                       "canceled",
+    cancelado:                       "canceled",
     chargeback:                      "chargeback",
-    expired:                         "refused",
+    expired:                         "canceled",
     refused:                         "refused",
     recusado:                        "refused",
-    // payload.event names (fallback quando invoice.status está vazio)
     "myeduzz-invoice-paid":          "authorized",
     "myeduzz.invoice_paid":          "authorized",
     "myeduzz-invoice-refunded":      "refunded",
     "myeduzz.invoice_refunded":      "refunded",
     "myeduzz-invoice-chargeback":    "chargeback",
     "myeduzz.invoice_chargeback":    "chargeback",
-    "myeduzz-invoice-canceled":      "refunded",
-    "myeduzz.invoice_canceled":      "refunded",
-    "myeduzz-invoice-expired":       "refused",
-    "myeduzz.invoice_expired":       "refused",
-    "myeduzz-invoice-waiting-payment": "waiting_payment",
+    "myeduzz-invoice-canceled":      "canceled",
+    "myeduzz.invoice_canceled":      "canceled",
+    "myeduzz-invoice-expired":       "canceled",
+    "myeduzz.invoice_expired":       "canceled",
+    "myeduzz-invoice-waiting-payment": "pending",
   };
   return map[status?.toLowerCase()] || status?.toLowerCase() || "unknown";
+}
+
+function normalizePaymentMethod(value: unknown): string | null {
+  const method = String(value || "").trim().toLowerCase();
+  if (!method) return null;
+  if (method.includes("pix")) return "pix";
+  if (method.includes("boleto") || method.includes("bank_slip") || method.includes("billet")) return "bank_slip";
+  if (method.includes("card") || method.includes("cart")) return "credit_card";
+  return method;
 }
 
 Deno.serve(async (req) => {
@@ -82,21 +89,18 @@ Deno.serve(async (req) => {
   try {
     const payload = await req.json();
 
-    // Ping/teste — event === "ping" ou data.message === "ping"
+    // Ping/teste
     if (payload.event === "ping" || payload.data?.message === "ping") {
       console.log("Ping payload, ignoring:", JSON.stringify(payload).slice(0, 200));
       return jsonResponse({ success: true, message: "ping ok" });
     }
 
-    // ── Formato real da Eduzz (API v2/MyEduzz) ──
-    // Estrutura: { id, event, sentDate, data: { invoice, customer, content, tracking } }
     const data     = payload.data     || {};
     const invoice  = data.invoice     || {};
     const customer = data.customer    || {};
     const content  = data.content     || data.product || {};
     const tracking = data.tracking    || data.utm     || {};
 
-    // ID da transação: data.invoice.id (não o payload.id que é o ID do webhook delivery)
     const invoiceId = String(invoice.id || "");
 
     const rawStatus  = invoice.status || payload.event || "unknown";
@@ -104,10 +108,9 @@ Deno.serve(async (req) => {
                        || invoice.dueDate  || payload.sentDate
                        || new Date().toISOString();
 
-    // Valor em REAIS
     const amountReais = parseFloat(invoice.amount || invoice.value || invoice.price || 0);
 
-    const paymentMethod = invoice.payment?.method || invoice.paymentMethod || null;
+    const paymentMethod = normalizePaymentMethod(invoice.payment?.method || invoice.paymentMethod);
     const installments  = parseInt(invoice.installments || 1);
 
     const productId   = String(content.id   || "");
@@ -130,7 +133,6 @@ Deno.serve(async (req) => {
     const adParsed       = parseUtmPair(utmContent);
 
     if (!invoiceId) {
-      // Evento sem fatura (ex: nutror, safevideo, carrinho) — ignorar silenciosamente
       console.log("No invoice_id, ignoring event:", payload.event, JSON.stringify(payload).slice(0, 200));
       return jsonResponse({ success: true, message: "event ignored" });
     }
@@ -143,7 +145,7 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase    = createClient(supabaseUrl, supabaseKey);
 
-    // Resolve funnel_id: primeiro por token na URL, depois por product name ILIKE
+    // Resolve funnel_id
     const urlToken = new URL(req.url).searchParams.get("token");
     let funnelId: string | null = null;
 
@@ -161,15 +163,65 @@ Deno.serve(async (req) => {
       funnelId = data || null;
     }
 
-    // Grava em ticto_transactions (mesma tabela que o Ticto webhook)
-    // Isso garante inclusão automática na v_all_sales sem mudanças na view
-    const record = {
+    // ── FIX CRÍTICO #3: Resolve or create unified customer (como Guru) ──
+    let unifiedCustomerId: string | null = null;
+    if (clientEmail || clientDoc || clientPhone) {
+      const { data: cid } = await supabase.rpc("resolve_or_create_customer", {
+        p_org_id: "00000000-0000-0000-0000-000000000001",
+        p_email:  clientEmail,
+        p_cpf:    clientDoc,
+        p_phone:  clientPhone,
+        p_name:   clientName,
+      });
+      unifiedCustomerId = cid || null;
+    }
+
+    // ── FIX CRÍTICO #2: Gravar em customer_purchases (como Guru) ──
+    const purchaseRecord = {
+      organization_id:        "00000000-0000-0000-0000-000000000001",
+      unified_customer_id:    unifiedCustomerId,
+      platform:               "eduzz",
+      platform_transaction_id: transactionHash,
+      platform_order_id:      transactionHash,
+      product_name:           productName,
+      product_id:             productId || null,
+      offer_name:             offerName,
+      gross_amount:           amountReais,
+      net_amount:             null,
+      payment_method:         paymentMethod,
+      installments:           installments,
+      status:                 normalizedStatus,
+      purchased_at:           new Date(datePaid).toISOString(),
+      utm_source:             utmSource,
+      utm_medium:             utmMedium,
+      utm_campaign:           utmCampaign,
+      utm_content:            utmContent,
+      utm_term:               utmTerm,
+      meta_campaign_id:       campaignParsed.id,
+      meta_adset_id:          adsetParsed.id,
+      meta_ad_id:             adParsed.id,
+      funnel_id:              funnelId,
+      imported_from:          "webhook",
+      raw_data:               payload,
+    };
+
+    const { error: cpError } = await supabase
+      .from("customer_purchases")
+      .upsert(purchaseRecord, { onConflict: "platform,platform_transaction_id" });
+
+    if (cpError) {
+      console.error("customer_purchases error:", cpError);
+      return jsonResponse({ error: "Failed to save purchase", detail: cpError.message }, 500);
+    }
+
+    // ── Manter gravação em ticto_transactions para dashboards legados ──
+    const legacyRecord = {
       organization_id:    "00000000-0000-0000-0000-000000000001",
       transaction_hash:   transactionHash,
       order_hash:         transactionHash,
       status:             normalizedStatus,
       payment_method:     paymentMethod,
-      paid_amount:        paidAmountCentavos,  // centavos, consistente com Ticto
+      paid_amount:        paidAmountCentavos,
       installments:       installments,
       order_date:         new Date(datePaid).toISOString(),
       product_name:       productName,
@@ -196,14 +248,12 @@ Deno.serve(async (req) => {
       updated_at:         new Date().toISOString(),
     };
 
-    // Upsert por transaction_hash: se a mesma fatura vier via webhook E CSV, não duplica
-    const { error } = await supabase
+    const { error: ttError } = await supabase
       .from("ticto_transactions")
-      .upsert(record, { onConflict: "transaction_hash" });
+      .upsert(legacyRecord, { onConflict: "transaction_hash" });
 
-    if (error) {
-      console.error("DB error:", error);
-      return jsonResponse({ error: "Failed to save transaction", detail: error.message }, 500);
+    if (ttError) {
+      console.error("ticto_transactions legacy error (non-fatal):", ttError);
     }
 
     console.log(
@@ -211,28 +261,31 @@ Deno.serve(async (req) => {
       ` | product "${productName}" | funnel_id: ${funnelId} | R$${amountReais}`
     );
 
-    // ── Sincronizar lead na "BASE DE LEADS" (RPC centralizada) ──
-    try {
-      await supabase.rpc("sync_lead_from_sale", {
-        p_phone: clientPhone,
-        p_email: clientEmail,
-        p_name: clientName,
-        p_utm_source: utmSource,
-        p_utm_medium: utmMedium,
-        p_utm_campaign: utmCampaign,
-        p_utm_content: utmContent,
-        p_utm_term: utmTerm,
-        p_event_name: "purchase",
-        p_metadata: {
-          platform: "eduzz",
-          product_name: productName,
-          status: normalizedStatus,
-          amount_reais: amountReais,
-          invoice_id: invoiceId,
-        },
-      });
-    } catch (leadErr) {
-      console.error("Lead sync error (non-fatal):", leadErr);
+    // ── FIX #5: Só sincronizar lead quando status === "authorized" ──
+    if (normalizedStatus === "authorized") {
+      try {
+        await supabase.rpc("sync_lead_from_sale", {
+          p_phone: clientPhone,
+          p_email: clientEmail,
+          p_name: clientName,
+          p_utm_source: utmSource,
+          p_utm_medium: utmMedium,
+          p_utm_campaign: utmCampaign,
+          p_utm_content: utmContent,
+          p_utm_term: utmTerm,
+          p_event_name: "purchase",
+          p_product_name: productName || null,
+          p_metadata: {
+            platform: "eduzz",
+            product_name: productName,
+            status: normalizedStatus,
+            amount_reais: amountReais,
+            invoice_id: invoiceId,
+          },
+        });
+      } catch (leadErr) {
+        console.error("Lead sync error (non-fatal):", leadErr);
+      }
     }
 
     return jsonResponse({ success: true });

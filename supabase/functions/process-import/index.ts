@@ -210,6 +210,7 @@ Deno.serve(async (req) => {
               p_utm_content: record.utm_content || null,
               p_utm_term: record.utm_term || null,
               p_event_name: "purchase",
+              p_product_name: record.product_name || null,
               p_metadata: {
                 platform,
                 product_name: record.product_name,

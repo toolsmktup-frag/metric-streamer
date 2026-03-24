@@ -215,28 +215,31 @@ Deno.serve(async (req) => {
 
     console.log(`Ticto webhook processed: status=${record.status} product="${record.product_name}" amount=${record.paid_amount} funnel=${funnelId} order=${record.order_id}`);
 
-    // ── Sincronizar lead na "BASE DE LEADS" (RPC centralizada) ──
-    try {
-      await supabase.rpc("sync_lead_from_sale", {
-        p_phone: record.customer_phone,
-        p_email: record.customer_email,
-        p_name: record.customer_name,
-        p_utm_source: record.utm_source,
-        p_utm_medium: record.utm_medium,
-        p_utm_campaign: record.utm_campaign,
-        p_utm_content: record.utm_content,
-        p_utm_term: record.utm_term,
-        p_event_name: "purchase",
-        p_metadata: {
-          platform: "ticto",
-          product_name: record.product_name,
-          status: record.status,
-          amount_cents: record.paid_amount,
-          order_hash: record.order_hash,
-        },
-      });
-    } catch (leadErr) {
-      console.error("Lead sync error (non-fatal):", leadErr);
+    // ── Sincronizar lead — só quando status === "authorized" ──
+    if (record.status === "authorized") {
+      try {
+        await supabase.rpc("sync_lead_from_sale", {
+          p_phone: record.customer_phone,
+          p_email: record.customer_email,
+          p_name: record.customer_name,
+          p_utm_source: record.utm_source,
+          p_utm_medium: record.utm_medium,
+          p_utm_campaign: record.utm_campaign,
+          p_utm_content: record.utm_content,
+          p_utm_term: record.utm_term,
+          p_event_name: "purchase",
+          p_product_name: record.product_name || null,
+          p_metadata: {
+            platform: "ticto",
+            product_name: record.product_name,
+            status: record.status,
+            amount_cents: record.paid_amount,
+            order_hash: record.order_hash,
+          },
+        });
+      } catch (leadErr) {
+        console.error("Lead sync error (non-fatal):", leadErr);
+      }
     }
 
     return new Response(JSON.stringify({ success: true }), {

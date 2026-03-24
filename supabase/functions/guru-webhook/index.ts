@@ -251,27 +251,30 @@ Deno.serve(async (req) => {
 
     console.log(`Guru webhook processed: ${normalizedStatus} - product "${productName}" - funnel_id: ${funnelId}`);
 
-    // ── Sincronizar lead na "BASE DE LEADS" (RPC centralizada) ──
-    try {
-      await supabase.rpc("sync_lead_from_sale", {
-        p_phone: customerPhone,
-        p_email: customer.email || null,
-        p_name: customer.name || customer.full_name || null,
-        p_utm_source: utmSource,
-        p_utm_medium: utmMedium,
-        p_utm_campaign: utmCampaign,
-        p_utm_content: utmContent,
-        p_utm_term: utmTerm,
-        p_event_name: "purchase",
-        p_metadata: {
-          platform: "guru",
-          product_name: productName,
-          status: normalizedStatus,
-          amount: record.gross_amount,
-        },
-      });
-    } catch (leadErr) {
-      console.error("Lead sync error (non-fatal):", leadErr);
+    // ── Sincronizar lead — só quando status === "authorized" ──
+    if (normalizedStatus === "authorized") {
+      try {
+        await supabase.rpc("sync_lead_from_sale", {
+          p_phone: customerPhone,
+          p_email: customer.email || null,
+          p_name: customer.name || customer.full_name || null,
+          p_utm_source: utmSource,
+          p_utm_medium: utmMedium,
+          p_utm_campaign: utmCampaign,
+          p_utm_content: utmContent,
+          p_utm_term: utmTerm,
+          p_event_name: "purchase",
+          p_product_name: productName || null,
+          p_metadata: {
+            platform: "guru",
+            product_name: productName,
+            status: normalizedStatus,
+            amount: record.gross_amount,
+          },
+        });
+      } catch (leadErr) {
+        console.error("Lead sync error (non-fatal):", leadErr);
+      }
     }
 
     return jsonResponse({ success: true });
