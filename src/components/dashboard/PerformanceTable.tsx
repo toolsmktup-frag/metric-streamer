@@ -344,6 +344,8 @@ const PerformanceTable = React.memo(function PerformanceTable({ data, level = 'c
               <td className={`px-3 py-2.5 font-mono-value ${totals.conv_checkout >= 16 ? 'text-kpi-positive' : totals.conv_checkout >= 10 ? 'text-kpi-warning' : totals.conv_checkout > 0 ? 'text-destructive' : 'text-muted-foreground'}`}>{totals.conv_checkout > 0 ? `${totals.conv_checkout.toFixed(1)}%` : '—'}</td>
               <td className="px-3 py-2.5 font-mono-value">{totals.ticket_medio > 0 ? formatCurrency(totals.ticket_medio) : '—'}</td>
               <td className="px-3 py-2.5 font-mono-value">{totals.hook > 0 ? `${totals.hook.toFixed(2)}%` : '—'}</td>
+              <td className="px-3 py-2.5 font-mono-value">{formatNumber(totals.landing_page_views)}</td>
+              <td className="px-3 py-2.5 font-mono-value">{formatNumber(totals.initiate_checkout)}</td>
               <td className="px-3 py-2.5 font-mono-value">{formatNumber(totals.link_clicks)}</td>
               <td className="px-3 py-2.5 font-mono-value">{formatPercent(totals.ctr)}</td>
               <td className="px-3 py-2.5 font-mono-value">{formatNumber(totals.impressions)}</td>
