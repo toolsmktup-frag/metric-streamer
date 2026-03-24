@@ -135,6 +135,13 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Hard floor: never fetch data before 2024-01-01
+    const MIN_DATE = "2024-01-01";
+    if (dateFrom < MIN_DATE) {
+      console.log(`dateFrom ${dateFrom} clamped to ${MIN_DATE}`);
+      dateFrom = MIN_DATE;
+    }
+
     const timeRange = JSON.stringify({ since: dateFrom, until: dateTo });
     const syncMode = fullSync ? "completo (30d)" : "rápido (2d)";
     console.log(`Sync ${syncMode} started. Range: ${dateFrom} → ${dateTo}`);
