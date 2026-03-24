@@ -148,22 +148,22 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ── Sync leads para "BASE DE LEADS" ──
+    // ── Sync leads para "BASE DE LEADS" (RPC centralizada) ──
     let leadsSynced = 0;
     for (const rec of dbRecords) {
       if (rec.status !== "authorized") continue;
       try {
-        await syncLeadFromSale(supabase, {
-          email: rec.customer_email,
-          phone: rec.customer_phone,
-          name: rec.customer_name,
-          utm_source: rec.utm_source,
-          utm_medium: rec.utm_medium,
-          utm_campaign: rec.utm_campaign,
-          utm_content: rec.utm_content,
-          utm_term: rec.utm_term,
-          event_name: "purchase",
-          metadata: {
+        await supabase.rpc("sync_lead_from_sale", {
+          p_phone: rec.customer_phone,
+          p_email: rec.customer_email,
+          p_name: rec.customer_name,
+          p_utm_source: rec.utm_source,
+          p_utm_medium: rec.utm_medium,
+          p_utm_campaign: rec.utm_campaign,
+          p_utm_content: rec.utm_content,
+          p_utm_term: rec.utm_term,
+          p_event_name: "purchase",
+          p_metadata: {
             platform: "ticto",
             product_name: rec.product_name,
             status: rec.status,

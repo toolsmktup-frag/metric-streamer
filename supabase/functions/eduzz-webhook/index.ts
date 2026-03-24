@@ -211,19 +211,19 @@ Deno.serve(async (req) => {
       ` | product "${productName}" | funnel_id: ${funnelId} | R$${amountReais}`
     );
 
-    // ── Sincronizar lead na "BASE DE LEADS" ──
+    // ── Sincronizar lead na "BASE DE LEADS" (RPC centralizada) ──
     try {
-      await syncLeadFromSale(supabase, {
-        email: clientEmail,
-        phone: clientPhone,
-        name: clientName,
-        utm_source: utmSource,
-        utm_medium: utmMedium,
-        utm_campaign: utmCampaign,
-        utm_content: utmContent,
-        utm_term: utmTerm,
-        event_name: "purchase",
-        metadata: {
+      await supabase.rpc("sync_lead_from_sale", {
+        p_phone: clientPhone,
+        p_email: clientEmail,
+        p_name: clientName,
+        p_utm_source: utmSource,
+        p_utm_medium: utmMedium,
+        p_utm_campaign: utmCampaign,
+        p_utm_content: utmContent,
+        p_utm_term: utmTerm,
+        p_event_name: "purchase",
+        p_metadata: {
           platform: "eduzz",
           product_name: productName,
           status: normalizedStatus,

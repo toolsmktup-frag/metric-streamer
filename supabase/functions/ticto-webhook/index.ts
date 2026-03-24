@@ -215,19 +215,19 @@ Deno.serve(async (req) => {
 
     console.log(`Ticto webhook processed: status=${record.status} product="${record.product_name}" amount=${record.paid_amount} funnel=${funnelId} order=${record.order_id}`);
 
-    // ── Sincronizar lead na "BASE DE LEADS" ──
+    // ── Sincronizar lead na "BASE DE LEADS" (RPC centralizada) ──
     try {
-      await syncLeadFromSale(supabase, {
-        email: record.customer_email,
-        phone: record.customer_phone,
-        name: record.customer_name,
-        utm_source: record.utm_source,
-        utm_medium: record.utm_medium,
-        utm_campaign: record.utm_campaign,
-        utm_content: record.utm_content,
-        utm_term: record.utm_term,
-        event_name: "purchase",
-        metadata: {
+      await supabase.rpc("sync_lead_from_sale", {
+        p_phone: record.customer_phone,
+        p_email: record.customer_email,
+        p_name: record.customer_name,
+        p_utm_source: record.utm_source,
+        p_utm_medium: record.utm_medium,
+        p_utm_campaign: record.utm_campaign,
+        p_utm_content: record.utm_content,
+        p_utm_term: record.utm_term,
+        p_event_name: "purchase",
+        p_metadata: {
           platform: "ticto",
           product_name: record.product_name,
           status: record.status,

@@ -251,19 +251,19 @@ Deno.serve(async (req) => {
 
     console.log(`Guru webhook processed: ${normalizedStatus} - product "${productName}" - funnel_id: ${funnelId}`);
 
-    // ── Sincronizar lead na "BASE DE LEADS" ──
+    // ── Sincronizar lead na "BASE DE LEADS" (RPC centralizada) ──
     try {
-      await syncLeadFromSale(supabase, {
-        email: customer.email || null,
-        phone: customer.phone || customer.telephone || null,
-        name: customer.name || customer.full_name || null,
-        utm_source: utmSource,
-        utm_medium: utmMedium,
-        utm_campaign: utmCampaign,
-        utm_content: utmContent,
-        utm_term: utmTerm,
-        event_name: "purchase",
-        metadata: {
+      await supabase.rpc("sync_lead_from_sale", {
+        p_phone: customerPhone,
+        p_email: customer.email || null,
+        p_name: customer.name || customer.full_name || null,
+        p_utm_source: utmSource,
+        p_utm_medium: utmMedium,
+        p_utm_campaign: utmCampaign,
+        p_utm_content: utmContent,
+        p_utm_term: utmTerm,
+        p_event_name: "purchase",
+        p_metadata: {
           platform: "guru",
           product_name: productName,
           status: normalizedStatus,

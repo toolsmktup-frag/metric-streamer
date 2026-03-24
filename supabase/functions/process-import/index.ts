@@ -197,20 +197,20 @@ Deno.serve(async (req) => {
           }
         }
 
-        // ── Sync lead para "BASE DE LEADS" ──
+        // ── Sync lead para "BASE DE LEADS" (RPC centralizada) ──
         if (normalizedSt === "authorized") {
           try {
-            await syncLeadFromSale(supabase, {
-              email: record.customer_email || null,
-              phone: record.customer_phone || null,
-              name: record.customer_name || null,
-              utm_source: record.utm_source || null,
-              utm_medium: record.utm_medium || null,
-              utm_campaign: record.utm_campaign || null,
-              utm_content: record.utm_content || null,
-              utm_term: record.utm_term || null,
-              event_name: "purchase",
-              metadata: {
+            await supabase.rpc("sync_lead_from_sale", {
+              p_phone: record.customer_phone || null,
+              p_email: record.customer_email || null,
+              p_name: record.customer_name || null,
+              p_utm_source: record.utm_source || null,
+              p_utm_medium: record.utm_medium || null,
+              p_utm_campaign: record.utm_campaign || null,
+              p_utm_content: record.utm_content || null,
+              p_utm_term: record.utm_term || null,
+              p_event_name: "purchase",
+              p_metadata: {
                 platform,
                 product_name: record.product_name,
                 status: normalizedSt,
