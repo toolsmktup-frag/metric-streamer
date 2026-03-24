@@ -256,7 +256,7 @@ export default function CohortTab() {
             A intensidade da cor verde indica o valor relativo ao maior LTV daquela janela.
           </p>
           <p>
-            <strong className="text-foreground">Fontes:</strong> customer_purchases (Guru/Eduzz) + ticto_transactions (via e-mail). Identidade unificada por unified_customer_id.
+            <strong className="text-foreground">Fontes:</strong> v_all_sales (Ticto, Guru, Eduzz, Hotmart). Identidade unificada por customer_email e unified_customer_id.
           </p>
         </div>
       </div>

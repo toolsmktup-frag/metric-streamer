@@ -219,30 +219,12 @@ export default function Resumo() {
           <button
             onClick={async () => {
               try {
-                // Buscar telefones da view unificada para enriquecer
-                const { data: phoneData } = await (supabase as any)
-                  .from('v_all_sales')
-                  .select('customer_email, customer_name')
-                  .not('customer_email', 'is', null);
-
-                // Buscar telefones diretamente das tabelas (v_all_sales não tem customer_phone)
-                const { data: tictoPhones } = await (supabase as any)
-                  .from('ticto_transactions')
-                  .select('customer_email, customer_phone')
-                  .not('customer_phone', 'is', null);
-
-                const phoneMap = new Map<string, string>();
-                for (const t of (tictoPhones || [])) {
-                  if (t.customer_email && t.customer_phone) {
-                    phoneMap.set(t.customer_email.toLowerCase().trim(), t.customer_phone);
-                  }
-                }
-
+                // v_all_sales agora inclui customer_phone diretamente
                 const rows = allSales.map(s => ({
                   Data: s.purchased_at ? new Date(s.purchased_at).toLocaleString('pt-BR') : '',
                   Nome: s.customer_name || '',
                   Email: s.customer_email || '',
-                  Telefone: phoneMap.get((s.customer_email || '').toLowerCase().trim()) || '',
+                  Telefone: (s as any).customer_phone || '',
                   Produto: s.product_name || '',
                   Oferta: s.offer_name || '',
                   Valor: s.revenue,
