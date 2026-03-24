@@ -242,12 +242,13 @@ const PerformanceTable = React.memo(function PerformanceTable({ data, level = 'c
     const video_views = data.reduce((s, c) => s + (c.video_views || 0), 0);
     return {
       spend, revenue, sales, front_sales, bump_sales, upsell_sales, impressions, link_clicks,
+      landing_page_views, initiate_checkout,
       cpa: sales > 0 ? spend / sales : 0,
       roas: spend > 0 ? revenue / spend : 0,
       profit: revenue - spend,
       ctr: impressions > 0 ? (clicks / impressions) * 100 : 0,
-      conv_pagina: landing_page_views > 0 ? (front_sales / landing_page_views) * 100 : 0,
-      conv_checkout: initiate_checkout > 0 ? (front_sales / initiate_checkout) * 100 : 0,
+      conv_pagina: landing_page_views > 0 ? (sales / landing_page_views) * 100 : 0,
+      conv_checkout: initiate_checkout > 0 ? (sales / initiate_checkout) * 100 : 0,
       ticket_medio: sales > 0 ? revenue / sales : 0,
       hook: impressions > 0 && video_views > 0 ? (video_views / impressions) * 100 : 0,
     };
