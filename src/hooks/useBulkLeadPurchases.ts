@@ -107,14 +107,8 @@ export function useBulkLeadPurchases(
         const leadIds = leadKeyMap.get(key);
 
         leadIds?.forEach((leadId) => {
-          const existing = result.get(leadId);
-          if (existing) {
-            existing.totalSpent += Number(row.total_spent);
-            existing.totalOrders += row.total_orders;
-            if (row.first_purchase_date && (!existing.firstPurchaseDate || row.first_purchase_date < existing.firstPurchaseDate)) {
-              existing.firstPurchaseDate = row.first_purchase_date;
-            }
-          } else {
+          // Skip if lead already resolved (avoid double-counting via email+phone)
+          if (!result.has(leadId)) {
             result.set(leadId, {
               totalSpent: Number(row.total_spent),
               totalOrders: row.total_orders,
