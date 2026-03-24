@@ -24,6 +24,7 @@ import {
   Plus,
   Pencil,
   BarChart3,
+  Zap,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useFunnels } from '@/hooks/useFunnels';
@@ -49,6 +50,7 @@ const INTELLIGENCE_ITEMS = [
 
 const TOOL_ITEMS = [
   { path: '/equipe',      label: 'Equipe',       icon: Users },
+  { path: '/ferramentas/automacoes', label: 'Automações', icon: Zap },
   { path: '/agente-ia',   label: 'Agente IA',    icon: Bot },
   { path: '/integracoes', label: 'Integrações',  icon: Link2 },
   { path: '/importar',    label: 'Importar',     icon: Upload },
