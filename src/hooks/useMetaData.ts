@@ -26,13 +26,22 @@ function toLocalDate(date: Date): string {
 }
 
 // Helper to extract action values from Meta actions array
+// Meta reports actions under multiple prefixes (e.g. omni_, onsite_web_, offsite_conversion.fb_pixel_)
 function getActionValue(actions: any[] | null, actionType: string): number {
   if (!actions || !Array.isArray(actions)) return 0;
-  const action = actions.find((a: any) =>
-    a.action_type === actionType ||
-    a.action_type === `offsite_conversion.fb_pixel_${actionType}`
-  );
-  return action ? Number(action.value) : 0;
+  // Try exact match first, then common Meta prefixes
+  const prefixes = [
+    actionType,
+    `offsite_conversion.fb_pixel_${actionType}`,
+    `omni_${actionType}`,
+    `onsite_web_${actionType}`,
+    `onsite_web_app_${actionType}`,
+  ];
+  for (const prefix of prefixes) {
+    const action = actions.find((a: any) => a.action_type === prefix);
+    if (action) return Number(action.value);
+  }
+  return 0;
 }
 
 function getCostPerAction(costPerActions: any[] | null, actionType: string): number {
