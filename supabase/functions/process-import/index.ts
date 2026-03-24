@@ -224,6 +224,7 @@ Deno.serve(async (req) => {
         p_utm_term: record.utm_term || null,
         p_event_name: "purchase",
         p_product_name: record.product_name || null,
+        p_purchased_at: record.purchased_at || new Date().toISOString(),
         p_metadata: {
           platform,
           product_name: record.product_name,

@@ -149,6 +149,7 @@ Deno.serve(async (req) => {
         p_utm_term: rec.utm_term,
         p_event_name: "purchase",
         p_product_name: rec.product_name,
+        p_purchased_at: rec.order_date || new Date().toISOString(),
         p_metadata: {
           platform: sourcePlatform,
           product_name: rec.product_name,
