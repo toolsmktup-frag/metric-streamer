@@ -28,6 +28,7 @@ import FunilResumo from "./pages/FunilResumo";
 import FunilKpi from "./pages/FunilKpi";
 import FunilCampanhas from "./pages/FunilCampanhas";
 import FunisConfigurar from "./pages/FunisConfigurar";
+import FunilCriativos from "./pages/FunilCriativos";
 import Ecommerce from "./pages/Ecommerce";
 import LeadCampaigns from "./pages/LeadCampaigns";
 import LeadFunnelDetail from "./pages/LeadFunnelDetail";
