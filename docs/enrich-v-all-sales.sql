@@ -4,6 +4,8 @@
 -- Rodar no SQL Editor do Supabase Dashboard
 -- ═══════════════════════════════════════════════════════════════════
 
+DROP VIEW IF EXISTS public.v_all_sales;
+
 CREATE OR REPLACE VIEW public.v_all_sales AS
 
   -- ── Ticto (webhook + CSV) e Eduzz (CSV) ──────────────────────────
