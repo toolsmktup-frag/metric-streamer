@@ -44,3 +44,9 @@ verify_jwt = false
 
 [functions.impersonate-user]
 verify_jwt = false
+
+[functions.wz-receiver]
+verify_jwt = false
+
+[functions.wz-executor]
+verify_jwt = false
