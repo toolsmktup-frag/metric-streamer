@@ -87,9 +87,9 @@ export default function RFMTab() {
       let hasMore = true;
 
       while (hasMore) {
-        const { data: batch, error } = await supabase
-          .from('customer_purchases')
-          .select('product_name, gross_amount, net_amount, status, purchased_at, platform, offer_name, payment_method, installments, product_type, unified_customer_id, unified_customers!inner(primary_email, full_name)')
+        const { data: batch, error } = await (supabase as any)
+          .from('v_all_sales')
+          .select('product_name, revenue, status, purchased_at, platform, offer_name, payment_method, customer_name, customer_email, unified_customer_id')
           .range(from, from + PAGE_SIZE - 1)
           .order('purchased_at', { ascending: false });
 
@@ -97,20 +97,16 @@ export default function RFMTab() {
         if (!batch || batch.length === 0) { hasMore = false; break; }
 
         for (const row of batch as any[]) {
-          const customer = row.unified_customers;
           allRows.push({
-            email: customer?.primary_email || '',
-            nome: customer?.full_name || '',
+            email: row.customer_email || '',
+            nome: row.customer_name || '',
             produto: row.product_name || '',
             oferta: row.offer_name || '',
-            valor_bruto: row.gross_amount ?? 0,
-            valor_liquido: row.net_amount ?? 0,
+            valor: row.revenue ?? 0,
             status: row.status || '',
             data_compra: formatLocalDateTime(row.purchased_at, 'dd/MM/yyyy HH:mm'),
             plataforma: row.platform || '',
             metodo_pagamento: row.payment_method || '',
-            parcelas: row.installments ?? 0,
-            tipo_produto: row.product_type || '',
           });
         }
 
