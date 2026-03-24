@@ -116,7 +116,7 @@ Deno.serve(async (req) => {
       chargeback: "chargeback",
       canceled: "canceled",
       cancelled: "canceled",
-      expired: "expired",
+      expired: "canceled",
       refused: "refused",
     };
     const normalizedStatus = statusMap[rawStatus] || rawStatus || "open";
