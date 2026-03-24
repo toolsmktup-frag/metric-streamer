@@ -11,7 +11,6 @@ function parseUtmPair(value: string | null): { name: string | null; id: string |
   if (!value || value === "Não Informado") return { name: null, id: null };
   const parts = value.split("|");
   if (parts.length === 2) {
-    // Strip Meta tracking suffix like "::IwZXh0bg...aem_xxx::" from IDs
     let id = parts[1].trim();
     const colonIdx = id.indexOf("::");
     if (colonIdx > 0) id = id.substring(0, colonIdx);
@@ -23,9 +22,65 @@ function parseUtmPair(value: string | null): { name: string | null; id: string |
 function isPaidTraffic(tracking: Record<string, string>): boolean {
   const source = tracking?.utm_source;
   if (!source || source === "Não Informado") return false;
-  // Common paid traffic sources
   const paidSources = ["fb", "facebook", "ig", "instagram", "google", "gads", "bing", "tiktok", "kwai", "taboola", "outbrain"];
   return paidSources.some((s) => source.toLowerCase().includes(s));
+}
+
+const clean = (value: unknown) => {
+  if (value === undefined || value === null) return null;
+  const text = String(value).trim();
+  return !text || text === "Não Informado" ? null : text;
+};
+
+/**
+ * Busca valor pago em centavos em múltiplos caminhos possíveis do payload Ticto.
+ * Retorna o primeiro valor > 0 encontrado, ou 0 se nenhum.
+ */
+function extractPaidAmountCents(payload: any, order: any, item: any, payment: any): number {
+  const candidates = [
+    order?.paid_amount,
+    item?.amount,
+    item?.total_value,
+    item?.unit_value,
+    item?.price,
+    item?.value,
+    payment?.amount,
+    payment?.paid_amount,
+    payment?.value,
+    payload?.paid_amount,
+    payload?.amount,
+    payload?.value,
+    payload?.price,
+    order?.amount,
+    order?.value,
+    order?.total,
+    order?.total_value,
+  ];
+
+  for (const c of candidates) {
+    const n = Number(c);
+    if (n > 0 && isFinite(n)) return Math.round(n);
+  }
+  return 0;
+}
+
+/**
+ * Busca nome do produto em múltiplos caminhos possíveis.
+ */
+function extractProductName(payload: any, item: any): string {
+  const candidates = [
+    item?.product_name,
+    item?.name,
+    item?.product?.name,
+    payload?.product_name,
+    payload?.product?.name,
+    payload?.product?.product_name,
+  ];
+  for (const c of candidates) {
+    const v = clean(c);
+    if (v) return v;
+  }
+  return "";
 }
 
 Deno.serve(async (req) => {
@@ -43,12 +98,16 @@ Deno.serve(async (req) => {
   try {
     const payload = await req.json();
 
+    // Log resumido do payload para diagnóstico
+    const topKeys = Object.keys(payload).join(", ");
+    console.log(`[ticto-webhook] Top-level keys: ${topKeys}`);
+
     // Aceita formatos antigos e novos da Ticto sem quebrar o webhook
     const hasSale = payload.sale || payload.order || payload.payment;
     const hasProduct = payload.product || payload.item || payload.items?.[0] || payload.product_name;
     const hasEvent = payload.event || payload.status;
     if (!hasSale && !hasProduct && !hasEvent) {
-      console.log("Ping or test payload received, ignoring:", JSON.stringify(payload).slice(0, 200));
+      console.log("[ticto-webhook] Ping or test payload, ignoring:", JSON.stringify(payload).slice(0, 300));
       return new Response(JSON.stringify({ success: true, message: "ping ok" }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -63,18 +122,9 @@ Deno.serve(async (req) => {
     const dates = payload.dates || {};
 
     // Parse UTMs to extract Meta Ads IDs
-    // utm_campaign = "Campaign Name|campaign_id"
-    // utm_medium   = "Adset Name|adset_id"
-    // utm_content  = "Ad Name|ad_id"
     const campaignParsed = parseUtmPair(tracking.utm_campaign);
     const adsetParsed = parseUtmPair(tracking.utm_medium);
     const adParsed = parseUtmPair(tracking.utm_content);
-
-    const clean = (value: unknown) => {
-      if (value === undefined || value === null) return null;
-      const text = String(value).trim();
-      return !text || text === "Não Informado" ? null : text;
-    };
 
     const utmSource = clean(tracking.utm_source);
     const utmMedium = clean(tracking.utm_medium);
@@ -95,8 +145,7 @@ Deno.serve(async (req) => {
     const statusDate = statusDateRaw ? new Date(statusDateRaw).toISOString() : null;
     const orderDate = orderDateRaw ? new Date(orderDateRaw).toISOString() : null;
 
-    // payload.status is the canonical status field from Ticto.
-    // payload.event can be "PageView" from tracking — must NOT override status.
+    // Normalize status
     const rawStatus = String(payload.status || order.status || payload.event || "").toLowerCase();
     const statusMap: Record<string, string> = {
       approved: "authorized",
@@ -121,18 +170,16 @@ Deno.serve(async (req) => {
     };
     const normalizedStatus = statusMap[rawStatus] || rawStatus || "open";
 
-    // Ticto v2.0: order.paid_amount and item.amount are already in centavos.
-    // item.amount = preço unitário do item (ex: 4700 = R$47,00)
-    // order.paid_amount = valor total pago (ex: 7400 = R$74,00 com bump)
-    const paidAmount = Number(order.paid_amount ?? item.amount ?? item.total_value ?? item.unit_value ?? 0);
-    // Ticto always sends centavos; no heuristic needed
-    const amountInCents = Math.round(paidAmount);
-
-    const productName = clean(item.product_name || item.name || payload.product_name) || "";
+    // ── Extração resiliente de valor e produto ──
+    const amountInCents = extractPaidAmountCents(payload, order, item, payment);
+    const productName = extractProductName(payload, item);
     const offerName = clean(item.offer_name || item.offer?.name || payload.offer_name);
     const offerId = clean(item.offer_id || item.offer?.id || payload.offer_id) || "";
     const orderId = Number(order.id || payload.order_id || 0) || null;
+    const productId = Number(item.product_id || item.id || payload.product_id || 0) || null;
     const installments = Number(order.installments || payment.installments?.qty || 1) || 1;
+
+    console.log(`[ticto-webhook] Extracted: status=${normalizedStatus} rawStatus=${rawStatus} amount=${amountInCents} product="${productName}" orderId=${orderId} productId=${productId}`);
 
     // Use service role to bypass RLS
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -159,6 +206,43 @@ Deno.serve(async (req) => {
       funnelId = funnelData || null;
     }
 
+    // ── Proteção contra sobrescrita: preservar dados bons ──
+    // Se o novo payload vem com amount=0 ou product vazio,
+    // verificar se já existe registro melhor no banco
+    let finalAmount = amountInCents;
+    let finalProductName = productName;
+    let finalOfferName = offerName;
+
+    if (orderId && productId) {
+      const { data: existing } = await supabase
+        .from("ticto_transactions")
+        .select("paid_amount, product_name, offer_name, funnel_id")
+        .eq("order_id", orderId)
+        .eq("product_id", productId)
+        .maybeSingle();
+
+      if (existing) {
+        // Preservar valor se o novo vier zerado mas o antigo tem valor
+        if (finalAmount === 0 && (existing.paid_amount || 0) > 0) {
+          finalAmount = existing.paid_amount;
+          console.log(`[ticto-webhook] Preserving existing paid_amount=${finalAmount} (new was 0)`);
+        }
+        // Preservar product_name se o novo vier vazio
+        if (!finalProductName && existing.product_name) {
+          finalProductName = existing.product_name;
+          console.log(`[ticto-webhook] Preserving existing product_name="${finalProductName}"`);
+        }
+        // Preservar offer_name se o novo vier vazio
+        if (!finalOfferName && existing.offer_name) {
+          finalOfferName = existing.offer_name;
+        }
+        // Preservar funnel_id se já existia
+        if (!funnelId && existing.funnel_id) {
+          funnelId = existing.funnel_id;
+        }
+      }
+    }
+
     const record = {
       order_id: orderId,
       order_hash: clean(order.hash || order.marketplace_id || payload.id),
@@ -166,12 +250,12 @@ Deno.serve(async (req) => {
       status: normalizedStatus,
       status_date: statusDate,
       payment_method: clean(payload.payment_method || payment.method),
-      paid_amount: amountInCents,
+      paid_amount: finalAmount,
       installments,
       order_date: orderDate,
-      product_name: productName,
-      product_id: Number(item.product_id || item.id || 0) || null,
-      offer_name: offerName,
+      product_name: finalProductName,
+      product_id: productId,
+      offer_name: finalOfferName,
       offer_id: offerId,
       offer_code: clean(item.offer_code),
       customer_name: clean(customer.name),
@@ -197,23 +281,19 @@ Deno.serve(async (req) => {
       updated_at: new Date().toISOString(),
     };
 
-    // Upsert by (order_id, product_id) — idempotência real.
-    // Ticto re-envia o mesmo pedido+produto com transaction_hash DIFERENTE
-    // a cada retry, então conflitar por transaction_hash criava N linhas.
-    // Com order_id+product_id qualquer re-envio atualiza a linha existente.
     const { error } = await supabase
       .from("ticto_transactions")
       .upsert(record, { onConflict: "order_id,product_id" });
 
     if (error) {
-      console.error("DB error:", error);
+      console.error("[ticto-webhook] DB error:", error);
       return new Response(
         JSON.stringify({ error: "Failed to save transaction", detail: error.message }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    console.log(`Ticto webhook processed: status=${record.status} product="${record.product_name}" amount=${record.paid_amount} funnel=${funnelId} order=${record.order_id}`);
+    console.log(`[ticto-webhook] Saved: status=${record.status} product="${record.product_name}" amount=${record.paid_amount} funnel=${funnelId} order=${record.order_id}`);
 
     // ── Sincronizar lead — só quando status === "authorized" ──
     if (record.status === "authorized") {
@@ -238,7 +318,7 @@ Deno.serve(async (req) => {
           },
         });
       } catch (leadErr) {
-        console.error("Lead sync error (non-fatal):", leadErr);
+        console.error("[ticto-webhook] Lead sync error (non-fatal):", leadErr);
       }
     }
 
@@ -247,7 +327,7 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
-    console.error("Webhook error:", err);
+    console.error("[ticto-webhook] Webhook error:", err);
     return new Response(
       JSON.stringify({ error: "Internal server error", detail: String(err) }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
