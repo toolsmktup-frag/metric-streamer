@@ -97,6 +97,12 @@ const App = () => (
           <Route path="/equipe" element={<Protected><Equipe /></Protected>} />
           {/* WhatsApp Chat - fullscreen layout */}
           <Route path="/whatsapp" element={<Protected><WhatsAppChat /></Protected>} />
+          {/* Automações WhatsApp */}
+          <Route path="/ferramentas/automacoes" element={<Protected><WzAutomacoes /></Protected>} />
+          <Route path="/ferramentas/automacoes/novo" element={<Protected><WzFlowCanvas /></Protected>} />
+          <Route path="/ferramentas/automacoes/:id" element={<Protected><WzFlowCanvas /></Protected>} />
+          <Route path="/ferramentas/automacoes/instancias" element={<Protected><WzInstancias /></Protected>} />
+          <Route path="/ferramentas/automacoes/execucoes" element={<Protected><WzExecucoes /></Protected>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
         </ErrorBoundary>
