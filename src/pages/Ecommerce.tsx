@@ -151,20 +151,14 @@ function useDailySalesRate() {
         .from('product_offer_mappings')
         .select('product_id, offer_name, quantity');
 
-      const { data: tictoSales } = await supabase
-        .from('ticto_transactions')
+      const { data: salesData } = await supabase
+        .from('v_all_sales')
         .select('product_name')
         .eq('status', 'authorized')
-        .gte('order_date', `${dateFrom}T00:00:00`)
-        .lte('order_date', `${dateTo}T23:59:59`);
-
-      const { data: guruSales } = await supabase
-        .from('customer_purchases')
-        .select('product_name')
         .gte('purchased_at', `${dateFrom}T00:00:00`)
         .lte('purchased_at', `${dateTo}T23:59:59`);
 
-      const allSales = [...(tictoSales || []), ...(guruSales || [])];
+      const allSales = salesData || [];
       const mappingMap: Record<string, { product_id: string; quantity: number }> = {};
       for (const m of mappings || []) {
         mappingMap[m.offer_name.toLowerCase()] = { product_id: m.product_id, quantity: m.quantity };
