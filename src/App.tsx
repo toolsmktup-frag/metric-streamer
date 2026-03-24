@@ -36,6 +36,10 @@ import LeadsList from "./pages/LeadsList";
 import LeadsSources from "./pages/LeadsSources";
 import WhatsAppChat from "./pages/WhatsAppChat";
 import Equipe from "./pages/Equipe";
+import WzAutomacoes from "./pages/WzAutomacoes";
+import WzFlowCanvas from "./pages/WzFlowCanvas";
+import WzInstancias from "./pages/WzInstancias";
+import WzExecucoes from "./pages/WzExecucoes";
 
 const queryClient = new QueryClient({
   defaultOptions: {
