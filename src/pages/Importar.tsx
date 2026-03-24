@@ -336,7 +336,12 @@ export default function Importar() {
       setParsedRows(rows);
       setPreviewHeaders(headers);
       setPreviewRows(preview);
+      const missingId = rows.filter((r: any) => !r.platform_transaction_id).length;
       addLog(`✅ ${rows.length} linhas encontradas no arquivo`);
+      if (missingId > 0) {
+        addLog(`⚠️ ${missingId} linhas sem ID de transação — serão ignoradas na importação`);
+        toast.warning(`${missingId} de ${rows.length} linhas sem ID de transação`);
+      }
     } catch (err) {
       toast.error('Erro ao ler o arquivo: ' + String(err));
       setStatus('idle');
