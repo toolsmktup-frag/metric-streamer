@@ -10,48 +10,20 @@ function normalizeStatus(raw: string | null): string {
   if (!raw) return "authorized";
   const s = raw.toLowerCase().trim();
   const map: Record<string, string> = {
-    paid: "authorized",
-    approved: "authorized",
-    authorized: "authorized",
-    autorizado: "authorized",
-    sale_approved: "authorized",
-    sale_completed: "authorized",
-    completed: "authorized",
-    aprovado: "authorized",
-    pago: "authorized",
-
-    pending: "pending",
-    waiting_payment: "pending",
-    pix_created: "pending",
-    pix_pending: "pending",
-    bank_slip_created: "pending",
-    bank_slip_delayed: "pending",
-    unpaid: "pending",
-    pendente: "pending",
-    "pix gerado": "pending",
-    "boleto gerado": "pending",
-    "aguardando pagamento": "pending",
-
-    refunded: "refunded",
-    refund: "refunded",
-    sale_refunded: "refunded",
-    reembolsado: "refunded",
-    estornado: "refunded",
-
-    chargeback: "chargeback",
-    sale_chargeback: "chargeback",
-
-    canceled: "canceled",
-    cancelled: "canceled",
-    expired: "canceled",
-    cancelado: "canceled",
-    expirado: "canceled",
-    pix_expired: "canceled",
+    paid: "authorized", approved: "authorized", authorized: "authorized",
+    autorizado: "authorized", sale_approved: "authorized", sale_completed: "authorized",
+    completed: "authorized", aprovado: "authorized", pago: "authorized",
+    pending: "pending", waiting_payment: "pending", pix_created: "pending",
+    pix_pending: "pending", bank_slip_created: "pending", bank_slip_delayed: "pending",
+    unpaid: "pending", pendente: "pending", "pix gerado": "pending",
+    "boleto gerado": "pending", "aguardando pagamento": "pending",
+    refunded: "refunded", refund: "refunded", sale_refunded: "refunded",
+    reembolsado: "refunded", estornado: "refunded",
+    chargeback: "chargeback", sale_chargeback: "chargeback",
+    canceled: "canceled", cancelled: "canceled", expired: "canceled",
+    cancelado: "canceled", expirado: "canceled", pix_expired: "canceled",
     bank_slip_expired: "canceled",
-
-    refused: "refused",
-    recusado: "refused",
-    sale_refused: "refused",
+    refused: "refused", recusado: "refused", sale_refused: "refused",
   };
   return map[s] || s;
 }
@@ -65,8 +37,6 @@ Deno.serve(async (req) => {
 
   try {
     const authHeader = req.headers.get("Authorization");
-    console.log("Auth header present:", !!authHeader);
-
     if (!authHeader?.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -97,17 +67,32 @@ Deno.serve(async (req) => {
       });
     }
 
+    // ── Pre-resolve funnel_ids por product_name (em batch) ──
+    const uniqueProducts = [...new Set(records.map((r: any) => r.product_name).filter(Boolean))];
+    const funnelCache: Record<string, string | null> = {};
+    for (const pn of uniqueProducts) {
+      const { data } = await supabase.rpc("resolve_funnel_id", { p_product_name: pn });
+      funnelCache[pn] = data || null;
+    }
+    console.log(`Resolved ${uniqueProducts.length} product names to funnel_ids`);
+
     let inserted = 0;
     let skipped = 0;
     let errors = 0;
     let leadsSynced = 0;
     const errorDetails: string[] = [];
 
+    // ── Bulk prepare customer_purchases records ──
+    const cpRecords: any[] = [];
+    const ttRecords: any[] = [];
+    const leadSyncQueue: any[] = [];
+
     for (const record of records) {
       try {
         if (!record.platform_transaction_id) { skipped++; continue; }
 
         const normalizedSt = normalizeStatus(record.status);
+        const funnelId = funnelCache[record.product_name] || null;
 
         // Resolve ou cria cliente
         let unified_customer_id: string | null = null;
@@ -123,8 +108,7 @@ Deno.serve(async (req) => {
           else console.error("Customer error:", cerr.message);
         }
 
-        // Salva em customer_purchases
-        const { error: pe } = await supabase.from('customer_purchases').insert({
+        cpRecords.push({
           organization_id: org_id,
           unified_customer_id,
           platform,
@@ -145,16 +129,10 @@ Deno.serve(async (req) => {
           utm_content: record.utm_content || null,
           utm_term: record.utm_term || null,
           imported_from: 'planilha',
+          funnel_id: funnelId,
         });
 
-        if (pe) {
-          if (pe.code === '23505') { skipped++; continue; }
-          errors++;
-          errorDetails.push(`${record.platform_transaction_id}: ${pe.message}`);
-          continue;
-        }
-
-        // Para Ticto e Eduzz: salva também em ticto_transactions (alimenta o dashboard)
+        // Para Ticto e Eduzz: salva também em ticto_transactions
         if (platform === 'ticto' || platform === 'eduzz') {
           const extractId = (v: string | null) => v ? (v.match(/\|(\d{10,})/)?.[1] || null) : null;
           const extractName = (v: string | null) => v ? v.split('|')[0].trim() || null : null;
@@ -162,7 +140,7 @@ Deno.serve(async (req) => {
             (record.utm_source || '').toLowerCase().includes(s)
           ) || !!extractId(record.utm_campaign);
 
-          const { error: te } = await supabase.from('ticto_transactions').insert({
+          ttRecords.push({
             organization_id: org_id,
             transaction_hash: record.platform_transaction_id,
             order_hash: record.platform_order_id || null,
@@ -191,38 +169,14 @@ Deno.serve(async (req) => {
             meta_ad_id: extractId(record.utm_term),
             meta_ad_name: extractName(record.utm_term),
             is_paid_traffic: isPaid,
+            funnel_id: funnelId,
+            source_platform: platform,
           });
-          if (te && te.code !== '23505') {
-            console.error("ticto_transactions error:", te.message);
-          }
         }
 
-        // ── Sync lead para "BASE DE LEADS" (RPC centralizada) ──
+        // Queue lead sync for authorized sales
         if (normalizedSt === "authorized") {
-          try {
-            await supabase.rpc("sync_lead_from_sale", {
-              p_phone: record.customer_phone || null,
-              p_email: record.customer_email || null,
-              p_name: record.customer_name || null,
-              p_utm_source: record.utm_source || null,
-              p_utm_medium: record.utm_medium || null,
-              p_utm_campaign: record.utm_campaign || null,
-              p_utm_content: record.utm_content || null,
-              p_utm_term: record.utm_term || null,
-              p_event_name: "purchase",
-              p_product_name: record.product_name || null,
-              p_metadata: {
-                platform,
-                product_name: record.product_name,
-                status: normalizedSt,
-                amount: record.gross_amount || 0,
-                source: "planilha_import",
-              },
-            });
-            leadsSynced++;
-          } catch (err) {
-            console.error("Lead sync error (non-fatal):", err);
-          }
+          leadSyncQueue.push(record);
         }
 
         inserted++;
@@ -231,6 +185,56 @@ Deno.serve(async (req) => {
         errorDetails.push(String(err));
       }
     }
+
+    // ── Bulk insert customer_purchases ──
+    if (cpRecords.length > 0) {
+      const { error: cpErr } = await supabase.from('customer_purchases')
+        .upsert(cpRecords, { onConflict: 'platform,platform_transaction_id' });
+      if (cpErr) {
+        console.error("Bulk customer_purchases error:", cpErr.message);
+        if (cpErr.code !== '23505') errorDetails.push(`cp_bulk: ${cpErr.message}`);
+      }
+    }
+
+    // ── Bulk insert ticto_transactions ──
+    if (ttRecords.length > 0) {
+      const { error: ttErr } = await supabase.from('ticto_transactions')
+        .upsert(ttRecords, { onConflict: 'transaction_hash' });
+      if (ttErr && ttErr.code !== '23505') {
+        console.error("Bulk ticto_transactions error:", ttErr.message);
+      }
+    }
+
+    // ── Fire-and-forget lead syncs (best-effort, time-boxed) ──
+    const leadPromises = leadSyncQueue.map(record =>
+      supabase.rpc("sync_lead_from_sale", {
+        p_phone: record.customer_phone || null,
+        p_email: record.customer_email || null,
+        p_name: record.customer_name || null,
+        p_utm_source: record.utm_source || null,
+        p_utm_medium: record.utm_medium || null,
+        p_utm_campaign: record.utm_campaign || null,
+        p_utm_content: record.utm_content || null,
+        p_utm_term: record.utm_term || null,
+        p_event_name: "purchase",
+        p_product_name: record.product_name || null,
+        p_metadata: {
+          platform,
+          product_name: record.product_name,
+          status: "authorized",
+          amount: record.gross_amount || 0,
+          source: "planilha_import",
+        },
+      }).then(() => { leadsSynced++; }).catch((err: any) => {
+        console.error("Lead sync error (non-fatal):", err);
+      })
+    );
+
+    // Wait up to 15s for lead syncs
+    await Promise.race([
+      Promise.allSettled(leadPromises),
+      new Promise(resolve => setTimeout(resolve, 15000)),
+    ]);
 
     console.log(`Done: inserted=${inserted}, skipped=${skipped}, errors=${errors}, leadsSynced=${leadsSynced}`);
     return new Response(

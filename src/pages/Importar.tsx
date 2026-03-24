@@ -338,7 +338,7 @@ export default function Importar() {
     setStatus('importing');
     setProgress(0);
 
-    const BATCH = 50;
+    const BATCH = 250;
     const total = parsedRows.length;
     let inserted = 0;
     let skipped = 0;
