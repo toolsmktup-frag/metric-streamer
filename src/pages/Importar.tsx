@@ -538,7 +538,7 @@ export default function Importar() {
 
       {/* Result */}
       {status === 'done' && result && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
           <div className="rounded-lg border border-border bg-card p-4 text-center">
             <div className="text-2xl font-bold text-foreground">{result.total}</div>
             <div className="text-xs text-muted-foreground mt-1">Total no arquivo</div>
@@ -549,8 +549,14 @@ export default function Importar() {
           </div>
           <div className="rounded-lg border border-yellow-200 bg-yellow-50 dark:bg-yellow-950/20 p-4 text-center">
             <div className="text-2xl font-bold text-yellow-600">{result.skipped}</div>
-            <div className="text-xs text-muted-foreground mt-1">Duplicados (pulados)</div>
+            <div className="text-xs text-muted-foreground mt-1">Duplicados</div>
           </div>
+          {result.invalid > 0 && (
+            <div className="rounded-lg border border-orange-200 bg-orange-50 dark:bg-orange-950/20 p-4 text-center">
+              <div className="text-2xl font-bold text-orange-600">{result.invalid}</div>
+              <div className="text-xs text-muted-foreground mt-1">Sem ID (inválidos)</div>
+            </div>
+          )}
           <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-950/20 p-4 text-center">
             <div className="text-2xl font-bold text-red-600">{result.errors}</div>
             <div className="text-xs text-muted-foreground mt-1">Erros</div>

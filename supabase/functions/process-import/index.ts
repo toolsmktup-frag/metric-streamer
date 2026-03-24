@@ -242,9 +242,9 @@ Deno.serve(async (req) => {
       new Promise(resolve => setTimeout(resolve, 15000)),
     ]);
 
-    console.log(`Done: inserted=${inserted}, skipped=${skipped}, errors=${errors}, leadsSynced=${leadsSynced}`);
+    console.log(`Done: inserted=${inserted}, skipped=${skipped}, invalid=${invalid}, errors=${errors}, leadsSynced=${leadsSynced}`);
     return new Response(
-      JSON.stringify({ inserted, skipped, errors, errorDetails, leadsSynced }),
+      JSON.stringify({ inserted, skipped, invalid, errors, errorDetails, leadsSynced }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
