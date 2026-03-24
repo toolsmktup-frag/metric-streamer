@@ -155,7 +155,7 @@ export function usePrevPeriodAllSales(funnelId?: string | null) {
   const { dateRange, compareEnabled, lastUpdated } = useFilterStore();
   const durationDays = Math.round((dateRange.end.getTime() - dateRange.start.getTime()) / (24 * 60 * 60 * 1000));
   const prevEnd = new Date(dateRange.start);
-  prevEnd.setDate(prevEnd.getDate() - 1); // day before current start
+  prevEnd.setDate(prevEnd.getDate() - 1);
   const prevStart = new Date(prevEnd);
   prevStart.setDate(prevStart.getDate() - durationDays);
   const dateFrom = toLocalDate(prevStart);
@@ -163,18 +163,7 @@ export function usePrevPeriodAllSales(funnelId?: string | null) {
 
   return useQuery({
     queryKey: ['all-sales-prev', dateFrom, dateTo, funnelId ?? 'all', lastUpdated.getTime()],
-    queryFn: async () => {
-      let query = (supabase as any)
-        .from('v_all_sales')
-        .select('*')
-        .gte('purchased_at', `${dateFrom}T00:00:00`)
-        .lte('purchased_at', `${dateTo}T23:59:59`)
-        .order('purchased_at', { ascending: false });
-      if (funnelId) query = query.eq('funnel_id', funnelId);
-      const { data, error } = await query;
-      if (error) throw error;
-      return (data || []) as UnifiedSale[];
-    },
+    queryFn: async () => fetchAllSalesRows(dateFrom, dateTo, funnelId),
     enabled: compareEnabled,
     ...SHARED_QUERY_OPTIONS,
   });

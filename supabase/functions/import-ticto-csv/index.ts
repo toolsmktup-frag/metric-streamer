@@ -23,53 +23,25 @@ function isPaidTraffic(utmSource: string | null): boolean {
   return paidSources.some(s => utmSource.toLowerCase().includes(s));
 }
 
-/** Mapa canônico de status — normaliza status de qualquer plataforma */
+/** Mapa canônico de status */
 function normalizeStatus(raw: string | null): string {
   if (!raw) return "authorized";
   const s = raw.toLowerCase().trim();
   const map: Record<string, string> = {
-    paid: "authorized",
-    approved: "authorized",
-    authorized: "authorized",
-    autorizado: "authorized",
-    sale_approved: "authorized",
-    sale_completed: "authorized",
-    completed: "authorized",
-    aprovado: "authorized",
-    pago: "authorized",
-
-    pending: "pending",
-    waiting_payment: "pending",
-    pix_created: "pending",
-    pix_pending: "pending",
-    bank_slip_created: "pending",
-    bank_slip_delayed: "pending",
-    unpaid: "pending",
-    pendente: "pending",
-    "pix gerado": "pending",
-    "boleto gerado": "pending",
-    "aguardando pagamento": "pending",
-
-    refunded: "refunded",
-    refund: "refunded",
-    sale_refunded: "refunded",
-    reembolsado: "refunded",
-    estornado: "refunded",
-
-    chargeback: "chargeback",
-    sale_chargeback: "chargeback",
-
-    canceled: "canceled",
-    cancelled: "canceled",
-    expired: "canceled",
-    cancelado: "canceled",
-    expirado: "canceled",
-    pix_expired: "canceled",
+    paid: "authorized", approved: "authorized", authorized: "authorized",
+    autorizado: "authorized", sale_approved: "authorized", sale_completed: "authorized",
+    completed: "authorized", aprovado: "authorized", pago: "authorized",
+    pending: "pending", waiting_payment: "pending", pix_created: "pending",
+    pix_pending: "pending", bank_slip_created: "pending", bank_slip_delayed: "pending",
+    unpaid: "pending", pendente: "pending", "pix gerado": "pending",
+    "boleto gerado": "pending", "aguardando pagamento": "pending",
+    refunded: "refunded", refund: "refunded", sale_refunded: "refunded",
+    reembolsado: "refunded", estornado: "refunded",
+    chargeback: "chargeback", sale_chargeback: "chargeback",
+    canceled: "canceled", cancelled: "canceled", expired: "canceled",
+    cancelado: "canceled", expirado: "canceled", pix_expired: "canceled",
     bank_slip_expired: "canceled",
-
-    refused: "refused",
-    recusado: "refused",
-    sale_refused: "refused",
+    refused: "refused", recusado: "refused", sale_refused: "refused",
   };
   return map[s] || s;
 }
@@ -80,7 +52,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { records: inputRecords } = await req.json();
+    const { records: inputRecords, platform: inputPlatform } = await req.json();
 
     if (!inputRecords || !Array.isArray(inputRecords) || inputRecords.length === 0) {
       return new Response(JSON.stringify({ error: "No records provided" }), {
@@ -88,9 +60,20 @@ Deno.serve(async (req) => {
       });
     }
 
+    const sourcePlatform = inputPlatform || "ticto";
+
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // ── Resolve funnel_ids em batch (por product_name único) ──
+    const uniqueProducts = [...new Set(inputRecords.map((r: any) => r.product_name).filter(Boolean))];
+    const funnelCache: Record<string, string | null> = {};
+
+    for (const pn of uniqueProducts) {
+      const { data } = await supabase.rpc("resolve_funnel_id", { p_product_name: pn });
+      funnelCache[pn] = data || null;
+    }
 
     const dbRecords = inputRecords.map((r: any) => {
       const campaignParsed = parseUtmPair(r.utm_campaign);
@@ -129,53 +112,60 @@ Deno.serve(async (req) => {
         meta_ad_id: adParsed.id,
         meta_ad_name: adParsed.name,
         is_paid_traffic: isPaidTraffic(r.utm_source),
+        funnel_id: funnelCache[r.product_name] || null,
+        source_platform: sourcePlatform,
         updated_at: new Date().toISOString(),
       };
     });
 
-    // Insert in batches of 50
+    // Bulk upsert all records at once (edge function handles up to 250 per call)
     let inserted = 0;
     const errors: string[] = [];
-    for (let i = 0; i < dbRecords.length; i += 50) {
-      const batch = dbRecords.slice(i, i + 50);
-      const { error } = await supabase
-        .from("ticto_transactions")
-        .upsert(batch, { onConflict: "transaction_hash" });
-      if (error) {
-        errors.push(`Batch ${Math.floor(i / 50)}: ${error.message}`);
-      } else {
-        inserted += batch.length;
-      }
+
+    const { error } = await supabase
+      .from("ticto_transactions")
+      .upsert(dbRecords, { onConflict: "transaction_hash" });
+
+    if (error) {
+      errors.push(error.message);
+    } else {
+      inserted = dbRecords.length;
     }
 
-    // ── Sync leads para "BASE DE LEADS" (RPC centralizada) ──
+    // ── Fire-and-forget: sync leads in background ──
+    const authorizedRecs = dbRecords.filter((r: any) => r.status === "authorized");
     let leadsSynced = 0;
-    for (const rec of dbRecords) {
-      if (rec.status !== "authorized") continue;
-      try {
-        await supabase.rpc("sync_lead_from_sale", {
-          p_phone: rec.customer_phone,
-          p_email: rec.customer_email,
-          p_name: rec.customer_name,
-          p_utm_source: rec.utm_source,
-          p_utm_medium: rec.utm_medium,
-          p_utm_campaign: rec.utm_campaign,
-          p_utm_content: rec.utm_content,
-          p_utm_term: rec.utm_term,
-          p_event_name: "purchase",
-          p_metadata: {
-            platform: "ticto",
-            product_name: rec.product_name,
-            status: rec.status,
-            amount_cents: rec.paid_amount,
-            source: "csv_import",
-          },
-        });
-        leadsSynced++;
-      } catch (err) {
+
+    // Non-blocking: don't await all, just best-effort with a short batch
+    const leadPromises = authorizedRecs.map((rec: any) =>
+      supabase.rpc("sync_lead_from_sale", {
+        p_phone: rec.customer_phone,
+        p_email: rec.customer_email,
+        p_name: rec.customer_name,
+        p_utm_source: rec.utm_source,
+        p_utm_medium: rec.utm_medium,
+        p_utm_campaign: rec.utm_campaign,
+        p_utm_content: rec.utm_content,
+        p_utm_term: rec.utm_term,
+        p_event_name: "purchase",
+        p_product_name: rec.product_name,
+        p_metadata: {
+          platform: sourcePlatform,
+          product_name: rec.product_name,
+          status: rec.status,
+          amount_cents: rec.paid_amount,
+          source: "csv_import",
+        },
+      }).then(() => { leadsSynced++; }).catch((err: any) => {
         console.error("Lead sync error (non-fatal):", err);
-      }
-    }
+      })
+    );
+
+    // Wait up to 10s for lead syncs, then return regardless
+    await Promise.race([
+      Promise.allSettled(leadPromises),
+      new Promise(resolve => setTimeout(resolve, 10000)),
+    ]);
 
     console.log(`Import: ${inserted} inserted, ${errors.length} errors, ${leadsSynced} leads synced`);
 

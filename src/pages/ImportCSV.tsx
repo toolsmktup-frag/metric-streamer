@@ -134,9 +134,9 @@ export default function ImportCSV() {
     addLog(`${records.length} registros válidos, ${errors.length} erros de parsing`);
     if (errors.length > 0) addLog(`Erros: ${errors.slice(0, 5).join('; ')}`);
 
-    // Send in batches of 50 to edge function
+    // Send in batches of 250 to edge function
     let totalInserted = 0;
-    const batchSize = 50;
+    const batchSize = 250;
     const totalBatches = Math.ceil(records.length / batchSize);
 
     for (let i = 0; i < records.length; i += batchSize) {
@@ -145,7 +145,7 @@ export default function ImportCSV() {
       addLog(`Enviando batch ${batchNum}/${totalBatches} (${batch.length} registros)...`);
 
       const { data, error } = await supabase.functions.invoke('import-ticto-csv', {
-        body: { records: batch },
+        body: { records: batch, platform: 'ticto' },
       });
 
       if (error) {
