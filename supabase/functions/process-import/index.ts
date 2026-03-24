@@ -78,6 +78,7 @@ Deno.serve(async (req) => {
 
     let inserted = 0;
     let skipped = 0;
+    let invalid = 0;
     let errors = 0;
     let leadsSynced = 0;
     const errorDetails: string[] = [];
@@ -89,7 +90,12 @@ Deno.serve(async (req) => {
 
     for (const record of records) {
       try {
-        if (!record.platform_transaction_id) { skipped++; continue; }
+        // Sanitize transaction ID server-side
+        const txId = record.platform_transaction_id
+          ? String(record.platform_transaction_id).replace(/^\uFEFF/, '').replace(/^="?|"?$/g, '').trim()
+          : null;
+        if (!txId) { invalid++; continue; }
+        record.platform_transaction_id = txId;
 
         const normalizedSt = normalizeStatus(record.status);
         const funnelId = funnelCache[record.product_name] || null;
