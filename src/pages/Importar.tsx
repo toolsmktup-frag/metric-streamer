@@ -170,30 +170,39 @@ function parseLine(line: string, sep: string): string[] {
   return result;
 }
 
+function cleanId(val: string | undefined | null): string | null {
+  if (!val) return null;
+  // Remove BOM, quotes, ="..." wrappers, whitespace
+  const cleaned = String(val).replace(/^\uFEFF/, '').replace(/^="?|"?$/g, '').trim();
+  return cleaned || null;
+}
+
 function normalizeGuruRow(cols: string[]): any {
-  const phone_code = cols[GURU_COLS.phone_code] || '55';
-  const phone = cols[GURU_COLS.phone] || '';
+  const phone_code = c(cols, GURU_COLS.phone_code) || '55';
+  const phone = c(cols, GURU_COLS.phone);
   const full_phone = phone ? `${phone_code}${phone}` : null;
+  // Primary: transaction_id (col 0). Fallback: product_id + email + date as composite key
+  const txId = cleanId(cols[GURU_COLS.transaction_id]);
   return {
     platform: 'guru',
-    platform_transaction_id: cols[GURU_COLS.transaction_id] || null,
-    product_name: cols[GURU_COLS.product_name] || '',
-    product_id: cols[GURU_COLS.product_id] || null,
-    offer_name: cols[GURU_COLS.offer_name] || null,
-    gross_amount: parseGuruCentavos(cols[GURU_COLS.gross_amount]),
-    net_amount: parseGuruCentavos(cols[GURU_COLS.net_amount]),
-    payment_method: mapPayment(cols[GURU_COLS.payment_method]),
-    installments: parseInt(cols[GURU_COLS.installments]) || 1,
-    status: mapGuruStatus(cols[GURU_COLS.status]),
-    purchased_at: parseBRDate(cols[GURU_COLS.purchased_at]),
-    customer_name: cols[GURU_COLS.name] || null,
-    customer_email: cols[GURU_COLS.email] || null,
-    customer_cpf: cols[GURU_COLS.cpf] || null,
+    platform_transaction_id: txId,
+    product_name: c(cols, GURU_COLS.product_name) || '',
+    product_id: c(cols, GURU_COLS.product_id) || null,
+    offer_name: c(cols, GURU_COLS.offer_name) || null,
+    gross_amount: parseGuruCentavos(c(cols, GURU_COLS.gross_amount)),
+    net_amount: parseGuruCentavos(c(cols, GURU_COLS.net_amount)),
+    payment_method: mapPayment(c(cols, GURU_COLS.payment_method)),
+    installments: parseInt(c(cols, GURU_COLS.installments)) || 1,
+    status: mapGuruStatus(c(cols, GURU_COLS.status)),
+    purchased_at: parseBRDate(c(cols, GURU_COLS.purchased_at)),
+    customer_name: c(cols, GURU_COLS.name) || null,
+    customer_email: c(cols, GURU_COLS.email) || null,
+    customer_cpf: c(cols, GURU_COLS.cpf) || null,
     customer_phone: full_phone,
-    utm_source: cols[GURU_COLS.utm_source] || null,
-    utm_campaign: cols[GURU_COLS.utm_campaign] || null,
-    utm_medium: cols[GURU_COLS.utm_medium] || null,
-    utm_content: cols[GURU_COLS.utm_content] || null,
+    utm_source: c(cols, GURU_COLS.utm_source) || null,
+    utm_campaign: c(cols, GURU_COLS.utm_campaign) || null,
+    utm_medium: c(cols, GURU_COLS.utm_medium) || null,
+    utm_content: c(cols, GURU_COLS.utm_content) || null,
   };
 }
 
