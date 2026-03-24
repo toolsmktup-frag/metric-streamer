@@ -23,23 +23,33 @@ export default function WzFlowList({ embedded = false }: { embedded?: boolean })
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   return (
-    <div className="p-6 space-y-6 max-w-6xl mx-auto">
+    <div className={embedded ? 'space-y-6' : 'p-6 space-y-6 max-w-6xl mx-auto'}>
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-            <Zap className="h-6 w-6 text-primary" />
-            Automações WhatsApp
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Crie fluxos automatizados para envio de mensagens
-          </p>
+      {!embedded && (
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+              <Zap className="h-6 w-6 text-primary" />
+              Automações WhatsApp
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Crie fluxos automatizados para envio de mensagens
+            </p>
+          </div>
+          <Button onClick={() => navigate('/ferramentas/automacoes/novo')} className="gap-2">
+            <Plus className="h-4 w-4" />
+            Novo Fluxo
+          </Button>
         </div>
-        <Button onClick={() => navigate('/ferramentas/automacoes/novo')} className="gap-2">
-          <Plus className="h-4 w-4" />
-          Novo Fluxo
-        </Button>
-      </div>
+      )}
+      {embedded && (
+        <div className="flex justify-end">
+          <Button onClick={() => navigate('/ferramentas/automacoes/novo')} className="gap-2">
+            <Plus className="h-4 w-4" />
+            Novo Fluxo
+          </Button>
+        </div>
+      )}
 
       {/* Flow Cards */}
       {isLoading ? (
