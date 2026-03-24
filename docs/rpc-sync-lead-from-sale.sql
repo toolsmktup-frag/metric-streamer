@@ -132,25 +132,26 @@ BEGIN
     END IF;
   END IF;
 
-  -- ─── 6. FIX CRÍTICO #1: Posicionar no funil do PRODUTO (via lead_funnel_products) ───
+  -- ─── 6. Posicionar no funil do PRODUTO ───
   IF p_product_name IS NOT NULL AND p_product_name <> '' THEN
-    -- Buscar funil do produto via lead_funnel_products (match case-insensitive)
+    -- Tentativa 1: match exato via lead_product_mappings (vínculo manual da UI)
     SELECT lf.id INTO v_prod_funnel_id
-    FROM lead_funnel_products lfp
-    JOIN lead_funnels lf ON lf.id = lfp.funnel_id
+    FROM lead_product_mappings lpm
+    JOIN lead_funnels lf ON lf.id = lpm.lead_funnel_id
     WHERE lf.organization_id = v_org_id
-      AND LOWER(lfp.name) = LOWER(p_product_name)
+      AND LOWER(lpm.raw_product_name) = LOWER(p_product_name)
       AND lf.is_active = true
     LIMIT 1;
 
-    -- Fallback: tentar via lead_product_mappings
+    -- Tentativa 2: match por fragmento via lead_funnel_products (ILIKE)
     IF v_prod_funnel_id IS NULL THEN
-      SELECT lf.id INTO v_prod_funnel_id
-      FROM lead_product_mappings lpm
-      JOIN lead_funnels lf ON lf.id = lpm.lead_funnel_id
+      SELECT lfp.lead_funnel_id INTO v_prod_funnel_id
+      FROM lead_funnel_products lfp
+      JOIN lead_funnels lf ON lf.id = lfp.lead_funnel_id
       WHERE lf.organization_id = v_org_id
-        AND LOWER(lpm.raw_product_name) = LOWER(p_product_name)
+        AND p_product_name ILIKE '%' || lfp.product_name_contains || '%'
         AND lf.is_active = true
+      ORDER BY length(lfp.product_name_contains) DESC
       LIMIT 1;
     END IF;
 
