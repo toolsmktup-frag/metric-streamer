@@ -191,4 +191,4 @@ GRANT EXECUTE ON FUNCTION public.sync_lead_from_sale TO authenticated;
 GRANT EXECUTE ON FUNCTION public.sync_lead_from_sale TO service_role;
 
 COMMENT ON FUNCTION public.sync_lead_from_sale IS
-  'v2: Dedup case-insensitive + criação de lead + posicionamento em BASE DE LEADS e funil do produto. Chamada por todos os webhooks e importadores.';
+  'v3: Dedup case-insensitive + criação de lead + posicionamento em BASE DE LEADS e funil do produto (match exato via mappings → fallback ILIKE via product_name_contains). Chamada por todos os webhooks e importadores.';
