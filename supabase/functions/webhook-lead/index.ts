@@ -87,7 +87,7 @@ Deno.serve(async (req) => {
         .from('leads')
         .select('*')
         .eq('organization_id', funnel.organization_id)
-        .eq('email', email)
+        .ilike('email', email)
         .maybeSingle()
       lead = data
     }
@@ -119,14 +119,14 @@ Deno.serve(async (req) => {
       }
       lead = data
     } else {
-      // Update name/UTMs if provided
+      // Update name/UTMs — COALESCE: só preenche se lead não tem
       const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
       if (name && !lead.name) updates.name = name
-      if (utm_source) updates.utm_source = utm_source
-      if (utm_medium) updates.utm_medium = utm_medium
-      if (utm_campaign) updates.utm_campaign = utm_campaign
-      if (utm_content) updates.utm_content = utm_content
-      if (utm_term) updates.utm_term = utm_term
+      if (utm_source && !lead.utm_source) updates.utm_source = utm_source
+      if (utm_medium && !lead.utm_medium) updates.utm_medium = utm_medium
+      if (utm_campaign && !lead.utm_campaign) updates.utm_campaign = utm_campaign
+      if (utm_content && !lead.utm_content) updates.utm_content = utm_content
+      if (utm_term && !lead.utm_term) updates.utm_term = utm_term
 
       await supabase.from('leads').update(updates).eq('id', lead.id)
     }
