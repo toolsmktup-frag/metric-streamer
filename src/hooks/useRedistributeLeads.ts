@@ -16,20 +16,34 @@ export function useRedistributeLeads() {
     mutationFn: async ({ funnelId, scope, stageIds, sellerIds }: RedistributeParams) => {
       if (!sellerIds.length) throw new Error('Selecione ao menos um vendedor');
 
-      // 1. Fetch positions
-      let query = (supabase as any)
-        .from('lead_stage_positions')
-        .select('id, lead_id, stage_id, entered_at')
-        .eq('funnel_id', funnelId)
-        .order('entered_at', { ascending: true });
+      // 1. Fetch positions in batches to avoid URL length limits
+      const allPositions: any[] = [];
+      const PAGE_SIZE = 500;
+      let from = 0;
+      let hasMore = true;
 
-      if (stageIds.length > 0) {
-        query = query.in('stage_id', stageIds);
+      while (hasMore) {
+        let query = (supabase as any)
+          .from('lead_stage_positions')
+          .select('id, lead_id, stage_id, entered_at')
+          .eq('funnel_id', funnelId)
+          .order('entered_at', { ascending: true })
+          .range(from, from + PAGE_SIZE - 1);
+
+        if (stageIds.length > 0) {
+          query = query.in('stage_id', stageIds);
+        }
+
+        const { data: page, error: posErr } = await query;
+        if (posErr) throw posErr;
+
+        allPositions.push(...(page || []));
+        hasMore = (page?.length || 0) === PAGE_SIZE;
+        from += PAGE_SIZE;
       }
 
-      const { data: positions, error: posErr } = await query;
-      if (posErr) throw posErr;
-      if (!positions?.length) throw new Error('Nenhum lead encontrado com os filtros selecionados');
+      const positions = allPositions;
+      if (!positions.length) throw new Error('Nenhum lead encontrado com os filtros selecionados');
 
       // 2. Fetch leads to filter by scope
       const leadIds = [...new Set(positions.map((p: any) => p.lead_id))] as string[];

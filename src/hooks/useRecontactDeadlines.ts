@@ -66,7 +66,32 @@ export function useRecontactDeadlines(
       const lead = pos.lead;
       const productName = (lead.metadata?.product_name as string) || '';
 
-      if (!productName) continue;
+      // FIX #11: Se não tem product_name no metadata, tentar match via purchaseMap
+      // (leads criados via webhook-lead não têm metadata.product_name)
+      if (!productName) {
+        // Ainda assim, tentar calcular recontato se tiver purchaseMap com data
+        // usando o primeiro produto com recontact_days como fallback
+        if (purchaseMap) {
+          const summary = purchaseMap.get(pos.lead_id);
+          if (summary?.firstPurchaseDate && productsWithRecontact.length === 1) {
+            const fallbackProduct = productsWithRecontact[0];
+            const purchaseDate = parseLocalDateTime(summary.firstPurchaseDate);
+            if (purchaseDate) {
+              const deadlineDate = addDays(purchaseDate, fallbackProduct.recontact_days!);
+              const daysRemaining = differenceInDays(deadlineDate, today);
+              map.set(pos.lead_id, {
+                daysRemaining,
+                isOverdue: daysRemaining < 0,
+                deadlineDate,
+                productName: fallbackProduct.display_name || fallbackProduct.product_name_contains,
+                recontactDays: fallbackProduct.recontact_days!,
+                matchedProductId: fallbackProduct.id,
+              });
+            }
+          }
+        }
+        continue;
+      }
 
       // Resolve purchase date: metadata first, then purchaseMap fallback
       let purchasedAtRaw = (lead.metadata?.purchased_at as string) || '';

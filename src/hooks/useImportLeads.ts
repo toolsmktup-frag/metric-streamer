@@ -343,6 +343,26 @@ export function useImportLeads() {
         }
         await Promise.all(posPromises);
 
+        // FIX #8: Buscar eventos existentes para evitar duplicatas em reimportação
+        const allLeadIdsForEvents = Array.from(new Set(
+          Array.from(dedupMap.values()).map(u => leadIdMap.get(u.lead)).filter(Boolean)
+        )) as string[];
+
+        let existingEventKeys = new Set<string>();
+        if (allLeadIdsForEvents.length > 0) {
+          for (let ei = 0; ei < allLeadIdsForEvents.length; ei += 500) {
+            const batch = allLeadIdsForEvents.slice(ei, ei + 500);
+            const { data: existingEvents } = await (supabase as any)
+              .from('lead_events')
+              .select('lead_id, event_name, created_at')
+              .eq('funnel_id', funnelId)
+              .in('lead_id', batch);
+            for (const ev of existingEvents || []) {
+              existingEventKeys.add(`${ev.lead_id}|${ev.event_name}|${ev.created_at}`);
+            }
+          }
+        }
+
         const events: ReturnType<typeof buildEvent>[] = [];
         const newLeadIds = new Set(toInsert.map(l => leadIdMap.get(l)).filter(Boolean));
 
@@ -353,11 +373,21 @@ export function useImportLeads() {
           const rowsByDate = [...allRows].sort((a, b) => getLeadTimestamp(a) - getLeadTimestamp(b));
 
           if (newLeadIds.has(resolvedId)) {
-            events.push(buildLeadImportadoEvent(resolvedId, funnelId, lead));
+            const evt = buildLeadImportadoEvent(resolvedId, funnelId, lead);
+            const key = `${evt.lead_id}|${evt.event_name}|${evt.created_at}`;
+            if (!existingEventKeys.has(key)) {
+              events.push(evt);
+              existingEventKeys.add(key);
+            }
           }
 
           for (const row of rowsByDate) {
-            events.push(buildEvent(resolvedId, funnelId, row));
+            const evt = buildEvent(resolvedId, funnelId, row);
+            const key = `${evt.lead_id}|${evt.event_name}|${evt.created_at}`;
+            if (!existingEventKeys.has(key)) {
+              events.push(evt);
+              existingEventKeys.add(key);
+            }
           }
         }
 

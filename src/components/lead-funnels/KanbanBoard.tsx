@@ -77,7 +77,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
   const [visibleCounts, setVisibleCounts] = useState<Record<string, number>>({});
 
   const moveLeadStage = useMoveLeadStage();
-  const { data: purchaseMap } = useBulkLeadPurchases(positions);
+  const { data: purchaseMap } = useBulkLeadPurchases(visiblePositions);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
