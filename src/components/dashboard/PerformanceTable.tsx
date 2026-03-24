@@ -154,7 +154,7 @@ const PerformanceTable = React.memo(function PerformanceTable({ data, level = 'c
       {
         id: 'conv_pagina',
         header: 'Conv. Pág.',
-        accessorFn: (row) => row.landing_page_views > 0 ? (((row as any).front_sales || 0) / row.landing_page_views) * 100 : 0,
+        accessorFn: (row) => row.landing_page_views > 0 ? (row.sales / row.landing_page_views) * 100 : 0,
         cell: ({ getValue }) => {
           const v = getValue() as number;
           const color = v >= 2.5 ? 'text-kpi-positive' : v >= 1.5 ? 'text-kpi-warning' : v > 0 ? 'text-destructive' : 'text-muted-foreground';
@@ -165,7 +165,7 @@ const PerformanceTable = React.memo(function PerformanceTable({ data, level = 'c
       {
         id: 'conv_checkout',
         header: 'Conv. Chk.',
-        accessorFn: (row) => row.initiate_checkout > 0 ? (((row as any).front_sales || 0) / row.initiate_checkout) * 100 : 0,
+        accessorFn: (row) => row.initiate_checkout > 0 ? (row.sales / row.initiate_checkout) * 100 : 0,
         cell: ({ getValue }) => {
           const v = getValue() as number;
           const color = v >= 16 ? 'text-kpi-positive' : v >= 10 ? 'text-kpi-warning' : v > 0 ? 'text-destructive' : 'text-muted-foreground';
@@ -192,6 +192,18 @@ const PerformanceTable = React.memo(function PerformanceTable({ data, level = 'c
           return <span className="font-mono-value">{v > 0 ? `${v.toFixed(2)}%` : '—'}</span>;
         },
         size: 80,
+      },
+      {
+        accessorKey: 'landing_page_views',
+        header: 'Vis. Pág.',
+        cell: ({ getValue }) => <span className="font-mono-value">{formatNumber(getValue() as number)}</span>,
+        size: 90,
+      },
+      {
+        accessorKey: 'initiate_checkout',
+        header: 'Init. Chk.',
+        cell: ({ getValue }) => <span className="font-mono-value">{formatNumber(getValue() as number)}</span>,
+        size: 90,
       },
       {
         accessorKey: 'link_clicks',
@@ -230,12 +242,13 @@ const PerformanceTable = React.memo(function PerformanceTable({ data, level = 'c
     const video_views = data.reduce((s, c) => s + (c.video_views || 0), 0);
     return {
       spend, revenue, sales, front_sales, bump_sales, upsell_sales, impressions, link_clicks,
+      landing_page_views, initiate_checkout,
       cpa: sales > 0 ? spend / sales : 0,
       roas: spend > 0 ? revenue / spend : 0,
       profit: revenue - spend,
       ctr: impressions > 0 ? (clicks / impressions) * 100 : 0,
-      conv_pagina: landing_page_views > 0 ? (front_sales / landing_page_views) * 100 : 0,
-      conv_checkout: initiate_checkout > 0 ? (front_sales / initiate_checkout) * 100 : 0,
+      conv_pagina: landing_page_views > 0 ? (sales / landing_page_views) * 100 : 0,
+      conv_checkout: initiate_checkout > 0 ? (sales / initiate_checkout) * 100 : 0,
       ticket_medio: sales > 0 ? revenue / sales : 0,
       hook: impressions > 0 && video_views > 0 ? (video_views / impressions) * 100 : 0,
     };
@@ -331,6 +344,8 @@ const PerformanceTable = React.memo(function PerformanceTable({ data, level = 'c
               <td className={`px-3 py-2.5 font-mono-value ${totals.conv_checkout >= 16 ? 'text-kpi-positive' : totals.conv_checkout >= 10 ? 'text-kpi-warning' : totals.conv_checkout > 0 ? 'text-destructive' : 'text-muted-foreground'}`}>{totals.conv_checkout > 0 ? `${totals.conv_checkout.toFixed(1)}%` : '—'}</td>
               <td className="px-3 py-2.5 font-mono-value">{totals.ticket_medio > 0 ? formatCurrency(totals.ticket_medio) : '—'}</td>
               <td className="px-3 py-2.5 font-mono-value">{totals.hook > 0 ? `${totals.hook.toFixed(2)}%` : '—'}</td>
+              <td className="px-3 py-2.5 font-mono-value">{formatNumber(totals.landing_page_views)}</td>
+              <td className="px-3 py-2.5 font-mono-value">{formatNumber(totals.initiate_checkout)}</td>
               <td className="px-3 py-2.5 font-mono-value">{formatNumber(totals.link_clicks)}</td>
               <td className="px-3 py-2.5 font-mono-value">{formatPercent(totals.ctr)}</td>
               <td className="px-3 py-2.5 font-mono-value">{formatNumber(totals.impressions)}</td>
