@@ -1,58 +1,76 @@
 
 
-# Correção da RPC sync_lead_from_sale — Match de Produto
+# Plano: Normalização e Unificação de Dados
 
-## Problema encontrado
+## Resumo
 
-A RPC v2 tem dois bugs no bloco de roteamento por produto (seção 6):
+Corrigir a fragmentação de dados do sistema em 4 fases: normalizar status em todos os pontos de entrada, adicionar sync de leads nas importações, expandir a view `v_all_sales` para todas as plataformas, e migrar o frontend para usar essa view.
 
-1. Referencia `lfp.name` — coluna que não existe. A coluna correta é `lfp.product_name_contains`
-2. Usa match exato (`LOWER(x) = LOWER(y)`) em vez de match por fragmento (`ILIKE`), ignorando o padrão já estabelecido no sistema
+---
 
-Isso significa que o roteamento por produto **não funciona** mesmo após o deploy da v2.
+## ✅ Centralização do syncLeadFromSale (CONCLUÍDO)
 
-## Correção
+A lógica duplicada em 5 Edge Functions foi substituída por uma stored procedure PostgreSQL `sync_lead_from_sale`.
 
-Alterar o bloco da seção 6 no arquivo `docs/rpc-sync-lead-from-sale.sql`:
+**Arquivo SQL**: `docs/rpc-sync-lead-from-sale.sql` — rodar no Supabase antes de deployar.
 
-### Lógica corrigida (2 tentativas, em ordem):
+**Edge Functions refatoradas**: ticto-webhook, guru-webhook, eduzz-webhook, import-ticto-csv, process-import.
 
-**Tentativa 1 — `lead_product_mappings` (match exato, case-insensitive)**
-Usa o mapeamento manual da UI onde o usuário vinculou o nome raw ao produto catalogado.
+---
 
-**Tentativa 2 — `lead_funnel_products` (match por fragmento via ILIKE)**
-Usa `p_product_name ILIKE '%' || lfp.product_name_contains || '%'` com `ORDER BY length(lfp.product_name_contains) DESC` para priorizar o match mais específico. Mesmo padrão da RPC `resolve_funnel_for_product` que já existe.
+## Fase 1 — Normalização de Status nos Importadores ✅
 
-### Mudanças no SQL:
+Já implementado nos importadores com mapa canônico.
 
-```sql
--- Tentativa 1: match exato via lead_product_mappings
-SELECT lf.id INTO v_prod_funnel_id
-FROM lead_product_mappings lpm
-JOIN lead_funnels lf ON lf.id = lpm.lead_funnel_id
-WHERE lf.organization_id = v_org_id
-  AND LOWER(lpm.raw_product_name) = LOWER(p_product_name)
-  AND lf.is_active = true
-LIMIT 1;
+## Fase 2 — Sync de Leads nas Importações ✅
 
--- Tentativa 2: match por fragmento via lead_funnel_products
-IF v_prod_funnel_id IS NULL THEN
-  SELECT lfp.lead_funnel_id INTO v_prod_funnel_id
-  FROM lead_funnel_products lfp
-  JOIN lead_funnels lf ON lf.id = lfp.lead_funnel_id
-  WHERE lf.organization_id = v_org_id
-    AND p_product_name ILIKE '%' || lfp.product_name_contains || '%'
-    AND lf.is_active = true
-  ORDER BY length(lfp.product_name_contains) DESC
-  LIMIT 1;
-END IF;
-```
+Já implementado — agora via RPC centralizada.
 
-## Arquivo modificado
+## ✅ Auditoria Completa do CRM — Correções Aplicadas
 
-- `docs/rpc-sync-lead-from-sale.sql` — corrigir seção 6 (linhas 135-155)
+### Etapa 1 ✅ — Eduzz gravar em `customer_purchases` + unificar cliente
+- Eduzz agora grava em `customer_purchases` (como Guru) + mantém `ticto_transactions` para legado
+- Chama `resolve_or_create_customer` para unificar identidade
 
-## Pós-deploy
+### Etapa 2 ✅ — RPC posicionar no funil do produto
+- `sync_lead_from_sale` v3: match exato via `lead_product_mappings` → fallback ILIKE via `lead_funnel_products.product_name_contains`
+- Prioriza match mais específico (`ORDER BY length DESC`)
+- Posiciona lead na BASE DE LEADS **e** no funil do produto
 
-Após atualizar o arquivo, o SQL precisa ser re-executado no Supabase Dashboard para substituir a RPC v2 com a versão corrigida.
+### Etapa 3 ✅ — Dedup case-insensitive
+- RPC usa `LOWER()` na busca por email
+- webhook-lead usa `.ilike()` na busca por email
 
+### Etapa 4 ✅ — Filtrar status antes de sync lead
+- Todos os webhooks (Eduzz, Guru, Ticto) só chamam `sync_lead_from_sale` quando `status === "authorized"`
+- process-import já fazia isso
+
+### Etapa 5 ✅ — Alinhar mapa de status
+- Eduzz: `cancelled` → `canceled`, `expired` → `canceled` (antes era `refunded`/`refused`)
+- Ticto: `pix_expired`/`bank_slip_expired`/`expired` → `canceled` (antes era `expired`)
+- UTMs no webhook-lead: COALESCE (não sobrescreve UTMs originais)
+
+---
+
+## Fase 3 — Expandir `v_all_sales` para Todas as Plataformas
+
+**Problema**: A view filtra `WHERE platform = 'guru'` em `customer_purchases`, excluindo Hotmart e outros.
+
+**Ação**: Nova migration SQL que recria a view **removendo o filtro `WHERE platform = 'guru'`**, incluindo todas as plataformas de `customer_purchases`.
+
+## Fase 4 — Migrar Frontend para `v_all_sales`
+
+**Problema**: 6 arquivos consultam `ticto_transactions` e `customer_purchases` diretamente com lógicas diferentes.
+
+**Ação** — Migrar para usar `v_all_sales` (ou `useAllSales` hook).
+
+---
+
+## Sequência de Execução
+
+1. ✅ Centralizar syncLeadFromSale em RPC
+2. ✅ Aplicar correções da auditoria completa
+3. **Rodar `docs/rpc-sync-lead-from-sale.sql` no Supabase** (v2 com p_product_name)
+4. **Deploy das 5 Edge Functions** (eduzz, guru, ticto, process-import, webhook-lead)
+5. Criar migration SQL para `v_all_sales` expandida
+6. Migrar os 6 arquivos frontend para `v_all_sales`
