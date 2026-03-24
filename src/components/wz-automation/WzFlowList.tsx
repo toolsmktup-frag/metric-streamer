@@ -15,7 +15,7 @@ const platformLabels: Record<string, string> = {
   guru: 'Guru',
 };
 
-export default function WzFlowList() {
+export default function WzFlowList({ embedded = false }: { embedded?: boolean }) {
   const navigate = useNavigate();
   const { data: flows = [], isLoading } = useWzFlows();
   const deleteFlow = useDeleteWzFlow();
