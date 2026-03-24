@@ -87,7 +87,7 @@ Deno.serve(async (req) => {
         .from('leads')
         .select('*')
         .eq('organization_id', funnel.organization_id)
-        .eq('email', email)
+        .ilike('email', email)
         .maybeSingle()
       lead = data
     }
