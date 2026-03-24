@@ -1,5 +1,9 @@
 -- ═══════════════════════════════════════════════════════════════════
--- VIEW: v_all_sales — FASE 3: adiciona customer_phone e unified_customer_id
+-- VIEW: v_all_sales — FASE 4: usa source_platform + remove filtro platform='guru'
+--
+-- PRÉ-REQUISITOS (rodar antes no SQL Editor):
+--   ALTER TABLE public.ticto_transactions ADD COLUMN IF NOT EXISTS source_platform text NOT NULL DEFAULT 'ticto';
+--   CREATE INDEX IF NOT EXISTS idx_ticto_source_platform ON public.ticto_transactions(source_platform);
 --
 -- Rodar no SQL Editor do Supabase Dashboard
 -- ═══════════════════════════════════════════════════════════════════
@@ -8,10 +12,10 @@ DROP VIEW IF EXISTS public.v_all_sales;
 
 CREATE OR REPLACE VIEW public.v_all_sales AS
 
-  -- ── Ticto (webhook + CSV) e Eduzz (CSV) ──────────────────────────
+  -- ── Ticto + Eduzz (via ticto_transactions) ──────────────────────
   SELECT
     t.id,
-    'ticto'::text                      AS platform,
+    t.source_platform                  AS platform,
     t.funnel_id,
     t.status,
     t.order_date::timestamptz          AS purchased_at,
@@ -38,7 +42,7 @@ CREATE OR REPLACE VIEW public.v_all_sales AS
 
   UNION ALL
 
-  -- ── Guru (webhook + CSV) ─────────────────────────────────────────
+  -- ── Guru + outras plataformas (via customer_purchases) ──────────
   SELECT
     cp.id,
     cp.platform,
@@ -66,7 +70,7 @@ CREATE OR REPLACE VIEW public.v_all_sales AS
     (cp.meta_campaign_id IS NOT NULL)  AS is_paid_traffic
   FROM public.customer_purchases cp
   LEFT JOIN public.unified_customers uc ON uc.id = cp.unified_customer_id
-  WHERE cp.platform = 'guru';
+  WHERE cp.platform != 'ticto';
 
 -- Permissões
 GRANT SELECT ON public.v_all_sales TO authenticated;
