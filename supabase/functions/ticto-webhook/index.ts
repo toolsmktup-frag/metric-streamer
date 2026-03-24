@@ -72,11 +72,14 @@ function extractPaidAmountCents(payload: any, order: any, item: any, payment: an
 /**
  * Busca nome do produto em múltiplos caminhos possíveis.
  */
-function extractProductName(payload: any, item: any): string {
+function extractProductName(payload: any, item: any, invoice: any): string {
   const candidates = [
     item?.product_name,
     item?.name,
     item?.product?.name,
+    invoice?.product_name,
+    invoice?.product?.name,
+    invoice?.product?.product_name,
     payload?.product_name,
     payload?.product?.name,
     payload?.product?.product_name,
