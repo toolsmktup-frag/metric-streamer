@@ -39,7 +39,6 @@ interface AppSidebarProps {
 const AD_ANALYSIS_ITEMS = [
   { path: '/kpi-geral',  label: 'Geral ADS',  icon: Layers },
   { path: '/vendas',     label: 'Vendas',     icon: ShoppingCart },
-  { path: '/criativos',  label: 'Criativos',  icon: FileImage },
 ];
 
 const INTELLIGENCE_ITEMS = [

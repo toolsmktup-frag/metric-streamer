@@ -75,7 +75,7 @@ const App = () => (
           <Route path="/demograficos" element={<Protected><Demograficos /></Protected>} />
           <Route path="/geografico" element={<Protected><Geografico /></Protected>} />
           <Route path="/dispositivos" element={<Protected><Dispositivos /></Protected>} />
-          <Route path="/criativos" element={<Protected><Criativos /></Protected>} />
+          
           <Route path="/integracoes" element={<Protected><Integracoes /></Protected>} />
           <Route path="/agente-ia" element={<Protected><AgenteIA /></Protected>} />
           <Route path="/import-csv" element={<Protected><ImportCSV /></Protected>} />
