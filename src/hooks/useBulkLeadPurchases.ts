@@ -56,19 +56,52 @@ export function useBulkLeadPurchases(
     queryFn: async (): Promise<Map<string, PurchaseSummary>> => {
       console.log(`[useBulkLeadPurchases] RPC call: ${emails.length} emails, ${phones.length} phones`);
 
-      const { data: rpcData, error } = await (supabase as any).rpc('get_bulk_purchase_summaries', {
-        p_emails: emails,
-        p_phones: phones,
-      }).limit(100000);
+      // Split into batches to avoid Supabase 1000-row RPC limit
+      const BATCH_SIZE = 400;
+      const allRpcRows: { match_type: string; match_value: string; total_spent: number; total_orders: number; first_purchase_date: string | null }[] = [];
 
-      if (error) {
-        console.error('[useBulkLeadPurchases] RPC error:', error.message);
-        throw error;
+      const emailBatches: string[][] = [];
+      for (let i = 0; i < emails.length; i += BATCH_SIZE) {
+        emailBatches.push(emails.slice(i, i + BATCH_SIZE));
+      }
+      const phoneBatches: string[][] = [];
+      for (let i = 0; i < phones.length; i += BATCH_SIZE) {
+        phoneBatches.push(phones.slice(i, i + BATCH_SIZE));
+      }
+
+      // Call RPC for each email batch (with empty phones) + each phone batch (with empty emails)
+      // If small enough, do single call
+      if (emails.length + phones.length <= BATCH_SIZE) {
+        const { data, error } = await (supabase as any).rpc('get_bulk_purchase_summaries', {
+          p_emails: emails,
+          p_phones: phones,
+        }).limit(100000);
+        if (error) { console.error('[useBulkLeadPurchases] RPC error:', error.message); throw error; }
+        allRpcRows.push(...(data || []));
+      } else {
+        // Batch emails
+        for (const batch of emailBatches) {
+          const { data, error } = await (supabase as any).rpc('get_bulk_purchase_summaries', {
+            p_emails: batch,
+            p_phones: [],
+          }).limit(100000);
+          if (error) { console.error('[useBulkLeadPurchases] RPC error:', error.message); throw error; }
+          allRpcRows.push(...(data || []));
+        }
+        // Batch phones
+        for (const batch of phoneBatches) {
+          const { data, error } = await (supabase as any).rpc('get_bulk_purchase_summaries', {
+            p_emails: [],
+            p_phones: batch,
+          }).limit(100000);
+          if (error) { console.error('[useBulkLeadPurchases] RPC error:', error.message); throw error; }
+          allRpcRows.push(...(data || []));
+        }
       }
 
       const result = new Map<string, PurchaseSummary>();
 
-      (rpcData || []).forEach((row: { match_type: string; match_value: string; total_spent: number; total_orders: number; first_purchase_date: string | null }) => {
+      allRpcRows.forEach((row) => {
         const prefix = row.match_type === 'email' ? 'e:' : 'p:';
         const key = prefix + (row.match_type === 'email' ? row.match_value.toLowerCase().trim() : row.match_value.trim());
         const leadIds = leadKeyMap.get(key);
@@ -91,7 +124,7 @@ export function useBulkLeadPurchases(
         });
       });
 
-      console.log(`[useBulkLeadPurchases] Done: ${rpcData?.length || 0} rows, ${result.size} leads with LTV`);
+      console.log(`[useBulkLeadPurchases] Done: ${allRpcRows.length} rows, ${result.size} leads with LTV`);
       return result;
     },
     enabled: emails.length > 0 || phones.length > 0,
