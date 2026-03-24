@@ -36,9 +36,14 @@ const clean = (value: unknown) => {
  * Busca valor pago em centavos em múltiplos caminhos possíveis do payload Ticto.
  * Retorna o primeiro valor > 0 encontrado, ou 0 se nenhum.
  */
-function extractPaidAmountCents(payload: any, order: any, item: any, payment: any): number {
+function extractPaidAmountCents(payload: any, order: any, item: any, payment: any, invoice: any): number {
   const candidates = [
     order?.paid_amount,
+    invoice?.paid_amount,
+    invoice?.amount,
+    invoice?.total,
+    invoice?.value,
+    invoice?.price,
     item?.amount,
     item?.total_value,
     item?.unit_value,
@@ -67,11 +72,14 @@ function extractPaidAmountCents(payload: any, order: any, item: any, payment: an
 /**
  * Busca nome do produto em múltiplos caminhos possíveis.
  */
-function extractProductName(payload: any, item: any): string {
+function extractProductName(payload: any, item: any, invoice: any): string {
   const candidates = [
     item?.product_name,
     item?.name,
     item?.product?.name,
+    invoice?.product_name,
+    invoice?.product?.name,
+    invoice?.product?.product_name,
     payload?.product_name,
     payload?.product?.name,
     payload?.product?.product_name,
@@ -102,10 +110,17 @@ Deno.serve(async (req) => {
     const topKeys = Object.keys(payload).join(", ");
     console.log(`[ticto-webhook] Top-level keys: ${topKeys}`);
 
+    // ── Unwrap data.invoice structure (Ticto v2 format) ──
+    const invoice = payload.data?.invoice || payload.data || {};
+    const invoiceKeys = Object.keys(invoice).join(", ");
+    if (invoiceKeys) {
+      console.log(`[ticto-webhook] Invoice keys: ${invoiceKeys}`);
+    }
+
     // Aceita formatos antigos e novos da Ticto sem quebrar o webhook
-    const hasSale = payload.sale || payload.order || payload.payment;
-    const hasProduct = payload.product || payload.item || payload.items?.[0] || payload.product_name;
-    const hasEvent = payload.event || payload.status;
+    const hasSale = payload.sale || payload.order || payload.payment || invoice.id;
+    const hasProduct = payload.product || payload.item || payload.items?.[0] || payload.product_name || invoice.product || invoice.product_name;
+    const hasEvent = payload.event || payload.status || invoice.status;
     if (!hasSale && !hasProduct && !hasEvent) {
       console.log("[ticto-webhook] Ping or test payload, ignoring:", JSON.stringify(payload).slice(0, 300));
       return new Response(JSON.stringify({ success: true, message: "ping ok" }), {
@@ -114,12 +129,12 @@ Deno.serve(async (req) => {
       });
     }
 
-    const tracking = payload.tracking || payload.utm_data || payload.source || {};
-    const order = payload.order || payload.sale || payload.payment || {};
-    const item = payload.item || payload.product || payload.items?.[0] || {};
-    const customer = payload.customer || payload.buyer || payload.contact || {};
-    const payment = payload.payment || {};
-    const dates = payload.dates || {};
+    const tracking = payload.tracking || invoice.tracking || invoice.utm_data || payload.utm_data || payload.source || {};
+    const order = payload.order || payload.sale || invoice || payload.payment || {};
+    const item = payload.item || payload.product || invoice.product || payload.items?.[0] || invoice.items?.[0] || {};
+    const customer = payload.customer || invoice.customer || invoice.buyer || payload.buyer || payload.contact || {};
+    const payment = payload.payment || invoice.payment || {};
+    const dates = payload.dates || invoice.dates || {};
 
     // Parse UTMs to extract Meta Ads IDs
     const campaignParsed = parseUtmPair(tracking.utm_campaign);
@@ -139,14 +154,14 @@ Deno.serve(async (req) => {
       ? `${customer.phone.ddi || customer.phone_local_code || ""}${customer.phone.ddd || ""}${customer.phone.number || customer.phone_number || ""}`
       : clean(customer.phone_number);
 
-    // Parse dates
-    const statusDateRaw = payload.status_date || dates.confirmed_at || dates.updated_at || dates.created_at || null;
-    const orderDateRaw = order.order_date || dates.ordered_at || dates.confirmed_at || dates.created_at || null;
+    // Parse dates (include invoice fallbacks)
+    const statusDateRaw = payload.status_date || invoice.status_date || invoice.confirmed_at || dates.confirmed_at || dates.updated_at || dates.created_at || invoice.created_at || null;
+    const orderDateRaw = order.order_date || invoice.order_date || invoice.created_at || dates.ordered_at || dates.confirmed_at || dates.created_at || null;
     const statusDate = statusDateRaw ? new Date(statusDateRaw).toISOString() : null;
     const orderDate = orderDateRaw ? new Date(orderDateRaw).toISOString() : null;
 
-    // Normalize status
-    const rawStatus = String(payload.status || order.status || payload.event || "").toLowerCase();
+    // Normalize status (include invoice.status)
+    const rawStatus = String(payload.status || order.status || invoice.status || payload.event || "").toLowerCase();
     const statusMap: Record<string, string> = {
       approved: "authorized",
       authorized: "authorized",
@@ -171,13 +186,13 @@ Deno.serve(async (req) => {
     const normalizedStatus = statusMap[rawStatus] || rawStatus || "open";
 
     // ── Extração resiliente de valor e produto ──
-    const amountInCents = extractPaidAmountCents(payload, order, item, payment);
-    const productName = extractProductName(payload, item);
-    const offerName = clean(item.offer_name || item.offer?.name || payload.offer_name);
-    const offerId = clean(item.offer_id || item.offer?.id || payload.offer_id) || "";
-    const orderId = Number(order.id || payload.order_id || 0) || null;
-    const productId = Number(item.product_id || item.id || payload.product_id || 0) || null;
-    const installments = Number(order.installments || payment.installments?.qty || 1) || 1;
+    const amountInCents = extractPaidAmountCents(payload, order, item, payment, invoice);
+    const productName = extractProductName(payload, item, invoice);
+    const offerName = clean(item.offer_name || item.offer?.name || invoice.offer_name || payload.offer_name);
+    const offerId = clean(item.offer_id || item.offer?.id || invoice.offer_id || payload.offer_id) || "";
+    const orderId = Number(order.id || invoice.id || payload.order_id || 0) || null;
+    const productId = Number(item.product_id || item.id || invoice.product_id || invoice.product?.id || payload.product_id || 0) || null;
+    const installments = Number(order.installments || payment.installments?.qty || invoice.installments || 1) || 1;
 
     console.log(`[ticto-webhook] Extracted: status=${normalizedStatus} rawStatus=${rawStatus} amount=${amountInCents} product="${productName}" orderId=${orderId} productId=${productId}`);
 
