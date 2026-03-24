@@ -36,9 +36,14 @@ const clean = (value: unknown) => {
  * Busca valor pago em centavos em múltiplos caminhos possíveis do payload Ticto.
  * Retorna o primeiro valor > 0 encontrado, ou 0 se nenhum.
  */
-function extractPaidAmountCents(payload: any, order: any, item: any, payment: any): number {
+function extractPaidAmountCents(payload: any, order: any, item: any, payment: any, invoice: any): number {
   const candidates = [
     order?.paid_amount,
+    invoice?.paid_amount,
+    invoice?.amount,
+    invoice?.total,
+    invoice?.value,
+    invoice?.price,
     item?.amount,
     item?.total_value,
     item?.unit_value,
