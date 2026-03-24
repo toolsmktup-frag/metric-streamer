@@ -1,72 +1,76 @@
 
-Objetivo: confirmar se a correção vai refletir nesta tela e o que ainda falta para isso acontecer.
 
-Sim — vai aparecer aqui na plataforma, mas somente depois de completar 3 pontos. Hoje, pelo código atual, ainda não basta ter rodado só os SQLs.
+# Auditoria Pre-Importacao: Bugs e Riscos Identificados
 
-O que eu confirmei no código
-- Esta tela `/funis/10000000-0000-0000-0000-000000000001/resumo` lê vendas por:
-  - `useAllSalesAggregation(id)` para KPIs
-  - `useAllSales(id)` para lista agregada por produto
-- Esses hooks consultam a view `v_all_sales`.
-- A view `v_all_sales` usa `ticto_transactions.paid_amount / 100` e `product_name`.
-- Portanto, se `paid_amount` e `product_name` forem corrigidos no banco, esta tela atualiza automaticamente.
+Revisei todo o fluxo de importacao (frontend Importar.tsx, edge function process-import, view v_all_sales, hooks de leitura). Encontrei **4 problemas reais** que vao impactar a importacao de 50k+ registros.
 
-O ponto crítico que ainda falta
-- No arquivo atual `supabase/functions/ticto-webhook/index.ts`, o parser ainda extrai dados de:
-  - `payload.order | payload.sale | payload.payment`
-  - `payload.item | payload.product | payload.items[0]`
-- Ele não está tratando explicitamente o formato aninhado `payload.data.invoice`.
-- Então, se o payload real da Ticto vier nesse formato, novas vendas ainda podem continuar entrando com:
-  - `paid_amount = 0`
-  - `product_name = ""`
-  - `order_id = null`
+---
 
-Conclusão prática
-- Sim, isso vai resolver e aparecer aqui.
-- Mas para aparecer de fato nesta tela, precisa desta sequência:
+## BUG 1 (Critico): funnel_id nao e atribuido na importacao
 
-1. Corrigir o webhook da Ticto
-- Ajustar o parser para ler `payload.data.invoice` e seus campos derivados.
-- Incluir esse fallback para:
-  - valor pago
-  - nome do produto
-  - status
-  - order_id
-  - datas
-  - customer/payment/tracking quando aplicável
+O `process-import` insere em `ticto_transactions` mas **nunca define `funnel_id`**. Resultado: todas as vendas importadas ficam com `funnel_id = NULL`. A pagina de resumo do funil (`/funis/.../resumo`) filtra por `funnel_id`, entao **nenhuma venda importada aparece nos funis**.
 
-2. Fazer deploy da Edge Function
-- Sem deploy, a plataforma continua usando a versão antiga do webhook.
-- Isso afeta novas entradas.
+**Correcao:** Resolver o `funnel_id` no `process-import` usando a mesma logica do webhook (token ou `resolve_funnel_id` por product_name).
 
-3. Fazer backfill das 7 transações já gravadas erradas
-- As vendas antigas não se corrigem sozinhas.
-- Mesmo com o webhook corrigido, as linhas já salvas com zero continuam zeradas até serem atualizadas.
+---
 
-4. Recarregar/refazer a leitura no frontend
-- Como a tela já consome `v_all_sales`, depois do backfill os cards devem refletir:
-  - Faturamento Líquido
-  - Ticket Médio
-  - Lucro / ROAS / CPA
-  - Vendas por Produto deixando de mostrar “Sem nome”
+## BUG 2 (Critico): Performance vai travar com 50k registros
 
-O que deve mudar aqui depois disso
-- `Faturamento Líquido` sai de R$ 0,00
-- `Ticket Médio` sai de R$ 0,00
-- `Vendas por Produto` passa a mostrar o nome real
-- `ROAS` e `Lucro` recalculam automaticamente
-- Se houver vendas aprovadas suficientes, o gráfico também passa a refletir receita real
+O fluxo atual para **cada registro** faz:
+- 1 RPC `resolve_or_create_customer`
+- 1 INSERT `customer_purchases`
+- 1 INSERT `ticto_transactions`
+- 1 RPC `sync_lead_from_sale`
 
-Detalhes técnicos
-- Fonte da tela: `src/pages/FunilResumo.tsx`
-- Fonte dos dados: `src/hooks/useAllSales.ts`
-- Fonte financeira unificada: `public.v_all_sales`
-- Gargalo atual: ingestão no `supabase/functions/ticto-webhook/index.ts`
-- Sintoma atual esperado: como `approved` usa `status === 'authorized'` e soma `revenue`, qualquer linha com `paid_amount = 0` continuará zerando os KPIs
+Sao **4 chamadas ao banco por registro**. Com batch de 50, sao 200 chamadas por batch. Com 50k registros = **1000 batches x 200 chamadas = 200.000 operacoes**. Edge functions tem timeout de ~60s. Cada batch vai levar 5-10s. Total estimado: **~3-5 horas** de importacao sequencial, com risco de timeout em batches grandes.
 
-Plano de implementação
-1. Atualizar o parser do webhook para suportar `data.invoice`
-2. Revisar fallbacks de amount/product/status/order_id
-3. Garantir que o upsert preserve dados bons
-4. Montar SQL de backfill para as transações já corrompidas
-5. Validar que o funil “Guia de Tinturas” passa a refletir os valores automaticamente nesta tela
+**Correcao:** Aumentar batch para 200-500 e/ou converter inserts individuais para bulk inserts. Considerar processar `sync_lead_from_sale` em background (nao bloquear o insert).
+
+---
+
+## BUG 3 (Moderado): usePrevPeriodAllSales nao pagina
+
+O hook `usePrevPeriodAllSales` faz uma unica query sem paginacao. Supabase retorna no maximo 1000 linhas. Depois da importacao, o periodo anterior pode ter mais de 1000 vendas, e os dados de comparacao ficarao incompletos/errados.
+
+**Correcao:** Reutilizar `fetchAllSalesRows` (que ja faz loop de paginacao) no `usePrevPeriodAllSales`.
+
+---
+
+## BUG 4 (Menor): Eduzz importada aparece como "ticto" na v_all_sales
+
+A view `v_all_sales` rotula tudo de `ticto_transactions` como `'ticto'::text AS platform`. Vendas Eduzz importadas via CSV vao para `ticto_transactions` e aparecem como plataforma "ticto" nos dashboards.
+
+**Correcao:** Adicionar coluna `platform` em `ticto_transactions` (ou usar a existente se houver) e refletir na view.
+
+---
+
+## Plano de Implementacao
+
+### Passo 1 — Resolver funnel_id no process-import
+- Adicionar chamada RPC `resolve_funnel_id(product_name)` no loop de processamento
+- Setar `funnel_id` no insert de `ticto_transactions` e `customer_purchases`
+
+### Passo 2 — Otimizar performance para escala
+- Aumentar BATCH de 50 para 250
+- Converter inserts individuais para bulk inserts (array de objetos)
+- Tornar `sync_lead_from_sale` nao-bloqueante (fire-and-forget)
+- Adicionar timeout handling no frontend
+
+### Passo 3 — Corrigir paginacao do periodo anterior
+- Refatorar `usePrevPeriodAllSales` para usar `fetchAllSalesRows`
+
+### Passo 4 — Corrigir label de plataforma na view
+- Usar campo `organization_id` ou adicionar campo `source_platform` em `ticto_transactions`
+- Atualizar a view `v_all_sales` para refletir a plataforma real
+
+---
+
+## Detalhes Tecnicos
+
+| Arquivo | Problema |
+|---|---|
+| `supabase/functions/process-import/index.ts` | Sem funnel_id, inserts individuais lentos |
+| `src/hooks/useAllSales.ts:154-181` | usePrevPeriodAllSales sem paginacao |
+| `docs/enrich-v-all-sales.sql` | Platform hardcoded como 'ticto' |
+| `src/pages/Importar.tsx:341` | BATCH=50 muito pequeno para 50k |
+
