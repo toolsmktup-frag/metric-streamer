@@ -33,8 +33,8 @@ Já implementado — agora via RPC centralizada.
 - Chama `resolve_or_create_customer` para unificar identidade
 
 ### Etapa 2 ✅ — RPC posicionar no funil do produto
-- `sync_lead_from_sale` agora recebe `p_product_name`
-- Busca funil via `lead_funnel_products` e `lead_product_mappings`
+- `sync_lead_from_sale` v3: match exato via `lead_product_mappings` → fallback ILIKE via `lead_funnel_products.product_name_contains`
+- Prioriza match mais específico (`ORDER BY length DESC`)
 - Posiciona lead na BASE DE LEADS **e** no funil do produto
 
 ### Etapa 3 ✅ — Dedup case-insensitive
