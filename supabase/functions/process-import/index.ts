@@ -56,87 +56,6 @@ function normalizeStatus(raw: string | null): string {
   return map[s] || s;
 }
 
-/** Sync a sale as a lead into the "BASE DE LEADS" funnel */
-async function syncLeadFromSale(
-  supabase: ReturnType<typeof createClient>,
-  params: {
-    email: string | null;
-    phone: string | null;
-    name: string | null;
-    utm_source?: string | null;
-    utm_medium?: string | null;
-    utm_campaign?: string | null;
-    utm_content?: string | null;
-    utm_term?: string | null;
-    event_name: string;
-    metadata: Record<string, unknown>;
-  }
-) {
-  const ORG_ID = "00000000-0000-0000-0000-000000000001";
-  if (!params.email && !params.phone) return;
-
-  let lead: any = null;
-  if (params.phone) {
-    const { data } = await supabase.from("leads").select("*").eq("organization_id", ORG_ID).eq("phone", params.phone).maybeSingle();
-    lead = data;
-  }
-  if (!lead && params.email) {
-    const { data } = await supabase.from("leads").select("*").eq("organization_id", ORG_ID).eq("email", params.email).maybeSingle();
-    lead = data;
-  }
-
-  if (!lead) {
-    const { data, error } = await supabase.from("leads").insert({
-      organization_id: ORG_ID,
-      phone: params.phone || null,
-      email: params.email || null,
-      name: params.name || null,
-      utm_source: params.utm_source || null,
-      utm_medium: params.utm_medium || null,
-      utm_campaign: params.utm_campaign || null,
-      utm_content: params.utm_content || null,
-      utm_term: params.utm_term || null,
-      metadata: {},
-    }).select().single();
-    if (error) { console.error("Lead insert error:", error); return; }
-    lead = data;
-  } else {
-    const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
-    if (params.name && !lead.name) updates.name = params.name;
-    if (params.utm_source) updates.utm_source = params.utm_source;
-    await supabase.from("leads").update(updates).eq("id", lead.id);
-  }
-
-  let { data: baseFunnel } = await supabase.from("lead_funnels").select("id").eq("organization_id", ORG_ID).eq("name", "BASE DE LEADS").maybeSingle();
-  if (!baseFunnel) {
-    const { data: created } = await supabase.from("lead_funnels").insert({
-      organization_id: ORG_ID, name: "BASE DE LEADS", color: "#6366f1", is_active: true,
-    }).select("id").single();
-    baseFunnel = created;
-    if (baseFunnel) {
-      await supabase.from("lead_funnel_stages").insert([
-        { funnel_id: baseFunnel.id, name: "Novo", color: "#94a3b8", sort_order: 0 },
-        { funnel_id: baseFunnel.id, name: "Comprador", color: "#22c55e", sort_order: 1 },
-        { funnel_id: baseFunnel.id, name: "Recorrente", color: "#3b82f6", sort_order: 2 },
-        { funnel_id: baseFunnel.id, name: "VIP", color: "#f59e0b", sort_order: 3 },
-      ]);
-    }
-  }
-  if (!baseFunnel) return;
-
-  await supabase.from("lead_events").insert({
-    lead_id: lead.id, funnel_id: baseFunnel.id, event_name: params.event_name, metadata: params.metadata,
-  });
-
-  const { data: existingPos } = await supabase.from("lead_stage_positions").select("id").eq("lead_id", lead.id).eq("funnel_id", baseFunnel.id).maybeSingle();
-  if (!existingPos) {
-    const { data: firstStage } = await supabase.from("lead_funnel_stages").select("id").eq("funnel_id", baseFunnel.id).order("sort_order", { ascending: true }).limit(1).maybeSingle();
-    if (firstStage) {
-      await supabase.from("lead_stage_positions").insert({ lead_id: lead.id, funnel_id: baseFunnel.id, stage_id: firstStage.id });
-    }
-  }
-}
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -278,20 +197,20 @@ Deno.serve(async (req) => {
           }
         }
 
-        // ── Sync lead para "BASE DE LEADS" ──
+        // ── Sync lead para "BASE DE LEADS" (RPC centralizada) ──
         if (normalizedSt === "authorized") {
           try {
-            await syncLeadFromSale(supabase, {
-              email: record.customer_email || null,
-              phone: record.customer_phone || null,
-              name: record.customer_name || null,
-              utm_source: record.utm_source || null,
-              utm_medium: record.utm_medium || null,
-              utm_campaign: record.utm_campaign || null,
-              utm_content: record.utm_content || null,
-              utm_term: record.utm_term || null,
-              event_name: "purchase",
-              metadata: {
+            await supabase.rpc("sync_lead_from_sale", {
+              p_phone: record.customer_phone || null,
+              p_email: record.customer_email || null,
+              p_name: record.customer_name || null,
+              p_utm_source: record.utm_source || null,
+              p_utm_medium: record.utm_medium || null,
+              p_utm_campaign: record.utm_campaign || null,
+              p_utm_content: record.utm_content || null,
+              p_utm_term: record.utm_term || null,
+              p_event_name: "purchase",
+              p_metadata: {
                 platform,
                 product_name: record.product_name,
                 status: normalizedSt,
