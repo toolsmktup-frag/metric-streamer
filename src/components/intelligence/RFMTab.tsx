@@ -118,14 +118,11 @@ export default function RFMTab() {
         { key: 'nome', label: 'Nome' },
         { key: 'produto', label: 'Produto' },
         { key: 'oferta', label: 'Oferta' },
-        { key: 'valor_bruto', label: 'Valor Bruto (R$)' },
-        { key: 'valor_liquido', label: 'Valor Líquido (R$)' },
+        { key: 'valor', label: 'Valor (R$)' },
         { key: 'status', label: 'Status' },
         { key: 'data_compra', label: 'Data da Compra' },
         { key: 'plataforma', label: 'Plataforma' },
         { key: 'metodo_pagamento', label: 'Método de Pagamento' },
-        { key: 'parcelas', label: 'Parcelas' },
-        { key: 'tipo_produto', label: 'Tipo de Produto' },
       ];
 
       const date = format(new Date(), 'yyyy-MM-dd');
