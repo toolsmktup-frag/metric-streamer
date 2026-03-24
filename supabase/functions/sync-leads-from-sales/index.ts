@@ -31,33 +31,32 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Call the stored procedure in background — single RPC call, no timeout risk
-    EdgeRuntime.waitUntil(
-      supabase
-        .rpc("sync_leads_from_sales", { p_log_id: logEntry.id })
-        .then(({ error }) => {
-          if (error) {
-            console.error(`RPC failed for job ${logEntry.id}:`, error.message);
-            // The stored procedure handles its own error logging,
-            // but if the RPC itself fails, update the log
-            supabase
-              .from("meta_sync_log")
-              .update({ status: "failed", finished_at: new Date().toISOString(), error: error.message })
-              .eq("id", logEntry.id)
-              .then(() => {});
-          } else {
-            console.log(`Sync completed for job ${logEntry.id}`);
-          }
-        })
-        .catch((err) => {
-          console.error(`Unexpected error for job ${logEntry.id}:`, err);
+    // Fire-and-forget: run RPC in background so we return immediately
+    const bgTask = supabase
+      .rpc("sync_leads_from_sales", { p_log_id: logEntry.id })
+      .then(({ error }) => {
+        if (error) {
+          console.error(`RPC failed for job ${logEntry.id}:`, error.message);
           supabase
             .from("meta_sync_log")
-            .update({ status: "failed", finished_at: new Date().toISOString(), error: String(err) })
+            .update({ status: "failed", finished_at: new Date().toISOString(), error: error.message })
             .eq("id", logEntry.id)
             .then(() => {});
-        })
-    );
+        } else {
+          console.log(`Sync completed for job ${logEntry.id}`);
+        }
+      })
+      .catch((err: unknown) => {
+        console.error(`Unexpected error for job ${logEntry.id}:`, err);
+        supabase
+          .from("meta_sync_log")
+          .update({ status: "failed", finished_at: new Date().toISOString(), error: String(err) })
+          .eq("id", logEntry.id)
+          .then(() => {});
+      });
+
+    // Don't await — let it run in the background
+    void bgTask;
 
     // Return immediately with job ID
     return new Response(
