@@ -9,7 +9,7 @@ import { useWzInstances, useCreateWzInstance, useUpdateWzInstance, useDeleteWzIn
 import type { WzInstance } from '@/types/wz-automation';
 import { toast } from 'sonner';
 
-export default function WzInstanceManager() {
+export default function WzInstanceManager({ embedded = false }: { embedded?: boolean }) {
   const { data: instances = [], isLoading } = useWzInstances();
   const createInstance = useCreateWzInstance();
   const updateInstance = useUpdateWzInstance();
