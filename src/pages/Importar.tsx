@@ -12,6 +12,7 @@ interface ImportResult {
   total: number;
   inserted: number;
   skipped: number;
+  invalid: number;
   errors: number;
   errorDetails: string[];
 }
