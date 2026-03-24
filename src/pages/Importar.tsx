@@ -357,6 +357,7 @@ export default function Importar() {
     const total = parsedRows.length;
     let inserted = 0;
     let skipped = 0;
+    let invalid = 0;
     let errors = 0;
     const errorDetails: string[] = [];
 
@@ -380,9 +381,13 @@ export default function Importar() {
         } else {
           inserted += data?.inserted || 0;
           skipped += data?.skipped || 0;
+          invalid += data?.invalid || 0;
           errors += data?.errors || 0;
           if (data?.errorDetails?.length) errorDetails.push(...data.errorDetails);
-          addLog(`✅ Batch ${batchNum}/${totalBatches}: ${data?.inserted || 0} inseridos, ${data?.skipped || 0} pulados`);
+          const parts = [`${data?.inserted || 0} inseridos`];
+          if (data?.skipped) parts.push(`${data.skipped} duplicados`);
+          if (data?.invalid) parts.push(`${data.invalid} sem ID`);
+          addLog(`✅ Batch ${batchNum}/${totalBatches}: ${parts.join(', ')}`);
         }
       } catch (err) {
         addLog(`❌ Batch ${batchNum}/${totalBatches}: ${String(err)}`);
@@ -392,7 +397,7 @@ export default function Importar() {
       setProgress(Math.round(((i + BATCH) / total) * 100));
     }
 
-    setResult({ total, inserted, skipped, errors, errorDetails });
+    setResult({ total, inserted, skipped, invalid, errors, errorDetails });
     setStatus('done');
     toast.success(`Importação concluída! ${inserted} registros inseridos.`);
   };
