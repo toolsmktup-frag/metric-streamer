@@ -89,16 +89,26 @@ export default function KpiGeral() {
   });
 
   const { data: transactions = [], isLoading: loadingTicto } = useQuery({
-    queryKey: ['kpi-ticto', dateFrom, dateTo],
+    queryKey: ['kpi-all-sales', dateFrom, dateTo],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('ticto_transactions')
-        .select('*')
-        .gte('order_date', `${dateFrom}T00:00:00`)
-        .lte('order_date', `${dateTo}T23:59:59`)
-        .order('order_date', { ascending: false });
-      if (error) throw error;
-      return data || [];
+      let all: any[] = [];
+      let from = 0;
+      const pageSize = 1000;
+      while (true) {
+        const { data, error } = await (supabase as any)
+          .from('v_all_sales')
+          .select('*')
+          .gte('purchased_at', `${dateFrom}T00:00:00`)
+          .lte('purchased_at', `${dateTo}T23:59:59`)
+          .order('purchased_at', { ascending: false })
+          .range(from, from + pageSize - 1);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        all.push(...data);
+        if (data.length < pageSize) break;
+        from += pageSize;
+      }
+      return all;
     },
     staleTime: 2 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
