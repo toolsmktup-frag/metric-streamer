@@ -88,6 +88,7 @@ const App = () => (
           <Route path="/funis/:id/resumo" element={<Protected><FunilResumo /></Protected>} />
           <Route path="/funis/:id/kpi" element={<Protected><FunilKpi /></Protected>} />
           <Route path="/funis/:id/campanhas" element={<Protected><FunilCampanhas /></Protected>} />
+          <Route path="/funis/:id/criativos" element={<Protected><FunilCriativos /></Protected>} />
           {/* Leads */}
           <Route path="/leads/dashboard" element={<Protected><LeadsDashboard /></Protected>} />
           <Route path="/leads" element={<Protected><LeadsList /></Protected>} />
