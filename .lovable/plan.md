@@ -1,76 +1,47 @@
 
+Objetivo: corrigir o importador Guru para não marcar tudo como “Duplicados (pulados)” quando, na prática, os registros estão sendo descartados por `platform_transaction_id` vazio.
 
-# Auditoria Pre-Importacao: Bugs e Riscos Identificados
+1. Confirmar a causa no fluxo atual
+- O screenshot indica: `1907 total`, `0 inseridos`, `1907 pulados`, `0 erros`.
+- Pelo código atual, isso só acontece se todas as linhas entrarem em `if (!record.platform_transaction_id) { skipped++; continue; }` na edge function `process-import`.
+- Portanto, limpar o funil não é a causa; o problema está no parsing/mapeamento do ID da transação do Guru.
 
-Revisei todo o fluxo de importacao (frontend Importar.tsx, edge function process-import, view v_all_sales, hooks de leitura). Encontrei **4 problemas reais** que vao impactar a importacao de 50k+ registros.
+2. Corrigir o parser do Guru no frontend
+- Reforçar `normalizeGuruRow` para limpar o valor de `transaction_id` com `trim`, remoção de aspas/BOM e normalização de strings vazias.
+- Evitar `cols[idx] || null` cru para campos críticos; usar helper consistente como já existe em Ticto/Eduzz.
+- Adicionar fallback controlado se a coluna principal vier vazia e houver outro identificador confiável na planilha.
 
----
+3. Melhorar a validação antes do envio
+- Antes de começar a importação, contar quantas linhas ficaram sem `platform_transaction_id`.
+- Se houver muitas inválidas, bloquear a importação e mostrar mensagem clara do tipo: “X linhas sem ID de transação no arquivo Guru”.
+- Exibir o campo de ID também na prévia/log para facilitar conferência.
 
-## BUG 1 (Critico): funnel_id nao e atribuido na importacao
+4. Corrigir a semântica do resultado
+- Hoje o card “Duplicados (pulados)” é enganoso: `skipped` também significa “sem ID”.
+- Separar métricas em:
+  - inseridos
+  - duplicados
+  - inválidos/sem ID
+  - erros
+- Ajustar logs por batch para refletir isso corretamente.
 
-O `process-import` insere em `ticto_transactions` mas **nunca define `funnel_id`**. Resultado: todas as vendas importadas ficam com `funnel_id = NULL`. A pagina de resumo do funil (`/funis/.../resumo`) filtra por `funnel_id`, entao **nenhuma venda importada aparece nos funis**.
+5. Tornar a edge function mais robusta
+- Sanitizar `record.platform_transaction_id` também no backend antes da validação.
+- Registrar em `errorDetails` ou contador dedicado quando o motivo do skip for ID ausente.
+- Manter `upsert` como está para duplicados reais, mas sem misturar com linhas inválidas.
 
-**Correcao:** Resolver o `funnel_id` no `process-import` usando a mesma logica do webhook (token ou `resolve_funnel_id` por product_name).
+6. Resultado esperado após a implementação
+- Se a planilha estiver correta, os registros do Guru passam a entrar normalmente.
+- Se o arquivo vier com coluna problemática, o sistema acusa isso antes do import.
+- O painel deixa de mostrar “duplicados” quando o problema real for ausência de ID.
 
----
-
-## BUG 2 (Critico): Performance vai travar com 50k registros
-
-O fluxo atual para **cada registro** faz:
-- 1 RPC `resolve_or_create_customer`
-- 1 INSERT `customer_purchases`
-- 1 INSERT `ticto_transactions`
-- 1 RPC `sync_lead_from_sale`
-
-Sao **4 chamadas ao banco por registro**. Com batch de 50, sao 200 chamadas por batch. Com 50k registros = **1000 batches x 200 chamadas = 200.000 operacoes**. Edge functions tem timeout de ~60s. Cada batch vai levar 5-10s. Total estimado: **~3-5 horas** de importacao sequencial, com risco de timeout em batches grandes.
-
-**Correcao:** Aumentar batch para 200-500 e/ou converter inserts individuais para bulk inserts. Considerar processar `sync_lead_from_sale` em background (nao bloquear o insert).
-
----
-
-## BUG 3 (Moderado): usePrevPeriodAllSales nao pagina
-
-O hook `usePrevPeriodAllSales` faz uma unica query sem paginacao. Supabase retorna no maximo 1000 linhas. Depois da importacao, o periodo anterior pode ter mais de 1000 vendas, e os dados de comparacao ficarao incompletos/errados.
-
-**Correcao:** Reutilizar `fetchAllSalesRows` (que ja faz loop de paginacao) no `usePrevPeriodAllSales`.
-
----
-
-## BUG 4 (Menor): Eduzz importada aparece como "ticto" na v_all_sales
-
-A view `v_all_sales` rotula tudo de `ticto_transactions` como `'ticto'::text AS platform`. Vendas Eduzz importadas via CSV vao para `ticto_transactions` e aparecem como plataforma "ticto" nos dashboards.
-
-**Correcao:** Adicionar coluna `platform` em `ticto_transactions` (ou usar a existente se houver) e refletir na view.
-
----
-
-## Plano de Implementacao
-
-### Passo 1 — Resolver funnel_id no process-import
-- Adicionar chamada RPC `resolve_funnel_id(product_name)` no loop de processamento
-- Setar `funnel_id` no insert de `ticto_transactions` e `customer_purchases`
-
-### Passo 2 — Otimizar performance para escala
-- Aumentar BATCH de 50 para 250
-- Converter inserts individuais para bulk inserts (array de objetos)
-- Tornar `sync_lead_from_sale` nao-bloqueante (fire-and-forget)
-- Adicionar timeout handling no frontend
-
-### Passo 3 — Corrigir paginacao do periodo anterior
-- Refatorar `usePrevPeriodAllSales` para usar `fetchAllSalesRows`
-
-### Passo 4 — Corrigir label de plataforma na view
-- Usar campo `organization_id` ou adicionar campo `source_platform` em `ticto_transactions`
-- Atualizar a view `v_all_sales` para refletir a plataforma real
-
----
-
-## Detalhes Tecnicos
-
-| Arquivo | Problema |
-|---|---|
-| `supabase/functions/process-import/index.ts` | Sem funnel_id, inserts individuais lentos |
-| `src/hooks/useAllSales.ts:154-181` | usePrevPeriodAllSales sem paginacao |
-| `docs/enrich-v-all-sales.sql` | Platform hardcoded como 'ticto' |
-| `src/pages/Importar.tsx:341` | BATCH=50 muito pequeno para 50k |
-
+Detalhes técnicos
+- Arquivos principais:
+  - `src/pages/Importar.tsx`
+  - `supabase/functions/process-import/index.ts`
+- Causa mais provável:
+  - `normalizeGuruRow` usa `platform_transaction_id: cols[GURU_COLS.transaction_id] || null`
+  - com Excel/XLSX, esse campo pode chegar como string vazia/suja
+  - a edge function então incrementa `skipped` para todas as linhas
+- Observação importante:
+  - limpar o funil só afeta CRM/leads; não explica `0 inseridos / 1907 pulados` nesse fluxo de `customer_purchases`.
