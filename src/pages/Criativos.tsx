@@ -94,11 +94,11 @@ interface EnrichedAd {
   thumbnail_url?: string;
 }
 
-export default function Criativos({ embedded = false }: { embedded?: boolean }) {
-  const { data: ads = [], isLoading: loadingAds } = useMetaAds();
-  const { data: campaigns = [] } = useMetaCampaigns();
-  const { data: adsets = [] } = useMetaAdsets();
-  const { byAd } = useAllSalesAggregation();
+export default function Criativos({ embedded = false, funnelId }: { embedded?: boolean; funnelId?: string | null }) {
+  const { data: ads = [], isLoading: loadingAds } = useMetaAds(funnelId);
+  const { data: campaigns = [] } = useMetaCampaigns(funnelId);
+  const { data: adsets = [] } = useMetaAdsets(funnelId);
+  const { byAd } = useAllSalesAggregation(funnelId);
   const { data: creatives = [] } = useAdCreatives();
   const upsertCreative = useUpsertAdCreative();
 
