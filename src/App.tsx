@@ -28,6 +28,7 @@ import FunilResumo from "./pages/FunilResumo";
 import FunilKpi from "./pages/FunilKpi";
 import FunilCampanhas from "./pages/FunilCampanhas";
 import FunisConfigurar from "./pages/FunisConfigurar";
+import FunilCriativos from "./pages/FunilCriativos";
 import Ecommerce from "./pages/Ecommerce";
 import LeadCampaigns from "./pages/LeadCampaigns";
 import LeadFunnelDetail from "./pages/LeadFunnelDetail";
@@ -87,6 +88,7 @@ const App = () => (
           <Route path="/funis/:id/resumo" element={<Protected><FunilResumo /></Protected>} />
           <Route path="/funis/:id/kpi" element={<Protected><FunilKpi /></Protected>} />
           <Route path="/funis/:id/campanhas" element={<Protected><FunilCampanhas /></Protected>} />
+          <Route path="/funis/:id/criativos" element={<Protected><FunilCriativos /></Protected>} />
           {/* Leads */}
           <Route path="/leads/dashboard" element={<Protected><LeadsDashboard /></Protected>} />
           <Route path="/leads" element={<Protected><LeadsList /></Protected>} />

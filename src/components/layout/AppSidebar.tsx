@@ -233,6 +233,7 @@ const AppSidebar = React.memo(function AppSidebar({ collapsed, onToggle }: AppSi
                         { path: `/funis/${funnel.id}/resumo`,    label: 'Resumo',    icon: LayoutDashboard },
                         { path: `/funis/${funnel.id}/kpi`,       label: 'KPI',       icon: Layers },
                         { path: `/funis/${funnel.id}/campanhas`, label: 'Campanhas', icon: Megaphone },
+                        { path: `/funis/${funnel.id}/criativos`, label: 'Criativos', icon: FileImage },
                         { path: `/funis/configurar?editar=${funnel.id}`, label: 'Editar', icon: Pencil },
                       ].map(({ path, label, icon: Icon }) => (
                         <NavLink
