@@ -102,10 +102,17 @@ Deno.serve(async (req) => {
     const topKeys = Object.keys(payload).join(", ");
     console.log(`[ticto-webhook] Top-level keys: ${topKeys}`);
 
+    // ── Unwrap data.invoice structure (Ticto v2 format) ──
+    const invoice = payload.data?.invoice || payload.data || {};
+    const invoiceKeys = Object.keys(invoice).join(", ");
+    if (invoiceKeys) {
+      console.log(`[ticto-webhook] Invoice keys: ${invoiceKeys}`);
+    }
+
     // Aceita formatos antigos e novos da Ticto sem quebrar o webhook
-    const hasSale = payload.sale || payload.order || payload.payment;
-    const hasProduct = payload.product || payload.item || payload.items?.[0] || payload.product_name;
-    const hasEvent = payload.event || payload.status;
+    const hasSale = payload.sale || payload.order || payload.payment || invoice.id;
+    const hasProduct = payload.product || payload.item || payload.items?.[0] || payload.product_name || invoice.product || invoice.product_name;
+    const hasEvent = payload.event || payload.status || invoice.status;
     if (!hasSale && !hasProduct && !hasEvent) {
       console.log("[ticto-webhook] Ping or test payload, ignoring:", JSON.stringify(payload).slice(0, 300));
       return new Response(JSON.stringify({ success: true, message: "ping ok" }), {
@@ -114,12 +121,12 @@ Deno.serve(async (req) => {
       });
     }
 
-    const tracking = payload.tracking || payload.utm_data || payload.source || {};
-    const order = payload.order || payload.sale || payload.payment || {};
-    const item = payload.item || payload.product || payload.items?.[0] || {};
-    const customer = payload.customer || payload.buyer || payload.contact || {};
-    const payment = payload.payment || {};
-    const dates = payload.dates || {};
+    const tracking = payload.tracking || invoice.tracking || invoice.utm_data || payload.utm_data || payload.source || {};
+    const order = payload.order || payload.sale || invoice || payload.payment || {};
+    const item = payload.item || payload.product || invoice.product || payload.items?.[0] || invoice.items?.[0] || {};
+    const customer = payload.customer || invoice.customer || invoice.buyer || payload.buyer || payload.contact || {};
+    const payment = payload.payment || invoice.payment || {};
+    const dates = payload.dates || invoice.dates || {};
 
     // Parse UTMs to extract Meta Ads IDs
     const campaignParsed = parseUtmPair(tracking.utm_campaign);
