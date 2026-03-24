@@ -154,14 +154,14 @@ Deno.serve(async (req) => {
       ? `${customer.phone.ddi || customer.phone_local_code || ""}${customer.phone.ddd || ""}${customer.phone.number || customer.phone_number || ""}`
       : clean(customer.phone_number);
 
-    // Parse dates
-    const statusDateRaw = payload.status_date || dates.confirmed_at || dates.updated_at || dates.created_at || null;
-    const orderDateRaw = order.order_date || dates.ordered_at || dates.confirmed_at || dates.created_at || null;
+    // Parse dates (include invoice fallbacks)
+    const statusDateRaw = payload.status_date || invoice.status_date || invoice.confirmed_at || dates.confirmed_at || dates.updated_at || dates.created_at || invoice.created_at || null;
+    const orderDateRaw = order.order_date || invoice.order_date || invoice.created_at || dates.ordered_at || dates.confirmed_at || dates.created_at || null;
     const statusDate = statusDateRaw ? new Date(statusDateRaw).toISOString() : null;
     const orderDate = orderDateRaw ? new Date(orderDateRaw).toISOString() : null;
 
-    // Normalize status
-    const rawStatus = String(payload.status || order.status || payload.event || "").toLowerCase();
+    // Normalize status (include invoice.status)
+    const rawStatus = String(payload.status || order.status || invoice.status || payload.event || "").toLowerCase();
     const statusMap: Record<string, string> = {
       approved: "authorized",
       authorized: "authorized",
@@ -186,13 +186,13 @@ Deno.serve(async (req) => {
     const normalizedStatus = statusMap[rawStatus] || rawStatus || "open";
 
     // ── Extração resiliente de valor e produto ──
-    const amountInCents = extractPaidAmountCents(payload, order, item, payment);
-    const productName = extractProductName(payload, item);
-    const offerName = clean(item.offer_name || item.offer?.name || payload.offer_name);
-    const offerId = clean(item.offer_id || item.offer?.id || payload.offer_id) || "";
-    const orderId = Number(order.id || payload.order_id || 0) || null;
-    const productId = Number(item.product_id || item.id || payload.product_id || 0) || null;
-    const installments = Number(order.installments || payment.installments?.qty || 1) || 1;
+    const amountInCents = extractPaidAmountCents(payload, order, item, payment, invoice);
+    const productName = extractProductName(payload, item, invoice);
+    const offerName = clean(item.offer_name || item.offer?.name || invoice.offer_name || payload.offer_name);
+    const offerId = clean(item.offer_id || item.offer?.id || invoice.offer_id || payload.offer_id) || "";
+    const orderId = Number(order.id || invoice.id || payload.order_id || 0) || null;
+    const productId = Number(item.product_id || item.id || invoice.product_id || invoice.product?.id || payload.product_id || 0) || null;
+    const installments = Number(order.installments || payment.installments?.qty || invoice.installments || 1) || 1;
 
     console.log(`[ticto-webhook] Extracted: status=${normalizedStatus} rawStatus=${rawStatus} amount=${amountInCents} product="${productName}" orderId=${orderId} productId=${productId}`);
 
