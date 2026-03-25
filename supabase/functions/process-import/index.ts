@@ -99,33 +99,35 @@ Deno.serve(async (req) => {
       ? requestedOrgId.trim()
       : null;
 
-    const { data: userData, error: userError } = await authClient.auth.getUser();
-    if (userError || !userData.user) {
+    // Validate JWT via getClaims (faster, no network round-trip)
+    const token = authHeader.replace("Bearer ", "");
+    const { data: claimsData, error: claimsError } = await authClient.auth.getClaims(token);
+    
+    if (claimsError || !claimsData?.claims?.sub) {
+      console.error("Auth failed:", claimsError?.message || "no sub claim");
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    
+    const userId = claimsData.claims.sub as string;
 
-    const { data: resolvedOrgId, error: orgError } = await authClient.rpc("get_user_org_id");
+    // Use service role client for RPC to avoid RLS issues
+    const { data: resolvedOrgId, error: orgError } = await supabase
+      .from("user_profiles")
+      .select("organization_id")
+      .eq("id", userId)
+      .maybeSingle()
+      .then(({ data, error }) => ({ data: data?.organization_id || null, error }));
 
     let fallbackOrgId: string | null = null;
     if (!resolvedOrgId) {
-      const { data: profile, error: profileError } = await supabase
-        .from("user_profiles")
-        .select("organization_id")
-        .eq("id", userData.user.id)
-        .maybeSingle();
-
-      if (profileError) {
-        console.error("Failed to resolve organization via user_profiles:", profileError.message);
-      } else {
-        fallbackOrgId = profile?.organization_id || null;
-      }
+      console.error("Could not resolve org_id from user_profiles for user:", userId);
     }
 
     const org_id = resolvedOrgId || fallbackOrgId || normalizedRequestedOrgId || null;
 
-    console.log(`platform=${platform}, requested_org_id=${normalizedRequestedOrgId}, resolved_org_id=${resolvedOrgId}, records=${records?.length}, user_id=${userData.user.id}`);
+    console.log(`platform=${platform}, requested_org_id=${normalizedRequestedOrgId}, resolved_org_id=${resolvedOrgId}, records=${records?.length}, user_id=${userId}`);
 
     if (orgError) {
       console.error("Failed to resolve organization id:", orgError.message);
@@ -141,7 +143,7 @@ Deno.serve(async (req) => {
           resolvedOrgId: resolvedOrgId || null,
           fallbackOrgId,
           requestedOrgId: normalizedRequestedOrgId,
-          userId: userData.user.id,
+          userId,
         },
       }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
