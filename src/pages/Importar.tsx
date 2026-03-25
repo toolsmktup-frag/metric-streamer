@@ -402,6 +402,15 @@ export default function Importar() {
     const errorDetails: string[] = [];
     let resolvedOrgLogged = false;
 
+    const normalizedPlatform = parsedRows[0]?.platform || platform;
+
+    if (!normalizedPlatform) {
+      addLog('❌ Plataforma não identificada para importação');
+      toast.error('Plataforma não identificada. Reimporte o arquivo e tente novamente.');
+      setStatus('previewing');
+      return;
+    }
+
     for (let i = 0; i < parsedRows.length; i += BATCH) {
       const batch = parsedRows.slice(i, i + BATCH);
       const batchNum = Math.floor(i / BATCH) + 1;
@@ -411,12 +420,13 @@ export default function Importar() {
         const { data, error } = await supabase.functions.invoke('process-import', {
           body: {
             records: batch,
-            platform,
+            platform: normalizedPlatform,
           },
         });
 
         if (error) {
-          addLog(`❌ Batch ${batchNum}/${totalBatches}: ${error.message}`);
+          const details = (error as any)?.context?.json?.details;
+          addLog(`❌ Batch ${batchNum}/${totalBatches}: ${error.message}${details ? ` ${JSON.stringify(details)}` : ''}`);
           errors += batch.length;
         } else {
           inserted += data?.inserted || 0;
