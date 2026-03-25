@@ -393,6 +393,16 @@ export default function Importar() {
     setStatus('importing');
     setProgress(0);
 
+    const { data: orgId, error: orgError } = await (supabase as any).rpc('get_user_org_id');
+    if (orgError || !orgId) {
+      setStatus('previewing');
+      toast.error('Não foi possível identificar sua organização para importar os dados.');
+      addLog(`❌ Falha ao obter organização atual: ${orgError?.message || 'organização não encontrada'}`);
+      return;
+    }
+
+    addLog(`🏢 Importando na organização atual: ${orgId}`);
+
     const BATCH = 250;
     const total = parsedRows.length;
     let inserted = 0;
@@ -411,7 +421,7 @@ export default function Importar() {
           body: {
             records: batch,
             platform,
-            org_id: '00000000-0000-0000-0000-000000000001',
+            org_id: orgId,
           },
         });
 
