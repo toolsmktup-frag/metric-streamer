@@ -76,11 +76,23 @@ export default function ImportCSV() {
 
   const addLog = (msg: string) => setLog(prev => [...prev, `${new Date().toLocaleTimeString()} - ${msg}`]);
 
+  const fileToLines = async (file: File): Promise<string[]> => {
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    if (ext === 'xlsx' || ext === 'xls') {
+      const buffer = await file.arrayBuffer();
+      const wb = XLSX.read(buffer, { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const csv = XLSX.utils.sheet_to_csv(ws);
+      return csv.split(/\r\n|\n|\r/).filter(l => l.trim());
+    }
+    const text = await file.text();
+    return text.split(/\r\n|\n|\r/).filter(l => l.trim());
+  };
+
   const processFile = async (file: File) => {
     addLog(`📄 Arquivo: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`);
 
-    const text = await file.text();
-    const lines = text.split(/\r\n|\n|\r/).filter(l => l.trim());
+    const lines = await fileToLines(file);
     addLog(`${lines.length - 1} linhas de dados encontradas`);
 
     const records: any[] = [];
