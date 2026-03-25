@@ -104,7 +104,23 @@ Deno.serve(async (req) => {
     }
 
     const { data: resolvedOrgId, error: orgError } = await authClient.rpc("get_user_org_id");
-    const org_id = resolvedOrgId || requestedOrgId || null;
+
+    let fallbackOrgId: string | null = null;
+    if (!resolvedOrgId) {
+      const { data: profile, error: profileError } = await supabase
+        .from("user_profiles")
+        .select("organization_id")
+        .eq("id", userData.user.id)
+        .maybeSingle();
+
+      if (profileError) {
+        console.error("Failed to resolve organization via user_profiles:", profileError.message);
+      } else {
+        fallbackOrgId = profile?.organization_id || null;
+      }
+    }
+
+    const org_id = resolvedOrgId || fallbackOrgId || requestedOrgId || null;
 
     console.log(`platform=${platform}, requested_org_id=${requestedOrgId}, resolved_org_id=${resolvedOrgId}, records=${records?.length}, user_id=${userData.user.id}`);
 
@@ -113,7 +129,17 @@ Deno.serve(async (req) => {
     }
 
     if (!records?.length || !platform || !org_id) {
-      return new Response(JSON.stringify({ error: "Missing required fields" }), {
+      return new Response(JSON.stringify({
+        error: "Missing required fields",
+        details: {
+          hasRecords: Boolean(records?.length),
+          hasPlatform: Boolean(platform),
+          hasOrgId: Boolean(org_id),
+          resolvedOrgId: resolvedOrgId || null,
+          fallbackOrgId,
+          requestedOrgId: requestedOrgId || null,
+        },
+      }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
