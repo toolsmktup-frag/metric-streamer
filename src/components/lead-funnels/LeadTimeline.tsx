@@ -172,9 +172,13 @@ const LeadTimeline: React.FC<LeadTimelineProps> = ({ lead, open, onClose }) => {
                 <div className="space-y-2">
                   {purchaseData.purchases.slice(0, 10).map(p => {
                     const isPaid = p.status === 'authorized';
+                    const isRefunded = p.status === 'refunded' || p.status === 'chargeback';
+                    const dotColor = isPaid ? 'bg-emerald-500' : isRefunded ? 'bg-destructive' : 'bg-muted-foreground/40';
+                    const valueColor = isPaid ? 'text-emerald-600 dark:text-emerald-400' : isRefunded ? 'text-destructive' : 'text-muted-foreground';
+                    const tooltip = isRefunded ? (p.status === 'chargeback' ? 'Chargeback' : 'Reembolsado') : isPaid ? 'Aprovada' : p.status;
                     return (
-                      <div key={p.id} className="flex items-start gap-2 text-xs">
-                        <div className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${isPaid ? 'bg-emerald-500' : 'bg-muted-foreground/40'}`} />
+                      <div key={p.id} className="flex items-start gap-2 text-xs group/purchase" title={tooltip}>
+                        <div className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${dotColor}`} />
                         <div className="flex-1 min-w-0">
                           <p className="font-medium text-foreground truncate">{p.product_name}</p>
                           <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
@@ -189,9 +193,14 @@ const LeadTimeline: React.FC<LeadTimelineProps> = ({ lead, open, onClose }) => {
                                 <CreditCard className="h-2.5 w-2.5" /> {p.product_type}
                               </span>
                             )}
+                            {isRefunded && (
+                              <Badge variant="destructive" className="text-[9px] px-1.5 py-0 h-4 font-medium">
+                                {p.status === 'chargeback' ? 'Chargeback' : 'Reembolso'}
+                              </Badge>
+                            )}
                           </div>
                         </div>
-                        <span className={`shrink-0 font-semibold ml-1 ${isPaid ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`}>
+                        <span className={`shrink-0 font-semibold ml-1 ${valueColor}`}>
                           {formatCurrency(p.net_amount ?? p.gross_amount)}
                         </span>
                       </div>
