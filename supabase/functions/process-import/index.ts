@@ -95,6 +95,9 @@ Deno.serve(async (req) => {
     }
 
     const { records, platform, org_id: requestedOrgId } = body;
+    const normalizedRequestedOrgId = typeof requestedOrgId === "string" && requestedOrgId.trim()
+      ? requestedOrgId.trim()
+      : null;
 
     const { data: userData, error: userError } = await authClient.auth.getUser();
     if (userError || !userData.user) {
@@ -120,9 +123,9 @@ Deno.serve(async (req) => {
       }
     }
 
-    const org_id = resolvedOrgId || fallbackOrgId || requestedOrgId || null;
+    const org_id = resolvedOrgId || fallbackOrgId || normalizedRequestedOrgId || null;
 
-    console.log(`platform=${platform}, requested_org_id=${requestedOrgId}, resolved_org_id=${resolvedOrgId}, records=${records?.length}, user_id=${userData.user.id}`);
+    console.log(`platform=${platform}, requested_org_id=${normalizedRequestedOrgId}, resolved_org_id=${resolvedOrgId}, records=${records?.length}, user_id=${userData.user.id}`);
 
     if (orgError) {
       console.error("Failed to resolve organization id:", orgError.message);
@@ -137,7 +140,8 @@ Deno.serve(async (req) => {
           hasOrgId: Boolean(org_id),
           resolvedOrgId: resolvedOrgId || null,
           fallbackOrgId,
-          requestedOrgId: requestedOrgId || null,
+          requestedOrgId: normalizedRequestedOrgId,
+          userId: userData.user.id,
         },
       }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
