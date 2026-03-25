@@ -48,6 +48,18 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
+    const authClient = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      {
+        global: {
+          headers: {
+            Authorization: authHeader,
+          },
+        },
+      }
+    );
+
     let body: any;
     try {
       body = await req.json();
@@ -58,8 +70,23 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { records, platform, org_id } = body;
-    console.log(`platform=${platform}, org_id=${org_id}, records=${records?.length}`);
+    const { records, platform, org_id: requestedOrgId } = body;
+
+    const { data: userData, error: userError } = await authClient.auth.getUser();
+    if (userError || !userData.user) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const { data: resolvedOrgId, error: orgError } = await authClient.rpc("get_user_org_id");
+    const org_id = resolvedOrgId || requestedOrgId || null;
+
+    console.log(`platform=${platform}, requested_org_id=${requestedOrgId}, resolved_org_id=${resolvedOrgId}, records=${records?.length}, user_id=${userData.user.id}`);
+
+    if (orgError) {
+      console.error("Failed to resolve organization id:", orgError.message);
+    }
 
     if (!records?.length || !platform || !org_id) {
       return new Response(JSON.stringify({ error: "Missing required fields" }), {
@@ -277,7 +304,7 @@ Deno.serve(async (req) => {
 
     console.log(`Done: inserted=${inserted}, skipped=${skipped}, invalid=${invalid}, errors=${errors}, leadsSynced=${leadsSynced}`);
     return new Response(
-      JSON.stringify({ inserted, skipped, invalid, errors, errorDetails, leadsSynced }),
+      JSON.stringify({ inserted, skipped, invalid, errors, errorDetails, leadsSynced, organizationId: org_id }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
