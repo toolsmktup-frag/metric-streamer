@@ -121,12 +121,20 @@ Deno.serve(async (req) => {
           ? String(record.platform_transaction_id).replace(/^\uFEFF/, '').replace(/^="?|"?$/g, '').trim()
           : null;
         if (!txId) { invalid++; continue; }
-        if (seenTxIds.has(txId) || existingTxIds.has(txId)) { skipped++; continue; }
+
+        const isSkipped = seenTxIds.has(txId) || existingTxIds.has(txId);
+        const normalizedSt = normalizeStatus(record.status);
+
+        // Always queue lead sync for authorized sales (even if purchase already exists)
+        if (normalizedSt === "authorized") {
+          leadSyncQueue.push(record);
+        }
+
+        if (isSkipped) { skipped++; continue; }
 
         seenTxIds.add(txId);
         record.platform_transaction_id = txId;
 
-        const normalizedSt = normalizeStatus(record.status);
         const funnelId = funnelCache[record.product_name] || null;
 
         // Resolve ou cria cliente
@@ -207,11 +215,6 @@ Deno.serve(async (req) => {
             funnel_id: funnelId,
             source_platform: platform,
           });
-        }
-
-        // Queue lead sync for authorized sales
-        if (normalizedSt === "authorized") {
-          leadSyncQueue.push(record);
         }
 
         inserted++;
