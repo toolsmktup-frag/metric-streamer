@@ -210,6 +210,30 @@ function c(cols: string[], idx: number): string {
   return (cols[idx] ?? '').trim();
 }
 
+function dedupeRowsByTransactionId(rows: any[]): { rows: any[]; duplicates: number } {
+  const seen = new Set<string>();
+  const deduped: any[] = [];
+  let duplicates = 0;
+
+  for (const row of rows) {
+    const txId = cleanId(row.platform_transaction_id);
+    if (!txId) {
+      deduped.push(row);
+      continue;
+    }
+
+    if (seen.has(txId)) {
+      duplicates++;
+      continue;
+    }
+
+    seen.add(txId);
+    deduped.push({ ...row, platform_transaction_id: txId });
+  }
+
+  return { rows: deduped, duplicates };
+}
+
 function normalizeEduzzRow(cols: string[]): any {
   const fatura = c(cols, EDUZZ_COLS.fatura);
   const productId = c(cols, EDUZZ_COLS.product_id);
@@ -325,19 +349,35 @@ export default function Importar() {
   const addLog = (msg: string) => setLogLines(prev => [...prev, msg]);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setFileName(file.name);
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+
+    setFileName(files.length === 1 ? files[0].name : `${files.length} arquivos`);
     setResult(null);
     setLogLines([]);
     setStatus('previewing');
+
     try {
-      const { rows, headers, preview } = await parseFile(file, platform);
+      const allRows: any[] = [];
+      let firstHeaders: string[] = [];
+      const allPreview: PreviewRow[] = [];
+
+      for (const file of files) {
+        const { rows, headers, preview } = await parseFile(file, platform);
+        if (firstHeaders.length === 0) firstHeaders = headers;
+        allRows.push(...rows);
+        allPreview.push(...preview);
+        addLog(`✅ ${file.name}: ${rows.length} linhas encontradas`);
+      }
+
+      const { rows, duplicates } = dedupeRowsByTransactionId(allRows);
       setParsedRows(rows);
-      setPreviewHeaders(headers);
-      setPreviewRows(preview);
+      setPreviewHeaders(firstHeaders);
+      setPreviewRows(allPreview.slice(0, 5));
+
       const missingId = rows.filter((r: any) => !r.platform_transaction_id).length;
-      addLog(`✅ ${rows.length} linhas encontradas no arquivo`);
+      addLog(`📦 Total consolidado: ${rows.length} linhas válidas para importar`);
+      if (duplicates > 0) addLog(`🔁 ${duplicates} linhas duplicadas entre arquivos removidas antes da importação`);
       if (missingId > 0) {
         addLog(`⚠️ ${missingId} linhas sem ID de transação — serão ignoradas na importação`);
         toast.warning(`${missingId} de ${rows.length} linhas sem ID de transação`);
@@ -463,6 +503,7 @@ export default function Importar() {
             ref={inputRef}
             type="file"
             accept={platform === 'guru' ? '.xlsx,.xls' : '.csv,.txt'}
+            multiple
             onChange={handleFileChange}
             className="hidden"
           />

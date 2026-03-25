@@ -67,6 +67,31 @@ Deno.serve(async (req) => {
       });
     }
 
+    const sanitizedTxIds = records
+      .map((record: any) => record.platform_transaction_id
+        ? String(record.platform_transaction_id).replace(/^\uFEFF/, '').replace(/^="?|"?$/g, '').trim()
+        : null)
+      .filter(Boolean);
+
+    const existingTxIds = new Set<string>();
+    if (sanitizedTxIds.length > 0) {
+      const uniqueTxIds = [...new Set(sanitizedTxIds)];
+      const { data: existingRows, error: existingErr } = await supabase
+        .from("customer_purchases")
+        .select("platform_transaction_id")
+        .eq("organization_id", org_id)
+        .eq("platform", platform)
+        .in("platform_transaction_id", uniqueTxIds);
+
+      if (existingErr) {
+        console.error("Failed to preload existing transaction ids:", existingErr.message);
+      } else {
+        for (const row of existingRows || []) {
+          if (row.platform_transaction_id) existingTxIds.add(row.platform_transaction_id);
+        }
+      }
+    }
+
     // ── Pre-resolve funnel_ids por product_name (em batch) ──
     const uniqueProducts = [...new Set(records.map((r: any) => r.product_name).filter(Boolean))];
     const funnelCache: Record<string, string | null> = {};
@@ -87,6 +112,7 @@ Deno.serve(async (req) => {
     const cpRecords: any[] = [];
     const ttRecords: any[] = [];
     const leadSyncQueue: any[] = [];
+    const seenTxIds = new Set<string>();
 
     for (const record of records) {
       try {
@@ -95,6 +121,9 @@ Deno.serve(async (req) => {
           ? String(record.platform_transaction_id).replace(/^\uFEFF/, '').replace(/^="?|"?$/g, '').trim()
           : null;
         if (!txId) { invalid++; continue; }
+        if (seenTxIds.has(txId) || existingTxIds.has(txId)) { skipped++; continue; }
+
+        seenTxIds.add(txId);
         record.platform_transaction_id = txId;
 
         const normalizedSt = normalizeStatus(record.status);
