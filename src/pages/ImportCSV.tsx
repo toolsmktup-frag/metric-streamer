@@ -200,7 +200,7 @@ export default function ImportCSV() {
       <div className="rounded-lg border border-border bg-card p-6">
         <input
           type="file"
-          accept=".csv"
+          accept=".csv,.xlsx,.xls"
           multiple
           onChange={handleFiles}
           disabled={processing}
