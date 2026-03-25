@@ -5,6 +5,30 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+function normalizeTransactionId(value: unknown): string | null {
+  if (value == null) return null;
+
+  const normalized = String(value)
+    .replace(/^\uFEFF/, "")
+    .replace(/^\s*=\s*"?/, "")
+    .replace(/^"+|"+$/g, "")
+    .trim();
+
+  return normalized || null;
+}
+
+function buildTransactionIdVariants(value: unknown): string[] {
+  const normalized = normalizeTransactionId(value);
+  if (!normalized) return [];
+
+  return [...new Set([
+    normalized,
+    `="${normalized}"`,
+    `"${normalized}"`,
+    ` ${normalized} `,
+  ])];
+}
+
 /** Mapa canônico de status — normaliza status de qualquer plataforma */
 function normalizeStatus(raw: string | null): string {
   if (!raw) return "authorized";
@@ -95,26 +119,25 @@ Deno.serve(async (req) => {
     }
 
     const sanitizedTxIds = records
-      .map((record: any) => record.platform_transaction_id
-        ? String(record.platform_transaction_id).replace(/^\uFEFF/, '').replace(/^="?|"?$/g, '').trim()
-        : null)
+      .map((record: any) => normalizeTransactionId(record.platform_transaction_id))
       .filter(Boolean);
 
     const existingTxIds = new Set<string>();
     if (sanitizedTxIds.length > 0) {
-      const uniqueTxIds = [...new Set(sanitizedTxIds)];
+      const lookupTxIds = [...new Set(sanitizedTxIds.flatMap((txId) => buildTransactionIdVariants(txId)))];
       const { data: existingRows, error: existingErr } = await supabase
         .from("customer_purchases")
         .select("platform_transaction_id")
         .eq("organization_id", org_id)
         .eq("platform", platform)
-        .in("platform_transaction_id", uniqueTxIds);
+        .in("platform_transaction_id", lookupTxIds);
 
       if (existingErr) {
         console.error("Failed to preload existing transaction ids:", existingErr.message);
       } else {
         for (const row of existingRows || []) {
-          if (row.platform_transaction_id) existingTxIds.add(row.platform_transaction_id);
+          const normalized = normalizeTransactionId(row.platform_transaction_id);
+          if (normalized) existingTxIds.add(normalized);
         }
       }
     }
@@ -144,9 +167,7 @@ Deno.serve(async (req) => {
     for (const record of records) {
       try {
         // Sanitize transaction ID server-side
-        const txId = record.platform_transaction_id
-          ? String(record.platform_transaction_id).replace(/^\uFEFF/, '').replace(/^="?|"?$/g, '').trim()
-          : null;
+        const txId = normalizeTransactionId(record.platform_transaction_id);
         if (!txId) { invalid++; continue; }
 
         const isSkipped = seenTxIds.has(txId) || existingTxIds.has(txId);
@@ -160,6 +181,7 @@ Deno.serve(async (req) => {
         if (isSkipped) { skipped++; continue; }
 
         seenTxIds.add(txId);
+        existingTxIds.add(txId);
         record.platform_transaction_id = txId;
 
         const funnelId = funnelCache[record.product_name] || null;
