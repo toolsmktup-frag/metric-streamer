@@ -205,16 +205,17 @@ Deno.serve(async (req) => {
         const isSkipped = seenTxIds.has(txId) || existingTxIds.has(txId);
         const normalizedSt = normalizeStatus(record.status);
 
-        // Always queue lead sync for authorized sales (even if purchase already exists)
-        if (normalizedSt === "authorized") {
-          leadSyncQueue.push(record);
-        }
-
         if (isSkipped) { skipped++; continue; }
 
         seenTxIds.add(txId);
         existingTxIds.add(txId);
         record.platform_transaction_id = txId;
+
+        // Only sync timeline/lead effects for newly accepted purchases.
+        // Reimported duplicate transactions must not create duplicated events.
+        if (normalizedSt === "authorized") {
+          leadSyncQueue.push(record);
+        }
 
         const funnelId = funnelCache[record.product_name] || null;
 
