@@ -188,7 +188,8 @@ export default function ImportCSV() {
         <input
           type="file"
           accept=".csv"
-          onChange={handleFile}
+          multiple
+          onChange={handleFiles}
           disabled={processing}
           className="block w-full text-sm text-foreground file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 disabled:opacity-50"
         />
