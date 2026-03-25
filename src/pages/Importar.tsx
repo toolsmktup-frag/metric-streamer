@@ -249,6 +249,7 @@ function normalizeEduzzRow(cols: string[]): any {
     product_id: productId || null,
     offer_name: c(cols, EDUZZ_COLS.offer_name) || null,
     gross_amount: parseBRCurrency(c(cols, EDUZZ_COLS.gross_amount)),
+    net_amount: parseBRCurrency(c(cols, EDUZZ_COLS.net_amount)) || null,
     payment_method: mapPayment(c(cols, EDUZZ_COLS.payment_method)),
     installments: parseInt(c(cols, EDUZZ_COLS.installments)) || 1,
     status: mapEduzzStatus(c(cols, EDUZZ_COLS.status)),
