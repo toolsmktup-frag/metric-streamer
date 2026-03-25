@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import * as XLSX from 'xlsx';
 
 function parseCSVLine(line: string): string[] {
   const result: string[] = [];
