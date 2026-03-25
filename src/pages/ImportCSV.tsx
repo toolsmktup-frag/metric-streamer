@@ -75,13 +75,8 @@ export default function ImportCSV() {
 
   const addLog = (msg: string) => setLog(prev => [...prev, `${new Date().toLocaleTimeString()} - ${msg}`]);
 
-  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setProcessing(true);
-    setLog([]);
-    addLog(`Arquivo: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`);
+  const processFile = async (file: File) => {
+    addLog(`📄 Arquivo: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`);
 
     const text = await file.text();
     const lines = text.split(/\r\n|\n|\r/).filter(l => l.trim());
@@ -134,7 +129,6 @@ export default function ImportCSV() {
     addLog(`${records.length} registros válidos, ${errors.length} erros de parsing`);
     if (errors.length > 0) addLog(`Erros: ${errors.slice(0, 5).join('; ')}`);
 
-    // Send in batches of 250 to edge function
     let totalInserted = 0;
     const batchSize = 250;
     const totalBatches = Math.ceil(records.length / batchSize);
@@ -160,7 +154,26 @@ export default function ImportCSV() {
       }
     }
 
-    addLog(`🎉 Importação concluída! Total inserido: ${totalInserted}`);
+    return totalInserted;
+  };
+
+  const handleFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setProcessing(true);
+    setLog([]);
+    addLog(`📂 ${files.length} arquivo(s) selecionado(s)`);
+
+    let grandTotal = 0;
+    for (let f = 0; f < files.length; f++) {
+      addLog(`\n━━━ Processando ${f + 1}/${files.length}: ${files[f].name} ━━━`);
+      const inserted = await processFile(files[f]);
+      grandTotal += inserted;
+      addLog(`✅ ${files[f].name}: ${inserted} inseridos`);
+    }
+
+    addLog(`\n🎉 Importação concluída! Total geral: ${grandTotal} registros`);
     setProcessing(false);
   };
 
