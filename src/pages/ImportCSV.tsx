@@ -193,8 +193,8 @@ export default function ImportCSV() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Importar CSV Ticto</h1>
-        <p className="text-sm text-muted-foreground">Selecione o arquivo CSV exportado da Ticto</p>
+        <h1 className="text-2xl font-bold text-foreground">Importar CSV / Excel</h1>
+        <p className="text-sm text-muted-foreground">Selecione arquivos CSV ou XLSX (Ticto/Guru)</p>
       </div>
 
       <div className="rounded-lg border border-border bg-card p-6">
