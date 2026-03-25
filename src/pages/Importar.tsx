@@ -393,16 +393,6 @@ export default function Importar() {
     setStatus('importing');
     setProgress(0);
 
-    const { data: orgId, error: orgError } = await (supabase as any).rpc('get_user_org_id');
-    if (orgError || !orgId) {
-      setStatus('previewing');
-      toast.error('Não foi possível identificar sua organização para importar os dados.');
-      addLog(`❌ Falha ao obter organização atual: ${orgError?.message || 'organização não encontrada'}`);
-      return;
-    }
-
-    addLog(`🏢 Importando na organização atual: ${orgId}`);
-
     const BATCH = 250;
     const total = parsedRows.length;
     let inserted = 0;
@@ -410,6 +400,7 @@ export default function Importar() {
     let invalid = 0;
     let errors = 0;
     const errorDetails: string[] = [];
+    let resolvedOrgLogged = false;
 
     for (let i = 0; i < parsedRows.length; i += BATCH) {
       const batch = parsedRows.slice(i, i + BATCH);
@@ -421,7 +412,6 @@ export default function Importar() {
           body: {
             records: batch,
             platform,
-            org_id: orgId,
           },
         });
 
@@ -434,6 +424,10 @@ export default function Importar() {
           invalid += data?.invalid || 0;
           errors += data?.errors || 0;
           if (data?.errorDetails?.length) errorDetails.push(...data.errorDetails);
+          if (!resolvedOrgLogged && data?.organizationId) {
+            addLog(`🏢 Importando na organização atual: ${data.organizationId}`);
+            resolvedOrgLogged = true;
+          }
           const parts = [`${data?.inserted || 0} inseridos`];
           if (data?.skipped) parts.push(`${data.skipped} duplicados`);
           if (data?.invalid) parts.push(`${data.invalid} sem ID`);
