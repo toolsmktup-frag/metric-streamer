@@ -38,7 +38,7 @@ const GURU_COLS: Record<string, number> = {
 const EDUZZ_COLS: Record<string, number> = {
   fatura: 0, status: 1, payment_method: 2, installments: 4,
   purchased_at: 10, product_id: 16, product_name: 17,
-  gross_amount: 24, customer_name: 34, customer_email: 35,
+  gross_amount: 24, net_amount: 33, customer_name: 34, customer_email: 35,
   customer_phone: 36, customer_cpf: 38,
   utm_source: 47, utm_campaign: 48, utm_medium: 49,
   utm_content: 50, utm_term: 51, offer_name: 53,
@@ -249,6 +249,7 @@ function normalizeEduzzRow(cols: string[]): any {
     product_id: productId || null,
     offer_name: c(cols, EDUZZ_COLS.offer_name) || null,
     gross_amount: parseBRCurrency(c(cols, EDUZZ_COLS.gross_amount)),
+    net_amount: parseBRCurrency(c(cols, EDUZZ_COLS.net_amount)) || null,
     payment_method: mapPayment(c(cols, EDUZZ_COLS.payment_method)),
     installments: parseInt(c(cols, EDUZZ_COLS.installments)) || 1,
     status: mapEduzzStatus(c(cols, EDUZZ_COLS.status)),
