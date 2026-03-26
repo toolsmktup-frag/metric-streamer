@@ -50,6 +50,8 @@ const COLUMN_MAP: Record<string, keyof ParsedLead | null> = {
   'nome completo': 'name',
   // Email variations
   'email contato': 'email',
+  'email contacto': 'email',
+  'e-mail contacto': 'email',
   'email': 'email',
   'e-mail': 'email',
   'email do cliente': 'email',
