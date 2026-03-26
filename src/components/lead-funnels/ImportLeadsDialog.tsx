@@ -61,6 +61,7 @@ const COLUMN_MAP: Record<string, keyof ParsedLead | null> = {
   'e-mail contato': 'email',
   // Phone variations
   'telefone contato': 'phone',
+  'telefone contacto': 'phone',
   'telefone': 'phone',
   'phone': 'phone',
   'celular': 'phone',
