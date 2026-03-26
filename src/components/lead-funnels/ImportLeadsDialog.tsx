@@ -36,6 +36,7 @@ interface ParsedLead {
 const COLUMN_MAP: Record<string, keyof ParsedLead | null> = {
   // Name variations
   'nome contato': 'name',
+  'nome contacto': 'name',
   'nome': 'name',
   'name': 'name',
   'full_name': 'name',
