@@ -113,7 +113,12 @@ const METADATA_KEY_MAP: Record<string, string> = {
   'código telefone': '_phone_code',
   'codigo telefone contato': '_phone_code',
   'código telefone contato': '_phone_code',
+  'codigo telefone contacto': '_phone_code',
+  'código telefone contacto': '_phone_code',
   'codigo telefone': '_phone_code',
+  'id marketplace': 'transaction_id',
+  'nome marketplace': 'platform',
+  'doc contacto': 'customer_doc',
 };
 
 function parseSpreadsheet(file: File): Promise<Record<string, string>[]> {
