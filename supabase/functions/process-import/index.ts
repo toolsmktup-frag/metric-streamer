@@ -255,6 +255,7 @@ Deno.serve(async (req) => {
           utm_term: record.utm_term || null,
           imported_from: 'planilha',
           funnel_id: funnelId,
+          ingestion_type: 'import',
         });
 
         // Para Ticto e Eduzz: salva também em ticto_transactions
@@ -296,6 +297,7 @@ Deno.serve(async (req) => {
             is_paid_traffic: isPaid,
             funnel_id: funnelId,
             source_platform: platform,
+            ingestion_type: 'import',
           });
         }
 

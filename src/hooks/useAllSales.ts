@@ -44,6 +44,7 @@ export interface UnifiedSale {
   utm_medium: string | null;
   utm_content: string | null;
   is_paid_traffic: boolean;
+  ingestion_type: string;
 }
 
 async function fetchAllSalesRows(dateFrom: string, dateTo: string, funnelId?: string | null) {
@@ -59,7 +60,7 @@ async function fetchAllSalesRows(dateFrom: string, dateTo: string, funnelId?: st
       .range(from, from + SALES_PAGE_SIZE - 1);
 
     if (funnelId) {
-      query = query.eq('funnel_id', funnelId);
+      query = query.eq('funnel_id', funnelId).eq('ingestion_type', 'webhook');
     }
 
     const { data, error } = await query;
