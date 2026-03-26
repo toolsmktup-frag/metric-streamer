@@ -36,6 +36,7 @@ interface ParsedLead {
 const COLUMN_MAP: Record<string, keyof ParsedLead | null> = {
   // Name variations
   'nome contato': 'name',
+  'nome contacto': 'name',
   'nome': 'name',
   'name': 'name',
   'full_name': 'name',
@@ -49,6 +50,8 @@ const COLUMN_MAP: Record<string, keyof ParsedLead | null> = {
   'nome completo': 'name',
   // Email variations
   'email contato': 'email',
+  'email contacto': 'email',
+  'e-mail contacto': 'email',
   'email': 'email',
   'e-mail': 'email',
   'email do cliente': 'email',
@@ -58,6 +61,7 @@ const COLUMN_MAP: Record<string, keyof ParsedLead | null> = {
   'e-mail contato': 'email',
   // Phone variations
   'telefone contato': 'phone',
+  'telefone contacto': 'phone',
   'telefone': 'phone',
   'phone': 'phone',
   'celular': 'phone',
@@ -109,7 +113,12 @@ const METADATA_KEY_MAP: Record<string, string> = {
   'código telefone': '_phone_code',
   'codigo telefone contato': '_phone_code',
   'código telefone contato': '_phone_code',
+  'codigo telefone contacto': '_phone_code',
+  'código telefone contacto': '_phone_code',
   'codigo telefone': '_phone_code',
+  'id marketplace': 'transaction_id',
+  'nome marketplace': 'platform',
+  'doc contacto': 'customer_doc',
 };
 
 function parseSpreadsheet(file: File): Promise<Record<string, string>[]> {
