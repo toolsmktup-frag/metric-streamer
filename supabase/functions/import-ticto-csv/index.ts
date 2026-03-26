@@ -114,6 +114,7 @@ Deno.serve(async (req) => {
         is_paid_traffic: isPaidTraffic(r.utm_source),
         funnel_id: funnelCache[r.product_name] || null,
         source_platform: sourcePlatform,
+        ingestion_type: 'import',
         updated_at: new Date().toISOString(),
       };
     });

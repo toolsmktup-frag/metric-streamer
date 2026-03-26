@@ -297,6 +297,7 @@ Deno.serve(async (req) => {
             is_paid_traffic: isPaid,
             funnel_id: funnelId,
             source_platform: platform,
+            ingestion_type: 'import',
           });
         }
 

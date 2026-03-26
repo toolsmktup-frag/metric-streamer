@@ -1,9 +1,9 @@
 -- ═══════════════════════════════════════════════════════════════════
--- VIEW: v_all_sales — FASE 4: usa source_platform + remove filtro platform='guru'
+-- VIEW: v_all_sales — FASE 5: inclui ingestion_type (webhook vs import)
 --
 -- PRÉ-REQUISITOS (rodar antes no SQL Editor):
---   ALTER TABLE public.ticto_transactions ADD COLUMN IF NOT EXISTS source_platform text NOT NULL DEFAULT 'ticto';
---   CREATE INDEX IF NOT EXISTS idx_ticto_source_platform ON public.ticto_transactions(source_platform);
+--   ALTER TABLE public.ticto_transactions ADD COLUMN IF NOT EXISTS ingestion_type text NOT NULL DEFAULT 'webhook';
+--   ALTER TABLE public.customer_purchases ADD COLUMN IF NOT EXISTS ingestion_type text NOT NULL DEFAULT 'webhook';
 --
 -- Rodar no SQL Editor do Supabase Dashboard
 -- ═══════════════════════════════════════════════════════════════════
@@ -37,7 +37,8 @@ CREATE OR REPLACE VIEW public.v_all_sales AS
     t.utm_campaign,
     t.utm_medium,
     t.utm_content,
-    t.is_paid_traffic
+    t.is_paid_traffic,
+    t.ingestion_type
   FROM public.ticto_transactions t
 
   UNION ALL
@@ -67,7 +68,8 @@ CREATE OR REPLACE VIEW public.v_all_sales AS
     cp.utm_campaign,
     cp.utm_medium,
     cp.utm_content,
-    (cp.meta_campaign_id IS NOT NULL)  AS is_paid_traffic
+    (cp.meta_campaign_id IS NOT NULL)  AS is_paid_traffic,
+    cp.ingestion_type
   FROM public.customer_purchases cp
   LEFT JOIN public.unified_customers uc ON uc.id = cp.unified_customer_id
   WHERE cp.platform != 'ticto';

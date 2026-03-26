@@ -60,7 +60,7 @@ async function fetchAllSalesRows(dateFrom: string, dateTo: string, funnelId?: st
       .range(from, from + SALES_PAGE_SIZE - 1);
 
     if (funnelId) {
-      query = query.eq('funnel_id', funnelId);
+      query = query.eq('funnel_id', funnelId).eq('ingestion_type', 'webhook');
     }
 
     const { data, error } = await query;
