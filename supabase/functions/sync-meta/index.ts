@@ -239,6 +239,14 @@ Deno.serve(async (req) => {
 
         totalRecords += campaigns.length + campaignInsightRows.length;
         console.log(`Phase 1 done: ${campaigns.length} campaigns, ${campaignInsightRows.length} insights (${Date.now() - t1}ms)`);
+
+        // Auto-assign funnel_id to campaigns based on funnel_products keywords
+        try {
+          const { data: assigned, error: assignErr } = await supabase.rpc("auto_assign_campaign_funnels");
+          if (assignErr) console.error("Auto-assign error:", assignErr);
+          else if (assigned > 0) console.log(`Auto-assigned ${assigned} campaigns to funnels`);
+        } catch (e) { console.error("Auto-assign error:", e); }
+
       } catch (e) { console.error("Phase 1 error:", e); }
 
       // ── PHASE 2: Adsets + Adset Insights (always) ──
