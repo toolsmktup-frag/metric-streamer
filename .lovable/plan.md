@@ -1,47 +1,42 @@
 
-Objetivo: corrigir o importador Guru para não marcar tudo como “Duplicados (pulados)” quando, na prática, os registros estão sendo descartados por `platform_transaction_id` vazio.
 
-1. Confirmar a causa no fluxo atual
-- O screenshot indica: `1907 total`, `0 inseridos`, `1907 pulados`, `0 erros`.
-- Pelo código atual, isso só acontece se todas as linhas entrarem em `if (!record.platform_transaction_id) { skipped++; continue; }` na edge function `process-import`.
-- Portanto, limpar o funil não é a causa; o problema está no parsing/mapeamento do ID da transação do Guru.
+## O que grandes empresas fazem: Paginação no servidor (Server-Side Pagination)
 
-2. Corrigir o parser do Guru no frontend
-- Reforçar `normalizeGuruRow` para limpar o valor de `transaction_id` com `trim`, remoção de aspas/BOM e normalização de strings vazias.
-- Evitar `cols[idx] || null` cru para campos críticos; usar helper consistente como já existe em Ticto/Eduzz.
-- Adicionar fallback controlado se a coluna principal vier vazia e houver outro identificador confiável na planilha.
+### O problema atual
+A tela "Base de Leads" carrega **todos os 15k+ leads** de uma vez do Supabase (em batches de 1000), junta com posições e funis no frontend, e só depois renderiza. Com Guru + Eduzz + Ticto, isso vai crescer pra 30k+. Cada acesso dispara 3 queries exaustivas em paralelo.
 
-3. Melhorar a validação antes do envio
-- Antes de começar a importação, contar quantas linhas ficaram sem `platform_transaction_id`.
-- Se houver muitas inválidas, bloquear a importação e mostrar mensagem clara do tipo: “X linhas sem ID de transação no arquivo Guru”.
-- Exibir o campo de ID também na prévia/log para facilitar conferência.
+### O que empresas como HubSpot, Salesforce e Pipedrive fazem
 
-4. Corrigir a semântica do resultado
-- Hoje o card “Duplicados (pulados)” é enganoso: `skipped` também significa “sem ID”.
-- Separar métricas em:
-  - inseridos
-  - duplicados
-  - inválidos/sem ID
-  - erros
-- Ajustar logs por batch para refletir isso corretamente.
+1. **Paginação no servidor** — Nunca carregam tudo. Buscam 50-100 registros por vez, com `LIMIT/OFFSET` ou cursor-based pagination.
+2. **Busca no banco** — Filtros de texto (nome, email) rodam como `ILIKE` no SQL, não no JavaScript.
+3. **Contagens separadas** — Um `SELECT COUNT(*)` rápido retorna o total sem carregar dados.
+4. **Caching inteligente** — React Query mantém a página anterior visível enquanto a próxima carrega.
 
-5. Tornar a edge function mais robusta
-- Sanitizar `record.platform_transaction_id` também no backend antes da validação.
-- Registrar em `errorDetails` ou contador dedicado quando o motivo do skip for ID ausente.
-- Manter `upsert` como está para duplicados reais, mas sem misturar com linhas inválidas.
+### Plano de implementação
 
-6. Resultado esperado após a implementação
-- Se a planilha estiver correta, os registros do Guru passam a entrar normalmente.
-- Se o arquivo vier com coluna problemática, o sistema acusa isso antes do import.
-- O painel deixa de mostrar “duplicados” quando o problema real for ausência de ID.
+**1. Criar RPC no Supabase para busca paginada**
+- Uma função `search_leads_paginated(p_search, p_funnel_id, p_source, p_limit, p_offset)` que faz JOIN de `leads` + `lead_stage_positions` + `lead_funnels` + `lead_funnel_stages` direto no banco
+- Retorna leads com posição, nome do funil/etapa, cores — tudo pronto
+- Filtros de texto rodam como `ILIKE` no PostgreSQL (muito mais rápido que filtrar 15k no JS)
+- Retorna também o `total_count` para a paginação
 
-Detalhes técnicos
-- Arquivos principais:
-  - `src/pages/Importar.tsx`
-  - `supabase/functions/process-import/index.ts`
-- Causa mais provável:
-  - `normalizeGuruRow` usa `platform_transaction_id: cols[GURU_COLS.transaction_id] || null`
-  - com Excel/XLSX, esse campo pode chegar como string vazia/suja
-  - a edge function então incrementa `skipped` para todas as linhas
-- Observação importante:
-  - limpar o funil só afeta CRM/leads; não explica `0 inseridos / 1907 pulados` nesse fluxo de `customer_purchases`.
+**2. Refatorar `useAllLeads` → `usePaginatedLeads`**
+- Novo hook que recebe `{ search, funnelId, source, page, pageSize }`
+- Chama a RPC com os parâmetros
+- React Query com `keepPreviousData: true` para transição suave entre páginas
+- Sem loop de fetchAllRows — uma única chamada por página
+
+**3. Refatorar `LeadsList.tsx`**
+- Trocar `useAllLeads()` por `usePaginatedLeads(filters)`
+- Adicionar paginação real (já existe componente `Pagination` no projeto)
+- Filtros chamam o servidor em vez de filtrar localmente
+- Debounce de 300ms no campo de busca para não sobrecarregar
+
+**4. Manter `useLeadStats` separado**
+- As estatísticas do dashboard continuam com a lógica atual (são agregações, não listagem)
+
+### Resultado esperado
+- **Tempo de carregamento**: de ~10-15s → <1s por página
+- **Escala**: funciona igual com 15k ou 500k leads
+- **UX**: Navegação fluida com paginação, filtros instantâneos
+
