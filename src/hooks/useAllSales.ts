@@ -44,6 +44,7 @@ export interface UnifiedSale {
   utm_medium: string | null;
   utm_content: string | null;
   is_paid_traffic: boolean;
+  ingestion_type: string;
 }
 
 async function fetchAllSalesRows(dateFrom: string, dateTo: string, funnelId?: string | null) {
