@@ -192,6 +192,20 @@ function mapRow(row: Record<string, string>): ParsedLead {
     delete lead.metadata['_phone_code'];
   }
 
+  // Ticto: combine DDI + DDD + phone number if phone not already set
+  if (!lead.phone && lead.metadata['_phone_ddi'] && lead.metadata['_phone_ddd']) {
+    const ddi = String(lead.metadata['_phone_ddi']).replace(/\D/g, '');
+    const ddd = String(lead.metadata['_phone_ddd']).replace(/\D/g, '');
+    // Look for a raw phone number in metadata
+    const rawPhone = lead.metadata['numero do telefone do cliente'] || lead.metadata['número do telefone do cliente'] || '';
+    const phoneDigits = String(rawPhone).replace(/\D/g, '');
+    if (phoneDigits) {
+      lead.phone = `+${ddi}${ddd}${phoneDigits}`;
+    }
+    delete lead.metadata['_phone_ddi'];
+    delete lead.metadata['_phone_ddd'];
+  }
+
   return lead;
 }
 
