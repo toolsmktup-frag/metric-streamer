@@ -38,6 +38,7 @@ import LeadsList from "./pages/LeadsList";
 import LeadsSources from "./pages/LeadsSources";
 import WhatsAppChat from "./pages/WhatsAppChat";
 import Equipe from "./pages/Equipe";
+import UserSettings from "./pages/UserSettings";
 import WzAutomacoes from "./pages/WzAutomacoes";
 import WzFlowCanvas from "./pages/WzFlowCanvas";
 import WzInstancias from "./pages/WzInstancias";
@@ -99,6 +100,8 @@ const App = () => (
           <Route path="/lead-funnels/:id" element={<Protected><LeadFunnelDetail /></Protected>} />
           {/* Equipe */}
           <Route path="/equipe" element={<Protected><Equipe /></Protected>} />
+          {/* Configurações do usuário */}
+          <Route path="/configuracoes" element={<Protected><UserSettings /></Protected>} />
           {/* WhatsApp Chat - fullscreen layout */}
           <Route path="/whatsapp" element={<Protected><WhatsAppChat /></Protected>} />
           {/* Automações WhatsApp */}

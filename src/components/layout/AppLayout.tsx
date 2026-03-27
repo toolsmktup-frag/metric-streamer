@@ -6,6 +6,7 @@ import { useFilterStore } from '@/stores/filterStore';
 import { SkeletonCard } from '@/components/dashboard/SkeletonCard';
 import { useMetaSyncStatus } from '@/hooks/useMetaData';
 import { Suspense } from 'react';
+import UserMenu from './UserMenu';
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -75,6 +76,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
             >
               <RefreshCw className={`h-4 w-4 text-muted-foreground ${refreshing ? 'animate-spin' : ''}`} />
             </button>
+            <UserMenu />
           </div>
         </header>
         <main className="flex-1 p-6">
