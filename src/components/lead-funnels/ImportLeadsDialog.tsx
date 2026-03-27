@@ -32,7 +32,7 @@ interface ParsedLead {
   metadata: Record<string, unknown>;
 }
 
-// Common column name mappings (Guru, Eduzz, generic)
+// Common column name mappings (Guru, Eduzz, Ticto, generic)
 const COLUMN_MAP: Record<string, keyof ParsedLead | null> = {
   // Name variations
   'nome contato': 'name',
@@ -55,6 +55,7 @@ const COLUMN_MAP: Record<string, keyof ParsedLead | null> = {
   'email': 'email',
   'e-mail': 'email',
   'email do cliente': 'email',
+  'e-mail do cliente': 'email',
   'email cliente': 'email',
   'customer_email': 'email',
   'buyer_email': 'email',
@@ -67,6 +68,9 @@ const COLUMN_MAP: Record<string, keyof ParsedLead | null> = {
   'celular': 'phone',
   'telefone cliente': 'phone',
   'customer_phone': 'phone',
+  'telefone completo do cliente': 'phone',
+  'número do telefone do cliente': 'phone',
+  'numero do telefone do cliente': 'phone',
   // UTM variations
   'utm_source': 'utm_source',
   'utm source': 'utm_source',
