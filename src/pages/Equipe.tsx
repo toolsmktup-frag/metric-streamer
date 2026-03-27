@@ -8,7 +8,7 @@ import { useLeadFunnels } from '@/hooks/useLeadFunnels';
 import { useOrgFunnelAccess, useGrantFunnelAccess, useRevokeFunnelAccess } from '@/hooks/useLeadFunnelAccess';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentUserRole } from '@/hooks/useCurrentUserRole';
-import { Loader2, Users, Pencil, Check, X, Shield, ChevronDown, ChevronUp, MessageSquare, UserCheck, UserX, Clock, Target, Camera, LogIn } from 'lucide-react';
+import { Loader2, Users, Pencil, Check, X, Shield, ChevronDown, ChevronUp, MessageSquare, UserCheck, UserX, Clock, Target, Camera, LogIn, KeyRound } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   Select,
@@ -57,6 +57,7 @@ export default function Equipe() {
   const isAdmin = currentRole === 'admin';
   const [impersonating, setImpersonating] = useState<string | null>(null);
   const [uploadingAvatar, setUploadingAvatar] = useState<string | null>(null);
+  const [resettingPassword, setResettingPassword] = useState<string | null>(null);
 
   const pendingMembers = members.filter(m => m.status === 'pending');
   const activeMembers = members.filter(m => m.status !== 'pending');
@@ -168,6 +169,37 @@ export default function Equipe() {
     updateStatus.mutate({ userId, status: 'active' });
   }
 
+
+  async function handleResetPassword(userId: string) {
+    setResettingPassword(userId);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) { toast.error('Sessão expirada'); return; }
+      const { data, error } = await supabase.functions.invoke('admin-reset-password', {
+        body: { user_id: userId },
+      });
+      if (error) throw error;
+      if (data?.url) {
+        let finalUrl = data.url;
+        try {
+          const u = new URL(finalUrl);
+          const redirectTo = u.searchParams.get('redirect_to');
+          if (redirectTo && redirectTo.includes('localhost')) {
+            u.searchParams.set('redirect_to', window.location.origin);
+            finalUrl = u.toString();
+          }
+        } catch {}
+        await navigator.clipboard.writeText(finalUrl);
+        toast.success('Link de reset de senha copiado para a área de transferência!');
+      } else {
+        toast.error('Não foi possível gerar o link');
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao gerar link de reset');
+    } finally {
+      setResettingPassword(null);
+    }
+  }
 
   async function handleImpersonate(userId: string) {
     setImpersonating(userId);
@@ -482,20 +514,36 @@ export default function Equipe() {
                           </Button>
                         )}
                         {isAdmin && member.status === 'active' && (
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-7 w-7 text-primary hover:text-primary"
-                            onClick={() => handleImpersonate(member.id)}
-                            title="Acessar como este usuário"
-                            disabled={impersonating === member.id}
-                          >
-                            {impersonating === member.id ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            ) : (
-                              <LogIn className="h-3.5 w-3.5" />
-                            )}
-                          </Button>
+                          <>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7 text-amber-500 hover:text-amber-600"
+                              onClick={() => handleResetPassword(member.id)}
+                              title="Gerar link de reset de senha"
+                              disabled={resettingPassword === member.id}
+                            >
+                              {resettingPassword === member.id ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <KeyRound className="h-3.5 w-3.5" />
+                              )}
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7 text-primary hover:text-primary"
+                              onClick={() => handleImpersonate(member.id)}
+                              title="Acessar como este usuário"
+                              disabled={impersonating === member.id}
+                            >
+                              {impersonating === member.id ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <LogIn className="h-3.5 w-3.5" />
+                              )}
+                            </Button>
+                          </>
                         )}
                       </div>
                     </td>
