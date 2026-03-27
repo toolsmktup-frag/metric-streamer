@@ -1,3 +1,4 @@
+// v1.0.1 - redeploy for matheuscolombo.uazapi.com migration
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {

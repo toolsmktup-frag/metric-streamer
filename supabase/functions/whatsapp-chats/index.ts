@@ -1,4 +1,4 @@
-// v1.1.0 - unified chat: support instance_id=all for cross-instance history
+// v1.1.1 - redeploy for matheuscolombo.uazapi.com migration
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {

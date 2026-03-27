@@ -1,4 +1,4 @@
-// v1.0.2 - simplify UAZAPI send flow and use admin client for writes
+// v1.0.3 - redeploy for matheuscolombo.uazapi.com migration
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
