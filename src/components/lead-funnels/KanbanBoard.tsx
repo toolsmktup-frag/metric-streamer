@@ -71,7 +71,15 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
     return positions.filter(p => !p.lead.assigned_to || p.lead.assigned_to === currentUserId);
   }, [positions, isSeller, currentUserId]);
   const [search, setSearch] = useState('');
-  const [sortMode, setSortMode] = useState<SortMode>('ltv');
+  const storageKey = `kanban-sort-${funnelId}`;
+  const [sortMode, setSortMode] = useState<SortMode>(() => {
+    const saved = localStorage.getItem(`kanban-sort-${funnelId}`);
+    return (saved && SORT_CYCLE.includes(saved as SortMode)) ? saved as SortMode : 'recontact';
+  });
+
+  useEffect(() => {
+    localStorage.setItem(storageKey, sortMode);
+  }, [storageKey, sortMode]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
   const [visibleCounts, setVisibleCounts] = useState<Record<string, number>>({});
