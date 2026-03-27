@@ -120,14 +120,28 @@ export function useLeadStats(startDate?: Date, endDate?: Date, funnelId?: string
       const rangeStart = startDate ? startDate.toISOString() : null;
       const rangeEnd = endDate ? endDate.toISOString() : null;
 
-      const filteredLeads = (rangeStart && rangeEnd)
+      let filteredLeads = (rangeStart && rangeEnd)
         ? leadsWithEntryDate.filter(l => l.entryDate >= rangeStart && l.entryDate <= rangeEnd)
         : leadsWithEntryDate;
 
+      // Filter by funnel if specified
+      if (funnelId) {
+        const leadIdsInFunnel = new Set(
+          positions.filter(p => p.funnel_id === funnelId).map(p => p.lead_id)
+        );
+        filteredLeads = filteredLeads.filter(l => leadIdsInFunnel.has(l.id));
+      }
+
       const total = filteredLeads.length;
-      // Novos hoje/semana always relative to now
-      const newToday = leadsWithEntryDate.filter((lead) => lead.entryDate >= today).length;
-      const newWeek = leadsWithEntryDate.filter((lead) => lead.entryDate >= weekAgo).length;
+      // Novos hoje/semana always relative to now (but respect funnel filter)
+      const funnelFilteredAll = funnelId
+        ? leadsWithEntryDate.filter(l => {
+            const leadIdsInFunnel = new Set(positions.filter(p => p.funnel_id === funnelId).map(p => p.lead_id));
+            return leadIdsInFunnel.has(l.id);
+          })
+        : leadsWithEntryDate;
+      const newToday = funnelFilteredAll.filter((lead) => lead.entryDate >= today).length;
+      const newWeek = funnelFilteredAll.filter((lead) => lead.entryDate >= weekAgo).length;
 
       const dailyMap = new Map<string, number>();
       filteredLeads.forEach((lead) => {
