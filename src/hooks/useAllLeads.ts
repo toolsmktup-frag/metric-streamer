@@ -1,7 +1,7 @@
-import { useQuery, useMemo } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
+import { useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { Lead, LeadStagePosition, LeadFunnel, LeadFunnelStage } from '@/types/leadFunnels';
-import { useMemo as useReactMemo } from 'react';
 
 const PAGE_SIZE = 1000;
 
