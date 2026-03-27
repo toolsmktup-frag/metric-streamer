@@ -3,11 +3,14 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { Camera, Save, KeyRound, Loader2 } from 'lucide-react';
+import { Camera, Save, KeyRound, Loader2, Sun, Moon, Monitor } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useTheme } from '@/hooks/useTheme';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 
 export default function UserSettings() {
   const { toast } = useToast();
+  const { theme, setTheme } = useTheme();
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [loading, setLoading] = useState(true);
@@ -168,6 +171,22 @@ export default function UserSettings() {
         {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
         Salvar perfil
       </Button>
+
+      {/* Aparência */}
+      <div className="border-t border-border pt-6 space-y-3">
+        <h2 className="text-lg font-semibold text-foreground">Aparência</h2>
+        <ToggleGroup type="single" value={theme} onValueChange={(v) => v && setTheme(v as 'light' | 'dark' | 'system')}>
+          <ToggleGroupItem value="light" aria-label="Claro" className="gap-2 px-4">
+            <Sun className="h-4 w-4" /> Claro
+          </ToggleGroupItem>
+          <ToggleGroupItem value="dark" aria-label="Escuro" className="gap-2 px-4">
+            <Moon className="h-4 w-4" /> Escuro
+          </ToggleGroupItem>
+          <ToggleGroupItem value="system" aria-label="Sistema" className="gap-2 px-4">
+            <Monitor className="h-4 w-4" /> Sistema
+          </ToggleGroupItem>
+        </ToggleGroup>
+      </div>
 
       {/* Alterar Senha */}
       <div className="border-t border-border pt-6 space-y-4">
