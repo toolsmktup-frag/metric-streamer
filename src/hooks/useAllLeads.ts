@@ -1,6 +1,7 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMemo } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { Lead, LeadStagePosition, LeadFunnel, LeadFunnelStage } from '@/types/leadFunnels';
+import { useMemo as useReactMemo } from 'react';
 
 const PAGE_SIZE = 1000;
 
@@ -89,120 +90,122 @@ export function useFunnelList() {
   });
 }
 
-export function useLeadStats(startDate?: Date, endDate?: Date, funnelId?: string | null) {
+// Base data query - fetched ONCE and cached, shared across all funnel/date filters
+function useLeadStatsBase() {
   return useQuery({
-    queryKey: ['lead-stats', startDate?.toISOString(), endDate?.toISOString(), funnelId || 'all'],
+    queryKey: ['lead-stats-base'],
     queryFn: async () => {
-      // When filtering by funnel, only fetch positions for that funnel to reduce data
-      const positionsPromise = funnelId
-        ? fetchAllRows<Pick<LeadStagePosition, 'lead_id' | 'funnel_id' | 'stage_id' | 'entered_at'>>(
-            'lead_stage_positions', 'lead_id, funnel_id, stage_id, entered_at',
-            { column: 'entered_at', ascending: true }
-          ).then(async (allPositions) => {
-            // Filter client-side since fetchAllRows doesn't support .eq()
-            return allPositions;
-          })
-        : fetchAllRows<Pick<LeadStagePosition, 'lead_id' | 'funnel_id' | 'stage_id' | 'entered_at'>>(
-            'lead_stage_positions', 'lead_id, funnel_id, stage_id, entered_at'
-          );
-
       const [leads, positions, funnels] = await Promise.all([
         fetchAllRows<Pick<Lead, 'id' | 'created_at' | 'utm_source' | 'utm_medium'>>('leads', 'id, created_at, utm_source, utm_medium'),
-        positionsPromise,
+        fetchAllRows<Pick<LeadStagePosition, 'lead_id' | 'funnel_id' | 'stage_id' | 'entered_at'>>('lead_stage_positions', 'lead_id, funnel_id, stage_id, entered_at'),
         fetchAllRows<LeadFunnel>('lead_funnels', 'id, name, color, lead_funnel_stages(id, name, sort_order)'),
       ]);
-
-      const now = new Date();
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
-      const weekAgo = new Date(now.getTime() - 7 * 86400000).toISOString();
-
-      const firstEntryByLead = new Map<string, string>();
-      positions.forEach((position) => {
-        const existing = firstEntryByLead.get(position.lead_id);
-        if (!existing || position.entered_at < existing) {
-          firstEntryByLead.set(position.lead_id, position.entered_at);
-        }
-      });
-
-      const leadsWithEntryDate = leads.map((lead) => ({
-        ...lead,
-        entryDate: firstEntryByLead.get(lead.id) || lead.created_at,
-      }));
-
-      // Filter by selected date range
-      const rangeStart = startDate ? startDate.toISOString() : null;
-      const rangeEnd = endDate ? endDate.toISOString() : null;
-
-      let filteredLeads = (rangeStart && rangeEnd)
-        ? leadsWithEntryDate.filter(l => l.entryDate >= rangeStart && l.entryDate <= rangeEnd)
-        : leadsWithEntryDate;
-
-      // Filter by funnel if specified
-      if (funnelId) {
-        const leadIdsInFunnel = new Set(
-          positions.filter(p => p.funnel_id === funnelId).map(p => p.lead_id)
-        );
-        filteredLeads = filteredLeads.filter(l => leadIdsInFunnel.has(l.id));
-      }
-
-      const total = filteredLeads.length;
-      // Novos hoje/semana always relative to now (but respect funnel filter)
-      const funnelFilteredAll = funnelId
-        ? leadsWithEntryDate.filter(l => {
-            const leadIdsInFunnel = new Set(positions.filter(p => p.funnel_id === funnelId).map(p => p.lead_id));
-            return leadIdsInFunnel.has(l.id);
-          })
-        : leadsWithEntryDate;
-      const newToday = funnelFilteredAll.filter((lead) => lead.entryDate >= today).length;
-      const newWeek = funnelFilteredAll.filter((lead) => lead.entryDate >= weekAgo).length;
-
-      const dailyMap = new Map<string, number>();
-      filteredLeads.forEach((lead) => {
-        const key = lead.entryDate.slice(0, 10);
-        dailyMap.set(key, (dailyMap.get(key) || 0) + 1);
-      });
-      const dailyLeads = Array.from(dailyMap.entries())
-        .map(([date, count]) => ({ date, count }))
-        .sort((a, b) => a.date.localeCompare(b.date));
-
-      const filteredLeadIds = new Set(filteredLeads.map(l => l.id));
-
-      const sourceMap = new Map<string, number>();
-      filteredLeads.forEach((lead) => {
-        const source = lead.utm_source || 'Direto';
-        sourceMap.set(source, (sourceMap.get(source) || 0) + 1);
-      });
-      const bySource = Array.from(sourceMap.entries())
-        .map(([source, count]) => ({ source, count }))
-        .sort((a, b) => b.count - a.count);
-
-      const sourceMediumMap = new Map<string, { source: string; medium: string; count: number }>();
-      filteredLeads.forEach((lead) => {
-        const source = lead.utm_source || 'Direto';
-        const medium = lead.utm_medium || '(none)';
-        const key = `${source}||${medium}`;
-        const existing = sourceMediumMap.get(key);
-        if (existing) existing.count += 1;
-        else sourceMediumMap.set(key, { source, medium, count: 1 });
-      });
-      const bySourceMedium = Array.from(sourceMediumMap.values())
-        .sort((a, b) => b.count - a.count);
-
-      const funnelCountMap = new Map<string, number>();
-      positions.forEach((position) => {
-        if (filteredLeadIds.has(position.lead_id)) {
-          funnelCountMap.set(position.funnel_id, (funnelCountMap.get(position.funnel_id) || 0) + 1);
-        }
-      });
-      const byFunnel = funnels.map(funnel => ({
-        id: funnel.id,
-        name: funnel.name,
-        color: funnel.color,
-        count: funnelCountMap.get(funnel.id) || 0,
-      })).sort((a, b) => b.count - a.count);
-
-      return { total, newToday, newWeek, dailyLeads, bySource, bySourceMedium, byFunnel };
+      return { leads, positions, funnels };
     },
     refetchInterval: 30000,
+    staleTime: 15000,
   });
+}
+
+export function useLeadStats(startDate?: Date, endDate?: Date, funnelId?: string | null) {
+  const { data: baseData, isLoading } = useLeadStatsBase();
+
+  const stats = useReactMemo(() => {
+    if (!baseData) return null;
+
+    const { leads, positions, funnels } = baseData;
+
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+    const weekAgo = new Date(now.getTime() - 7 * 86400000).toISOString();
+
+    // Build lead entry dates from positions
+    const firstEntryByLead = new Map<string, string>();
+    positions.forEach((position) => {
+      const existing = firstEntryByLead.get(position.lead_id);
+      if (!existing || position.entered_at < existing) {
+        firstEntryByLead.set(position.lead_id, position.entered_at);
+      }
+    });
+
+    const leadsWithEntryDate = leads.map((lead) => ({
+      ...lead,
+      entryDate: firstEntryByLead.get(lead.id) || lead.created_at,
+    }));
+
+    // Filter by date range
+    const rangeStart = startDate ? startDate.toISOString() : null;
+    const rangeEnd = endDate ? endDate.toISOString() : null;
+
+    let filteredLeads = (rangeStart && rangeEnd)
+      ? leadsWithEntryDate.filter(l => l.entryDate >= rangeStart && l.entryDate <= rangeEnd)
+      : leadsWithEntryDate;
+
+    // Filter by funnel if specified
+    let leadIdsInFunnel: Set<string> | null = null;
+    if (funnelId) {
+      leadIdsInFunnel = new Set(
+        positions.filter(p => p.funnel_id === funnelId).map(p => p.lead_id)
+      );
+      filteredLeads = filteredLeads.filter(l => leadIdsInFunnel!.has(l.id));
+    }
+
+    const total = filteredLeads.length;
+
+    // Novos hoje/semana (respect funnel filter but not date range)
+    const baseForRecent = funnelId && leadIdsInFunnel
+      ? leadsWithEntryDate.filter(l => leadIdsInFunnel!.has(l.id))
+      : leadsWithEntryDate;
+    const newToday = baseForRecent.filter((lead) => lead.entryDate >= today).length;
+    const newWeek = baseForRecent.filter((lead) => lead.entryDate >= weekAgo).length;
+
+    const dailyMap = new Map<string, number>();
+    filteredLeads.forEach((lead) => {
+      const key = lead.entryDate.slice(0, 10);
+      dailyMap.set(key, (dailyMap.get(key) || 0) + 1);
+    });
+    const dailyLeads = Array.from(dailyMap.entries())
+      .map(([date, count]) => ({ date, count }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    const filteredLeadIds = new Set(filteredLeads.map(l => l.id));
+
+    const sourceMap = new Map<string, number>();
+    filteredLeads.forEach((lead) => {
+      const source = lead.utm_source || 'Direto';
+      sourceMap.set(source, (sourceMap.get(source) || 0) + 1);
+    });
+    const bySource = Array.from(sourceMap.entries())
+      .map(([source, count]) => ({ source, count }))
+      .sort((a, b) => b.count - a.count);
+
+    const sourceMediumMap = new Map<string, { source: string; medium: string; count: number }>();
+    filteredLeads.forEach((lead) => {
+      const source = lead.utm_source || 'Direto';
+      const medium = lead.utm_medium || '(none)';
+      const key = `${source}||${medium}`;
+      const existing = sourceMediumMap.get(key);
+      if (existing) existing.count += 1;
+      else sourceMediumMap.set(key, { source, medium, count: 1 });
+    });
+    const bySourceMedium = Array.from(sourceMediumMap.values())
+      .sort((a, b) => b.count - a.count);
+
+    const funnelCountMap = new Map<string, number>();
+    positions.forEach((position) => {
+      if (filteredLeadIds.has(position.lead_id)) {
+        funnelCountMap.set(position.funnel_id, (funnelCountMap.get(position.funnel_id) || 0) + 1);
+      }
+    });
+    const byFunnel = funnels.map(funnel => ({
+      id: funnel.id,
+      name: funnel.name,
+      color: funnel.color,
+      count: funnelCountMap.get(funnel.id) || 0,
+    })).sort((a, b) => b.count - a.count);
+
+    return { total, newToday, newWeek, dailyLeads, bySource, bySourceMedium, byFunnel };
+  }, [baseData, startDate, endDate, funnelId]);
+
+  return { data: stats, isLoading };
 }
