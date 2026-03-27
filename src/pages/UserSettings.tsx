@@ -3,12 +3,14 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { Camera, Save, KeyRound, Loader2, Sun, Moon, Monitor } from 'lucide-react';
+import { Camera, Save, KeyRound, Loader2, Sun, Moon, Monitor, ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useTheme } from '@/hooks/useTheme';
+import { useNavigate } from 'react-router-dom';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 
 export default function UserSettings() {
+  const navigate = useNavigate();
   const { toast } = useToast();
   const { theme, setTheme } = useTheme();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -130,6 +132,9 @@ export default function UserSettings() {
 
   return (
     <div className="max-w-lg mx-auto space-y-8">
+      <Button variant="ghost" size="sm" onClick={() => navigate(-1)} className="gap-2 mb-2">
+        <ArrowLeft className="h-4 w-4" /> Voltar
+      </Button>
       <h1 className="text-2xl font-bold text-foreground">Configurações</h1>
 
       {/* Avatar */}
