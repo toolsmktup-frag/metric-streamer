@@ -7,6 +7,7 @@ import { SkeletonCard } from '@/components/dashboard/SkeletonCard';
 import { useMetaSyncStatus } from '@/hooks/useMetaData';
 import { Suspense } from 'react';
 import UserMenu from './UserMenu';
+import { useTheme } from '@/hooks/useTheme';
 
 interface AppLayoutProps {
   children: React.ReactNode;

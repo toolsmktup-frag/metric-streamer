@@ -3,8 +3,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { Camera, Save, KeyRound, Loader2 } from 'lucide-react';
+import { Camera, Save, KeyRound, Loader2, Sun, Moon, Monitor } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useTheme } from '@/hooks/useTheme';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 
 export default function UserSettings() {
   const { toast } = useToast();
