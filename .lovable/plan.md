@@ -1,35 +1,33 @@
 
 
-## Plano: Filtro por Funil com opcao de fixar visualizacao
+## Plano: Menu de perfil do usuario no header + pagina de configuracoes
 
-### Resumo simples
-Hoje o dashboard carrega TODOS os leads e demora. A ideia e adicionar um dropdown de funil no topo que filtra tudo (KPIs, graficos). O usuario pode "fixar" um funil como padrao — assim toda vez que abrir a pagina (ele ou os vendedores), ja abre filtrado naquele funil. Se quiser ver tudo, seleciona "Todos os Funis".
+### Resumo
+Adicionar um avatar/botao do usuario no canto superior direito do header (ao lado do botao de refresh). Ao clicar, abre um dropdown com "Configuracoes" e "Sair". A pagina de configuracoes permite: editar nome, ver email (somente leitura), alterar senha e subir foto de perfil.
 
 ### Mudancas
 
-**1. `src/hooks/useAllLeads.ts` — Query separada para lista de funis + filtro no useLeadStats**
+**1. Novo componente `src/components/layout/UserMenu.tsx` — Dropdown do usuario**
+- Busca dados do usuario logado (nome, email, avatar) via `supabase.auth.getUser()` + `user_profiles`
+- Mostra avatar (ou iniciais) no header
+- Dropdown com 2 opcoes: "Configuracoes" (navega para `/configuracoes`) e "Sair" (faz logout)
 
-- Nova funcao `useFunnelList()`: query simples em `lead_funnels` retornando `id, name, color` — carrega rapido, independente de qualquer filtro
-- `useLeadStats()` ganha parametro `funnelId?: string | null`
-- Quando `funnelId` e fornecido, filtra `filteredLeadIds` para apenas leads que tem posicao naquele funil
-- Todos os KPIs e graficos passam a refletir so os leads do funil selecionado
+**2. `src/components/layout/AppLayout.tsx` — Adicionar UserMenu ao header**
+- Importar e renderizar `<UserMenu />` no lado direito do header, ao lado do botao de refresh
 
-**2. `src/pages/LeadsDashboard.tsx` — Dropdown de funil + botao de fixar**
+**3. Nova pagina `src/pages/UserSettings.tsx` — Configuracoes do usuario**
+- Campo "Nome" — editavel, salva em `user_profiles.full_name`
+- Campo "Email" — somente leitura, exibe o email do auth
+- Secao "Alterar Senha" — campos "Nova senha" e "Confirmar senha", chama `supabase.auth.updateUser({ password })`
+- Secao "Foto de Perfil" — upload de imagem para o bucket `avatars` (ja existe), atualiza `user_profiles.avatar_url`
+- Botao "Salvar" para nome/foto, botao separado "Alterar Senha" para a senha
 
-- Importar `Select` + `useFunnelList()`
-- State: `selectedFunnelId` inicializado do `localStorage` (chave `leads-dashboard-pinned-funnel`)
-- Dropdown ao lado do DateRangePicker: "Todos os Funis" + lista de funis
-- Icone de "pin" (📌) ao lado do dropdown — ao clicar, salva o funil atual no `localStorage` como padrao. Se ja esta fixado, clicar de novo remove a fixacao
-- Toast confirmando: "Visualizacao fixada: [nome do funil]"
-- Passa `selectedFunnelId` para `useLeadStats(dateRange.start, dateRange.end, selectedFunnelId)`
-- Manter o botao Sincronizar como esta (sem mexer nele agora)
+**4. `src/App.tsx` — Rota `/configuracoes`**
+- Adicionar rota protegida para `UserSettings`
 
 ### Fluxo do usuario
-1. Abre dashboard → carrega com o funil fixado (ou "Todos" se nenhum fixado)
-2. Troca o dropdown para outro funil → dashboard atualiza
-3. Clica no pin → fixa aquele funil como padrao
-4. Proximo acesso (dele ou de qualquer vendedor naquele navegador) → ja abre no funil fixado
-
-### Detalhe tecnico
-A "fixacao" e por navegador (localStorage). Se quiser que seja por usuario (todos veem o mesmo), precisaria salvar no banco — mas por enquanto localStorage resolve o caso de uso descrito.
+1. Vendedor ve seu avatar no canto superior direito
+2. Clica → dropdown com "Configuracoes" e "Sair"
+3. "Configuracoes" → pagina onde edita nome, ve email, troca senha e sobe foto
+4. "Sair" → logout e redireciona para login
 
