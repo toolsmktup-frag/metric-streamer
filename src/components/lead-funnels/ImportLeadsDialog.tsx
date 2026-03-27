@@ -301,6 +301,7 @@ const ImportLeadsDialog: React.FC<ImportLeadsDialogProps> = ({
     setParsedRows([]);
     setFileName(null);
     setSelectedStage('');
+    setSelectedPlatform('');
     setStatusStageMap({});
     setSeparateByStatus(false);
     setProgress(0);
