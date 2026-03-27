@@ -132,6 +132,9 @@ export default function UserSettings() {
 
   return (
     <div className="max-w-lg mx-auto space-y-8">
+      <Button variant="ghost" size="sm" onClick={() => navigate(-1)} className="gap-2 mb-2">
+        <ArrowLeft className="h-4 w-4" /> Voltar
+      </Button>
       <h1 className="text-2xl font-bold text-foreground">Configurações</h1>
 
       {/* Avatar */}
