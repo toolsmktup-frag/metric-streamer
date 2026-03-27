@@ -1,32 +1,32 @@
 
 
-## Plano: Corrigir mapeamento de colunas Guru no importador de leads
+## Plano: Corrigir erro `.catch is not a function` na importação
 
 ### Problema
-A planilha Guru usa "contacto" nos headers (ex: `nome contacto`, `email contacto`, `telefone contacto`), mas o `COLUMN_MAP` só reconhece "contato". Resultado: 0 leads encontrados.
+O `supabase.rpc()` retorna um `PromiseLike` (thenable do PostgREST), que não possui método `.catch()`. Isso causa o erro `(intermediate value).rpc(...).catch is not a function`.
 
 ### Solução
-Adicionar as variantes com "contacto" ao `COLUMN_MAP` e `METADATA_KEY_MAP` no arquivo `src/components/lead-funnels/ImportLeadsDialog.tsx`.
+No arquivo `src/hooks/useImportLeads.ts`, linha 409-427, envolver a chamada `.rpc()` com `Promise.resolve()` para convertê-la em uma Promise real que possui `.catch()`.
 
-### Arquivo: `src/components/lead-funnels/ImportLeadsDialog.tsx`
+### Arquivo: `src/hooks/useImportLeads.ts`
 
-**COLUMN_MAP** - adicionar:
-- `'nome contacto'` → `'name'`
-- `'email contacto'` → `'email'`
-- `'telefone contacto'` → `'phone'`
-- `'e-mail contacto'` → `'email'`
+**Linha 408-428** - Alterar de:
+```typescript
+syncPromises.push(
+  (supabase as any).rpc('sync_lead_from_sale', { ... })
+    .catch((err: unknown) => console.error(...))
+);
+```
 
-**METADATA_KEY_MAP** - adicionar:
-- `'codigo telefone contacto'` → `'_phone_code'`
-- `'código telefone contacto'` → `'_phone_code'` (já existe, confirmar)
-- `'nome produto'` → `'product_name'` (já mapeado, ok)
-- `'data pedido'` → `'purchased_at'` (já mapeado, ok)
-- `'id marketplace'` → `'transaction_id'` (para dedup futuro)
-- `'nome marketplace'` → `'platform'`
-
-Também adicionar ao COLUMN_MAP:
-- `'doc contacto'` → ignorar (já vai para metadata)
+Para:
+```typescript
+syncPromises.push(
+  Promise.resolve(
+    (supabase as any).rpc('sync_lead_from_sale', { ... })
+  ).catch((err: unknown) => console.error(...))
+);
+```
 
 ### Resultado
-A planilha Guru será reconhecida corretamente, populando name, email e phone, passando pelo filtro e mostrando os 273 leads.
+A importação dos 273 leads processará corretamente, sincronizando com BASE DE LEADS sem erro de runtime.
 
