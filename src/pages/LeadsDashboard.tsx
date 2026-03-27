@@ -121,10 +121,13 @@ const LeadsDashboard: React.FC = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Dashboard de Leads</h1>
-        <Button variant="outline" size="sm" onClick={handleSync} disabled={syncing}>
-          <RefreshCw className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
-          {syncing ? 'Sincronizando...' : 'Sincronizar Base'}
-        </Button>
+        <div className="flex items-center gap-2">
+          <DateRangePicker />
+          <Button variant="outline" size="sm" onClick={handleSync} disabled={syncing}>
+            <RefreshCw className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
+            {syncing ? 'Sincronizando...' : 'Sincronizar Base'}
+          </Button>
+        </div>
       </div>
 
       {/* KPI Cards */}
