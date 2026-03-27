@@ -170,6 +170,37 @@ export default function Equipe() {
   }
 
 
+  async function handleResetPassword(userId: string) {
+    setResettingPassword(userId);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) { toast.error('Sessão expirada'); return; }
+      const { data, error } = await supabase.functions.invoke('admin-reset-password', {
+        body: { user_id: userId },
+      });
+      if (error) throw error;
+      if (data?.url) {
+        let finalUrl = data.url;
+        try {
+          const u = new URL(finalUrl);
+          const redirectTo = u.searchParams.get('redirect_to');
+          if (redirectTo && redirectTo.includes('localhost')) {
+            u.searchParams.set('redirect_to', window.location.origin);
+            finalUrl = u.toString();
+          }
+        } catch {}
+        await navigator.clipboard.writeText(finalUrl);
+        toast.success('Link de reset de senha copiado para a área de transferência!');
+      } else {
+        toast.error('Não foi possível gerar o link');
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao gerar link de reset');
+    } finally {
+      setResettingPassword(null);
+    }
+  }
+
   async function handleImpersonate(userId: string) {
     setImpersonating(userId);
     try {
