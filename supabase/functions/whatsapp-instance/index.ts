@@ -1,4 +1,4 @@
-// v1.0.5 - redeployed for new UAZAPI_BASE_URL (matheuscolombo.uazapi.com)
+// v1.0.6 - redeploy all functions for matheuscolombo.uazapi.com migration
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
