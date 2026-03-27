@@ -10,6 +10,7 @@ import { useNavigate } from 'react-router-dom';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 
 export default function UserSettings() {
+  const navigate = useNavigate();
   const { toast } = useToast();
   const { theme, setTheme } = useTheme();
   const fileRef = useRef<HTMLInputElement>(null);
