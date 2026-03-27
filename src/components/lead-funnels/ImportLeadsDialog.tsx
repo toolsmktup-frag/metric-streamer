@@ -333,6 +333,22 @@ const ImportLeadsDialog: React.FC<ImportLeadsDialogProps> = ({
         </DialogHeader>
 
         <div className="space-y-4">
+          {/* Platform selector */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-foreground">Plataforma de origem</label>
+            <Select value={selectedPlatform} onValueChange={setSelectedPlatform}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione a plataforma..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="guru">Guru</SelectItem>
+                <SelectItem value="ticto">Ticto</SelectItem>
+                <SelectItem value="eduzz">Eduzz</SelectItem>
+                <SelectItem value="outro">Outro / Genérico</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
           {/* File Upload */}
           <div
             className="border-2 border-dashed border-border rounded-lg p-6 text-center cursor-pointer hover:border-primary/50 transition-colors"
