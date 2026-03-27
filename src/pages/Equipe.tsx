@@ -483,20 +483,36 @@ export default function Equipe() {
                           </Button>
                         )}
                         {isAdmin && member.status === 'active' && (
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-7 w-7 text-primary hover:text-primary"
-                            onClick={() => handleImpersonate(member.id)}
-                            title="Acessar como este usuário"
-                            disabled={impersonating === member.id}
-                          >
-                            {impersonating === member.id ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            ) : (
-                              <LogIn className="h-3.5 w-3.5" />
-                            )}
-                          </Button>
+                          <>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7 text-amber-500 hover:text-amber-600"
+                              onClick={() => handleResetPassword(member.id)}
+                              title="Gerar link de reset de senha"
+                              disabled={resettingPassword === member.id}
+                            >
+                              {resettingPassword === member.id ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <KeyRound className="h-3.5 w-3.5" />
+                              )}
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7 text-primary hover:text-primary"
+                              onClick={() => handleImpersonate(member.id)}
+                              title="Acessar como este usuário"
+                              disabled={impersonating === member.id}
+                            >
+                              {impersonating === member.id ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <LogIn className="h-3.5 w-3.5" />
+                              )}
+                            </Button>
+                          </>
                         )}
                       </div>
                     </td>
