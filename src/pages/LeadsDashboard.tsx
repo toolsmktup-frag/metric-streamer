@@ -13,7 +13,8 @@ import { useQueryClient } from '@tanstack/react-query';
 const COLORS = ['hsl(var(--primary))', 'hsl(var(--accent))', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4'];
 
 const LeadsDashboard: React.FC = () => {
-  const { data: stats, isLoading } = useLeadStats();
+  const { dateRange } = useFilterStore();
+  const { data: stats, isLoading } = useLeadStats(dateRange.start, dateRange.end);
   const [syncing, setSyncing] = useState(false);
   const queryClient = useQueryClient();
 
