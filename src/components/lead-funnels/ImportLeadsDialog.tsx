@@ -32,7 +32,7 @@ interface ParsedLead {
   metadata: Record<string, unknown>;
 }
 
-// Common column name mappings (Guru, Eduzz, generic)
+// Common column name mappings (Guru, Eduzz, Ticto, generic)
 const COLUMN_MAP: Record<string, keyof ParsedLead | null> = {
   // Name variations
   'nome contato': 'name',
@@ -55,6 +55,7 @@ const COLUMN_MAP: Record<string, keyof ParsedLead | null> = {
   'email': 'email',
   'e-mail': 'email',
   'email do cliente': 'email',
+  'e-mail do cliente': 'email',
   'email cliente': 'email',
   'customer_email': 'email',
   'buyer_email': 'email',
@@ -67,6 +68,9 @@ const COLUMN_MAP: Record<string, keyof ParsedLead | null> = {
   'celular': 'phone',
   'telefone cliente': 'phone',
   'customer_phone': 'phone',
+  'telefone completo do cliente': 'phone',
+  'número do telefone do cliente': 'phone',
+  'numero do telefone do cliente': 'phone',
   // UTM variations
   'utm_source': 'utm_source',
   'utm source': 'utm_source',
@@ -84,24 +88,33 @@ const COLUMN_MAP: Record<string, keyof ParsedLead | null> = {
 const METADATA_KEY_MAP: Record<string, string> = {
   'produto': 'product_name',
   'nome produto': 'product_name',
+  'nome do produto': 'product_name',
   'product_name': 'product_name',
   'oferta': 'offer_name',
+  'nome da oferta': 'offer_name',
   'offer_name': 'offer_name',
   'valor': 'amount',
   'valor venda': 'amount',
   'valor líquido': 'amount',
+  'valor pago': 'amount',
   'gross_amount': 'amount',
   'net_amount': 'amount',
   'status': 'status',
   'status da compra': 'status',
+  'status da transação': 'status',
+  'status da transacao': 'status',
   'pagamento': 'payment_method',
   'payment_method': 'payment_method',
   'método pagamento': 'payment_method',
+  'método de pagamento': 'payment_method',
+  'metodo de pagamento': 'payment_method',
   'plataforma': 'platform',
   'platform': 'platform',
   'data': 'purchased_at',
   'data pedido': 'purchased_at',
+  'data do pedido': 'purchased_at',
   'purchased_at': 'purchased_at',
+  'data do status': 'status_date',
   'campanha meta': 'meta_campaign_name',
   'meta campaign name': 'meta_campaign_name',
   'adset meta': 'meta_adset_name',
@@ -116,7 +129,13 @@ const METADATA_KEY_MAP: Record<string, string> = {
   'codigo telefone contacto': '_phone_code',
   'código telefone contacto': '_phone_code',
   'codigo telefone': '_phone_code',
+  'ddi do cliente': '_phone_ddi',
+  'ddd do cliente': '_phone_ddd',
   'id marketplace': 'transaction_id',
+  'código da transação': 'transaction_id',
+  'codigo da transação': 'transaction_id',
+  'código da transacao': 'transaction_id',
+  'codigo da transacao': 'transaction_id',
   'nome marketplace': 'platform',
   'doc contacto': 'customer_doc',
 };
@@ -173,6 +192,20 @@ function mapRow(row: Record<string, string>): ParsedLead {
     delete lead.metadata['_phone_code'];
   }
 
+  // Ticto: combine DDI + DDD + phone number if phone not already set
+  if (!lead.phone && lead.metadata['_phone_ddi'] && lead.metadata['_phone_ddd']) {
+    const ddi = String(lead.metadata['_phone_ddi']).replace(/\D/g, '');
+    const ddd = String(lead.metadata['_phone_ddd']).replace(/\D/g, '');
+    // Look for a raw phone number in metadata
+    const rawPhone = lead.metadata['numero do telefone do cliente'] || lead.metadata['número do telefone do cliente'] || '';
+    const phoneDigits = String(rawPhone).replace(/\D/g, '');
+    if (phoneDigits) {
+      lead.phone = `+${ddi}${ddd}${phoneDigits}`;
+    }
+    delete lead.metadata['_phone_ddi'];
+    delete lead.metadata['_phone_ddd'];
+  }
+
   return lead;
 }
 
@@ -191,6 +224,7 @@ const ImportLeadsDialog: React.FC<ImportLeadsDialogProps> = ({
   const [progress, setProgress] = useState<number>(0);
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState<{ imported: number; skipped: number } | null>(null);
+  const [selectedPlatform, setSelectedPlatform] = useState<string>('');
   const fileRef = useRef<HTMLInputElement>(null);
   const importMutation = useImportLeads();
 
@@ -235,6 +269,15 @@ const ImportLeadsDialog: React.FC<ImportLeadsDialogProps> = ({
     setImporting(true);
     setProgress(0);
 
+    // Inject selected platform into metadata
+    if (selectedPlatform) {
+      parsedRows.forEach(lead => {
+        if (!lead.metadata.platform) {
+          lead.metadata.platform = selectedPlatform;
+        }
+      });
+    }
+
     const res = await importMutation.mutateAsync({
       leads: parsedRows,
       funnelId,
@@ -258,6 +301,7 @@ const ImportLeadsDialog: React.FC<ImportLeadsDialogProps> = ({
     setParsedRows([]);
     setFileName(null);
     setSelectedStage('');
+    setSelectedPlatform('');
     setStatusStageMap({});
     setSeparateByStatus(false);
     setProgress(0);
@@ -289,6 +333,22 @@ const ImportLeadsDialog: React.FC<ImportLeadsDialogProps> = ({
         </DialogHeader>
 
         <div className="space-y-4">
+          {/* Platform selector */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-foreground">Plataforma de origem</label>
+            <Select value={selectedPlatform} onValueChange={setSelectedPlatform}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione a plataforma..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="guru">Guru</SelectItem>
+                <SelectItem value="ticto">Ticto</SelectItem>
+                <SelectItem value="eduzz">Eduzz</SelectItem>
+                <SelectItem value="outro">Outro / Genérico</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
           {/* File Upload */}
           <div
             className="border-2 border-dashed border-border rounded-lg p-6 text-center cursor-pointer hover:border-primary/50 transition-colors"
