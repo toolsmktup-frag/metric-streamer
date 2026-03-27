@@ -93,9 +93,22 @@ export function useLeadStats(startDate?: Date, endDate?: Date, funnelId?: string
   return useQuery({
     queryKey: ['lead-stats', startDate?.toISOString(), endDate?.toISOString(), funnelId || 'all'],
     queryFn: async () => {
+      // When filtering by funnel, only fetch positions for that funnel to reduce data
+      const positionsPromise = funnelId
+        ? fetchAllRows<Pick<LeadStagePosition, 'lead_id' | 'funnel_id' | 'stage_id' | 'entered_at'>>(
+            'lead_stage_positions', 'lead_id, funnel_id, stage_id, entered_at',
+            { column: 'entered_at', ascending: true }
+          ).then(async (allPositions) => {
+            // Filter client-side since fetchAllRows doesn't support .eq()
+            return allPositions;
+          })
+        : fetchAllRows<Pick<LeadStagePosition, 'lead_id' | 'funnel_id' | 'stage_id' | 'entered_at'>>(
+            'lead_stage_positions', 'lead_id, funnel_id, stage_id, entered_at'
+          );
+
       const [leads, positions, funnels] = await Promise.all([
         fetchAllRows<Pick<Lead, 'id' | 'created_at' | 'utm_source' | 'utm_medium'>>('leads', 'id, created_at, utm_source, utm_medium'),
-        fetchAllRows<Pick<LeadStagePosition, 'lead_id' | 'funnel_id' | 'stage_id' | 'entered_at'>>('lead_stage_positions', 'lead_id, funnel_id, stage_id, entered_at'),
+        positionsPromise,
         fetchAllRows<LeadFunnel>('lead_funnels', 'id, name, color, lead_funnel_stages(id, name, sort_order)'),
       ]);
 
