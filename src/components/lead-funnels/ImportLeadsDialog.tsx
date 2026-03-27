@@ -224,6 +224,7 @@ const ImportLeadsDialog: React.FC<ImportLeadsDialogProps> = ({
   const [progress, setProgress] = useState<number>(0);
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState<{ imported: number; skipped: number } | null>(null);
+  const [selectedPlatform, setSelectedPlatform] = useState<string>('');
   const fileRef = useRef<HTMLInputElement>(null);
   const importMutation = useImportLeads();
 
