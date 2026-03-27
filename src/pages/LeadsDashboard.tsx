@@ -1,52 +1,63 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { useLeadStats } from '@/hooks/useAllLeads';
+import { useLeadStats, useFunnelList } from '@/hooks/useAllLeads';
 import { useFilterStore } from '@/stores/filterStore';
 import DateRangePicker from '@/components/dashboard/DateRangePicker';
-import { Users, UserPlus, TrendingUp, Target, RefreshCw } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Users, UserPlus, TrendingUp, Target, RefreshCw, Pin, PinOff } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
 
 const COLORS = ['hsl(var(--primary))', 'hsl(var(--accent))', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4'];
+const PINNED_KEY = 'leads-dashboard-pinned-funnel';
 
 const LeadsDashboard: React.FC = () => {
   const { dateRange } = useFilterStore();
-  const { data: stats, isLoading } = useLeadStats(dateRange.start, dateRange.end);
+  const { data: funnels } = useFunnelList();
+  const [selectedFunnelId, setSelectedFunnelId] = useState<string | null>(() => {
+    return localStorage.getItem(PINNED_KEY) || null;
+  });
+  const isPinned = localStorage.getItem(PINNED_KEY) === selectedFunnelId && selectedFunnelId !== null;
+
+  const { data: stats, isLoading } = useLeadStats(dateRange.start, dateRange.end, selectedFunnelId);
   const [syncing, setSyncing] = useState(false);
   const queryClient = useQueryClient();
+
+  const handlePin = () => {
+    if (isPinned) {
+      localStorage.removeItem(PINNED_KEY);
+      toast.info('Visualização desfixada');
+    } else if (selectedFunnelId) {
+      localStorage.setItem(PINNED_KEY, selectedFunnelId);
+      const name = funnels?.find(f => f.id === selectedFunnelId)?.name || 'Funil';
+      toast.success(`Visualização fixada: ${name}`);
+    }
+    // Force re-render
+    setSelectedFunnelId(prev => prev);
+  };
+
+  const handleFunnelChange = (value: string) => {
+    setSelectedFunnelId(value === 'all' ? null : value);
+  };
 
   const handleSync = async () => {
     setSyncing(true);
     try {
       const { data, error } = await supabase.functions.invoke('sync-leads-from-sales');
       if (error) throw error;
-      
       const jobId = data?.job_id;
       if (!jobId) throw new Error('No job_id returned');
-
-      toast.info('Sincronização iniciada em background...', {
-        description: 'Processando seus leads. Isso pode levar alguns minutos.',
-      });
-
-      // Poll meta_sync_log for completion
+      toast.info('Sincronização iniciada em background...', { description: 'Processando seus leads. Isso pode levar alguns minutos.' });
       const pollInterval = setInterval(async () => {
-        const { data: log } = await supabase
-          .from('meta_sync_log')
-          .select('status, records_synced, error, finished_at')
-          .eq('id', jobId)
-          .single();
-
+        const { data: log } = await supabase.from('meta_sync_log').select('status, records_synced, error, finished_at').eq('id', jobId).single();
         if (!log) return;
-
         if (log.status === 'completed') {
           clearInterval(pollInterval);
           setSyncing(false);
-          toast.success('Sincronização concluída!', {
-            description: `${log.records_synced ?? 0} leads sincronizados.`,
-          });
+          toast.success('Sincronização concluída!', { description: `${log.records_synced ?? 0} leads sincronizados.` });
           queryClient.invalidateQueries({ queryKey: ['lead-stats'] });
           queryClient.invalidateQueries({ queryKey: ['all-leads'] });
           queryClient.invalidateQueries({ queryKey: ['leads-by-funnel'] });
@@ -56,13 +67,8 @@ const LeadsDashboard: React.FC = () => {
           setSyncing(false);
           toast.error('Erro na sincronização', { description: log.error || 'Erro desconhecido' });
         }
-      }, 5000); // Poll every 5 seconds
-
-      // Safety timeout after 10 minutes
-      setTimeout(() => {
-        setSyncing(false);
-      }, 600000);
-
+      }, 5000);
+      setTimeout(() => { setSyncing(false); }, 600000);
     } catch (err: any) {
       toast.error('Erro ao iniciar sincronização', { description: err.message });
       setSyncing(false);
@@ -84,9 +90,6 @@ const LeadsDashboard: React.FC = () => {
             <h1 className="text-2xl font-bold text-foreground">Dashboard de Leads</h1>
             <p className="text-sm text-muted-foreground mt-1 animate-pulse">Carregando dados...</p>
           </div>
-          <Button variant="outline" size="sm" disabled className="gap-1.5 opacity-50">
-            <RefreshCw className="h-4 w-4" /> Sincronizar Leads
-          </Button>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {kpiPlaceholders.map((kpi, i) => (
@@ -101,14 +104,9 @@ const LeadsDashboard: React.FC = () => {
             </Card>
           ))}
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Card><CardHeader><CardTitle className="text-sm">Leads por Funil</CardTitle></CardHeader><CardContent><div className="h-[250px] rounded animate-pulse bg-muted" /></CardContent></Card>
-          <Card><CardHeader><CardTitle className="text-sm">Leads por Dia (30d)</CardTitle></CardHeader><CardContent><div className="h-[250px] rounded animate-pulse bg-muted" /></CardContent></Card>
-        </div>
       </div>
     );
   }
-
 
   const kpis = [
     { label: 'Total de Leads', value: stats.total, icon: Users, color: 'text-primary' },
@@ -119,9 +117,35 @@ const LeadsDashboard: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <h1 className="text-2xl font-bold">Dashboard de Leads</h1>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Select value={selectedFunnelId || 'all'} onValueChange={handleFunnelChange}>
+            <SelectTrigger className="w-[200px]">
+              <SelectValue placeholder="Todos os Funis" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os Funis</SelectItem>
+              {funnels?.map(f => (
+                <SelectItem key={f.id} value={f.id}>
+                  <span className="flex items-center gap-2">
+                    {f.color && <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: f.color }} />}
+                    {f.name}
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handlePin}
+            disabled={!selectedFunnelId}
+            title={isPinned ? 'Desfixar visualização' : 'Fixar este funil como padrão'}
+            className={isPinned ? 'text-primary' : 'text-muted-foreground'}
+          >
+            {isPinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
+          </Button>
           <DateRangePicker />
           <Button variant="outline" size="sm" onClick={handleSync} disabled={syncing}>
             <RefreshCw className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
@@ -130,7 +154,6 @@ const LeadsDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {kpis.map(k => (
           <Card key={k.label}>
@@ -148,7 +171,6 @@ const LeadsDashboard: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Leads por dia */}
         <Card>
           <CardHeader><CardTitle className="text-base">Leads por Dia (30 dias)</CardTitle></CardHeader>
           <CardContent>
@@ -164,7 +186,6 @@ const LeadsDashboard: React.FC = () => {
           </CardContent>
         </Card>
 
-        {/* Por fonte UTM */}
         <Card>
           <CardHeader><CardTitle className="text-base">Leads por Fonte</CardTitle></CardHeader>
           <CardContent>
@@ -181,7 +202,6 @@ const LeadsDashboard: React.FC = () => {
           </CardContent>
         </Card>
 
-        {/* Top funis */}
         <Card className="lg:col-span-2">
           <CardHeader><CardTitle className="text-base">Leads por Funil</CardTitle></CardHeader>
           <CardContent>
