@@ -110,7 +110,7 @@ function useLeadStatsBase() {
 export function useLeadStats(startDate?: Date, endDate?: Date, funnelId?: string | null) {
   const { data: baseData, isLoading } = useLeadStatsBase();
 
-  const stats = useReactMemo(() => {
+  const stats = useMemo(() => {
     if (!baseData) return null;
 
     const { leads, positions, funnels } = baseData;
