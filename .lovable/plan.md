@@ -1,27 +1,25 @@
 
 
-## Plano: Botao de reset de senha pelo admin na pagina Equipe
+## Plano: Criar página de Reset de Senha
 
-### Como funciona
-O Supabase nao permite que admins definam uma nova senha diretamente pelo client-side. A abordagem segura e gerar um **link de reset de senha** via `auth.admin.generateLink({ type: 'recovery', email })` numa Edge Function, e o admin copia/envia esse link ao usuario.
+### Problema
+O link de recovery gerado pelo `admin-reset-password` redireciona ao site com um token `type=recovery` no hash da URL. Como não existe uma rota `/reset-password`, o usuário cai no login normal.
 
-### Mudancas
+### Mudanças
 
-**1. Nova Edge Function `supabase/functions/admin-reset-password/index.ts`**
-- Recebe `{ user_id }` no body
-- Valida que o caller e admin (mesma logica do `impersonate-user`)
-- Busca o email do usuario via `auth.admin.getUserById()`
-- Gera link de recovery via `auth.admin.generateLink({ type: 'recovery', email })`
-- Retorna `{ url }` para o frontend
+**1. Novo arquivo `src/pages/ResetPassword.tsx`**
+- Detecta o token `type=recovery` no hash da URL
+- Mostra formulário com "Nova senha" + "Confirmar senha"
+- Chama `supabase.auth.updateUser({ password })` ao submeter
+- Exibe toast de sucesso e redireciona para `/resumo`
 
-**2. `src/pages/Equipe.tsx` — Adicionar botao de reset na coluna Acoes**
-- Novo icone (KeyRound ou similar) ao lado dos botoes existentes (editar, permissoes, impersonar)
-- Visivel apenas para admins
-- Ao clicar: chama a Edge Function, copia o link para clipboard e mostra toast "Link de reset copiado!"
-- Alternativa: abre dialog perguntando se quer copiar o link ou abrir em nova aba
+**2. `src/App.tsx` — Adicionar rota pública**
+- Rota `/reset-password` apontando para `ResetPassword` (fora do `Protected`)
+
+**3. `supabase/functions/admin-reset-password/index.ts` — Ajustar redirect**
+- O `generateLink` gera um link que por padrão aponta para o site root
+- O link precisa incluir redirect para `/reset-password` — mas como `generateLink` não aceita `redirectTo`, vamos manipular a URL retornada para trocar o path de redirect
 
 ### Resultado
-- Admin clica no botao de reset ao lado do membro
-- Recebe um link magic de recovery que pode enviar ao usuario via WhatsApp/email
-- O usuario clica no link e define uma nova senha
+- Admin gera link → envia pro membro → membro clica → vê formulário "Defina sua nova senha" → salva → entra no sistema
 
