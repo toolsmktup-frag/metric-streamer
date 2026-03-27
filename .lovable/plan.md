@@ -1,25 +1,35 @@
 
 
-## Plano: Criar página de Reset de Senha
+## Plano: Filtro por Funil com opcao de fixar visualizacao
 
-### Problema
-O link de recovery gerado pelo `admin-reset-password` redireciona ao site com um token `type=recovery` no hash da URL. Como não existe uma rota `/reset-password`, o usuário cai no login normal.
+### Resumo simples
+Hoje o dashboard carrega TODOS os leads e demora. A ideia e adicionar um dropdown de funil no topo que filtra tudo (KPIs, graficos). O usuario pode "fixar" um funil como padrao — assim toda vez que abrir a pagina (ele ou os vendedores), ja abre filtrado naquele funil. Se quiser ver tudo, seleciona "Todos os Funis".
 
-### Mudanças
+### Mudancas
 
-**1. Novo arquivo `src/pages/ResetPassword.tsx`**
-- Detecta o token `type=recovery` no hash da URL
-- Mostra formulário com "Nova senha" + "Confirmar senha"
-- Chama `supabase.auth.updateUser({ password })` ao submeter
-- Exibe toast de sucesso e redireciona para `/resumo`
+**1. `src/hooks/useAllLeads.ts` — Query separada para lista de funis + filtro no useLeadStats**
 
-**2. `src/App.tsx` — Adicionar rota pública**
-- Rota `/reset-password` apontando para `ResetPassword` (fora do `Protected`)
+- Nova funcao `useFunnelList()`: query simples em `lead_funnels` retornando `id, name, color` — carrega rapido, independente de qualquer filtro
+- `useLeadStats()` ganha parametro `funnelId?: string | null`
+- Quando `funnelId` e fornecido, filtra `filteredLeadIds` para apenas leads que tem posicao naquele funil
+- Todos os KPIs e graficos passam a refletir so os leads do funil selecionado
 
-**3. `supabase/functions/admin-reset-password/index.ts` — Ajustar redirect**
-- O `generateLink` gera um link que por padrão aponta para o site root
-- O link precisa incluir redirect para `/reset-password` — mas como `generateLink` não aceita `redirectTo`, vamos manipular a URL retornada para trocar o path de redirect
+**2. `src/pages/LeadsDashboard.tsx` — Dropdown de funil + botao de fixar**
 
-### Resultado
-- Admin gera link → envia pro membro → membro clica → vê formulário "Defina sua nova senha" → salva → entra no sistema
+- Importar `Select` + `useFunnelList()`
+- State: `selectedFunnelId` inicializado do `localStorage` (chave `leads-dashboard-pinned-funnel`)
+- Dropdown ao lado do DateRangePicker: "Todos os Funis" + lista de funis
+- Icone de "pin" (📌) ao lado do dropdown — ao clicar, salva o funil atual no `localStorage` como padrao. Se ja esta fixado, clicar de novo remove a fixacao
+- Toast confirmando: "Visualizacao fixada: [nome do funil]"
+- Passa `selectedFunnelId` para `useLeadStats(dateRange.start, dateRange.end, selectedFunnelId)`
+- Manter o botao Sincronizar como esta (sem mexer nele agora)
+
+### Fluxo do usuario
+1. Abre dashboard → carrega com o funil fixado (ou "Todos" se nenhum fixado)
+2. Troca o dropdown para outro funil → dashboard atualiza
+3. Clica no pin → fixa aquele funil como padrao
+4. Proximo acesso (dele ou de qualquer vendedor naquele navegador) → ja abre no funil fixado
+
+### Detalhe tecnico
+A "fixacao" e por navegador (localStorage). Se quiser que seja por usuario (todos veem o mesmo), precisaria salvar no banco — mas por enquanto localStorage resolve o caso de uso descrito.
 
