@@ -46,6 +46,25 @@ export default function WhatsAppChat() {
     }
   }, [instances, selectedInstanceId]);
 
+  // Recover automatically when the selected instance was deleted or no longer exists
+  useEffect(() => {
+    if (selectedInstanceId === null || selectedInstanceId === 'all') return;
+
+    const instanceStillExists = instances.some(instance => instance.id === selectedInstanceId);
+    if (instanceStillExists) return;
+
+    setSelectedPhone(null);
+    setReplyInstanceId(null);
+
+    if (instances.length === 1) {
+      setSelectedInstanceId(instances[0].id);
+    } else if (instances.length > 1) {
+      setSelectedInstanceId('all');
+    } else {
+      setSelectedInstanceId(null);
+    }
+  }, [instances, selectedInstanceId]);
+
   // Auto-open chat from query param ?phone= and capture ?from= for back navigation
   useEffect(() => {
     const phoneParam = searchParams.get('phone');
@@ -79,7 +98,15 @@ export default function WhatsAppChat() {
     return () => clearInterval(interval);
   }, []);
 
-  const singleInstanceId = isAllMode ? null : (selectedInstanceId || instances[0]?.id || null);
+  const selectedInstanceExists = selectedInstanceId !== null && selectedInstanceId !== 'all'
+    ? instances.some(instance => instance.id === selectedInstanceId)
+    : false;
+
+  const singleInstanceId = isAllMode
+    ? null
+    : selectedInstanceExists
+      ? selectedInstanceId
+      : (instances[0]?.id || null);
   const activeInstanceData = instances.find(i => i.id === singleInstanceId);
   const isDisconnected = activeInstanceData ? activeInstanceData.status !== 'connected' : false;
 
