@@ -74,9 +74,24 @@ export function useAllLeads() {
   });
 }
 
-export function useLeadStats(startDate?: Date, endDate?: Date) {
+export function useFunnelList() {
   return useQuery({
-    queryKey: ['lead-stats', startDate?.toISOString(), endDate?.toISOString()],
+    queryKey: ['funnel-list'],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('lead_funnels')
+        .select('id, name, color')
+        .order('name');
+      if (error) throw error;
+      return (data || []) as { id: string; name: string; color: string | null }[];
+    },
+    staleTime: 60000,
+  });
+}
+
+export function useLeadStats(startDate?: Date, endDate?: Date, funnelId?: string | null) {
+  return useQuery({
+    queryKey: ['lead-stats', startDate?.toISOString(), endDate?.toISOString(), funnelId || 'all'],
     queryFn: async () => {
       const [leads, positions, funnels] = await Promise.all([
         fetchAllRows<Pick<Lead, 'id' | 'created_at' | 'utm_source' | 'utm_medium'>>('leads', 'id, created_at, utm_source, utm_medium'),
