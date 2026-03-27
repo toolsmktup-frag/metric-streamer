@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useLeadStats } from '@/hooks/useAllLeads';
+import { useFilterStore } from '@/stores/filterStore';
+import DateRangePicker from '@/components/dashboard/DateRangePicker';
 import { Users, UserPlus, TrendingUp, Target, RefreshCw } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { supabase } from '@/integrations/supabase/client';
@@ -11,7 +13,8 @@ import { useQueryClient } from '@tanstack/react-query';
 const COLORS = ['hsl(var(--primary))', 'hsl(var(--accent))', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4'];
 
 const LeadsDashboard: React.FC = () => {
-  const { data: stats, isLoading } = useLeadStats();
+  const { dateRange } = useFilterStore();
+  const { data: stats, isLoading } = useLeadStats(dateRange.start, dateRange.end);
   const [syncing, setSyncing] = useState(false);
   const queryClient = useQueryClient();
 
@@ -118,10 +121,13 @@ const LeadsDashboard: React.FC = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Dashboard de Leads</h1>
-        <Button variant="outline" size="sm" onClick={handleSync} disabled={syncing}>
-          <RefreshCw className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
-          {syncing ? 'Sincronizando...' : 'Sincronizar Base'}
-        </Button>
+        <div className="flex items-center gap-2">
+          <DateRangePicker />
+          <Button variant="outline" size="sm" onClick={handleSync} disabled={syncing}>
+            <RefreshCw className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
+            {syncing ? 'Sincronizando...' : 'Sincronizar Base'}
+          </Button>
+        </div>
       </div>
 
       {/* KPI Cards */}
