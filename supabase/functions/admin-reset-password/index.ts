@@ -90,8 +90,23 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Adjust redirect to /reset-password
+    let url = linkData.properties.action_link;
+    try {
+      const parsed = new URL(url);
+      const redirectTo = parsed.searchParams.get("redirect_to");
+      if (redirectTo) {
+        const redirectUrl = new URL(redirectTo);
+        redirectUrl.pathname = "/reset-password";
+        parsed.searchParams.set("redirect_to", redirectUrl.toString());
+        url = parsed.toString();
+      }
+    } catch {
+      // keep original url if parsing fails
+    }
+
     return new Response(
-      JSON.stringify({ url: linkData.properties.action_link }),
+      JSON.stringify({ url }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {

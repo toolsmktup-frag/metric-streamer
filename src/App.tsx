@@ -7,6 +7,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import AppLayout from "./components/layout/AppLayout";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Login from "./pages/Login";
+import ResetPassword from "./pages/ResetPassword";
 import Resumo from "./pages/Resumo";
 import Index from "./pages/Index";
 import Campanhas from "./pages/Campanhas";
@@ -67,6 +68,7 @@ const App = () => (
         <ErrorBoundary>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/" element={<Protected><Index /></Protected>} />
           <Route path="/resumo" element={<Protected><PermissionRoute requiredPermission="mod_resumo"><Resumo /></PermissionRoute></Protected>} />
           <Route path="/campanhas" element={<Protected><Campanhas /></Protected>} />
