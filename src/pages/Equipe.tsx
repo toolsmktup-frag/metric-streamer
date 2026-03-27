@@ -8,7 +8,7 @@ import { useLeadFunnels } from '@/hooks/useLeadFunnels';
 import { useOrgFunnelAccess, useGrantFunnelAccess, useRevokeFunnelAccess } from '@/hooks/useLeadFunnelAccess';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentUserRole } from '@/hooks/useCurrentUserRole';
-import { Loader2, Users, Pencil, Check, X, Shield, ChevronDown, ChevronUp, MessageSquare, UserCheck, UserX, Clock, Target, Camera, LogIn } from 'lucide-react';
+import { Loader2, Users, Pencil, Check, X, Shield, ChevronDown, ChevronUp, MessageSquare, UserCheck, UserX, Clock, Target, Camera, LogIn, KeyRound } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   Select,
