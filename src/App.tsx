@@ -68,6 +68,7 @@ const App = () => (
         <ErrorBoundary>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/" element={<Protected><Index /></Protected>} />
           <Route path="/resumo" element={<Protected><PermissionRoute requiredPermission="mod_resumo"><Resumo /></PermissionRoute></Protected>} />
           <Route path="/campanhas" element={<Protected><Campanhas /></Protected>} />
