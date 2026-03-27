@@ -57,6 +57,7 @@ export default function Equipe() {
   const isAdmin = currentRole === 'admin';
   const [impersonating, setImpersonating] = useState<string | null>(null);
   const [uploadingAvatar, setUploadingAvatar] = useState<string | null>(null);
+  const [resettingPassword, setResettingPassword] = useState<string | null>(null);
 
   const pendingMembers = members.filter(m => m.status === 'pending');
   const activeMembers = members.filter(m => m.status !== 'pending');
