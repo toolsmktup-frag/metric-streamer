@@ -406,25 +406,27 @@ export function useImportLeads() {
           if (!approvedStatuses.includes(status)) continue;
 
           syncPromises.push(
-            (supabase as any).rpc('sync_lead_from_sale', {
-              p_phone: lead.phone,
-              p_email: lead.email,
-              p_name: lead.name,
-              p_utm_source: lead.utm_source,
-              p_utm_medium: lead.utm_medium,
-              p_utm_campaign: lead.utm_campaign,
-              p_utm_content: lead.utm_content,
-              p_utm_term: lead.utm_term,
-              p_event_name: 'purchase',
-              p_product_name: (lead.metadata?.product_name as string) || null,
-              p_purchased_at: toDatabaseTimestamp(lead.metadata?.purchased_at as string),
-              p_metadata: {
-                source: 'spreadsheet_import',
-                product_name: lead.metadata?.product_name || null,
-                amount: lead.metadata?.amount || null,
-                platform: lead.metadata?.platform || null,
-              },
-            }).catch((err: unknown) => console.error('Sync lead to BASE error (non-fatal):', err))
+            Promise.resolve(
+              (supabase as any).rpc('sync_lead_from_sale', {
+                p_phone: lead.phone,
+                p_email: lead.email,
+                p_name: lead.name,
+                p_utm_source: lead.utm_source,
+                p_utm_medium: lead.utm_medium,
+                p_utm_campaign: lead.utm_campaign,
+                p_utm_content: lead.utm_content,
+                p_utm_term: lead.utm_term,
+                p_event_name: 'purchase',
+                p_product_name: (lead.metadata?.product_name as string) || null,
+                p_purchased_at: toDatabaseTimestamp(lead.metadata?.purchased_at as string),
+                p_metadata: {
+                  source: 'spreadsheet_import',
+                  product_name: lead.metadata?.product_name || null,
+                  amount: lead.metadata?.amount || null,
+                  platform: lead.metadata?.platform || null,
+                },
+              })
+            ).catch((err: unknown) => console.error('Sync lead to BASE error (non-fatal):', err))
           );
         }
 
