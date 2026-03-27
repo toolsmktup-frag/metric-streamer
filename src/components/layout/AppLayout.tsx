@@ -53,6 +53,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
   const [collapsed, setCollapsed] = useState(false);
   const { refresh } = useFilterStore();
   const [refreshing, setRefreshing] = useState(false);
+  useTheme(); // Initialize theme on app load
 
   const handleRefresh = () => {
     setRefreshing(true);

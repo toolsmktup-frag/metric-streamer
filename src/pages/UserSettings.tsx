@@ -10,6 +10,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 
 export default function UserSettings() {
   const { toast } = useToast();
+  const { theme, setTheme } = useTheme();
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [loading, setLoading] = useState(true);
