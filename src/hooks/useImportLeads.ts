@@ -395,34 +395,42 @@ export function useImportLeads() {
           await (supabase as any).from('lead_events').insert(events);
         }
 
-        // Sincronizar leads aprovados com BASE DE LEADS + Inteligência
+        // Sincronizar leads aprovados com BASE DE LEADS + Inteligência (fire-and-forget em paralelo)
         const approvedStatuses = ['authorized', 'approved', 'paid', 'aprovada', 'aprovado', 'pago'];
-        for (const [, { lead, allRows }] of dedupMap.entries()) {
+        const syncPromises: Promise<void>[] = [];
+        for (const [, { lead }] of dedupMap.entries()) {
           const resolvedId = leadIdMap.get(lead);
           if (!resolvedId) continue;
 
           const status = ((lead.metadata?.status as string) || '').toLowerCase().trim();
           if (!approvedStatuses.includes(status)) continue;
 
-          await (supabase as any).rpc('sync_lead_from_sale', {
-            p_phone: lead.phone,
-            p_email: lead.email,
-            p_name: lead.name,
-            p_utm_source: lead.utm_source,
-            p_utm_medium: lead.utm_medium,
-            p_utm_campaign: lead.utm_campaign,
-            p_utm_content: lead.utm_content,
-            p_utm_term: lead.utm_term,
-            p_event_name: 'purchase',
-            p_product_name: (lead.metadata?.product_name as string) || null,
-            p_purchased_at: toDatabaseTimestamp(lead.metadata?.purchased_at as string),
-            p_metadata: {
-              source: 'spreadsheet_import',
-              product_name: lead.metadata?.product_name || null,
-              amount: lead.metadata?.amount || null,
-              platform: lead.metadata?.platform || null,
-            },
-          }).catch((err: unknown) => console.error('Sync lead to BASE error (non-fatal):', err));
+          syncPromises.push(
+            (supabase as any).rpc('sync_lead_from_sale', {
+              p_phone: lead.phone,
+              p_email: lead.email,
+              p_name: lead.name,
+              p_utm_source: lead.utm_source,
+              p_utm_medium: lead.utm_medium,
+              p_utm_campaign: lead.utm_campaign,
+              p_utm_content: lead.utm_content,
+              p_utm_term: lead.utm_term,
+              p_event_name: 'purchase',
+              p_product_name: (lead.metadata?.product_name as string) || null,
+              p_purchased_at: toDatabaseTimestamp(lead.metadata?.purchased_at as string),
+              p_metadata: {
+                source: 'spreadsheet_import',
+                product_name: lead.metadata?.product_name || null,
+                amount: lead.metadata?.amount || null,
+                platform: lead.metadata?.platform || null,
+              },
+            }).catch((err: unknown) => console.error('Sync lead to BASE error (non-fatal):', err))
+          );
+        }
+
+        // Executar em lotes de 10 para não sobrecarregar
+        for (let si = 0; si < syncPromises.length; si += 10) {
+          await Promise.allSettled(syncPromises.slice(si, si + 10));
         }
 
         imported += allLeadIds.length;
