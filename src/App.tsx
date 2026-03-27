@@ -100,6 +100,8 @@ const App = () => (
           <Route path="/lead-funnels/:id" element={<Protected><LeadFunnelDetail /></Protected>} />
           {/* Equipe */}
           <Route path="/equipe" element={<Protected><Equipe /></Protected>} />
+          {/* Configurações do usuário */}
+          <Route path="/configuracoes" element={<Protected><UserSettings /></Protected>} />
           {/* WhatsApp Chat - fullscreen layout */}
           <Route path="/whatsapp" element={<Protected><WhatsAppChat /></Protected>} />
           {/* Automações WhatsApp */}
