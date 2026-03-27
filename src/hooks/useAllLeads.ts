@@ -74,9 +74,9 @@ export function useAllLeads() {
   });
 }
 
-export function useLeadStats() {
+export function useLeadStats(startDate?: Date, endDate?: Date) {
   return useQuery({
-    queryKey: ['lead-stats'],
+    queryKey: ['lead-stats', startDate?.toISOString(), endDate?.toISOString()],
     queryFn: async () => {
       const [leads, positions, funnels] = await Promise.all([
         fetchAllRows<Pick<Lead, 'id' | 'created_at' | 'utm_source' | 'utm_medium'>>('leads', 'id, created_at, utm_source, utm_medium'),
@@ -87,7 +87,6 @@ export function useLeadStats() {
       const now = new Date();
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
       const weekAgo = new Date(now.getTime() - 7 * 86400000).toISOString();
-      const thirtyAgo = new Date(now.getTime() - 30 * 86400000);
 
       const firstEntryByLead = new Map<string, string>();
       positions.forEach((position) => {
@@ -102,24 +101,32 @@ export function useLeadStats() {
         entryDate: firstEntryByLead.get(lead.id) || lead.created_at,
       }));
 
-      const total = leads.length;
+      // Filter by selected date range
+      const rangeStart = startDate ? startDate.toISOString() : null;
+      const rangeEnd = endDate ? endDate.toISOString() : null;
+
+      const filteredLeads = (rangeStart && rangeEnd)
+        ? leadsWithEntryDate.filter(l => l.entryDate >= rangeStart && l.entryDate <= rangeEnd)
+        : leadsWithEntryDate;
+
+      const total = filteredLeads.length;
+      // Novos hoje/semana always relative to now
       const newToday = leadsWithEntryDate.filter((lead) => lead.entryDate >= today).length;
       const newWeek = leadsWithEntryDate.filter((lead) => lead.entryDate >= weekAgo).length;
 
       const dailyMap = new Map<string, number>();
-      leadsWithEntryDate.forEach((lead) => {
-        const date = new Date(lead.entryDate);
-        if (date >= thirtyAgo) {
-          const key = date.toISOString().slice(0, 10);
-          dailyMap.set(key, (dailyMap.get(key) || 0) + 1);
-        }
+      filteredLeads.forEach((lead) => {
+        const key = lead.entryDate.slice(0, 10);
+        dailyMap.set(key, (dailyMap.get(key) || 0) + 1);
       });
       const dailyLeads = Array.from(dailyMap.entries())
         .map(([date, count]) => ({ date, count }))
         .sort((a, b) => a.date.localeCompare(b.date));
 
+      const filteredLeadIds = new Set(filteredLeads.map(l => l.id));
+
       const sourceMap = new Map<string, number>();
-      leads.forEach((lead) => {
+      filteredLeads.forEach((lead) => {
         const source = lead.utm_source || 'Direto';
         sourceMap.set(source, (sourceMap.get(source) || 0) + 1);
       });
@@ -128,7 +135,7 @@ export function useLeadStats() {
         .sort((a, b) => b.count - a.count);
 
       const sourceMediumMap = new Map<string, { source: string; medium: string; count: number }>();
-      leads.forEach((lead) => {
+      filteredLeads.forEach((lead) => {
         const source = lead.utm_source || 'Direto';
         const medium = lead.utm_medium || '(none)';
         const key = `${source}||${medium}`;
@@ -141,7 +148,9 @@ export function useLeadStats() {
 
       const funnelCountMap = new Map<string, number>();
       positions.forEach((position) => {
-        funnelCountMap.set(position.funnel_id, (funnelCountMap.get(position.funnel_id) || 0) + 1);
+        if (filteredLeadIds.has(position.lead_id)) {
+          funnelCountMap.set(position.funnel_id, (funnelCountMap.get(position.funnel_id) || 0) + 1);
+        }
       });
       const byFunnel = funnels.map(funnel => ({
         id: funnel.id,
