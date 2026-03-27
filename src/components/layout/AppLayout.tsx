@@ -6,6 +6,7 @@ import { useFilterStore } from '@/stores/filterStore';
 import { SkeletonCard } from '@/components/dashboard/SkeletonCard';
 import { useMetaSyncStatus } from '@/hooks/useMetaData';
 import { Suspense } from 'react';
+import UserMenu from './UserMenu';
 
 interface AppLayoutProps {
   children: React.ReactNode;
