@@ -1,26 +1,27 @@
 
 
-## Plano: Filtrar Dashboard de Leads pelo DateRangePicker
+## Plano: Botao de reset de senha pelo admin na pagina Equipe
 
-### Problema
-O `DateRangePicker` existe no topo da página, mas o `useLeadStats()` ignora completamente o `dateRange` do `filterStore`. Ele busca **todos** os leads e calcula stats fixas (hoje, 7 dias, 30 dias). O filtro de data não afeta nada.
+### Como funciona
+O Supabase nao permite que admins definam uma nova senha diretamente pelo client-side. A abordagem segura e gerar um **link de reset de senha** via `auth.admin.generateLink({ type: 'recovery', email })` numa Edge Function, e o admin copia/envia esse link ao usuario.
 
-### Solução
+### Mudancas
 
-**1. `src/hooks/useAllLeads.ts` — `useLeadStats()` recebe dateRange**
-- Aceitar parâmetros `startDate` e `endDate`
-- Incluir no `queryKey` para reagir a mudanças
-- Filtrar `leadsWithEntryDate` pelo range selecionado antes de calcular KPIs
-- Total, bySource, byFunnel, dailyLeads — tudo filtrado pelo período
-- "Novos Hoje" e "Novos (7 dias)" continuam relativos à data atual (não mudam com filtro)
+**1. Nova Edge Function `supabase/functions/admin-reset-password/index.ts`**
+- Recebe `{ user_id }` no body
+- Valida que o caller e admin (mesma logica do `impersonate-user`)
+- Busca o email do usuario via `auth.admin.getUserById()`
+- Gera link de recovery via `auth.admin.generateLink({ type: 'recovery', email })`
+- Retorna `{ url }` para o frontend
 
-**2. `src/pages/LeadsDashboard.tsx` — Passar dateRange do filterStore**
-- Importar `useFilterStore`
-- Passar `dateRange.start` e `dateRange.end` para `useLeadStats()`
-- KPI "Total de Leads" passa a mostrar o total **no período selecionado**
+**2. `src/pages/Equipe.tsx` — Adicionar botao de reset na coluna Acoes**
+- Novo icone (KeyRound ou similar) ao lado dos botoes existentes (editar, permissoes, impersonar)
+- Visivel apenas para admins
+- Ao clicar: chama a Edge Function, copia o link para clipboard e mostra toast "Link de reset copiado!"
+- Alternativa: abre dialog perguntando se quer copiar o link ou abrir em nova aba
 
 ### Resultado
-- Selecionar "Hoje" → mostra só leads de hoje
-- Selecionar "Últimos 7 dias" → filtra tudo por 7 dias
-- Gráfico de leads/dia, pie de fonte e bar de funil — todos respeitam o filtro
+- Admin clica no botao de reset ao lado do membro
+- Recebe um link magic de recovery que pode enviar ao usuario via WhatsApp/email
+- O usuario clica no link e define uma nova senha
 
