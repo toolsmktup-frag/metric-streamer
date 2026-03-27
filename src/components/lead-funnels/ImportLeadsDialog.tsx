@@ -269,6 +269,15 @@ const ImportLeadsDialog: React.FC<ImportLeadsDialogProps> = ({
     setImporting(true);
     setProgress(0);
 
+    // Inject selected platform into metadata
+    if (selectedPlatform) {
+      parsedRows.forEach(lead => {
+        if (!lead.metadata.platform) {
+          lead.metadata.platform = selectedPlatform;
+        }
+      });
+    }
+
     const res = await importMutation.mutateAsync({
       leads: parsedRows,
       funnelId,
