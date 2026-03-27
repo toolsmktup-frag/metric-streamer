@@ -1,41 +1,33 @@
 
 
-## Plano: Adicionar headers Ticto + seletor de plataforma na importação
+## Plano: Persistir visualização do Kanban (fixar Recontato como padrão)
 
-### Por que não conflita
-O COLUMN_MAP já tem ~50 variantes coexistindo (Guru, Eduzz, genérico). Adicionar Ticto é só mais ~8 chaves com nomes diferentes. Nenhum header colide.
+### O que muda
+Salvar o modo de ordenação selecionado no `localStorage` por funil. Quando o usuário escolher "Recontato" (ou qualquer outro), na próxima vez que abrir o funil, já vem com essa ordenação.
 
-### Mudanças
+### Arquivo: `src/components/lead-funnels/KanbanBoard.tsx`
 
-**1. `src/components/lead-funnels/ImportLeadsDialog.tsx` — Adicionar headers Ticto ao COLUMN_MAP**
-- `'e-mail do cliente'` → `'email'`
-- `'telefone completo do cliente'` → `'phone'`
-- `'número do telefone do cliente'` → `'phone'` (fallback)
+**Linha 74** — Trocar o `useState` simples por um que lê/salva no `localStorage`:
 
-**2. Mesmo arquivo — Adicionar ao METADATA_KEY_MAP**
-- `'nome do produto'` → `'product_name'`
-- `'nome da oferta'` → `'offer_name'`
-- `'código da transação'` / `'codigo da transação'` → `'transaction_id'`
-- `'valor pago'` → `'amount'`
-- `'método de pagamento'` / `'metodo de pagamento'` → `'payment_method'`
-- `'data do pedido'` → `'purchased_at'`
-- `'data do status'` → `'status_date'`
-- `'ddi do cliente'` → `'_phone_ddi'`
-- `'ddd do cliente'` → `'_phone_ddd'`
+```typescript
+const storageKey = `kanban-sort-${funnelId}`;
+const [sortMode, setSortMode] = useState<SortMode>(() => {
+  const saved = localStorage.getItem(storageKey);
+  return (saved && SORT_CYCLE.includes(saved as SortMode)) ? saved as SortMode : 'recontact';
+});
+```
 
-**3. Mesmo arquivo — Seletor de plataforma (sub-popup)**
-Antes do upload do CSV, mostrar um `Select` com opções:
-- Guru
-- Ticto
-- Outro / Genérico
+- Default muda de `'ltv'` para `'recontact'`
+- Se o usuário já tiver salvo outra preferência, ela é respeitada
 
-O valor selecionado será salvo no metadata de cada lead importado como `platform`. Isso é puramente informativo/UX — o mapeamento de colunas funciona automaticamente independente da escolha.
-
-**4. Mesmo arquivo — Lógica de phone com DDI+DDD**
-Se `phone` não foi preenchido pelo COLUMN_MAP mas `_phone_ddi` + `_phone_ddd` + algum campo de número existem nos metadados, combinar em `+{ddi}{ddd}{numero}`.
+**Adicionar `useEffect`** para persistir mudanças:
+```typescript
+useEffect(() => {
+  localStorage.setItem(storageKey, sortMode);
+}, [storageKey, sortMode]);
+```
 
 ### Resultado
-- Planilhas Guru: continuam funcionando igual
-- Planilhas Ticto: email, phone e produto reconhecidos, 84 leads importados
-- UX: usuário sabe qual plataforma está importando
+- Recontato vira o padrão ao abrir qualquer funil pela primeira vez
+- A escolha fica "fixada" por funil — se trocar para "Maior LTV" no funil X, ele lembra
 
