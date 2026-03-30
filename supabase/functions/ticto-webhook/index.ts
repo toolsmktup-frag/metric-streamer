@@ -157,8 +157,8 @@ Deno.serve(async (req) => {
       : clean(customer.phone_number);
 
     // Parse dates (include invoice fallbacks)
-    const statusDateRaw = payload.status_date || invoice.status_date || invoice.confirmed_at || dates.confirmed_at || dates.updated_at || dates.created_at || invoice.created_at || null;
-    const orderDateRaw = order.order_date || invoice.order_date || invoice.created_at || dates.ordered_at || dates.confirmed_at || dates.created_at || null;
+    const statusDateRaw = payload.status_date || invoice.status_date || invoice.confirmed_at || invoice.attemptDate || dates.confirmed_at || dates.updated_at || dates.created_at || invoice.created_at || contract.updatedAt || null;
+    const orderDateRaw = order.order_date || invoice.order_date || invoice.created_at || invoice.attemptDate || contract.createdAt || dates.ordered_at || dates.confirmed_at || dates.created_at || null;
     const statusDate = statusDateRaw ? new Date(statusDateRaw).toISOString() : null;
     const orderDate = orderDateRaw ? new Date(orderDateRaw).toISOString() : null;
 
