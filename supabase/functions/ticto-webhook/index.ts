@@ -163,7 +163,9 @@ Deno.serve(async (req) => {
     const orderDate = orderDateRaw ? new Date(orderDateRaw).toISOString() : null;
 
     // Normalize status (include invoice.status)
-    const rawStatus = String(payload.status || order.status || invoice.status || payload.event || "").toLowerCase();
+    const rawStatus = String(payload.status || order.status || invoice.status || contract.status || payload.event || "").toLowerCase();
+    // Map Eduzz contract statuses too
+    const late = rawStatus === "late" ? "pending" : null; // "late" = cobrança atrasada
     const statusMap: Record<string, string> = {
       approved: "authorized",
       authorized: "authorized",
