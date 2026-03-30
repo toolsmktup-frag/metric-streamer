@@ -110,8 +110,9 @@ Deno.serve(async (req) => {
     const topKeys = Object.keys(payload).join(", ");
     console.log(`[ticto-webhook] Top-level keys: ${topKeys}`);
 
-    // ── Unwrap data.invoice structure (Ticto v2 format) ──
-    const invoice = payload.data?.invoice || payload.data || {};
+    // ── Unwrap invoice structure ──
+    // Ticto v2: payload.data.invoice | Eduzz-style: payload.invoice (top-level)
+    const invoice = payload.data?.invoice || payload.invoice || payload.data || {};
     const invoiceKeys = Object.keys(invoice).join(", ");
     if (invoiceKeys) {
       console.log(`[ticto-webhook] Invoice keys: ${invoiceKeys}`);
