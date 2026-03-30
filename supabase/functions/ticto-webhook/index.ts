@@ -187,14 +187,14 @@ Deno.serve(async (req) => {
       expired: "canceled",
       refused: "refused",
     };
-    const normalizedStatus = statusMap[rawStatus] || rawStatus || "open";
+    const normalizedStatus = late || statusMap[rawStatus] || rawStatus || "open";
 
     // ── Extração resiliente de valor e produto ──
     const amountInCents = extractPaidAmountCents(payload, order, item, payment, invoice);
     const productName = extractProductName(payload, item, invoice);
     const offerName = clean(item.offer_name || item.offer?.name || invoice.offer_name || payload.offer_name);
     const offerId = clean(item.offer_id || item.offer?.id || invoice.offer_id || payload.offer_id) || "";
-    const orderId = Number(order.id || invoice.id || payload.order_id || 0) || null;
+    const orderId = Number(order.id || invoice.id || contract.id || payload.order_id || 0) || null;
     const productId = Number(item.product_id || item.id || invoice.product_id || invoice.product?.id || payload.product_id || 0) || null;
     const installments = Number(order.installments || payment.installments?.qty || invoice.installments || 1) || 1;
 
