@@ -131,7 +131,8 @@ Deno.serve(async (req) => {
     }
 
     const tracking = payload.tracking || invoice.tracking || invoice.utm_data || payload.utm_data || payload.source || {};
-    const order = payload.order || payload.sale || invoice || payload.payment || {};
+    const contract = payload.contract || {};
+    const order = payload.order || payload.sale || invoice || contract || payload.payment || {};
     const item = payload.item || payload.product || invoice.product || payload.items?.[0] || invoice.items?.[0] || {};
     const customer = payload.customer || invoice.customer || invoice.buyer || payload.buyer || payload.contact || {};
     const payment = payload.payment || invoice.payment || {};
