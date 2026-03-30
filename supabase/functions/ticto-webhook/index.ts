@@ -110,8 +110,9 @@ Deno.serve(async (req) => {
     const topKeys = Object.keys(payload).join(", ");
     console.log(`[ticto-webhook] Top-level keys: ${topKeys}`);
 
-    // ── Unwrap data.invoice structure (Ticto v2 format) ──
-    const invoice = payload.data?.invoice || payload.data || {};
+    // ── Unwrap invoice structure ──
+    // Ticto v2: payload.data.invoice | Eduzz-style: payload.invoice (top-level)
+    const invoice = payload.data?.invoice || payload.invoice || payload.data || {};
     const invoiceKeys = Object.keys(invoice).join(", ");
     if (invoiceKeys) {
       console.log(`[ticto-webhook] Invoice keys: ${invoiceKeys}`);
@@ -130,7 +131,8 @@ Deno.serve(async (req) => {
     }
 
     const tracking = payload.tracking || invoice.tracking || invoice.utm_data || payload.utm_data || payload.source || {};
-    const order = payload.order || payload.sale || invoice || payload.payment || {};
+    const contract = payload.contract || {};
+    const order = payload.order || payload.sale || invoice || contract || payload.payment || {};
     const item = payload.item || payload.product || invoice.product || payload.items?.[0] || invoice.items?.[0] || {};
     const customer = payload.customer || invoice.customer || invoice.buyer || payload.buyer || payload.contact || {};
     const payment = payload.payment || invoice.payment || {};
@@ -155,13 +157,15 @@ Deno.serve(async (req) => {
       : clean(customer.phone_number);
 
     // Parse dates (include invoice fallbacks)
-    const statusDateRaw = payload.status_date || invoice.status_date || invoice.confirmed_at || dates.confirmed_at || dates.updated_at || dates.created_at || invoice.created_at || null;
-    const orderDateRaw = order.order_date || invoice.order_date || invoice.created_at || dates.ordered_at || dates.confirmed_at || dates.created_at || null;
+    const statusDateRaw = payload.status_date || invoice.status_date || invoice.confirmed_at || invoice.attemptDate || dates.confirmed_at || dates.updated_at || dates.created_at || invoice.created_at || contract.updatedAt || null;
+    const orderDateRaw = order.order_date || invoice.order_date || invoice.created_at || invoice.attemptDate || contract.createdAt || dates.ordered_at || dates.confirmed_at || dates.created_at || null;
     const statusDate = statusDateRaw ? new Date(statusDateRaw).toISOString() : null;
     const orderDate = orderDateRaw ? new Date(orderDateRaw).toISOString() : null;
 
     // Normalize status (include invoice.status)
-    const rawStatus = String(payload.status || order.status || invoice.status || payload.event || "").toLowerCase();
+    const rawStatus = String(payload.status || order.status || invoice.status || contract.status || payload.event || "").toLowerCase();
+    // Map Eduzz contract statuses too
+    const late = rawStatus === "late" ? "pending" : null; // "late" = cobrança atrasada
     const statusMap: Record<string, string> = {
       approved: "authorized",
       authorized: "authorized",
@@ -183,14 +187,14 @@ Deno.serve(async (req) => {
       expired: "canceled",
       refused: "refused",
     };
-    const normalizedStatus = statusMap[rawStatus] || rawStatus || "open";
+    const normalizedStatus = late || statusMap[rawStatus] || rawStatus || "open";
 
     // ── Extração resiliente de valor e produto ──
     const amountInCents = extractPaidAmountCents(payload, order, item, payment, invoice);
     const productName = extractProductName(payload, item, invoice);
     const offerName = clean(item.offer_name || item.offer?.name || invoice.offer_name || payload.offer_name);
     const offerId = clean(item.offer_id || item.offer?.id || invoice.offer_id || payload.offer_id) || "";
-    const orderId = Number(order.id || invoice.id || payload.order_id || 0) || null;
+    const orderId = Number(order.id || invoice.id || contract.id || payload.order_id || 0) || null;
     const productId = Number(item.product_id || item.id || invoice.product_id || invoice.product?.id || payload.product_id || 0) || null;
     const installments = Number(order.installments || payment.installments?.qty || invoice.installments || 1) || 1;
 
