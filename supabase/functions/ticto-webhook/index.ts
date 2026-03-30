@@ -300,14 +300,48 @@ Deno.serve(async (req) => {
       updated_at: new Date().toISOString(),
     };
 
-    const { error } = await supabase
-      .from("ticto_transactions")
-      .upsert(record, { onConflict: "order_id,product_id" });
+    // ── Save: select+insert/update manual (índice parcial não suporta upsert) ──
+    let saveError: any = null;
 
-    if (error) {
-      console.error("[ticto-webhook] DB error:", error);
+    if (orderId && productId) {
+      // Buscar por order_id + product_id
+      const { data: existing } = await supabase
+        .from("ticto_transactions")
+        .select("id")
+        .eq("order_id", orderId)
+        .eq("product_id", productId)
+        .maybeSingle();
+
+      if (existing) {
+        const { error } = await supabase
+          .from("ticto_transactions")
+          .update(record)
+          .eq("id", existing.id);
+        saveError = error;
+      } else {
+        const { error } = await supabase
+          .from("ticto_transactions")
+          .insert(record);
+        saveError = error;
+      }
+    } else if (record.transaction_hash) {
+      // Fallback: upsert por transaction_hash (constraint real no banco)
+      const { error } = await supabase
+        .from("ticto_transactions")
+        .upsert(record, { onConflict: "transaction_hash" });
+      saveError = error;
+    } else {
+      // Sem chave de dedup — insert direto
+      const { error } = await supabase
+        .from("ticto_transactions")
+        .insert(record);
+      saveError = error;
+    }
+
+    if (saveError) {
+      console.error("[ticto-webhook] DB error:", saveError);
       return new Response(
-        JSON.stringify({ error: "Failed to save transaction", detail: error.message }),
+        JSON.stringify({ error: "Failed to save transaction", detail: saveError.message }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
