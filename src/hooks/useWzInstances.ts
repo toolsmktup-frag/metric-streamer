@@ -74,7 +74,7 @@ export async function testWzInstanceConnection(apiUrl: string, apiKey: string): 
   try {
     const url = apiUrl.replace(/\/+$/, '');
     const res = await fetch(`${url}/instance/status`, {
-      headers: { apikey: apiKey },
+      headers: { token: apiKey },
     });
     return res.ok;
   } catch {
