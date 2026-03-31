@@ -21,6 +21,7 @@ interface NormalizedEvent {
   contact_name: string | null;
   contact_email: string | null;
   product_name: string | null;
+  product_id: string | null;
   offer_name: string | null;
   gross_amount: number;
   paid_amount: number;
