@@ -239,6 +239,7 @@ Deno.serve(async (req) => {
       // Create execution
       const variables = {
         product_name: event.product_name,
+        product_id: event.product_id,
         offer_name: event.offer_name,
         gross_amount: event.gross_amount,
         paid_amount: event.paid_amount,
