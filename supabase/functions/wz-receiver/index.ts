@@ -48,6 +48,7 @@ function normalizeTicto(body: Record<string, any>): NormalizedEvent {
     contact_name: buyer.name || null,
     contact_email: buyer.email || null,
     product_name: product.name || body.product_name || null,
+    product_id: String(product.id || body.product_id || body.item?.product_id || ""),
     offer_name: body.offer_name || body.offer?.name || null,
     gross_amount: Number(transaction.gross_amount || transaction.amount || 0),
     paid_amount: Number(transaction.paid_amount || transaction.net_amount || 0),
