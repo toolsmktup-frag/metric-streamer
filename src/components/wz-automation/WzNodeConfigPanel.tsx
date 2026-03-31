@@ -58,7 +58,12 @@ const WzNodeConfigPanel: React.FC<WzNodeConfigPanelProps> = ({
   const nodeType = node.type;
 
   const update = (key: string, value: any) => {
-    onUpdate(node.id, { ...data, [key]: value });
+    const nextData =
+      key.endsWith('Selection') && value && typeof value === 'object' && !Array.isArray(value)
+        ? { ...data, ...value }
+        : { ...data, [key]: value };
+
+    onUpdate(node.id, nextData);
   };
 
   return (
