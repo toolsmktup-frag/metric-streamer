@@ -80,6 +80,7 @@ function normalizeGuru(body: Record<string, any>): NormalizedEvent {
     contact_name: contact.name || contact.first_name || null,
     contact_email: contact.email || null,
     product_name: product.name || body.product_name || null,
+    product_id: String(product.id || product.product_id || product.marketplace_id || ""),
     offer_name: body.offer?.name || null,
     gross_amount: gross,
     paid_amount: gross,
