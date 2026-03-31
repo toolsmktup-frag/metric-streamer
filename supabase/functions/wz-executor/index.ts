@@ -214,27 +214,48 @@ async function processWhatsAppNode(
 
   // Send via UAZAPI — token header (v2), phone only in body
   const apiUrl = instance.api_url.replace(/\/+$/, "");
-  const endpoint = msg.type === "image"
-    ? `${apiUrl}/message/sendImage`
-    : `${apiUrl}/message/sendText`;
+  const cleanPhone = String(phone).replace(/\D/g, "");
 
-  const body: Record<string, any> =
-    msg.type === "image"
-      ? { number: phone, image: msg.imageUrl || "", caption: substituteVariables(msg.caption || "", vars) }
-      : { number: phone, text };
+  const isMedia = msg.type === "image";
+  const endpoint = isMedia
+    ? `${apiUrl}/send/media`
+    : `${apiUrl}/send/text`;
+
+  const body: Record<string, any> = isMedia
+    ? {
+        number: cleanPhone,
+        type: "image",
+        file: msg.imageUrl || "",
+        text: substituteVariables(msg.caption || "", vars),
+        readchat: true,
+        readmessages: true,
+        async: false,
+      }
+    : {
+        number: cleanPhone,
+        text,
+        readchat: true,
+        readmessages: true,
+        async: false,
+      };
 
   try {
     const res = await fetch(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        Accept: "application/json",
         token: instance.api_key,
       },
       body: JSON.stringify(body),
     });
 
     const result = await res.text();
-    console.log(`[wz-executor] WhatsApp sent to ${phone}: status=${res.status}`);
+    console.log(`[wz-executor] WhatsApp sent to ${cleanPhone}: status=${res.status} body=${result.slice(0, 500)}`);
+
+    if (!res.ok) {
+      console.error(`[wz-executor] UAZAPI error: ${res.status} ${result.slice(0, 500)}`);
+    }
   } catch (err) {
     console.error(`[wz-executor] WhatsApp send error:`, err);
   }
