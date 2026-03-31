@@ -297,6 +297,8 @@ Deno.serve(async (req) => {
       is_paid_traffic: isPaidTraffic(tracking),
       funnel_id: funnelId,
       raw_payload: payload,
+      ingestion_type: 'webhook',
+      source_platform: 'ticto',
       updated_at: new Date().toISOString(),
     };
 

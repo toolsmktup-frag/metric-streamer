@@ -41,7 +41,7 @@ export interface UnifiedSale {
   ingestion_type: string;
 }
 
-async function fetchAllSalesRows(dateFrom: string, dateTo: string, funnelId?: string | null) {
+async function fetchAllSalesRows(dateFrom: string, dateTo: string, funnelId?: string | null, ingestionType?: string | null) {
   const rows: UnifiedSale[] = [];
 
   for (let from = 0; ; from += SALES_PAGE_SIZE) {
@@ -55,6 +55,10 @@ async function fetchAllSalesRows(dateFrom: string, dateTo: string, funnelId?: st
 
     if (funnelId) {
       query = query.eq('funnel_id', funnelId);
+    }
+
+    if (ingestionType) {
+      query = query.eq('ingestion_type', ingestionType);
     }
 
     const { data, error } = await query;
@@ -73,14 +77,14 @@ async function fetchAllSalesRows(dateFrom: string, dateTo: string, funnelId?: st
  * Busca todas as vendas (Ticto + Guru + Eduzz + ...) via view v_all_sales.
  * Passe funnelId para filtrar por funil específico.
  */
-export function useAllSales(funnelId?: string | null) {
+export function useAllSales(funnelId?: string | null, ingestionType?: string | null) {
   const { dateRange, lastUpdated } = useFilterStore();
   const dateFrom = toLocalDate(dateRange.start);
   const dateTo = toLocalDate(dateRange.end);
 
   return useQuery({
-    queryKey: ['all-sales', dateFrom, dateTo, funnelId ?? 'all', lastUpdated.getTime()],
-    queryFn: async () => fetchAllSalesRows(dateFrom, dateTo, funnelId),
+    queryKey: ['all-sales', dateFrom, dateTo, funnelId ?? 'all', ingestionType ?? 'all', lastUpdated.getTime()],
+    queryFn: async () => fetchAllSalesRows(dateFrom, dateTo, funnelId, ingestionType),
     ...SHARED_QUERY_OPTIONS,
   });
 }
@@ -99,8 +103,8 @@ function emptySalesAgg(): SalesAggregation {
  * Agrega vendas de todas as plataformas por campanha / adset / ad.
  * Substitui useSalesAggregation para o Resumo Geral e páginas de funil.
  */
-export function useAllSalesAggregation(funnelId?: string | null) {
-  const { data: allSales = [] } = useAllSales(funnelId);
+export function useAllSalesAggregation(funnelId?: string | null, ingestionType?: string | null) {
+  const { data: allSales = [] } = useAllSales(funnelId, ingestionType);
   const confirmed = allSales.filter(t => t.status === 'authorized');
 
   const byCampaign: Record<string, SalesAggregation> = {};
