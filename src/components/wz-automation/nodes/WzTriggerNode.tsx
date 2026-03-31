@@ -20,7 +20,7 @@ interface WzTriggerNodeData {
   triggerType?: string;
   events?: string[];
   platform?: string;
-  productFilter?: string;
+  productIdFilter?: string;
   notes?: string;
   [key: string]: unknown;
 }
