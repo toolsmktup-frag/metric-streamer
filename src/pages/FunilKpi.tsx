@@ -14,6 +14,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useFunnel, type FunnelProduct } from '@/hooks/useFunnels';
 import { avgUnitPrice } from '@/lib/classifyTransaction';
+import { dayStartISO, dayEndISO } from '@/lib/dateUtils';
 
 type FunnelRole = FunnelProduct['role'];
 
@@ -277,8 +278,8 @@ export default function FunilKpi() {
         let query = supabase
           .from('v_all_sales')
           .select('*')
-          .gte('purchased_at', `${dateFrom}T00:00:00`)
-          .lte('purchased_at', `${dateTo}T23:59:59`)
+          .gte('purchased_at', dayStartISO(dateFrom))
+          .lte('purchased_at', dayEndISO(dateTo))
           .order('purchased_at', { ascending: false });
 
         if (id) {
