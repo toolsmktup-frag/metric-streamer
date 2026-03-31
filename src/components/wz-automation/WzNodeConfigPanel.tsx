@@ -58,7 +58,12 @@ const WzNodeConfigPanel: React.FC<WzNodeConfigPanelProps> = ({
   const nodeType = node.type;
 
   const update = (key: string, value: any) => {
-    onUpdate(node.id, { ...data, [key]: value });
+    const nextData =
+      key.endsWith('Selection') && value && typeof value === 'object' && !Array.isArray(value)
+        ? { ...data, ...value }
+        : { ...data, [key]: value };
+
+    onUpdate(node.id, nextData);
   };
 
   return (
@@ -218,8 +223,10 @@ function WhatsAppConfig({ data, update }: { data: any; update: (k: string, v: an
           value={data.instanceId || ''}
           onValueChange={(v) => {
             const inst = instances.find(i => i.id === v);
-            update('instanceId', v);
-            update('instanceName', inst?.name || '');
+            update('instanceSelection', {
+              instanceId: v,
+              instanceName: inst?.name || '',
+            });
           }}
         >
           <SelectTrigger><SelectValue placeholder="Selecionar instância..." /></SelectTrigger>
