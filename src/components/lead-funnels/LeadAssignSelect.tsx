@@ -3,7 +3,6 @@ import { useTeamMembers, ROLE_LABELS } from '@/hooks/useTeamMembers';
 import { useAssignLead } from '@/hooks/useAssignLead';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
 import { UserPlus } from 'lucide-react';
 
 interface LeadAssignSelectProps {
@@ -33,50 +32,40 @@ const LeadAssignSelect: React.FC<LeadAssignSelectProps> = ({ leadId, currentAssi
 
   if (compact) {
     return (
-      <TooltipProvider delayDuration={300}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <div>
-              <Select value={currentAssignedTo || '__none__'} onValueChange={handleChange}>
-                <SelectTrigger className="h-6 w-6 p-0 border-0 bg-transparent [&>svg]:hidden">
-                  <Avatar className="h-6 w-6">
-                    {currentMember?.avatar_url ? (
-                      <AvatarImage src={currentMember.avatar_url} alt={currentMember.full_name || 'Vendedor'} />
-                    ) : null}
-                    <AvatarFallback className={`text-[10px] font-bold ${currentAssignedTo ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground'}`}>
-                      {currentMember
-                        ? getInitials(currentMember.full_name)
-                        : <UserPlus className="h-3 w-3" />}
-                    </AvatarFallback>
-                  </Avatar>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">
-                    <span className="text-muted-foreground">Sem vendedor</span>
-                  </SelectItem>
-                  {assignableMembers.map(m => (
-                    <SelectItem key={m.id} value={m.id}>
-                      <div className="flex items-center gap-2">
-                        <Avatar className="h-5 w-5">
-                          {m.avatar_url ? <AvatarImage src={m.avatar_url} alt={m.full_name || ''} /> : null}
-                          <AvatarFallback className="text-[8px] font-bold">{getInitials(m.full_name)}</AvatarFallback>
-                        </Avatar>
-                        <span>{m.full_name || 'Sem nome'}</span>
-                        <span className="text-[10px] text-muted-foreground">{ROLE_LABELS[m.role] || m.role}</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </TooltipTrigger>
-          {currentMember && (
-            <TooltipContent side="top">
-              <p className="text-xs">{currentMember.full_name || 'Sem nome'}</p>
-            </TooltipContent>
-          )}
-        </Tooltip>
-      </TooltipProvider>
+      <Select value={currentAssignedTo || '__none__'} onValueChange={handleChange}>
+        <SelectTrigger
+          className="h-6 w-6 p-0 border-0 bg-transparent [&>svg]:hidden"
+          title={currentMember?.full_name || 'Atribuir vendedor'}
+        >
+          <Avatar className="h-6 w-6">
+            {currentMember?.avatar_url ? (
+              <AvatarImage src={currentMember.avatar_url} alt={currentMember.full_name || 'Vendedor'} />
+            ) : null}
+            <AvatarFallback className={`text-[10px] font-bold ${currentAssignedTo ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground'}`}>
+              {currentMember
+                ? getInitials(currentMember.full_name)
+                : <UserPlus className="h-3 w-3" />}
+            </AvatarFallback>
+          </Avatar>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="__none__">
+            <span className="text-muted-foreground">Sem vendedor</span>
+          </SelectItem>
+          {assignableMembers.map(m => (
+            <SelectItem key={m.id} value={m.id}>
+              <div className="flex items-center gap-2">
+                <Avatar className="h-5 w-5">
+                  {m.avatar_url ? <AvatarImage src={m.avatar_url} alt={m.full_name || ''} /> : null}
+                  <AvatarFallback className="text-[8px] font-bold">{getInitials(m.full_name)}</AvatarFallback>
+                </Avatar>
+                <span>{m.full_name || 'Sem nome'}</span>
+                <span className="text-[10px] text-muted-foreground">{ROLE_LABELS[m.role] || m.role}</span>
+              </div>
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     );
   }
 
