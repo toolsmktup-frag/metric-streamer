@@ -156,8 +156,8 @@ function useDailySalesRate() {
         .from('v_all_sales')
         .select('product_name')
         .eq('status', 'authorized')
-        .gte('purchased_at', `${dateFrom}T00:00:00`)
-        .lte('purchased_at', `${dateTo}T23:59:59`);
+        .gte('purchased_at', dayStartISO(dateFrom))
+        .lte('purchased_at', dayEndISO(dateTo));
 
       const allSales = salesData || [];
       const mappingMap: Record<string, { product_id: string; quantity: number }> = {};
