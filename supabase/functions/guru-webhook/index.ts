@@ -86,6 +86,21 @@ Deno.serve(async (req) => {
     };
     const normalizedStatus = statusMap[status];
 
+    // ── Forward to wz-receiver BEFORE skipping — automations need pending/pix events ──
+    try {
+      const wzUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/wz-receiver?platform=guru`;
+      fetch(wzUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+        },
+        body: JSON.stringify(payload),
+      }).catch((e) => console.error("[guru-webhook] wz-receiver forward error:", e));
+    } catch (fwdErr) {
+      console.error("[guru-webhook] wz-receiver forward error (non-fatal):", fwdErr);
+    }
+
     // PIX pendente não deve gerar erro nem salvar, para a Guru não retentar à toa
     if (normalizedStatus === "pending") {
       console.log(`Skipping pending Guru transaction with status "${status}"`);
@@ -278,20 +293,9 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ── Forward to wz-receiver for WhatsApp automations ──
-    try {
-      const wzUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/wz-receiver?platform=guru`;
-      fetch(wzUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-        },
-        body: JSON.stringify(payload),
-      }).catch((e) => console.error("[guru-webhook] wz-receiver forward error:", e));
-    } catch (fwdErr) {
-      console.error("[guru-webhook] wz-receiver forward error (non-fatal):", fwdErr);
-    }
+
+    // wz-receiver forward already done at the top (before status filtering)
+
 
     return jsonResponse({ success: true });
   } catch (err) {
