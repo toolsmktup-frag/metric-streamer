@@ -278,6 +278,21 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ── Forward to wz-receiver for WhatsApp automations ──
+    try {
+      const wzUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/wz-receiver?platform=guru`;
+      fetch(wzUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+        },
+        body: JSON.stringify(payload),
+      }).catch((e) => console.error("[guru-webhook] wz-receiver forward error:", e));
+    } catch (fwdErr) {
+      console.error("[guru-webhook] wz-receiver forward error (non-fatal):", fwdErr);
+    }
+
     return jsonResponse({ success: true });
   } catch (err) {
     console.error("Webhook error:", err);

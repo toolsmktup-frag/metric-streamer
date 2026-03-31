@@ -21,6 +21,7 @@ interface NormalizedEvent {
   contact_name: string | null;
   contact_email: string | null;
   product_name: string | null;
+  product_id: string | null;
   offer_name: string | null;
   gross_amount: number;
   paid_amount: number;
@@ -47,6 +48,7 @@ function normalizeTicto(body: Record<string, any>): NormalizedEvent {
     contact_name: buyer.name || null,
     contact_email: buyer.email || null,
     product_name: product.name || body.product_name || null,
+    product_id: String(product.id || body.product_id || body.item?.product_id || ""),
     offer_name: body.offer_name || body.offer?.name || null,
     gross_amount: Number(transaction.gross_amount || transaction.amount || 0),
     paid_amount: Number(transaction.paid_amount || transaction.net_amount || 0),
@@ -78,6 +80,7 @@ function normalizeGuru(body: Record<string, any>): NormalizedEvent {
     contact_name: contact.name || contact.first_name || null,
     contact_email: contact.email || null,
     product_name: product.name || body.product_name || null,
+    product_id: String(product.id || product.product_id || product.marketplace_id || ""),
     offer_name: body.offer?.name || null,
     gross_amount: gross,
     paid_amount: gross,
@@ -95,6 +98,7 @@ function normalizeGeneric(body: Record<string, any>): NormalizedEvent {
     contact_name: body.name || body.contact_name || null,
     contact_email: body.email || body.contact_email || null,
     product_name: body.product_name || body.product || null,
+    product_id: String(body.product_id || ""),
     offer_name: body.offer_name || body.offer || null,
     gross_amount: Number(body.amount || body.gross_amount || 0),
     paid_amount: Number(body.paid_amount || body.amount || 0),
@@ -165,11 +169,9 @@ function matchesTrigger(triggerData: Record<string, any>, event: NormalizedEvent
   // Platform filter
   if (triggerData.platform && triggerData.platform !== "any" && triggerData.platform !== event.platform) return false;
 
-  // Product filter (ILIKE match)
-  if (triggerData.productFilter && event.product_name) {
-    if (!event.product_name.toLowerCase().includes(triggerData.productFilter.toLowerCase())) return false;
-  } else if (triggerData.productFilter && !event.product_name) {
-    return false;
+  // Product ID filter (exact match)
+  if (triggerData.productIdFilter) {
+    if (!event.product_id || String(event.product_id) !== String(triggerData.productIdFilter)) return false;
   }
 
   // Offer filter
@@ -237,6 +239,7 @@ Deno.serve(async (req) => {
       // Create execution
       const variables = {
         product_name: event.product_name,
+        product_id: event.product_id,
         offer_name: event.offer_name,
         gross_amount: event.gross_amount,
         paid_amount: event.paid_amount,

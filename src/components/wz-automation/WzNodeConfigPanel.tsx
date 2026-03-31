@@ -153,11 +153,11 @@ function TriggerConfig({ data, update }: { data: any; update: (k: string, v: any
         </Select>
       </div>
       <div className="space-y-2">
-        <Label>Filtrar por produto (opcional)</Label>
+        <Label>Filtrar por ID do produto (opcional)</Label>
         <Input
-          value={data.productFilter || ''}
-          onChange={(e) => update('productFilter', e.target.value)}
-          placeholder="Nome do produto (ILIKE match)"
+          value={data.productIdFilter || ''}
+          onChange={(e) => update('productIdFilter', e.target.value)}
+          placeholder="ID do produto (ex: 46342)"
         />
       </div>
       <div className="space-y-2">
