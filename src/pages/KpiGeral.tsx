@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { dayStartISO, dayEndISO } from '@/lib/dateUtils';
 import { formatCurrency, formatNumber, formatPercent } from '@/lib/formatters';
 import { SkeletonCard } from '@/components/dashboard/SkeletonCard';
 import {
