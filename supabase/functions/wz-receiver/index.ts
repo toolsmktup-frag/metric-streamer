@@ -169,11 +169,9 @@ function matchesTrigger(triggerData: Record<string, any>, event: NormalizedEvent
   // Platform filter
   if (triggerData.platform && triggerData.platform !== "any" && triggerData.platform !== event.platform) return false;
 
-  // Product filter (ILIKE match)
-  if (triggerData.productFilter && event.product_name) {
-    if (!event.product_name.toLowerCase().includes(triggerData.productFilter.toLowerCase())) return false;
-  } else if (triggerData.productFilter && !event.product_name) {
-    return false;
+  // Product ID filter (exact match)
+  if (triggerData.productIdFilter) {
+    if (!event.product_id || String(event.product_id) !== String(triggerData.productIdFilter)) return false;
   }
 
   // Offer filter
