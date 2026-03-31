@@ -212,11 +212,11 @@ async function processWhatsAppNode(
   const delayMax = nodeData.delayMax ?? 5;
   await sleep(randomDelay(delayMin, delayMax));
 
-  // Send via UAZAPI
+  // Send via UAZAPI — token header (v2), phone only in body
   const apiUrl = instance.api_url.replace(/\/+$/, "");
   const endpoint = msg.type === "image"
-    ? `${apiUrl}/message/sendImage/${phone}`
-    : `${apiUrl}/message/sendText/${phone}`;
+    ? `${apiUrl}/message/sendImage`
+    : `${apiUrl}/message/sendText`;
 
   const body: Record<string, any> =
     msg.type === "image"
@@ -228,7 +228,7 @@ async function processWhatsAppNode(
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        apikey: instance.api_key,
+        token: instance.api_key,
       },
       body: JSON.stringify(body),
     });
