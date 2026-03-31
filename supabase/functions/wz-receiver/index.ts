@@ -1,4 +1,4 @@
-// v1.0.1 - redeploy for matheuscolombo.uazapi.com migration
+// v2.0.0 - Ticto v2 payload support + improved logging
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -33,30 +33,80 @@ interface NormalizedEvent {
 }
 
 function normalizeTicto(body: Record<string, any>): NormalizedEvent {
-  const buyer = body.buyer || body.customer || {};
-  const item = body.item || {};
-  const product = body.product || item || {};
-  const transaction = body.transaction || body;
+  // ─── Ticto v2: payload aninhado em data.invoice ───
+  const invoice = body.data?.invoice || body.invoice || {};
+  const customer = invoice.customer || invoice.buyer || body.customer || body.buyer || {};
+  const invoiceProduct = invoice.product || {};
+  const invoiceItems = invoice.items || [];
+  const firstItem = invoiceItems[0] || {};
 
-  // Ticto: phone_local_code + phone_number
-  let phone = buyer.phone || null;
-  if (!phone && (buyer.phone_local_code || buyer.phone_number)) {
-    phone = `${buyer.phone_local_code || ""}${buyer.phone_number || ""}`;
+  // ─── Ticto v1 / legacy top-level ───
+  const item = body.item || {};
+  const product = body.product || {};
+  const transaction = body.transaction || {};
+
+  // ─── Phone: DDI + DDD + Number (igual ao ticto-webhook) ───
+  let phone: string | null = null;
+  const ddi = customer.phone_local_code || customer.ddi || "";
+  const ddd = customer.phone_prefix || customer.ddd || "";
+  const number = customer.phone_number || customer.phone || "";
+  if (number) {
+    phone = `${ddi}${ddd}${number}`.replace(/\D/g, "") || null;
   }
+  // fallback v1
+  if (!phone) {
+    const buyerV1 = body.buyer || body.customer || {};
+    if (buyerV1.phone_local_code || buyerV1.phone_number) {
+      phone = `${buyerV1.phone_local_code || ""}${buyerV1.phone_number || ""}`.replace(/\D/g, "") || null;
+    } else if (buyerV1.phone) {
+      phone = String(buyerV1.phone).replace(/\D/g, "") || null;
+    }
+  }
+
+  // ─── Name / Email ───
+  const name = customer.name || customer.full_name || (body.buyer || body.customer || {}).name || null;
+  const email = customer.email || (body.buyer || body.customer || {}).email || null;
+
+  // ─── Product ───
+  const productName =
+    invoiceProduct.name || firstItem.product_name || firstItem.name ||
+    item.product_name || product.name || body.product_name || null;
+
+  const productId = String(
+    invoiceProduct.id || invoiceProduct.product_id ||
+    firstItem.product_id || firstItem.id ||
+    item.product_id || product.id || body.product_id || ""
+  );
+
+  // ─── Offer ───
+  const offerName =
+    firstItem.offer_name || item.offer_name || body.offer_name || body.offer?.name || null;
+
+  // ─── Amount (centavos) ───
+  const amount = Number(
+    invoice.paid_amount || invoice.amount || invoice.total || invoice.value ||
+    firstItem.amount || firstItem.total_value ||
+    item.amount || transaction.gross_amount || transaction.amount || 0
+  );
+
+  // ─── Status ───
+  const rawStatus = invoice.status || body.status || transaction.status || "";
 
   return {
     contact_phone: phone,
-    contact_name: buyer.name || null,
-    contact_email: buyer.email || null,
-    product_name: item.product_name || product.name || body.product_name || null,
-    product_id: String(item.product_id || product.id || body.product_id || ""),
-    offer_name: item.offer_name || body.offer_name || body.offer?.name || null,
-    gross_amount: Number(item.amount || transaction.gross_amount || transaction.amount || 0),
-    paid_amount: Number(item.amount || transaction.paid_amount || transaction.net_amount || 0),
-    status: normalizeStatus(body.status || transaction.status || ""),
+    contact_name: name,
+    contact_email: email,
+    product_name: productName,
+    product_id: productId,
+    offer_name: offerName,
+    gross_amount: amount,
+    paid_amount: amount,
+    status: normalizeStatus(rawStatus),
     platform: "ticto",
-    payment_method: normalizePaymentMethod(body.payment_method || transaction.payment_method),
-    installments: Number(transaction.installments || 1),
+    payment_method: normalizePaymentMethod(
+      invoice.payment_method || body.payment_method || transaction.payment_method
+    ),
+    installments: Number(invoice.installments || transaction.installments || 1),
     raw_payload: body,
   };
 }
@@ -117,9 +167,12 @@ function normalizeStatus(raw: string): string {
     approved: "purchase_approved",
     paid: "purchase_approved",
     completed: "purchase_approved",
+    authorized: "purchase_approved",
+    sale_approved: "purchase_approved",
     purchase_approved: "purchase_approved",
     waiting_payment: "pix_generated",
     pix_generated: "pix_generated",
+    pix_created: "pix_generated",
     boleto_generated: "boleto_generated",
     pending: "pix_generated",
     expired: "pix_expired",
@@ -153,7 +206,10 @@ function normalizePaymentMethod(value: unknown): string | null {
 function detectPlatform(body: Record<string, any>, url: URL): string {
   const p = url.searchParams.get("platform");
   if (p) return p.toLowerCase();
+  // Ticto v2 has data.invoice
+  if (body.data?.invoice) return "ticto";
   if (body.producer || body.transaction?.id?.toString().match(/^\d{6,}$/)) return "ticto";
+  if (body.item?.product_id) return "ticto";
   if (body.subscription || body.marketplace_id) return "guru";
   return "unknown";
 }
@@ -207,7 +263,7 @@ Deno.serve(async (req) => {
     else if (platform === "guru") event = normalizeGuru(body);
     else event = normalizeGeneric(body);
 
-    console.log(`[wz-receiver] Platform=${event.platform} Status=${event.status} Phone=${event.contact_phone} Product=${event.product_name}`);
+    console.log(`[wz-receiver] Platform=${event.platform} Status=${event.status} Phone=${event.contact_phone} ProductID=${event.product_id} ProductName=${event.product_name}`);
 
     // Fetch all active flows
     const { data: flows, error: flowsErr } = await supabase
@@ -221,6 +277,7 @@ Deno.serve(async (req) => {
     }
 
     if (!flows || flows.length === 0) {
+      console.log("[wz-receiver] No active flows found");
       return jsonResponse({ message: "No active flows", matched: 0 });
     }
 
@@ -233,8 +290,15 @@ Deno.serve(async (req) => {
       const triggerNode = nodes.find((n) => n.type === "trigger");
       if (!triggerNode) continue;
 
-      if (!matchesTrigger(triggerNode.data || {}, event)) continue;
+      const triggerData = triggerNode.data || {};
+      const isMatch = matchesTrigger(triggerData, event);
 
+      if (!isMatch) {
+        console.log(`[wz-receiver] Flow ${flow.id} NO MATCH: triggerType=${triggerData.triggerType} vs status=${event.status}, productFilter=${triggerData.productIdFilter} vs productId=${event.product_id}`);
+        continue;
+      }
+
+      console.log(`[wz-receiver] Flow ${flow.id} MATCHED! Creating execution...`);
       matched++;
 
       // Create execution
