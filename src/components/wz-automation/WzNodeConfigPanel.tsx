@@ -218,8 +218,10 @@ function WhatsAppConfig({ data, update }: { data: any; update: (k: string, v: an
           value={data.instanceId || ''}
           onValueChange={(v) => {
             const inst = instances.find(i => i.id === v);
-            update('instanceId', v);
-            update('instanceName', inst?.name || '');
+            update('instanceSelection', {
+              instanceId: v,
+              instanceName: inst?.name || '',
+            });
           }}
         >
           <SelectTrigger><SelectValue placeholder="Selecionar instância..." /></SelectTrigger>
