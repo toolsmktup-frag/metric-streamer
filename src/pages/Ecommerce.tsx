@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase as _supabase } from '@/integrations/supabase/client';
 const supabase = _supabase as any;
+import { dayStartISO, dayEndISO } from '@/lib/dateUtils';
 import { Button } from '@/components/ui/button';
 import { SkeletonCard } from '@/components/dashboard/SkeletonCard';
 import {
