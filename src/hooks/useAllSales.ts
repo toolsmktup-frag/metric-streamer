@@ -103,8 +103,8 @@ function emptySalesAgg(): SalesAggregation {
  * Agrega vendas de todas as plataformas por campanha / adset / ad.
  * Substitui useSalesAggregation para o Resumo Geral e páginas de funil.
  */
-export function useAllSalesAggregation(funnelId?: string | null) {
-  const { data: allSales = [] } = useAllSales(funnelId);
+export function useAllSalesAggregation(funnelId?: string | null, ingestionType?: string | null) {
+  const { data: allSales = [] } = useAllSales(funnelId, ingestionType);
   const confirmed = allSales.filter(t => t.status === 'authorized');
 
   const byCampaign: Record<string, SalesAggregation> = {};
