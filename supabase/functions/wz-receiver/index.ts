@@ -98,6 +98,7 @@ function normalizeGeneric(body: Record<string, any>): NormalizedEvent {
     contact_name: body.name || body.contact_name || null,
     contact_email: body.email || body.contact_email || null,
     product_name: body.product_name || body.product || null,
+    product_id: String(body.product_id || ""),
     offer_name: body.offer_name || body.offer || null,
     gross_amount: Number(body.amount || body.gross_amount || 0),
     paid_amount: Number(body.paid_amount || body.amount || 0),
