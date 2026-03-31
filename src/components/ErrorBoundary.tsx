@@ -2,6 +2,22 @@ import React from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
+const DOM_MUTATION_PATTERNS = [
+  'removeChild',
+  'insertBefore',
+  'appendChild',
+  'replaceChild',
+  'NotFoundError',
+  'The node to be removed is not a child',
+  'Failed to execute',
+];
+
+function isDOMMutationError(error: Error | null): boolean {
+  if (!error) return false;
+  const msg = error.message || '';
+  return DOM_MUTATION_PATTERNS.some((p) => msg.includes(p));
+}
+
 interface Props {
   children: React.ReactNode;
   fallback?: React.ReactNode;
@@ -19,10 +35,18 @@ export default class ErrorBoundary extends React.Component<Props, State> {
   }
 
   static getDerivedStateFromError(error: Error): State {
+    if (isDOMMutationError(error)) {
+      console.warn('[ErrorBoundary] DOM mutation error suppressed:', error.message);
+      return { hasError: false, error: null };
+    }
     return { hasError: true, error };
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
+    if (isDOMMutationError(error)) {
+      console.warn('[ErrorBoundary] DOM mutation caught & ignored:', error.message);
+      return;
+    }
     console.error('[ErrorBoundary]', error, info.componentStack);
   }
 
