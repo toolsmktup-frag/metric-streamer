@@ -1,26 +1,76 @@
 
+## Plano: estabilizar o erro `removeChild` que está derrubando o CRM para vendedoras
 
-## Plano: Corrigir upsert do webhook Ticto + atribuição de campanhas
+### Diagnóstico mais provável
+A causa mais forte, pelo código, é esta combinação:
 
-### Problema
-1. O upsert faz `onConflict: "order_id,product_id"` mas o banco tem apenas um **índice parcial** (`WHERE NOT NULL`). PostgREST não aceita índices parciais para ON CONFLICT — erro: "no unique or exclusion constraint matching".
-2. Campanhas Meta ainda estão mal atribuídas (precisa rodar o SQL de fix).
+```text
+HTML com lang="en" + UI inteira em português
+            +
+tradução automática do navegador / mutação externa do DOM
+            +
+componentes Radix/shadcn com Portal
+            +
+muitas instâncias no CRM/Kanban
+            =
+NotFoundError em removeChild
+```
 
-### Mudanças
+O ponto mais sensível hoje é o CRM de leads:
+- `index.html` está com `lang="en"`
+- o app usa muitos componentes com portal (`Select`, `Tooltip`, `Popover`, `Dialog`, `Sheet`, etc.)
+- no Kanban, cada card renderiza `LeadAssignSelect` compacto
+- esse seletor compacto hoje combina `Tooltip + Select`, o que aumenta bastante a chance de crash em massa para as vendedoras
 
-**1. `supabase/functions/ticto-webhook/index.ts` — Trocar upsert por select+insert/update manual**
+### O que vou ajustar
+1. **Corrigir idioma/base do documento**
+   - Em `index.html`, trocar `lang="en"` para `lang="pt-BR"`
+   - Adicionar proteção anti-tradução no documento/app shell (`translate="no"` / `notranslate`) para reduzir interferência do navegador
 
-Em vez de `.upsert(record, { onConflict: "order_id,product_id" })`, fazer:
-- Se `order_id` e `product_id` existem: buscar registro existente com `.select().eq("order_id", X).eq("product_id", Y).maybeSingle()`
-  - Se encontrou: `.update(record).eq("id", existing.id)`
-  - Se não: `.insert(record)`
-- Se `order_id` ou `product_id` é null: tentar upsert por `transaction_hash` (constraint original que existe no banco)
+2. **Blindar os componentes com portal**
+   - Revisar e endurecer:
+     - `src/components/ui/select.tsx`
+     - `src/components/ui/tooltip.tsx`
+     - `src/components/ui/popover.tsx`
+     - `src/components/ui/dialog.tsx`
+     - `src/components/ui/sheet.tsx`
+     - `src/components/ui/alert-dialog.tsx`
+     - `src/components/ui/dropdown-menu.tsx`
+   - Aplicar proteção de tradução nos conteúdos portalled, porque é exatamente neles que esse erro costuma aparecer
 
-**2. SQL para rodar no Supabase (campanhas) — sem mudança, continua o mesmo**
-O SQL que te passei antes para resetar campanhas e re-executar `auto_assign_campaign_funnels()` continua necessário e válido. Rode após o deploy do webhook.
+3. **Remover o hotspot principal do CRM**
+   - Simplificar `src/components/lead-funnels/LeadAssignSelect.tsx` no modo `compact`
+   - Evitar empilhar `Tooltip` e `Select` no avatar pequeno dos cards
+   - Manter a troca de vendedor de forma mais estável no painel/timeline, onde existe menos montagem/desmontagem simultânea
 
-### Resultado
-- Webhook para de dar erro 500
-- Vendas Ticto do Guia de Tinturas entram com dados completos (product_name, paid_amount, funnel_id)
-- Dashboard do funil passa a mostrar vendas
+4. **Ajustar o card do Kanban**
+   - Em `src/components/lead-funnels/LeadCard.tsx`, reduzir a complexidade do cabeçalho do card
+   - Se necessário, deixar no card apenas visualização do vendedor e mover a edição para o painel lateral do lead
 
+5. **Validar os fluxos onde as vendedoras mais sentem**
+   - `/lead-campaigns`
+   - `/lead-funnels/:id`
+   - timeline do lead
+   - `/crm-analytics`
+   - ida/volta para `/whatsapp`
+
+### Resultado esperado
+- parar de aparecer a tela “Algo deu errado”
+- navegação normal no CRM para vendedoras
+- menos risco de quebra em qualquer tela que use overlays do Radix/shadcn
+- correção estrutural, não só paliativa
+
+### Arquivos principais
+- `index.html`
+- `src/components/lead-funnels/LeadAssignSelect.tsx`
+- `src/components/lead-funnels/LeadCard.tsx`
+- `src/components/ui/select.tsx`
+- `src/components/ui/tooltip.tsx`
+- `src/components/ui/popover.tsx`
+- `src/components/ui/dialog.tsx`
+- `src/components/ui/sheet.tsx`
+- `src/components/ui/alert-dialog.tsx`
+- `src/components/ui/dropdown-menu.tsx`
+
+### Observação técnica
+Pelo que revisei, isso não parece ser um erro “de regra de negócio” das vendedoras; parece um problema de estabilidade do frontend que fica mais frequente no perfil delas porque elas usam justamente a área com mais cards, selects e painéis dinâmicos.
