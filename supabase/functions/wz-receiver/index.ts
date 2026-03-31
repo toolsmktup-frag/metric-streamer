@@ -34,27 +34,28 @@ interface NormalizedEvent {
 
 function normalizeTicto(body: Record<string, any>): NormalizedEvent {
   const buyer = body.buyer || body.customer || {};
-  const product = body.product || {};
+  const item = body.item || {};
+  const product = body.product || item || {};
   const transaction = body.transaction || body;
 
   // Ticto: phone_local_code + phone_number
   let phone = buyer.phone || null;
-  if (!phone && buyer.phone_local_code && buyer.phone_number) {
-    phone = `${buyer.phone_local_code}${buyer.phone_number}`;
+  if (!phone && (buyer.phone_local_code || buyer.phone_number)) {
+    phone = `${buyer.phone_local_code || ""}${buyer.phone_number || ""}`;
   }
 
   return {
     contact_phone: phone,
     contact_name: buyer.name || null,
     contact_email: buyer.email || null,
-    product_name: product.name || body.product_name || null,
-    product_id: String(product.id || body.product_id || body.item?.product_id || ""),
-    offer_name: body.offer_name || body.offer?.name || null,
-    gross_amount: Number(transaction.gross_amount || transaction.amount || 0),
-    paid_amount: Number(transaction.paid_amount || transaction.net_amount || 0),
-    status: normalizeStatus(transaction.status || body.status || ""),
+    product_name: item.product_name || product.name || body.product_name || null,
+    product_id: String(item.product_id || product.id || body.product_id || ""),
+    offer_name: item.offer_name || body.offer_name || body.offer?.name || null,
+    gross_amount: Number(item.amount || transaction.gross_amount || transaction.amount || 0),
+    paid_amount: Number(item.amount || transaction.paid_amount || transaction.net_amount || 0),
+    status: normalizeStatus(body.status || transaction.status || ""),
     platform: "ticto",
-    payment_method: normalizePaymentMethod(transaction.payment_method),
+    payment_method: normalizePaymentMethod(body.payment_method || transaction.payment_method),
     installments: Number(transaction.installments || 1),
     raw_payload: body,
   };
