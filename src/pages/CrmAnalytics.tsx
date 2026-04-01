@@ -200,11 +200,11 @@ export default function CrmAnalytics() {
       // Count per seller
       const lostBySellerCount: Record<string, number> = {};
       const lostLeadIdsBySeller: Record<string, Set<string>> = {};
-      for (const lid of lostLeadIds) {
-        const sellerId = lostLeadSeller.get(lid);
+      for (const lid of lostLeadIds as string[]) {
+        const sellerId = lostLeadSeller.get(lid as string);
         if (!sellerId) continue;
         if (!lostLeadIdsBySeller[sellerId]) lostLeadIdsBySeller[sellerId] = new Set();
-        lostLeadIdsBySeller[sellerId].add(lid);
+        (lostLeadIdsBySeller[sellerId] as Set<string>).add(lid as string);
       }
       for (const [sid, set] of Object.entries(lostLeadIdsBySeller)) {
         lostBySellerCount[sid] = set.size;
