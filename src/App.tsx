@@ -44,6 +44,7 @@ import WzFlowCanvas from "./pages/WzFlowCanvas";
 import WzInstancias from "./pages/WzInstancias";
 import WzExecucoes from "./pages/WzExecucoes";
 import MinhasMetas from "./pages/MinhasMetas";
+import ConfigMetas from "./pages/ConfigMetas";
 
 const queryClient = new QueryClient({
   defaultOptions: {
