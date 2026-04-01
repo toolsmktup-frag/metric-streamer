@@ -23,6 +23,7 @@ export interface UnifiedSale {
   purchased_at: string;
   revenue: number;
   product_name: string | null;
+  product_id: string | null;
   offer_name: string | null;
   payment_method: string | null;
   customer_name: string | null;
