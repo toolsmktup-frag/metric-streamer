@@ -371,15 +371,23 @@ export default function CrmAnalytics() {
                         Vendas
                         <Tooltip>
                           <TooltipTrigger><Info className="h-3 w-3 text-muted-foreground/50" /></TooltipTrigger>
-                          <TooltipContent><p className="text-xs max-w-[200px]">Vendas não podem ser atribuídas por vendedora — tabelas de vendas não possuem seller_id</p></TooltipContent>
+                          <TooltipContent><p className="text-xs max-w-[200px]">Atribuição por nome do afiliado no webhook</p></TooltipContent>
                         </Tooltip>
                       </span>
                     </TableHead>
-                    <TableHead>Receita</TableHead>
-                    <TableHead>Comissão</TableHead>
-                    <TableHead>Ticket Médio</TableHead>
+                    <TableHead className="cursor-pointer select-none" onClick={() => handleSort('revenue')}>
+                      Receita{sortIcon('revenue')}
+                    </TableHead>
+                    <TableHead className="cursor-pointer select-none" onClick={() => handleSort('commission')}>
+                      Comissão{sortIcon('commission')}
+                    </TableHead>
+                    <TableHead className="cursor-pointer select-none" onClick={() => handleSort('ticketMedio')}>
+                      Ticket Médio{sortIcon('ticketMedio')}
+                    </TableHead>
                     <TableHead>Tempo Conversa</TableHead>
-                    <TableHead>Conversão</TableHead>
+                    <TableHead className="cursor-pointer select-none" onClick={() => handleSort('conversionRate')}>
+                      Conversão{sortIcon('conversionRate')}
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -400,12 +408,12 @@ export default function CrmAnalytics() {
                       </TableCell>
                       <TableCell className="font-mono">{s.leads}</TableCell>
                       <TableCell className="font-mono">{s.avgDailyLeads.toFixed(1)}</TableCell>
+                      <TableCell className="font-mono">{s.sales}</TableCell>
+                      <TableCell className="font-mono">{formatCurrency(s.revenue)}</TableCell>
+                      <TableCell className="font-mono text-green-600">{formatCurrency(s.commission)}</TableCell>
+                      <TableCell className="font-mono">{s.ticketMedio > 0 ? formatCurrency(s.ticketMedio) : '—'}</TableCell>
                       <TableCell className="text-muted-foreground">—</TableCell>
-                      <TableCell className="text-muted-foreground">—</TableCell>
-                      <TableCell className="text-muted-foreground">—</TableCell>
-                      <TableCell className="text-muted-foreground">—</TableCell>
-                      <TableCell className="text-muted-foreground">—</TableCell>
-                      <TableCell className="text-muted-foreground">—</TableCell>
+                      <TableCell className="font-mono">{s.conversionRate > 0 ? `${s.conversionRate.toFixed(1)}%` : '—'}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
