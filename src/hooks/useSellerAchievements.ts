@@ -58,12 +58,20 @@ export function useAutoUnlockAchievements(
   const unlockMutation = useMutation({
     mutationFn: async (keys: { key: string; month: string }[]) => {
       for (const { key, month } of keys) {
-        await (supabase as any)
+        // Check if already exists before inserting
+        const { data: existing } = await (supabase as any)
           .from('seller_achievements')
-          .upsert(
-            { user_id: userId, achievement_key: key, month, unlocked_at: new Date().toISOString() },
-            { onConflict: 'user_id,achievement_key,month' }
-          );
+          .select('id')
+          .eq('user_id', userId)
+          .eq('achievement_key', key)
+          .eq('month', month)
+          .maybeSingle();
+        
+        if (!existing) {
+          await (supabase as any)
+            .from('seller_achievements')
+            .insert({ user_id: userId, achievement_key: key, month, unlocked_at: new Date().toISOString() });
+        }
       }
     },
     onSuccess: () => {
