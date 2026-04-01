@@ -1,6 +1,8 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { format } from 'date-fns';
+import { format, startOfMonth } from 'date-fns';
+import { useEffect, useRef } from 'react';
+import type { SellerStats } from './useSellerStats';
 
 export interface Achievement {
   key: string;
@@ -41,6 +43,87 @@ export function useSellerAchievements(userId?: string) {
     enabled: !!userId,
     staleTime: 60 * 1000,
   });
+}
+
+/** Automatically evaluate and unlock achievements based on current stats */
+export function useAutoUnlockAchievements(
+  userId: string | undefined,
+  stats: SellerStats | undefined,
+  achievements: UnlockedAchievement[],
+  goalAmounts: { goal1: number; goal2: number; goal3: number }
+) {
+  const queryClient = useQueryClient();
+  const processedRef = useRef(false);
+
+  const unlockMutation = useMutation({
+    mutationFn: async (keys: { key: string; month: string }[]) => {
+      for (const { key, month } of keys) {
+        await (supabase as any)
+          .from('seller_achievements')
+          .upsert(
+            { user_id: userId, achievement_key: key, month, unlocked_at: new Date().toISOString() },
+            { onConflict: 'user_id,achievement_key,month' }
+          );
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['seller-achievements', userId] });
+    },
+  });
+
+  useEffect(() => {
+    if (!userId || !stats || processedRef.current) return;
+
+    const unlockedKeys = new Set(achievements.map(a => `${a.achievement_key}_${a.month || ''}`));
+    const currentMonth = format(startOfMonth(new Date()), 'yyyy-MM');
+    const today = format(new Date(), 'yyyy-MM-dd');
+    const toUnlock: { key: string; month: string }[] = [];
+
+    function shouldUnlock(key: string, month: string) {
+      return !unlockedKeys.has(`${key}_${month}`);
+    }
+
+    // First sale of the day
+    if (stats.todayLeads >= 1 && shouldUnlock('first_sale_of_day', today)) {
+      toUnlock.push({ key: 'first_sale_of_day', month: today });
+    }
+
+    // 5 sales in a single day
+    const hasFiveSalesDay = stats.salesByDay.some(d => d.count >= 5);
+    if (hasFiveSalesDay && shouldUnlock('5_sales_day', currentMonth)) {
+      toUnlock.push({ key: '5_sales_day', month: currentMonth });
+    }
+
+    // Goal 1 reached
+    if (goalAmounts.goal1 > 0 && stats.monthRevenue >= goalAmounts.goal1 && shouldUnlock('goal_1_reached', currentMonth)) {
+      toUnlock.push({ key: 'goal_1_reached', month: currentMonth });
+    }
+
+    // Goal 2 reached
+    if (goalAmounts.goal2 > 0 && stats.monthRevenue >= goalAmounts.goal2 && shouldUnlock('goal_2_reached', currentMonth)) {
+      toUnlock.push({ key: 'goal_2_reached', month: currentMonth });
+    }
+
+    // Goal 3 reached
+    if (goalAmounts.goal3 > 0 && stats.monthRevenue >= goalAmounts.goal3 && shouldUnlock('goal_3_reached', currentMonth)) {
+      toUnlock.push({ key: 'goal_3_reached', month: currentMonth });
+    }
+
+    // Streak 7
+    if (stats.streak >= 7 && shouldUnlock('streak_7', currentMonth)) {
+      toUnlock.push({ key: 'streak_7', month: currentMonth });
+    }
+
+    // Streak 14
+    if (stats.streak >= 14 && shouldUnlock('streak_14', currentMonth)) {
+      toUnlock.push({ key: 'streak_14', month: currentMonth });
+    }
+
+    if (toUnlock.length > 0) {
+      processedRef.current = true;
+      unlockMutation.mutate(toUnlock);
+    }
+  }, [userId, stats, achievements, goalAmounts]);
 }
 
 export function getSellerLevel(monthlySales: number) {
