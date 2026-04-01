@@ -228,7 +228,7 @@ export default function FunisConfigurar() {
   }
 
   function addProduct() {
-    setProducts(p => [...p, { product_name_contains: '', role: 'front', display_name: '', recontact_days: null }]);
+    setProducts(p => [...p, { product_id: '', product_name_contains: '', role: 'front', display_name: '', recontact_days: null }]);
   }
 
   function removeProduct(idx: number) {
