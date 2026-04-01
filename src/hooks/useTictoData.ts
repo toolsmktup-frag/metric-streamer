@@ -36,6 +36,8 @@ export interface SalesAggregation {
   bump_revenue: number;
   upsell_sales: number;
   upsell_revenue: number;
+  downsell_sales: number;
+  downsell_revenue: number;
 }
 
 // classifyTransaction is imported from @/lib/classifyTransaction
