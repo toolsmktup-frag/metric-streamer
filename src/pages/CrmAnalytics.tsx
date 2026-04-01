@@ -161,11 +161,24 @@ export default function CrmAnalytics() {
     });
   }, [sellers, leads, sales, daysInPeriod, tableSortKey, tableSortDir]);
 
-  // Global KPIs
-  const totalLeads = leads.length;
-  const totalSales = sales.length;
-  const totalRevenue = sales.reduce((s, v) => s + v.revenue, 0);
-  const totalCommission = sales.reduce((s, v) => s + (v.affiliate_commission || v.revenue * COMMISSION_RATE), 0);
+  // KPIs filtered by selected seller (only seller-attributed sales)
+  const kpiStats = useMemo(() => {
+    if (selectedSeller === 'all') {
+      // Sum all sellers' stats (only sales attributed to any seller)
+      const totalLeads = sellerStats.reduce((s, v) => s + v.leads, 0);
+      const totalSales = sellerStats.reduce((s, v) => s + v.sales, 0);
+      const totalRevenue = sellerStats.reduce((s, v) => s + v.revenue, 0);
+      const totalCommission = sellerStats.reduce((s, v) => s + v.commission, 0);
+      return { totalLeads, totalSales, totalRevenue, totalCommission };
+    }
+    const stat = sellerStats.find(s => s.id === selectedSeller);
+    return {
+      totalLeads: stat?.leads ?? 0,
+      totalSales: stat?.sales ?? 0,
+      totalRevenue: stat?.revenue ?? 0,
+      totalCommission: stat?.commission ?? 0,
+    };
+  }, [sellerStats, selectedSeller]);
 
   // Filter by selected seller for leads
   const filteredLeads = selectedSeller === 'all' ? leads : leads.filter(l => l.assigned_to === selectedSeller);
