@@ -12,7 +12,9 @@ export interface Achievement {
 export const ACHIEVEMENTS: Achievement[] = [
   { key: 'first_sale_of_day', label: 'Primeira do Dia', emoji: '🌅', description: 'Fez a primeira venda do dia' },
   { key: '5_sales_day', label: 'Vendedora Turbo', emoji: '⚡', description: '5 vendas em um único dia' },
-  { key: 'goal_reached', label: 'Meta Batida', emoji: '🏆', description: 'Atingiu a meta mensal' },
+  { key: 'goal_1_reached', label: 'Meta 1 Atingida', emoji: '🥉', description: 'Atingiu a Meta 1 do mês' },
+  { key: 'goal_2_reached', label: 'Meta 2 Atingida', emoji: '🥈', description: 'Atingiu a Meta 2 do mês' },
+  { key: 'goal_3_reached', label: 'Meta 3 Atingida', emoji: '🥇', description: 'Atingiu a Meta 3 do mês' },
   { key: 'streak_7', label: 'Semana de Fogo', emoji: '🔥', description: '7 dias seguidos com vendas' },
   { key: 'streak_14', label: 'Imparável', emoji: '💎', description: '14 dias seguidos com vendas' },
   { key: 'goal_2_months', label: 'Consistência', emoji: '👑', description: 'Meta batida 2 meses seguidos' },
