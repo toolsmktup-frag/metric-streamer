@@ -581,6 +581,7 @@ export default function CrmAnalytics() {
                       <TableCell className="font-mono">{s.ticketMedio > 0 ? formatCurrency(s.ticketMedio) : '—'}</TableCell>
                       <TableCell className="text-muted-foreground">—</TableCell>
                       <TableCell className="font-mono">{s.conversionRate > 0 ? `${s.conversionRate.toFixed(1)}%` : '—'}</TableCell>
+                      <TableCell className="font-mono text-destructive">{s.lostLeads > 0 ? `${s.lostLeads} (${formatCurrency(s.lostValue)})` : '—'}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
