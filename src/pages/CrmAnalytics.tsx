@@ -631,12 +631,34 @@ export default function CrmAnalytics() {
             <CardTitle className="text-lg">Top Produtos — {selectedSellerName}</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center gap-2 py-8 justify-center">
-              <Info className="h-4 w-4 text-muted-foreground" />
-              <p className="text-sm text-muted-foreground">
-                Vendas não podem ser filtradas por vendedora — tabelas de vendas não possuem vínculo com seller_id
-              </p>
-            </div>
+            {isLoading ? (
+              <Skeleton className="h-48 w-full" />
+            ) : topProductsBySeller.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-8 text-center">Sem vendas de vendedoras no período</p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-10">#</TableHead>
+                    <TableHead>Produto</TableHead>
+                    <TableHead>Qtd</TableHead>
+                    <TableHead>Receita</TableHead>
+                    <TableHead>%</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {topProductsBySeller.map(p => (
+                    <TableRow key={p.name}>
+                      <TableCell className="font-mono text-muted-foreground">{p.pos}</TableCell>
+                      <TableCell className="font-medium max-w-[200px] truncate">{p.name}</TableCell>
+                      <TableCell className="font-mono">{p.qty}</TableCell>
+                      <TableCell className="font-mono">{formatCurrency(p.revenue)}</TableCell>
+                      <TableCell className="font-mono">{formatPercent(p.pct)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
           </CardContent>
         </Card>
       </div>
