@@ -224,9 +224,9 @@ export default function CrmAnalytics() {
       }));
   }, [sales]);
 
-  // Ranking by leads (since we can't rank by revenue per seller)
+  // Ranking by revenue (with fallback to leads)
   const topSellers = useMemo(() => {
-    return [...sellerStats].sort((a, b) => b.leads - a.leads).slice(0, 3);
+    return [...sellerStats].sort((a, b) => (b.revenue || 0) - (a.revenue || 0) || b.leads - a.leads).slice(0, 3);
   }, [sellerStats]);
 
   function handlePreset(label: string) {
