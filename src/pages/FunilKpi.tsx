@@ -23,13 +23,19 @@ type FunnelRole = FunnelProduct['role'];
  * Faz match por ILIKE (case-insensitive contains) do product_name.
  */
 function classifyByFunnelProducts(
-  tx: { product_name?: string | null },
+  tx: { product_name?: string | null; product_id?: string | null },
   funnelProducts: FunnelProduct[]
 ): FunnelRole | null {
+  const txProductId = String(tx.product_id || '').trim();
   const name = (tx.product_name || '').toLowerCase();
-  if (!name) return null;
+
   for (const fp of funnelProducts) {
-    if (name.includes(fp.product_name_contains.toLowerCase())) {
+    // Match by product_id first (exact match, most reliable)
+    if (fp.product_id && txProductId && String(fp.product_id) === txProductId) {
+      return fp.role;
+    }
+    // Fallback: match by product name substring
+    if (name && fp.product_name_contains && name.includes(fp.product_name_contains.toLowerCase())) {
       return fp.role;
     }
   }
