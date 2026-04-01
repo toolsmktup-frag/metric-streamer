@@ -71,60 +71,83 @@ export default function CrmAnalytics() {
     },
   });
 
-  // Fetch leads: created in period + assigned leads that had interactions in period
-  const { data: leads = [], isLoading: loadingLeads } = useQuery({
-    queryKey: ['crm-leads', dateFrom, dateTo],
+  // Fetch lead activities in the selected period using stage positions + assignment dates
+  const { data: leadActivityData = { activities: [] as Array<{ lead_id: string; seller_id: string; activity_date: string }>, sellerLeadCounts: {} as Record<string, number> }, isLoading: loadingLeads } = useQuery({
+    queryKey: ['crm-lead-activities', dateFrom, dateTo],
     queryFn: async () => {
       const { data: orgId } = await (supabase as any).rpc('get_user_org_id');
-      if (!orgId) return [];
+      if (!orgId) return { activities: [], sellerLeadCounts: {} };
 
-      // 1) Leads created in period
-      const { data: createdInPeriod } = await (supabase as any)
+      // 1) Stage movements in the period (real CRM interactions)
+      const { data: positions } = await (supabase as any)
+        .from('lead_stage_positions')
+        .select('lead_id, entered_at')
+        .gte('entered_at', dateFrom)
+        .lte('entered_at', dateTo);
+
+      // 2) Leads assigned in the period
+      const { data: assignedLeads } = await (supabase as any)
         .from('leads')
-        .select('id, assigned_to, created_at, updated_at')
-        .eq('organization_id', orgId)
-        .gte('created_at', dateFrom)
-        .lte('created_at', dateTo);
-
-      // 2) Get lead IDs that had events (interactions) in the period
-      const { data: eventsInPeriod } = await (supabase as any)
-        .from('lead_events')
-        .select('lead_id')
-        .gte('created_at', dateFrom)
-        .lte('created_at', dateTo);
-
-      const eventLeadIds = [...new Set((eventsInPeriod || []).map((e: any) => e.lead_id))];
-
-      // 3) Fetch those leads (with assigned_to) if not already in createdInPeriod
-      let interactedLeads: any[] = [];
-      if (eventLeadIds.length > 0) {
-        // Batch fetch in chunks of 500
-        for (let i = 0; i < eventLeadIds.length; i += 500) {
-          const batch = eventLeadIds.slice(i, i + 500);
-          const { data: batchLeads } = await (supabase as any)
-            .from('leads')
-            .select('id, assigned_to, created_at, updated_at')
-            .eq('organization_id', orgId)
-            .in('id', batch);
-          if (batchLeads) interactedLeads.push(...batchLeads);
-        }
-      }
-
-      // 4) Also fetch leads assigned in the period (updated_at = when assigned)
-      const { data: assignedInPeriod } = await (supabase as any)
-        .from('leads')
-        .select('id, assigned_to, created_at, updated_at')
+        .select('id, assigned_to, updated_at')
         .eq('organization_id', orgId)
         .not('assigned_to', 'is', null)
         .gte('updated_at', dateFrom)
         .lte('updated_at', dateTo);
 
-      // Merge and deduplicate
-      const map = new Map<string, any>();
-      for (const l of [...(createdInPeriod || []), ...interactedLeads, ...(assignedInPeriod || [])]) {
-        map.set(l.id, l);
+      // Collect all unique lead IDs from positions
+      const posLeadIds = [...new Set((positions || []).map((p: any) => p.lead_id).filter(Boolean))];
+
+      // Batch-fetch seller assignment for position leads
+      const leadSellerMap = new Map<string, string>();
+      for (let i = 0; i < posLeadIds.length; i += 500) {
+        const batch = posLeadIds.slice(i, i + 500);
+        const { data: batchLeads } = await (supabase as any)
+          .from('leads')
+          .select('id, assigned_to')
+          .eq('organization_id', orgId)
+          .not('assigned_to', 'is', null)
+          .in('id', batch);
+        for (const l of batchLeads || []) {
+          leadSellerMap.set(l.id, l.assigned_to);
+        }
       }
-      return Array.from(map.values()) as Array<{ id: string; assigned_to: string | null; created_at: string; updated_at: string }>;
+
+      // Build activity records (one per unique lead+seller+day)
+      const seen = new Set<string>();
+      const activities: Array<{ lead_id: string; seller_id: string; activity_date: string }> = [];
+
+      for (const p of positions || []) {
+        const sellerId = leadSellerMap.get(p.lead_id);
+        if (!sellerId) continue;
+        const day = (p.entered_at || '').slice(0, 10);
+        const key = `${sellerId}|${p.lead_id}|${day}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          activities.push({ lead_id: p.lead_id, seller_id: sellerId, activity_date: day });
+        }
+      }
+
+      for (const l of assignedLeads || []) {
+        const day = (l.updated_at || '').slice(0, 10);
+        const key = `${l.assigned_to}|${l.id}|${day}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          activities.push({ lead_id: l.id, seller_id: l.assigned_to, activity_date: day });
+        }
+      }
+
+      // Count unique leads per seller
+      const sellerLeadSets: Record<string, Set<string>> = {};
+      for (const a of activities) {
+        if (!sellerLeadSets[a.seller_id]) sellerLeadSets[a.seller_id] = new Set();
+        sellerLeadSets[a.seller_id].add(a.lead_id);
+      }
+      const sellerLeadCounts: Record<string, number> = {};
+      for (const [sid, set] of Object.entries(sellerLeadSets)) {
+        sellerLeadCounts[sid] = set.size;
+      }
+
+      return { activities, sellerLeadCounts };
     },
   });
 
@@ -157,11 +180,9 @@ export default function CrmAnalytics() {
     const sellerNorm = sellerName.toLowerCase().trim();
     const affiliateNorm = affiliateName.toLowerCase().trim();
     if (sellerNorm === affiliateNorm) return true;
-    // Match by first name (e.g. "Gabriela" matches "Gabriela Silva")
     const sellerFirst = sellerNorm.split(' ')[0];
     const affiliateFirst = affiliateNorm.split(' ')[0];
     if (sellerFirst.length >= 3 && sellerFirst === affiliateFirst) return true;
-    // Check if one contains the other
     if (sellerNorm.includes(affiliateNorm) || affiliateNorm.includes(sellerNorm)) return true;
     return false;
   }
@@ -170,10 +191,8 @@ export default function CrmAnalytics() {
   const sellerStats = useMemo(() => {
     return sellers.map(seller => {
       const sellerName = seller.full_name || '';
-      const sellerLeads = leads.filter(l => l.assigned_to === seller.id);
-      const leadsCount = sellerLeads.length;
+      const leadsCount = leadActivityData.sellerLeadCounts[seller.id] || 0;
 
-      // Match sales by affiliate_name
       const sellerSales = sellerName
         ? sales.filter(s => s.affiliate_name && matchesSellerName(sellerName, s.affiliate_name))
         : [];
@@ -200,12 +219,11 @@ export default function CrmAnalytics() {
       const bVal = (b as any)[tableSortKey] ?? -Infinity;
       return tableSortDir === 'desc' ? bVal - aVal : aVal - bVal;
     });
-  }, [sellers, leads, sales, daysInPeriod, tableSortKey, tableSortDir]);
+  }, [sellers, leadActivityData, sales, daysInPeriod, tableSortKey, tableSortDir]);
 
-  // KPIs filtered by selected seller (only seller-attributed sales)
+  // KPIs filtered by selected seller
   const kpiStats = useMemo(() => {
     if (selectedSeller === 'all') {
-      // Sum all sellers' stats (only sales attributed to any seller)
       const totalLeads = sellerStats.reduce((s, v) => s + v.leads, 0);
       const totalSales = sellerStats.reduce((s, v) => s + v.sales, 0);
       const totalRevenue = sellerStats.reduce((s, v) => s + v.revenue, 0);
@@ -221,25 +239,27 @@ export default function CrmAnalytics() {
     };
   }, [sellerStats, selectedSeller]);
 
-  // Filter by selected seller for leads
-  const filteredLeads = selectedSeller === 'all' ? leads : leads.filter(l => l.assigned_to === selectedSeller);
-
-  // Leads per day chart
+  // Leads per day chart — based on real activity dates
   const leadsPerDayData = useMemo(() => {
     const map: Record<string, Record<string, number>> = {};
-    const leadsToChart = selectedSeller === 'all' ? leads : leads.filter(l => l.assigned_to === selectedSeller);
-    
-    leadsToChart.forEach(l => {
-      const day = format(parseISO(l.created_at), 'yyyy-MM-dd');
-      const sellerName = sellers.find(s => s.id === l.assigned_to)?.full_name || 'Não atribuído';
+    const filtered = selectedSeller === 'all'
+      ? leadActivityData.activities
+      : leadActivityData.activities.filter(a => a.seller_id === selectedSeller);
+
+    for (const a of filtered) {
+      const day = a.activity_date;
+      const sellerName = sellers.find(s => s.id === a.seller_id)?.full_name || 'Não atribuído';
       if (!map[day]) map[day] = {};
       map[day][sellerName] = (map[day][sellerName] || 0) + 1;
-    });
+    }
 
-    const allNames = [...new Set(leadsToChart.map(l => sellers.find(s => s.id === l.assigned_to)?.full_name || 'Não atribuído'))];
+    const allNames = [...new Set(filtered.map(a => sellers.find(s => s.id === a.seller_id)?.full_name || 'Não atribuído'))];
     const days = Object.keys(map).sort();
-    return { data: days.map(d => ({ date: format(parseISO(d), 'dd/MM', { locale: ptBR }), ...map[d] })), names: allNames };
-  }, [leads, sellers, selectedSeller]);
+    return {
+      data: days.map(d => ({ date: format(parseISO(d), 'dd/MM', { locale: ptBR }), ...map[d] })),
+      names: allNames,
+    };
+  }, [leadActivityData, sellers, selectedSeller]);
 
   const leadsAvg = leadsPerDayData.data.length > 0
     ? leadsPerDayData.data.reduce((s, d) => s + Object.values(d).filter(v => typeof v === 'number').reduce((a, b) => (a as number) + (b as number), 0), 0) / leadsPerDayData.data.length
