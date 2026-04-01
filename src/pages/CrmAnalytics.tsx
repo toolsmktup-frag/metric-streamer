@@ -202,6 +202,9 @@ export default function CrmAnalytics() {
       const ticketMedio = salesCount > 0 ? revenue / salesCount : 0;
       const conversionRate = leadsCount > 0 ? (salesCount / leadsCount) * 100 : 0;
 
+      const lostLeads = Math.max(0, leadsCount - salesCount);
+      const lostValue = lostLeads * ticketMedio;
+
       return {
         id: seller.id,
         name: sellerName || 'Sem nome',
@@ -213,6 +216,8 @@ export default function CrmAnalytics() {
         ticketMedio,
         convTime: null as string | null,
         conversionRate,
+        lostLeads,
+        lostValue,
       };
     }).sort((a, b) => {
       const aVal = (a as any)[tableSortKey] ?? -Infinity;
