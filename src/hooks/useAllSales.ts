@@ -156,6 +156,7 @@ export function useAllSalesAggregation(funnelId?: string | null, ingestionType?:
     if (type === 'principal')  { agg.front_sales++;  agg.front_revenue  += revenue; }
     else if (type === 'bump1') { agg.bump_sales++;   agg.bump_revenue   += revenue; }
     else if (type === 'upsell1') { agg.upsell_sales++; agg.upsell_revenue += revenue; }
+    else if (type === 'downsell') { agg.downsell_sales++; agg.downsell_revenue += revenue; }
   }
 
   for (const tx of confirmed) {

@@ -44,7 +44,7 @@ export interface SalesAggregation {
 export { classifyTransaction };
 
 function emptySalesAgg(): SalesAggregation {
-  return { sales_count: 0, revenue: 0, front_sales: 0, front_revenue: 0, bump_sales: 0, bump_revenue: 0, upsell_sales: 0, upsell_revenue: 0 };
+  return { sales_count: 0, revenue: 0, front_sales: 0, front_revenue: 0, bump_sales: 0, bump_revenue: 0, upsell_sales: 0, upsell_revenue: 0, downsell_sales: 0, downsell_revenue: 0 };
 }
 
 export interface TictoTransaction {
