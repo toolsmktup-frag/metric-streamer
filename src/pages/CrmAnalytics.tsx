@@ -71,28 +71,57 @@ export default function CrmAnalytics() {
     },
   });
 
-  // Fetch leads: created in period + ALL leads currently assigned to any seller
+  // Fetch leads: created in period + assigned leads that had interactions in period
   const { data: leads = [], isLoading: loadingLeads } = useQuery({
     queryKey: ['crm-leads', dateFrom, dateTo],
     queryFn: async () => {
       const { data: orgId } = await (supabase as any).rpc('get_user_org_id');
       if (!orgId) return [];
-      // 1) Leads created in period (for chart/timeline)
+
+      // 1) Leads created in period
       const { data: createdInPeriod } = await (supabase as any)
         .from('leads')
         .select('id, assigned_to, created_at, updated_at')
         .eq('organization_id', orgId)
         .gte('created_at', dateFrom)
         .lte('created_at', dateTo);
-      // 2) ALL leads assigned to any seller (regardless of date — they are "attended")
-      const { data: allAssigned } = await (supabase as any)
+
+      // 2) Get lead IDs that had events (interactions) in the period
+      const { data: eventsInPeriod } = await (supabase as any)
+        .from('lead_events')
+        .select('lead_id')
+        .gte('created_at', dateFrom)
+        .lte('created_at', dateTo);
+
+      const eventLeadIds = [...new Set((eventsInPeriod || []).map((e: any) => e.lead_id))];
+
+      // 3) Fetch those leads (with assigned_to) if not already in createdInPeriod
+      let interactedLeads: any[] = [];
+      if (eventLeadIds.length > 0) {
+        // Batch fetch in chunks of 500
+        for (let i = 0; i < eventLeadIds.length; i += 500) {
+          const batch = eventLeadIds.slice(i, i + 500);
+          const { data: batchLeads } = await (supabase as any)
+            .from('leads')
+            .select('id, assigned_to, created_at, updated_at')
+            .eq('organization_id', orgId)
+            .in('id', batch);
+          if (batchLeads) interactedLeads.push(...batchLeads);
+        }
+      }
+
+      // 4) Also fetch leads assigned in the period (updated_at = when assigned)
+      const { data: assignedInPeriod } = await (supabase as any)
         .from('leads')
         .select('id, assigned_to, created_at, updated_at')
         .eq('organization_id', orgId)
-        .not('assigned_to', 'is', null);
+        .not('assigned_to', 'is', null)
+        .gte('updated_at', dateFrom)
+        .lte('updated_at', dateTo);
+
       // Merge and deduplicate
       const map = new Map<string, any>();
-      for (const l of [...(createdInPeriod || []), ...(allAssigned || [])]) {
+      for (const l of [...(createdInPeriod || []), ...interactedLeads, ...(assignedInPeriod || [])]) {
         map.set(l.id, l);
       }
       return Array.from(map.values()) as Array<{ id: string; assigned_to: string | null; created_at: string; updated_at: string }>;
