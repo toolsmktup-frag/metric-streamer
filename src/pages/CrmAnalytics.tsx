@@ -331,27 +331,27 @@ export default function CrmAnalytics() {
         <KpiCard
           icon={Users}
           label="Leads Atendidos"
-          value={isLoading ? null : formatNumber(filteredLeads.length)}
-          tooltip="Total de leads criados no período filtrado"
+          value={isLoading ? null : formatNumber(kpiStats.totalLeads)}
+          tooltip="Total de leads atribuídos às vendedoras no período"
         />
         <KpiCard
           icon={ShoppingCart}
           label="Vendas Geradas"
-          value={isLoading ? null : formatNumber(totalSales)}
-          tooltip="Total de vendas autorizadas no período (todas as plataformas)"
+          value={isLoading ? null : formatNumber(kpiStats.totalSales)}
+          tooltip="Vendas atribuídas às vendedoras (por afiliado no webhook)"
         />
         <KpiCard
           icon={DollarSign}
           label="Receita Total"
-          value={isLoading ? null : formatCurrency(totalRevenue)}
-          tooltip="Soma da receita bruta das vendas no período"
+          value={isLoading ? null : formatCurrency(kpiStats.totalRevenue)}
+          tooltip="Receita gerada pelas vendedoras no período"
         />
         <KpiCard
           icon={Award}
           label="Comissão Total"
-          value={isLoading ? null : formatCurrency(totalCommission)}
-          tooltip={`Estimativa com taxa de ${(COMMISSION_RATE * 100).toFixed(0)}% sobre a receita`}
-          sub={`${(COMMISSION_RATE * 100).toFixed(0)}% estimado`}
+          value={isLoading ? null : formatCurrency(kpiStats.totalCommission)}
+          tooltip="Comissão total das vendedoras (webhook ou 10% estimado)"
+          sub={kpiStats.totalCommission > 0 ? undefined : `${(COMMISSION_RATE * 100).toFixed(0)}% estimado`}
         />
       </div>
 
