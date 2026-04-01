@@ -43,6 +43,7 @@ import WzAutomacoes from "./pages/WzAutomacoes";
 import WzFlowCanvas from "./pages/WzFlowCanvas";
 import WzInstancias from "./pages/WzInstancias";
 import WzExecucoes from "./pages/WzExecucoes";
+import MinhasMetas from "./pages/MinhasMetas";
 
 const queryClient = new QueryClient({
   defaultOptions: {
