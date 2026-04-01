@@ -4,6 +4,7 @@ import { useFilterStore } from '@/stores/filterStore';
 import type { SalesAggregation } from './useTictoData';
 import { classifyTransaction as classifySale } from '@/lib/classifyTransaction';
 import { toLocalDate, dayStartISO, dayEndISO } from '@/lib/dateUtils';
+import type { FunnelProduct } from './useFunnels';
 
 const SHARED_QUERY_OPTIONS = {
   staleTime: 30 * 1000,
