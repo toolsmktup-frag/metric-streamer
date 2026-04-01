@@ -289,7 +289,7 @@ export default function CrmAnalytics() {
       const bVal = (b as any)[tableSortKey] ?? -Infinity;
       return tableSortDir === 'desc' ? bVal - aVal : aVal - bVal;
     });
-  }, [sellers, leadActivityData, sales, daysInPeriod, tableSortKey, tableSortDir]);
+  }, [sellers, leadActivityData, sales, daysInPeriod, tableSortKey, tableSortDir, lostLeadsData]);
 
   // KPIs filtered by selected seller
   const kpiStats = useMemo(() => {
