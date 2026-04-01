@@ -596,7 +596,52 @@ export default function FunilKpi() {
               </div>
             </div>
 
-            {/* Revenue breakdown */}
+            {/* Upsell 2 — only if configured */}
+            {hasUpsell2 && (
+              <div className="rounded-lg bg-violet-500/5 p-3 border border-violet-500/20">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-semibold text-foreground">{slotLabels.upsell2}</span>
+                  <span className="text-[10px] bg-violet-500/10 text-violet-500 px-2 py-0.5 rounded-full font-medium">Upsell 2</span>
+                </div>
+                <div className="flex items-baseline gap-3 mt-2">
+                  <span className="text-2xl font-bold font-mono-value text-foreground">{totals.vendas_upsell2}</span>
+                  <span className="text-xs text-muted-foreground">vendas</span>
+                  <span className="text-xs font-mono-value font-semibold text-kpi-positive ml-auto">{formatCurrency(totals.rev_upsell2)}</span>
+                </div>
+                <div className="flex items-center justify-between mt-1">
+                  <span className="text-[11px] text-muted-foreground">
+                    {totalVendasFunil > 0 ? ((totals.vendas_upsell2 / totalVendasFunil) * 100).toFixed(1) : 0}% do funil
+                  </span>
+                  <span className="text-[11px] text-muted-foreground">
+                    <span className="font-mono-value font-medium">{pctUpsell2.toFixed(1)}%</span> das vendas P1
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Upsell 3 — only if configured */}
+            {hasUpsell3 && (
+              <div className="rounded-lg bg-pink-500/5 p-3 border border-pink-500/20">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-semibold text-foreground">{slotLabels.upsell3}</span>
+                  <span className="text-[10px] bg-pink-500/10 text-pink-500 px-2 py-0.5 rounded-full font-medium">Upsell 3</span>
+                </div>
+                <div className="flex items-baseline gap-3 mt-2">
+                  <span className="text-2xl font-bold font-mono-value text-foreground">{totals.vendas_upsell3}</span>
+                  <span className="text-xs text-muted-foreground">vendas</span>
+                  <span className="text-xs font-mono-value font-semibold text-kpi-positive ml-auto">{formatCurrency(totals.rev_upsell3)}</span>
+                </div>
+                <div className="flex items-center justify-between mt-1">
+                  <span className="text-[11px] text-muted-foreground">
+                    {totalVendasFunil > 0 ? ((totals.vendas_upsell3 / totalVendasFunil) * 100).toFixed(1) : 0}% do funil
+                  </span>
+                  <span className="text-[11px] text-muted-foreground">
+                    <span className="font-mono-value font-medium">{pctUpsell3.toFixed(1)}%</span> das vendas P1
+                  </span>
+                </div>
+              </div>
+            )}
+
             <div className="mt-3 pt-3 border-t border-border text-xs text-center">
               <span className="text-muted-foreground">Total Faturamento:</span>{' '}
               <span className="font-mono-value font-bold text-foreground">{formatCurrency(totalRevenue)}</span>
