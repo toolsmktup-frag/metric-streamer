@@ -111,31 +111,55 @@ export default function CrmAnalytics() {
 
   const isLoading = loadingSellers || loadingLeads || loadingSales;
 
+  // Match sales to sellers by affiliate_name ↔ full_name (fuzzy first-name match)
+  function matchesSellerName(sellerName: string, affiliateName: string): boolean {
+    const sellerNorm = sellerName.toLowerCase().trim();
+    const affiliateNorm = affiliateName.toLowerCase().trim();
+    if (sellerNorm === affiliateNorm) return true;
+    // Match by first name (e.g. "Gabriela" matches "Gabriela Silva")
+    const sellerFirst = sellerNorm.split(' ')[0];
+    const affiliateFirst = affiliateNorm.split(' ')[0];
+    if (sellerFirst.length >= 3 && sellerFirst === affiliateFirst) return true;
+    // Check if one contains the other
+    if (sellerNorm.includes(affiliateNorm) || affiliateNorm.includes(sellerNorm)) return true;
+    return false;
+  }
+
   // Compute per-seller stats
   const sellerStats = useMemo(() => {
     return sellers.map(seller => {
+      const sellerName = seller.full_name || '';
       const sellerLeads = leads.filter(l => l.assigned_to === seller.id);
       const leadsCount = sellerLeads.length;
-      // No direct seller→sale link exists; show totals only if a single seller is selected
+
+      // Match sales by affiliate_name
+      const sellerSales = sellerName
+        ? sales.filter(s => s.affiliate_name && matchesSellerName(sellerName, s.affiliate_name))
+        : [];
+      const salesCount = sellerSales.length;
+      const revenue = sellerSales.reduce((sum, s) => sum + s.revenue, 0);
+      const commission = sellerSales.reduce((sum, s) => sum + (s.affiliate_commission || s.revenue * COMMISSION_RATE), 0);
+      const ticketMedio = salesCount > 0 ? revenue / salesCount : 0;
+      const conversionRate = leadsCount > 0 ? (salesCount / leadsCount) * 100 : 0;
+
       return {
         id: seller.id,
-        name: seller.full_name || 'Sem nome',
+        name: sellerName || 'Sem nome',
         leads: leadsCount,
         avgDailyLeads: leadsCount / daysInPeriod,
-        // Sales cannot be attributed to sellers - no seller_id on purchases
-        sales: null as number | null,
-        revenue: null as number | null,
-        commission: null as number | null,
-        ticketMedio: null as number | null,
+        sales: salesCount,
+        revenue,
+        commission,
+        ticketMedio,
         convTime: null as string | null,
-        conversionRate: null as number | null,
+        conversionRate,
       };
     }).sort((a, b) => {
       const aVal = (a as any)[tableSortKey] ?? -Infinity;
       const bVal = (b as any)[tableSortKey] ?? -Infinity;
       return tableSortDir === 'desc' ? bVal - aVal : aVal - bVal;
     });
-  }, [sellers, leads, daysInPeriod, tableSortKey, tableSortDir]);
+  }, [sellers, leads, sales, daysInPeriod, tableSortKey, tableSortDir]);
 
   // Global KPIs
   const totalLeads = leads.length;
