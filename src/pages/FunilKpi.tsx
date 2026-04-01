@@ -364,15 +364,17 @@ export default function FunilKpi() {
   // ─── Totals ───
   const totals = useMemo(() => {
     const t = { spend: 0, impressions: 0, clicks: 0, pageviews: 0, checkouts: 0,
-      vendas_principal: 0, vendas_bump1: 0, vendas_upsell1: 0,
-      rev_principal: 0, rev_bump1: 0, rev_upsell1: 0 };
+      vendas_principal: 0, vendas_bump1: 0, vendas_upsell1: 0, vendas_upsell2: 0, vendas_upsell3: 0,
+      rev_principal: 0, rev_bump1: 0, rev_upsell1: 0, rev_upsell2: 0, rev_upsell3: 0 };
     for (const r of dailyRows) {
       t.spend += r.spend; t.impressions += r.impressions; t.clicks += r.clicks;
       t.pageviews += r.pageviews; t.checkouts += r.checkouts;
       t.vendas_principal += r.vendas_principal; t.vendas_bump1 += r.vendas_bump1;
-      t.vendas_upsell1 += r.vendas_upsell1;
+      t.vendas_upsell1 += r.vendas_upsell1; t.vendas_upsell2 += r.vendas_upsell2;
+      t.vendas_upsell3 += r.vendas_upsell3;
       t.rev_principal += r.rev_principal; t.rev_bump1 += r.rev_bump1;
-      t.rev_upsell1 += r.rev_upsell1;
+      t.rev_upsell1 += r.rev_upsell1; t.rev_upsell2 += r.rev_upsell2;
+      t.rev_upsell3 += r.rev_upsell3;
     }
     return t;
   }, [dailyRows]);
