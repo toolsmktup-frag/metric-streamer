@@ -15,7 +15,7 @@ import { formatCurrency } from '@/lib/formatters';
 import { Target, ChevronLeft, ChevronRight, Save, Users } from 'lucide-react';
 
 export default function ConfigMetas() {
-  const { data: role } = useCurrentUserRole();
+  const { data: role, isLoading: roleLoading } = useCurrentUserRole();
   const isAdmin = role === 'admin' || role === 'gestor';
 
   const [selectedMonth, setSelectedMonth] = useState(new Date());
@@ -87,6 +87,15 @@ export default function ConfigMetas() {
     // Allow only numbers and decimals
     const clean = value.replace(/[^\d.,]/g, '').replace(',', '.');
     setGoalValues(prev => ({ ...prev, [userId]: clean }));
+  }
+
+  if (roleLoading) {
+    return (
+      <div className="p-6 space-y-4">
+        <Skeleton className="h-8 w-64" />
+        <Skeleton className="h-48 w-full" />
+      </div>
+    );
   }
 
   if (!isAdmin) {
