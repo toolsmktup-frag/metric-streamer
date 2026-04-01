@@ -165,7 +165,7 @@ export default function CrmAnalytics() {
   const totalLeads = leads.length;
   const totalSales = sales.length;
   const totalRevenue = sales.reduce((s, v) => s + v.revenue, 0);
-  const totalCommission = totalRevenue * COMMISSION_RATE;
+  const totalCommission = sales.reduce((s, v) => s + (v.affiliate_commission || v.revenue * COMMISSION_RATE), 0);
 
   // Filter by selected seller for leads
   const filteredLeads = selectedSeller === 'all' ? leads : leads.filter(l => l.assigned_to === selectedSeller);
