@@ -40,7 +40,8 @@ export default function FunilResumo() {
   const { data: campaigns = [], isLoading: loadingCampaigns } = useMetaCampaigns(id);
   const { data: kpiSummary, isLoading: loadingKpi } = useMetaKPISummary(id);
   const { data: dailyMetrics = [], isLoading: loadingDaily } = useMetaDailyInsights(id);
-  const { totalSales, byCampaign } = useAllSalesAggregation(id, 'webhook');
+  const funnelProducts = funnel?.funnel_products || [];
+  const { totalSales, byCampaign } = useAllSalesAggregation(id, 'webhook', funnelProducts);
   const { data: allSales = [] } = useAllSales(id, 'webhook');
   const syncMeta = useSyncMeta();
   const syncStatus = useSyncPollingRefetch();

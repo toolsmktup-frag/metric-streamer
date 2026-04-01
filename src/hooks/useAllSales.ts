@@ -4,6 +4,7 @@ import { useFilterStore } from '@/stores/filterStore';
 import type { SalesAggregation } from './useTictoData';
 import { classifyTransaction as classifySale } from '@/lib/classifyTransaction';
 import { toLocalDate, dayStartISO, dayEndISO } from '@/lib/dateUtils';
+import type { FunnelProduct } from './useFunnels';
 
 const SHARED_QUERY_OPTIONS = {
   staleTime: 30 * 1000,
@@ -104,7 +105,41 @@ function emptySalesAgg(): SalesAggregation {
  * Agrega vendas de todas as plataformas por campanha / adset / ad.
  * Substitui useSalesAggregation para o Resumo Geral e páginas de funil.
  */
-export function useAllSalesAggregation(funnelId?: string | null, ingestionType?: string | null) {
+/**
+ * Classifica uma venda usando funnel_products dinâmicos (se disponíveis)
+ * ou fallback para classificação hardcoded.
+ */
+function classifyWithProducts(
+  tx: { product_name?: string | null; product_id?: string | null },
+  funnelProducts?: FunnelProduct[]
+): string {
+  if (funnelProducts && funnelProducts.length > 0) {
+    const txProductId = String(tx.product_id || '').trim();
+    const name = (tx.product_name || '').toLowerCase();
+    for (const fp of funnelProducts) {
+      if (fp.product_id && txProductId && String(fp.product_id) === txProductId) {
+        if (fp.role === 'front') return 'principal';
+        if (fp.role === 'order_bump') return 'bump1';
+        if (fp.role === 'upsell1') return 'upsell1';
+        return 'other';
+      }
+      if (name && fp.product_name_contains && name.includes(fp.product_name_contains.toLowerCase())) {
+        if (fp.role === 'front') return 'principal';
+        if (fp.role === 'order_bump') return 'bump1';
+        if (fp.role === 'upsell1') return 'upsell1';
+        return 'other';
+      }
+    }
+    return 'other';
+  }
+  return classifySale(tx);
+}
+
+/**
+ * Agrega vendas de todas as plataformas por campanha / adset / ad.
+ * Quando funnelProducts é fornecido, usa classificação dinâmica.
+ */
+export function useAllSalesAggregation(funnelId?: string | null, ingestionType?: string | null, funnelProducts?: FunnelProduct[]) {
   const { data: allSales = [] } = useAllSales(funnelId, ingestionType);
   const confirmed = allSales.filter(t => t.status === 'authorized');
 
@@ -121,7 +156,7 @@ export function useAllSalesAggregation(funnelId?: string | null, ingestionType?:
   }
 
   for (const tx of confirmed) {
-    const type = classifySale(tx);
+    const type = classifyWithProducts(tx, funnelProducts);
     if (tx.meta_campaign_id) {
       if (!byCampaign[tx.meta_campaign_id]) byCampaign[tx.meta_campaign_id] = emptySalesAgg();
       addToAgg(byCampaign[tx.meta_campaign_id], tx.revenue, type);
@@ -139,12 +174,12 @@ export function useAllSalesAggregation(funnelId?: string | null, ingestionType?:
   const organicSales = emptySalesAgg();
   const organicTransactions = confirmed.filter(t => !t.is_paid_traffic);
   for (const tx of organicTransactions) {
-    addToAgg(organicSales, tx.revenue, classifySale(tx));
+    addToAgg(organicSales, tx.revenue, classifyWithProducts(tx, funnelProducts));
   }
 
   const totalSales = emptySalesAgg();
   for (const tx of confirmed) {
-    addToAgg(totalSales, tx.revenue, classifySale(tx));
+    addToAgg(totalSales, tx.revenue, classifyWithProducts(tx, funnelProducts));
   }
 
   return { byCampaign, byAdset, byAd, organicSales, totalSales, organicTransactions };
