@@ -71,19 +71,32 @@ export default function CrmAnalytics() {
     },
   });
 
-  // Fetch leads in period
+  // Fetch leads assigned to sellers (all leads with assigned_to set, not just created in period)
   const { data: leads = [], isLoading: loadingLeads } = useQuery({
     queryKey: ['crm-leads', dateFrom, dateTo],
     queryFn: async () => {
       const { data: orgId } = await (supabase as any).rpc('get_user_org_id');
       if (!orgId) return [];
-      const { data } = await (supabase as any)
+      // Fetch leads that were either created OR updated (assigned) within the period
+      const { data: createdInPeriod } = await (supabase as any)
         .from('leads')
-        .select('id, assigned_to, created_at')
+        .select('id, assigned_to, created_at, updated_at')
         .eq('organization_id', orgId)
         .gte('created_at', dateFrom)
         .lte('created_at', dateTo);
-      return (data || []) as Array<{ id: string; assigned_to: string | null; created_at: string }>;
+      const { data: updatedInPeriod } = await (supabase as any)
+        .from('leads')
+        .select('id, assigned_to, created_at, updated_at')
+        .eq('organization_id', orgId)
+        .not('assigned_to', 'is', null)
+        .gte('updated_at', dateFrom)
+        .lte('updated_at', dateTo);
+      // Merge and deduplicate
+      const map = new Map<string, any>();
+      for (const l of [...(createdInPeriod || []), ...(updatedInPeriod || [])]) {
+        map.set(l.id, l);
+      }
+      return Array.from(map.values()) as Array<{ id: string; assigned_to: string | null; created_at: string; updated_at: string }>;
     },
   });
 
