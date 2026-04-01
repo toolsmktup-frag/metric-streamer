@@ -97,6 +97,7 @@ function emptySalesAgg(): SalesAggregation {
     front_sales: 0, front_revenue: 0,
     bump_sales: 0, bump_revenue: 0,
     upsell_sales: 0, upsell_revenue: 0,
+    downsell_sales: 0, downsell_revenue: 0,
   };
 }
 
@@ -121,12 +122,14 @@ function classifyWithProducts(
         if (fp.role === 'front') return 'principal';
         if (fp.role === 'order_bump') return 'bump1';
         if (fp.role === 'upsell1') return 'upsell1';
+        if (fp.role === 'downsell') return 'downsell';
         return 'other';
       }
       if (name && fp.product_name_contains && name.includes(fp.product_name_contains.toLowerCase())) {
         if (fp.role === 'front') return 'principal';
         if (fp.role === 'order_bump') return 'bump1';
         if (fp.role === 'upsell1') return 'upsell1';
+        if (fp.role === 'downsell') return 'downsell';
         return 'other';
       }
     }
@@ -153,6 +156,7 @@ export function useAllSalesAggregation(funnelId?: string | null, ingestionType?:
     if (type === 'principal')  { agg.front_sales++;  agg.front_revenue  += revenue; }
     else if (type === 'bump1') { agg.bump_sales++;   agg.bump_revenue   += revenue; }
     else if (type === 'upsell1') { agg.upsell_sales++; agg.upsell_revenue += revenue; }
+    else if (type === 'downsell') { agg.downsell_sales++; agg.downsell_revenue += revenue; }
   }
 
   for (const tx of confirmed) {

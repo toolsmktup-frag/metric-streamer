@@ -122,6 +122,15 @@ const PerformanceTable = React.memo(function PerformanceTable({ data, level = 'c
         size: 70,
       },
       {
+        accessorKey: 'downsell_sales',
+        header: 'Downsell',
+        cell: ({ getValue }) => {
+          const v = getValue() as number;
+          return <span className="font-mono-value">{v > 0 ? v : '—'}</span>;
+        },
+        size: 80,
+      },
+      {
         accessorKey: 'sales',
         header: 'Total Vendas',
         cell: ({ getValue }) => <span className="font-mono-value font-semibold">{getValue() as number}</span>,
@@ -234,6 +243,7 @@ const PerformanceTable = React.memo(function PerformanceTable({ data, level = 'c
     const front_sales = data.reduce((s, c) => s + ((c as any).front_sales || 0), 0);
     const bump_sales = data.reduce((s, c) => s + ((c as any).bump_sales || 0), 0);
     const upsell_sales = data.reduce((s, c) => s + ((c as any).upsell_sales || 0), 0);
+    const downsell_sales = data.reduce((s, c) => s + ((c as any).downsell_sales || 0), 0);
     const impressions = data.reduce((s, c) => s + c.impressions, 0);
     const clicks = data.reduce((s, c) => s + c.clicks, 0);
     const link_clicks = data.reduce((s, c) => s + c.link_clicks, 0);
@@ -241,7 +251,7 @@ const PerformanceTable = React.memo(function PerformanceTable({ data, level = 'c
     const initiate_checkout = data.reduce((s, c) => s + (c.initiate_checkout || 0), 0);
     const video_views = data.reduce((s, c) => s + (c.video_views || 0), 0);
     return {
-      spend, revenue, sales, front_sales, bump_sales, upsell_sales, impressions, link_clicks,
+      spend, revenue, sales, front_sales, bump_sales, upsell_sales, downsell_sales, impressions, link_clicks,
       landing_page_views, initiate_checkout,
       cpa: sales > 0 ? spend / sales : 0,
       roas: spend > 0 ? revenue / spend : 0,

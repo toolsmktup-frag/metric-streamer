@@ -36,13 +36,15 @@ export interface SalesAggregation {
   bump_revenue: number;
   upsell_sales: number;
   upsell_revenue: number;
+  downsell_sales: number;
+  downsell_revenue: number;
 }
 
 // classifyTransaction is imported from @/lib/classifyTransaction
 export { classifyTransaction };
 
 function emptySalesAgg(): SalesAggregation {
-  return { sales_count: 0, revenue: 0, front_sales: 0, front_revenue: 0, bump_sales: 0, bump_revenue: 0, upsell_sales: 0, upsell_revenue: 0 };
+  return { sales_count: 0, revenue: 0, front_sales: 0, front_revenue: 0, bump_sales: 0, bump_revenue: 0, upsell_sales: 0, upsell_revenue: 0, downsell_sales: 0, downsell_revenue: 0 };
 }
 
 export interface TictoTransaction {
@@ -129,6 +131,7 @@ export function useSalesAggregation(funnelId?: string | null) {
     if (type === 'principal') { agg.front_sales++; agg.front_revenue += revenue; }
     else if (type === 'bump1') { agg.bump_sales++; agg.bump_revenue += revenue; }
     else if (type === 'upsell1') { agg.upsell_sales++; agg.upsell_revenue += revenue; }
+    else if (type === 'downsell') { agg.downsell_sales++; agg.downsell_revenue += revenue; }
   }
 
   for (const tx of confirmed) {
