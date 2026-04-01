@@ -151,6 +151,70 @@ export default function CrmAnalytics() {
     },
   });
 
+  // Fetch leads currently in "Não fechou" stages (real lost leads from Kanban)
+  const { data: lostLeadsData = { lostBySellerCount: {} as Record<string, number>, lostBySellerValue: {} as Record<string, number> } } = useQuery({
+    queryKey: ['crm-lost-leads', dateFrom, dateTo],
+    queryFn: async () => {
+      const { data: orgId } = await (supabase as any).rpc('get_user_org_id');
+      if (!orgId) return { lostBySellerCount: {}, lostBySellerValue: {} };
+
+      // 1) Find all stages named "Não fechou" (case-insensitive)
+      const { data: stages } = await (supabase as any)
+        .from('lead_funnel_stages')
+        .select('id, name');
+      const lostStageIds = (stages || [])
+        .filter((s: any) => (s.name || '').toLowerCase().includes('não fechou') || (s.name || '').toLowerCase().includes('nao fechou'))
+        .map((s: any) => s.id);
+
+      if (lostStageIds.length === 0) return { lostBySellerCount: {}, lostBySellerValue: {} };
+
+      // 2) Find leads in those stages
+      const { data: lostPositions } = await (supabase as any)
+        .from('lead_stage_positions')
+        .select('lead_id, stage_id, entered_at')
+        .in('stage_id', lostStageIds);
+
+      // Filter by date range (entered_at)
+      const filtered = (lostPositions || []).filter((p: any) =>
+        p.entered_at >= dateFrom && p.entered_at <= dateTo
+      );
+
+      const lostLeadIds = [...new Set(filtered.map((p: any) => p.lead_id))];
+      if (lostLeadIds.length === 0) return { lostBySellerCount: {}, lostBySellerValue: {} };
+
+      // 3) Get seller assignment for those leads
+      const lostLeadSeller = new Map<string, string>();
+      for (let i = 0; i < lostLeadIds.length; i += 500) {
+        const batch = lostLeadIds.slice(i, i + 500);
+        const { data: batchLeads } = await (supabase as any)
+          .from('leads')
+          .select('id, assigned_to')
+          .eq('organization_id', orgId)
+          .not('assigned_to', 'is', null)
+          .in('id', batch);
+        for (const l of batchLeads || []) {
+          lostLeadSeller.set(l.id, l.assigned_to);
+        }
+      }
+
+      // Count per seller
+      const lostBySellerCount: Record<string, number> = {};
+      const lostLeadIdsBySeller: Record<string, Set<string>> = {};
+      for (const lid of lostLeadIds as string[]) {
+        const sellerId = lostLeadSeller.get(lid as string);
+        if (!sellerId) continue;
+        if (!lostLeadIdsBySeller[sellerId]) lostLeadIdsBySeller[sellerId] = new Set();
+        (lostLeadIdsBySeller[sellerId] as Set<string>).add(lid as string);
+      }
+      for (const [sid, set] of Object.entries(lostLeadIdsBySeller)) {
+        lostBySellerCount[sid] = set.size;
+      }
+
+      return { lostBySellerCount, lostBySellerValue: {} };
+    },
+  });
+
+
   // Fetch sales from unified view v_all_sales (with affiliate info)
   const { data: sales = [], isLoading: loadingSales } = useQuery({
     queryKey: ['crm-sales', dateFrom, dateTo],
@@ -202,7 +266,8 @@ export default function CrmAnalytics() {
       const ticketMedio = salesCount > 0 ? revenue / salesCount : 0;
       const conversionRate = leadsCount > 0 ? (salesCount / leadsCount) * 100 : 0;
 
-      const lostLeads = Math.max(0, leadsCount - salesCount);
+      // Use real Kanban "Não fechou" data instead of estimation
+      const lostLeads = lostLeadsData.lostBySellerCount[seller.id] || 0;
       const lostValue = lostLeads * ticketMedio;
 
       return {
@@ -224,7 +289,7 @@ export default function CrmAnalytics() {
       const bVal = (b as any)[tableSortKey] ?? -Infinity;
       return tableSortDir === 'desc' ? bVal - aVal : aVal - bVal;
     });
-  }, [sellers, leadActivityData, sales, daysInPeriod, tableSortKey, tableSortDir]);
+  }, [sellers, leadActivityData, sales, daysInPeriod, tableSortKey, tableSortDir, lostLeadsData]);
 
   // KPIs filtered by selected seller
   const kpiStats = useMemo(() => {
