@@ -233,14 +233,22 @@ export default function CrmAnalytics() {
       const totalSales = sellerStats.reduce((s, v) => s + v.sales, 0);
       const totalRevenue = sellerStats.reduce((s, v) => s + v.revenue, 0);
       const totalCommission = sellerStats.reduce((s, v) => s + v.commission, 0);
-      return { totalLeads, totalSales, totalRevenue, totalCommission };
+      const totalLostLeads = sellerStats.reduce((s, v) => s + v.lostLeads, 0);
+      const totalLostValue = sellerStats.reduce((s, v) => s + v.lostValue, 0);
+      const avgLostValue = totalLostLeads > 0 ? totalLostValue / totalLostLeads : 0;
+      return { totalLeads, totalSales, totalRevenue, totalCommission, totalLostLeads, totalLostValue, avgLostValue };
     }
     const stat = sellerStats.find(s => s.id === selectedSeller);
+    const lostLeads = stat?.lostLeads ?? 0;
+    const lostValue = stat?.lostValue ?? 0;
     return {
       totalLeads: stat?.leads ?? 0,
       totalSales: stat?.sales ?? 0,
       totalRevenue: stat?.revenue ?? 0,
       totalCommission: stat?.commission ?? 0,
+      totalLostLeads: lostLeads,
+      totalLostValue: lostValue,
+      avgLostValue: lostLeads > 0 ? lostValue / lostLeads : 0,
     };
   }, [sellerStats, selectedSeller]);
 
