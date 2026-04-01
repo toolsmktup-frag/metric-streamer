@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 export interface FunnelProduct {
   id: string;
   funnel_id: string;
+  product_id: string | null;
   product_name_contains: string;
   role: 'front' | 'order_bump' | 'upsell1' | 'upsell2' | 'upsell3' | 'downsell';
   display_name: string | null;
