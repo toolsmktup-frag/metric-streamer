@@ -25,6 +25,7 @@ import {
   Pencil,
   BarChart3,
   Zap,
+  Trophy,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useFunnels } from '@/hooks/useFunnels';
@@ -56,6 +57,7 @@ const TOOL_ITEMS = [
 ];
 
 const LEAD_ITEMS = [
+  { path: '/leads/metas',     label: 'Minhas Metas',    icon: Trophy },
   { path: '/leads/dashboard', label: 'Dashboard Leads', icon: LayoutDashboard },
   { path: '/leads',           label: 'Todos os Leads',  icon: Users },
   { path: '/lead-campaigns',  label: 'Funis de Leads',  icon: Target },

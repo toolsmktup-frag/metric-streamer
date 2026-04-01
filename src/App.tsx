@@ -43,6 +43,7 @@ import WzAutomacoes from "./pages/WzAutomacoes";
 import WzFlowCanvas from "./pages/WzFlowCanvas";
 import WzInstancias from "./pages/WzInstancias";
 import WzExecucoes from "./pages/WzExecucoes";
+import MinhasMetas from "./pages/MinhasMetas";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -93,6 +94,7 @@ const App = () => (
           <Route path="/funis/:id/campanhas" element={<Protected><FunilCampanhas /></Protected>} />
           <Route path="/funis/:id/criativos" element={<Protected><FunilCriativos /></Protected>} />
           {/* Leads */}
+          <Route path="/leads/metas" element={<Protected><MinhasMetas /></Protected>} />
           <Route path="/leads/dashboard" element={<Protected><LeadsDashboard /></Protected>} />
           <Route path="/leads" element={<Protected><LeadsList /></Protected>} />
           <Route path="/leads/fontes" element={<Protected><LeadsSources /></Protected>} />
