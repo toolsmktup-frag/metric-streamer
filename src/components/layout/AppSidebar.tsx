@@ -57,11 +57,12 @@ const TOOL_ITEMS = [
 ];
 
 const LEAD_ITEMS = [
-  { path: '/leads/metas',     label: 'Minhas Metas',    icon: Trophy },
-  { path: '/leads/dashboard', label: 'Dashboard Leads', icon: LayoutDashboard },
-  { path: '/leads',           label: 'Todos os Leads',  icon: Users },
-  { path: '/lead-campaigns',  label: 'Funis de Leads',  icon: Target },
-  { path: '/leads/fontes',    label: 'Fontes / UTMs',   icon: Globe },
+  { path: '/leads/metas',          label: 'Minhas Metas',          icon: Trophy },
+  { path: '/leads/configurar-metas', label: 'Config. de Metas',   icon: Settings },
+  { path: '/leads/dashboard',      label: 'Dashboard Leads',      icon: LayoutDashboard },
+  { path: '/leads',                label: 'Todos os Leads',       icon: Users },
+  { path: '/lead-campaigns',      label: 'Funis de Leads',       icon: Target },
+  { path: '/leads/fontes',        label: 'Fontes / UTMs',        icon: Globe },
 ];
 
 const WHATSAPP_ITEM = { path: '/whatsapp', label: 'WhatsApp', icon: MessageCircle };
