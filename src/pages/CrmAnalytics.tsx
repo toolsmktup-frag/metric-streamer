@@ -266,7 +266,8 @@ export default function CrmAnalytics() {
       const ticketMedio = salesCount > 0 ? revenue / salesCount : 0;
       const conversionRate = leadsCount > 0 ? (salesCount / leadsCount) * 100 : 0;
 
-      const lostLeads = Math.max(0, leadsCount - salesCount);
+      // Use real Kanban "Não fechou" data instead of estimation
+      const lostLeads = lostLeadsData.lostBySellerCount[seller.id] || 0;
       const lostValue = lostLeads * ticketMedio;
 
       return {
