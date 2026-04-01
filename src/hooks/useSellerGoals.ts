@@ -7,6 +7,8 @@ export interface SellerGoal {
   user_id: string;
   month: string;
   goal_amount: number;
+  goal_amount_2: number;
+  goal_amount_3: number;
 }
 
 export function useSellerGoal(userId?: string) {
@@ -23,7 +25,11 @@ export function useSellerGoal(userId?: string) {
         .eq('month', currentMonth)
         .maybeSingle();
       if (error) throw error;
-      return data as SellerGoal | null;
+      return data ? {
+        ...data,
+        goal_amount_2: data.goal_amount_2 || 0,
+        goal_amount_3: data.goal_amount_3 || 0,
+      } as SellerGoal : null;
     },
     enabled: !!userId,
     staleTime: 60 * 1000,
@@ -41,7 +47,11 @@ export function useAllSellerGoals(month?: string) {
         .select('*')
         .eq('month', m);
       if (error) throw error;
-      return (data || []) as SellerGoal[];
+      return (data || []).map((g: any) => ({
+        ...g,
+        goal_amount_2: g.goal_amount_2 || 0,
+        goal_amount_3: g.goal_amount_3 || 0,
+      })) as SellerGoal[];
     },
     staleTime: 60 * 1000,
   });
