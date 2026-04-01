@@ -43,7 +43,7 @@ export default function FunilCampanhas() {
   // Merge Ticto sales data into campaigns/adsets/ads
   const campaignsWithSales = useMemo(() => {
     return campaigns.map(c => {
-      const sales = byCampaign[c.id] || { sales_count: 0, revenue: 0, front_sales: 0, front_revenue: 0, bump_sales: 0, bump_revenue: 0, upsell_sales: 0, upsell_revenue: 0 };
+      const sales = byCampaign[c.id] || { sales_count: 0, revenue: 0, front_sales: 0, front_revenue: 0, bump_sales: 0, bump_revenue: 0, upsell_sales: 0, upsell_revenue: 0, downsell_sales: 0, downsell_revenue: 0 };
       return {
         ...c,
         sales: sales.sales_count,
@@ -51,6 +51,7 @@ export default function FunilCampanhas() {
         front_sales: sales.front_sales,
         bump_sales: sales.bump_sales,
         upsell_sales: sales.upsell_sales,
+        downsell_sales: sales.downsell_sales,
         profit: sales.revenue - c.spend,
         roas: c.spend > 0 ? sales.revenue / c.spend : 0,
         cpa: sales.sales_count > 0 ? c.spend / sales.sales_count : 0,
