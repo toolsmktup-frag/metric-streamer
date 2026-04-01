@@ -87,13 +87,13 @@ export default function CrmAnalytics() {
     },
   });
 
-  // Fetch sales from unified view v_all_sales
+  // Fetch sales from unified view v_all_sales (with affiliate info)
   const { data: sales = [], isLoading: loadingSales } = useQuery({
     queryKey: ['crm-sales', dateFrom, dateTo],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from('v_all_sales')
-        .select('id, revenue, product_name, purchased_at, status')
+        .select('id, revenue, product_name, purchased_at, status, affiliate_name, affiliate_commission')
         .eq('status', 'authorized')
         .gte('purchased_at', dateFrom)
         .lte('purchased_at', dateTo);
@@ -103,6 +103,8 @@ export default function CrmAnalytics() {
         revenue: Number(s.revenue) || 0,
         product_name: s.product_name || '',
         date: s.purchased_at || '',
+        affiliate_name: s.affiliate_name || null,
+        affiliate_commission: Number(s.affiliate_commission) || 0,
       }));
     },
   });
