@@ -811,6 +811,8 @@ export default function FunilKpi() {
                 <th className="px-3 py-2.5 text-right font-semibold text-foreground whitespace-nowrap border-l border-border">Vendas P1</th>
                 <th className="px-3 py-2.5 text-right font-semibold text-kpi-warning whitespace-nowrap">Bump</th>
                 <th className="px-3 py-2.5 text-right font-semibold text-blue-500 whitespace-nowrap">Upsell</th>
+                {hasUpsell2 && <th className="px-3 py-2.5 text-right font-semibold text-violet-500 whitespace-nowrap">Up2</th>}
+                {hasUpsell3 && <th className="px-3 py-2.5 text-right font-semibold text-pink-500 whitespace-nowrap">Up3</th>}
                 <th className="px-3 py-2.5 text-right font-semibold text-muted-foreground whitespace-nowrap border-l border-border">CTR</th>
                 <th className="px-3 py-2.5 text-right font-semibold text-muted-foreground whitespace-nowrap">CPC</th>
                 <th className="px-3 py-2.5 text-right font-semibold text-muted-foreground whitespace-nowrap">PV/Cliq.</th>
