@@ -328,7 +328,7 @@ export default function FunilKpi() {
       const meta = metaByDate[date] || { spend: 0, impressions: 0, link_clicks: 0, landing_page_views: 0, checkouts: 0 };
       const dayTx = approved.filter((t: any) => t.purchased_at?.startsWith(date));
 
-      let vp = 0, vb1 = 0, vu1 = 0, rp = 0, rb1 = 0, ru1 = 0;
+      let vp = 0, vb1 = 0, vu1 = 0, vu2 = 0, vu3 = 0, rp = 0, rb1 = 0, ru1 = 0, ru2 = 0, ru3 = 0;
       for (const tx of dayTx) {
         const role = classifyByFunnelProducts(tx, funnelProducts);
         const slot = role ? roleToSlot(role) : null;
@@ -336,6 +336,8 @@ export default function FunilKpi() {
         if (slot === 'principal') { vp++; rp += rev; }
         else if (slot === 'bump1') { vb1++; rb1 += rev; }
         else if (slot === 'upsell1') { vu1++; ru1 += rev; }
+        else if (slot === 'upsell2') { vu2++; ru2 += rev; }
+        else if (slot === 'upsell3') { vu3++; ru3 += rev; }
       }
 
       return {
@@ -348,9 +350,13 @@ export default function FunilKpi() {
         vendas_principal: vp,
         vendas_bump1: vb1,
         vendas_upsell1: vu1,
+        vendas_upsell2: vu2,
+        vendas_upsell3: vu3,
         rev_principal: rp,
         rev_bump1: rb1,
         rev_upsell1: ru1,
+        rev_upsell2: ru2,
+        rev_upsell3: ru3,
       };
     });
   }, [metaInsights, approved, allDays, funnelProducts]);
