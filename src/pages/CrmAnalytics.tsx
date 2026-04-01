@@ -457,7 +457,56 @@ export default function CrmAnalytics() {
         />
       </div>
 
-      {/* Performance Table */}
+      {/* Vendas Perdidas */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <Card className="border-destructive/30 bg-destructive/5">
+          <CardContent className="pt-4 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-destructive/10">
+                <UserX className="h-5 w-5 text-destructive" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Contatos que Não Fecharam</p>
+                <p className="text-2xl font-semibold font-mono-value text-destructive">
+                  {isLoading ? '...' : formatNumber(kpiStats.totalLostLeads)}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-destructive/30 bg-destructive/5">
+          <CardContent className="pt-4 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-destructive/10">
+                <DollarSign className="h-5 w-5 text-destructive" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Valor Total Perdido (estimado)</p>
+                <p className="text-2xl font-semibold font-mono-value text-destructive">
+                  {isLoading ? '...' : formatCurrency(kpiStats.totalLostValue)}
+                </p>
+                <p className="text-xs text-muted-foreground">Baseado no ticket médio das vendedoras</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-destructive/30 bg-destructive/5">
+          <CardContent className="pt-4 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-destructive/10">
+                <DollarSign className="h-5 w-5 text-destructive" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Valor Médio Perdido por Lead</p>
+                <p className="text-2xl font-semibold font-mono-value text-destructive">
+                  {isLoading ? '...' : formatCurrency(kpiStats.avgLostValue)}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
       <Card>
         <CardHeader>
           <CardTitle className="text-lg">Performance por Vendedora</CardTitle>
