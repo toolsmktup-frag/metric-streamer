@@ -292,6 +292,8 @@ Deno.serve(async (req) => {
       ingestion_type: 'webhook',
       source_platform: 'ticto',
       updated_at: new Date().toISOString(),
+      affiliate_name: affiliateName,
+      affiliate_commission: affiliateCommission,
     };
 
     // ── Save: select+insert/update manual ──
