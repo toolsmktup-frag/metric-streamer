@@ -1,0 +1,106 @@
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { startOfMonth, endOfDay, startOfDay, subDays, format, differenceInDays } from 'date-fns';
+
+export interface SellerStats {
+  monthSales: number;
+  monthRevenue: number;
+  monthCommission: number;
+  todaySales: number;
+  todayRevenue: number;
+  yesterdayRevenue: number;
+  todayLeads: number;
+  avgDailyLeads: number;
+  monthConversion: number;
+  prevMonthConversion: number;
+  streak: number;
+  salesByDay: { date: string; revenue: number; count: number }[];
+}
+
+async function fetchSellerStats(sellerName: string): Promise<SellerStats> {
+  const now = new Date();
+  const monthStart = startOfMonth(now);
+  const today = startOfDay(now);
+  const yesterday = startOfDay(subDays(now, 1));
+
+  // Fetch month sales for this seller
+  const { data: monthData } = await (supabase as any)
+    .from('v_all_sales')
+    .select('purchased_at, revenue, affiliate_commission, status')
+    .ilike('affiliate_name', `%${sellerName}%`)
+    .gte('purchased_at', monthStart.toISOString())
+    .lte('purchased_at', endOfDay(now).toISOString());
+
+  const sales = (monthData || []) as any[];
+  const approved = sales.filter((s: any) => s.status === 'authorized');
+
+  const monthSales = approved.length;
+  const monthRevenue = approved.reduce((sum: number, s: any) => sum + (s.revenue || 0), 0);
+  const monthCommission = approved.reduce((sum: number, s: any) => sum + (s.affiliate_commission || 0), 0);
+
+  // Today
+  const todayStr = format(today, 'yyyy-MM-dd');
+  const yesterdayStr = format(yesterday, 'yyyy-MM-dd');
+
+  const todaySales = approved.filter((s: any) => s.purchased_at?.startsWith(todayStr));
+  const yesterdaySales = approved.filter((s: any) => s.purchased_at?.startsWith(yesterdayStr));
+
+  // Sales by day for streak
+  const dayMap = new Map<string, { revenue: number; count: number }>();
+  for (const s of approved) {
+    const d = (s.purchased_at || '').slice(0, 10);
+    const entry = dayMap.get(d) || { revenue: 0, count: 0 };
+    entry.revenue += s.revenue || 0;
+    entry.count++;
+    dayMap.set(d, entry);
+  }
+
+  // Streak calculation
+  let streak = 0;
+  let checkDate = new Date(today);
+  // If no sales today, start checking from yesterday
+  if (!dayMap.has(todayStr)) {
+    checkDate = new Date(yesterday);
+  }
+  while (true) {
+    const d = format(checkDate, 'yyyy-MM-dd');
+    if (dayMap.has(d)) {
+      streak++;
+      checkDate = subDays(checkDate, 1);
+    } else {
+      break;
+    }
+  }
+
+  const salesByDay = Array.from(dayMap.entries())
+    .map(([date, v]) => ({ date, ...v }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  // Avg daily leads (simplified - use sales as proxy)
+  const daysInMonth = differenceInDays(now, monthStart) + 1;
+
+  return {
+    monthSales,
+    monthRevenue,
+    monthCommission,
+    todaySales: todaySales.reduce((s: number, t: any) => s + (t.revenue || 0), 0),
+    todayRevenue: todaySales.reduce((s: number, t: any) => s + (t.revenue || 0), 0),
+    yesterdayRevenue: yesterdaySales.reduce((s: number, t: any) => s + (t.revenue || 0), 0),
+    todayLeads: todaySales.length,
+    avgDailyLeads: daysInMonth > 0 ? monthSales / daysInMonth : 0,
+    monthConversion: 0, // Needs leads data
+    prevMonthConversion: 0,
+    streak,
+    salesByDay,
+  };
+}
+
+export function useSellerStats(sellerName?: string) {
+  return useQuery({
+    queryKey: ['seller-stats', sellerName],
+    queryFn: () => fetchSellerStats(sellerName!),
+    enabled: !!sellerName,
+    staleTime: 30 * 1000,
+    refetchOnWindowFocus: true,
+  });
+}
