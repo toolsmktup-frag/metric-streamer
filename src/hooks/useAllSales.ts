@@ -97,6 +97,7 @@ function emptySalesAgg(): SalesAggregation {
     front_sales: 0, front_revenue: 0,
     bump_sales: 0, bump_revenue: 0,
     upsell_sales: 0, upsell_revenue: 0,
+    downsell_sales: 0, downsell_revenue: 0,
   };
 }
 
