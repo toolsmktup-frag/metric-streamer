@@ -12,7 +12,11 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatCurrency } from '@/lib/formatters';
-import { Target, ChevronLeft, ChevronRight, Save, Users } from 'lucide-react';
+import { Target, ChevronLeft, ChevronRight, Save, Users, Trophy } from 'lucide-react';
+
+const GOAL_LABELS = ['Meta 1', 'Meta 2', 'Meta 3'] as const;
+const GOAL_COLORS = ['border-primary/40', 'border-amber-400/40', 'border-emerald-400/40'];
+const GOAL_EMOJIS = ['🥉', '🥈', '🥇'];
 
 export default function ConfigMetas() {
   const { data: role, isLoading: roleLoading } = useCurrentUserRole();
@@ -26,26 +30,28 @@ export default function ConfigMetas() {
   const { data: goals = [], isLoading: loadingGoals } = useAllSellerGoals(monthKey);
   const queryClient = useQueryClient();
 
-  // Only show active sellers
   const sellers = useMemo(
     () => members.filter(m => m.role === 'vendedor' && m.status === 'active'),
     [members]
   );
 
-  // Local state for goal inputs
-  const [goalValues, setGoalValues] = useState<Record<string, string>>({});
+  // Local state: { [userId]: { goal1: string, goal2: string, goal3: string } }
+  const [goalValues, setGoalValues] = useState<Record<string, { goal1: string; goal2: string; goal3: string }>>({});
 
-  // Sync from DB when goals load
   React.useEffect(() => {
-    const vals: Record<string, string> = {};
+    const vals: Record<string, { goal1: string; goal2: string; goal3: string }> = {};
     for (const g of goals) {
-      vals[g.user_id] = String(g.goal_amount);
+      vals[g.user_id] = {
+        goal1: g.goal_amount ? String(g.goal_amount) : '',
+        goal2: g.goal_amount_2 ? String(g.goal_amount_2) : '',
+        goal3: g.goal_amount_3 ? String(g.goal_amount_3) : '',
+      };
     }
     setGoalValues(vals);
   }, [goals]);
 
   const saveMutation = useMutation({
-    mutationFn: async (entries: { user_id: string; amount: number }[]) => {
+    mutationFn: async (entries: { user_id: string; goal1: number; goal2: number; goal3: number }[]) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Não autenticado');
 
@@ -56,7 +62,9 @@ export default function ConfigMetas() {
             {
               user_id: entry.user_id,
               month: monthKey,
-              goal_amount: entry.amount,
+              goal_amount: entry.goal1,
+              goal_amount_2: entry.goal2,
+              goal_amount_3: entry.goal3,
               created_by: user.id,
               updated_at: new Date().toISOString(),
             },
@@ -76,17 +84,24 @@ export default function ConfigMetas() {
   });
 
   function handleSave() {
-    const entries = sellers.map(s => ({
-      user_id: s.id,
-      amount: parseFloat(goalValues[s.id] || '0') || 0,
-    }));
+    const entries = sellers.map(s => {
+      const v = goalValues[s.id] || { goal1: '0', goal2: '0', goal3: '0' };
+      return {
+        user_id: s.id,
+        goal1: parseFloat(v.goal1 || '0') || 0,
+        goal2: parseFloat(v.goal2 || '0') || 0,
+        goal3: parseFloat(v.goal3 || '0') || 0,
+      };
+    });
     saveMutation.mutate(entries);
   }
 
-  function handleValueChange(userId: string, value: string) {
-    // Allow only numbers and decimals
+  function handleValueChange(userId: string, field: 'goal1' | 'goal2' | 'goal3', value: string) {
     const clean = value.replace(/[^\d.,]/g, '').replace(',', '.');
-    setGoalValues(prev => ({ ...prev, [userId]: clean }));
+    setGoalValues(prev => ({
+      ...prev,
+      [userId]: { ...(prev[userId] || { goal1: '', goal2: '', goal3: '' }), [field]: clean },
+    }));
   }
 
   if (roleLoading) {
@@ -109,7 +124,7 @@ export default function ConfigMetas() {
   }
 
   return (
-    <div className="p-4 md:p-6 space-y-6 max-w-3xl mx-auto">
+    <div className="p-4 md:p-6 space-y-6 max-w-4xl mx-auto">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
@@ -117,7 +132,7 @@ export default function ConfigMetas() {
             Configurações de Metas
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Defina a meta mensal de faturamento para cada vendedora
+            Defina 3 metas progressivas para cada vendedora
           </p>
         </div>
       </div>
@@ -126,19 +141,11 @@ export default function ConfigMetas() {
       <Card>
         <CardContent className="p-4">
           <div className="flex items-center justify-between">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setSelectedMonth(prev => subMonths(prev, 1))}
-            >
+            <Button variant="ghost" size="icon" onClick={() => setSelectedMonth(prev => subMonths(prev, 1))}>
               <ChevronLeft className="h-4 w-4" />
             </Button>
             <span className="text-lg font-semibold capitalize">{monthLabel}</span>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setSelectedMonth(prev => addMonths(prev, 1))}
-            >
+            <Button variant="ghost" size="icon" onClick={() => setSelectedMonth(prev => addMonths(prev, 1))}>
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
@@ -153,12 +160,15 @@ export default function ConfigMetas() {
             Vendedoras ({sellers.length})
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-6">
           {loadingMembers || loadingGoals ? (
             Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="flex items-center gap-4">
-                <Skeleton className="h-10 w-10 rounded-full" />
-                <Skeleton className="h-10 flex-1" />
+              <div key={i} className="space-y-2">
+                <div className="flex items-center gap-4">
+                  <Skeleton className="h-10 w-10 rounded-full" />
+                  <Skeleton className="h-6 w-32" />
+                </div>
+                <Skeleton className="h-10 w-full" />
               </div>
             ))
           ) : sellers.length === 0 ? (
@@ -167,45 +177,60 @@ export default function ConfigMetas() {
             </p>
           ) : (
             sellers.map(seller => {
-              const currentValue = goalValues[seller.id] || '';
-              const numValue = parseFloat(currentValue) || 0;
+              const values = goalValues[seller.id] || { goal1: '', goal2: '', goal3: '' };
+              const fields: ('goal1' | 'goal2' | 'goal3')[] = ['goal1', 'goal2', 'goal3'];
 
               return (
                 <div
                   key={seller.id}
-                  className="flex items-center gap-4 p-3 rounded-lg border bg-card hover:bg-muted/30 transition-colors"
+                  className="p-4 rounded-xl border bg-card hover:bg-muted/30 transition-colors space-y-3"
                 >
-                  <Avatar className="h-10 w-10">
-                    <AvatarImage src={seller.avatar_url || undefined} />
-                    <AvatarFallback className="bg-primary/10 text-primary font-semibold">
-                      {(seller.full_name || '?').charAt(0).toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-foreground truncate">
-                      {seller.full_name || 'Sem nome'}
-                    </p>
-                    <p className="text-xs text-muted-foreground">Vendedora</p>
+                  {/* Seller header */}
+                  <div className="flex items-center gap-3">
+                    <Avatar className="h-10 w-10">
+                      <AvatarImage src={seller.avatar_url || undefined} />
+                      <AvatarFallback className="bg-primary/10 text-primary font-semibold">
+                        {(seller.full_name || '?').charAt(0).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-foreground truncate">
+                        {seller.full_name || 'Sem nome'}
+                      </p>
+                      <p className="text-xs text-muted-foreground">Vendedora</p>
+                    </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-muted-foreground">R$</span>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={currentValue}
-                      onChange={(e) => handleValueChange(seller.id, e.target.value)}
-                      placeholder="0,00"
-                      className="w-32 px-3 py-2 text-right rounded-md border bg-background text-foreground text-sm font-medium focus:outline-none focus:ring-2 focus:ring-ring"
-                    />
+                  {/* 3 Goal inputs */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {fields.map((field, idx) => {
+                      const numVal = parseFloat(values[field] || '0') || 0;
+                      return (
+                        <div key={field} className={`rounded-lg border-2 ${GOAL_COLORS[idx]} p-3 space-y-1`}>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-sm">{GOAL_EMOJIS[idx]}</span>
+                            <span className="text-xs font-semibold text-muted-foreground">{GOAL_LABELS[idx]}</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <span className="text-xs text-muted-foreground">R$</span>
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              value={values[field]}
+                              onChange={(e) => handleValueChange(seller.id, field, e.target.value)}
+                              placeholder="0,00"
+                              className="w-full px-2 py-1.5 text-right rounded-md border bg-background text-foreground text-sm font-medium focus:outline-none focus:ring-2 focus:ring-ring"
+                            />
+                          </div>
+                          {numVal > 0 && (
+                            <p className="text-[11px] text-muted-foreground text-right">
+                              {formatCurrency(numVal)}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
-
-                  {numValue > 0 && (
-                    <span className="text-xs text-muted-foreground whitespace-nowrap hidden md:block">
-                      {formatCurrency(numValue)}
-                    </span>
-                  )}
                 </div>
               );
             })
