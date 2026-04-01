@@ -87,13 +87,13 @@ export default function CrmAnalytics() {
     },
   });
 
-  // Fetch sales from unified view v_all_sales
+  // Fetch sales from unified view v_all_sales (with affiliate info)
   const { data: sales = [], isLoading: loadingSales } = useQuery({
     queryKey: ['crm-sales', dateFrom, dateTo],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from('v_all_sales')
-        .select('id, revenue, product_name, purchased_at, status')
+        .select('id, revenue, product_name, purchased_at, status, affiliate_name, affiliate_commission')
         .eq('status', 'authorized')
         .gte('purchased_at', dateFrom)
         .lte('purchased_at', dateTo);
@@ -103,43 +103,69 @@ export default function CrmAnalytics() {
         revenue: Number(s.revenue) || 0,
         product_name: s.product_name || '',
         date: s.purchased_at || '',
+        affiliate_name: s.affiliate_name || null,
+        affiliate_commission: Number(s.affiliate_commission) || 0,
       }));
     },
   });
 
   const isLoading = loadingSellers || loadingLeads || loadingSales;
 
+  // Match sales to sellers by affiliate_name ↔ full_name (fuzzy first-name match)
+  function matchesSellerName(sellerName: string, affiliateName: string): boolean {
+    const sellerNorm = sellerName.toLowerCase().trim();
+    const affiliateNorm = affiliateName.toLowerCase().trim();
+    if (sellerNorm === affiliateNorm) return true;
+    // Match by first name (e.g. "Gabriela" matches "Gabriela Silva")
+    const sellerFirst = sellerNorm.split(' ')[0];
+    const affiliateFirst = affiliateNorm.split(' ')[0];
+    if (sellerFirst.length >= 3 && sellerFirst === affiliateFirst) return true;
+    // Check if one contains the other
+    if (sellerNorm.includes(affiliateNorm) || affiliateNorm.includes(sellerNorm)) return true;
+    return false;
+  }
+
   // Compute per-seller stats
   const sellerStats = useMemo(() => {
     return sellers.map(seller => {
+      const sellerName = seller.full_name || '';
       const sellerLeads = leads.filter(l => l.assigned_to === seller.id);
       const leadsCount = sellerLeads.length;
-      // No direct seller→sale link exists; show totals only if a single seller is selected
+
+      // Match sales by affiliate_name
+      const sellerSales = sellerName
+        ? sales.filter(s => s.affiliate_name && matchesSellerName(sellerName, s.affiliate_name))
+        : [];
+      const salesCount = sellerSales.length;
+      const revenue = sellerSales.reduce((sum, s) => sum + s.revenue, 0);
+      const commission = sellerSales.reduce((sum, s) => sum + (s.affiliate_commission || s.revenue * COMMISSION_RATE), 0);
+      const ticketMedio = salesCount > 0 ? revenue / salesCount : 0;
+      const conversionRate = leadsCount > 0 ? (salesCount / leadsCount) * 100 : 0;
+
       return {
         id: seller.id,
-        name: seller.full_name || 'Sem nome',
+        name: sellerName || 'Sem nome',
         leads: leadsCount,
         avgDailyLeads: leadsCount / daysInPeriod,
-        // Sales cannot be attributed to sellers - no seller_id on purchases
-        sales: null as number | null,
-        revenue: null as number | null,
-        commission: null as number | null,
-        ticketMedio: null as number | null,
+        sales: salesCount,
+        revenue,
+        commission,
+        ticketMedio,
         convTime: null as string | null,
-        conversionRate: null as number | null,
+        conversionRate,
       };
     }).sort((a, b) => {
       const aVal = (a as any)[tableSortKey] ?? -Infinity;
       const bVal = (b as any)[tableSortKey] ?? -Infinity;
       return tableSortDir === 'desc' ? bVal - aVal : aVal - bVal;
     });
-  }, [sellers, leads, daysInPeriod, tableSortKey, tableSortDir]);
+  }, [sellers, leads, sales, daysInPeriod, tableSortKey, tableSortDir]);
 
   // Global KPIs
   const totalLeads = leads.length;
   const totalSales = sales.length;
   const totalRevenue = sales.reduce((s, v) => s + v.revenue, 0);
-  const totalCommission = totalRevenue * COMMISSION_RATE;
+  const totalCommission = sales.reduce((s, v) => s + (v.affiliate_commission || v.revenue * COMMISSION_RATE), 0);
 
   // Filter by selected seller for leads
   const filteredLeads = selectedSeller === 'all' ? leads : leads.filter(l => l.assigned_to === selectedSeller);
@@ -198,9 +224,9 @@ export default function CrmAnalytics() {
       }));
   }, [sales]);
 
-  // Ranking by leads (since we can't rank by revenue per seller)
+  // Ranking by revenue (with fallback to leads)
   const topSellers = useMemo(() => {
-    return [...sellerStats].sort((a, b) => b.leads - a.leads).slice(0, 3);
+    return [...sellerStats].sort((a, b) => (b.revenue || 0) - (a.revenue || 0) || b.leads - a.leads).slice(0, 3);
   }, [sellerStats]);
 
   function handlePreset(label: string) {
@@ -345,15 +371,23 @@ export default function CrmAnalytics() {
                         Vendas
                         <Tooltip>
                           <TooltipTrigger><Info className="h-3 w-3 text-muted-foreground/50" /></TooltipTrigger>
-                          <TooltipContent><p className="text-xs max-w-[200px]">Vendas não podem ser atribuídas por vendedora — tabelas de vendas não possuem seller_id</p></TooltipContent>
+                          <TooltipContent><p className="text-xs max-w-[200px]">Atribuição por nome do afiliado no webhook</p></TooltipContent>
                         </Tooltip>
                       </span>
                     </TableHead>
-                    <TableHead>Receita</TableHead>
-                    <TableHead>Comissão</TableHead>
-                    <TableHead>Ticket Médio</TableHead>
+                    <TableHead className="cursor-pointer select-none" onClick={() => handleSort('revenue')}>
+                      Receita{sortIcon('revenue')}
+                    </TableHead>
+                    <TableHead className="cursor-pointer select-none" onClick={() => handleSort('commission')}>
+                      Comissão{sortIcon('commission')}
+                    </TableHead>
+                    <TableHead className="cursor-pointer select-none" onClick={() => handleSort('ticketMedio')}>
+                      Ticket Médio{sortIcon('ticketMedio')}
+                    </TableHead>
                     <TableHead>Tempo Conversa</TableHead>
-                    <TableHead>Conversão</TableHead>
+                    <TableHead className="cursor-pointer select-none" onClick={() => handleSort('conversionRate')}>
+                      Conversão{sortIcon('conversionRate')}
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -374,12 +408,12 @@ export default function CrmAnalytics() {
                       </TableCell>
                       <TableCell className="font-mono">{s.leads}</TableCell>
                       <TableCell className="font-mono">{s.avgDailyLeads.toFixed(1)}</TableCell>
+                      <TableCell className="font-mono">{s.sales}</TableCell>
+                      <TableCell className="font-mono">{formatCurrency(s.revenue)}</TableCell>
+                      <TableCell className="font-mono text-primary">{formatCurrency(s.commission)}</TableCell>
+                      <TableCell className="font-mono">{s.ticketMedio > 0 ? formatCurrency(s.ticketMedio) : '—'}</TableCell>
                       <TableCell className="text-muted-foreground">—</TableCell>
-                      <TableCell className="text-muted-foreground">—</TableCell>
-                      <TableCell className="text-muted-foreground">—</TableCell>
-                      <TableCell className="text-muted-foreground">—</TableCell>
-                      <TableCell className="text-muted-foreground">—</TableCell>
-                      <TableCell className="text-muted-foreground">—</TableCell>
+                      <TableCell className="font-mono">{s.conversionRate > 0 ? `${s.conversionRate.toFixed(1)}%` : '—'}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

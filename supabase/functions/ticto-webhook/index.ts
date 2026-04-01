@@ -142,6 +142,9 @@ Deno.serve(async (req) => {
     const customer = payload.customer || invoice.customer || invoice.buyer || payload.buyer || payload.contact || {};
     const payment = payload.payment || invoice.payment || {};
     const dates = payload.dates || invoice.dates || {};
+    const affiliations = payload.affiliations || invoice.affiliations || [];
+    const affiliateName = affiliations[0]?.contact_name || affiliations[0]?.name || null;
+    const affiliateCommission = Number(affiliations[0]?.commission?.amount || 0) || null;
 
     const campaignParsed = parseUtmPair(tracking.utm_campaign);
     const adsetParsed = parseUtmPair(tracking.utm_medium);
@@ -289,6 +292,8 @@ Deno.serve(async (req) => {
       ingestion_type: 'webhook',
       source_platform: 'ticto',
       updated_at: new Date().toISOString(),
+      affiliate_name: affiliateName,
+      affiliate_commission: affiliateCommission,
     };
 
     // ── Save: select+insert/update manual ──

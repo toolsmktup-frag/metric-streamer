@@ -41,6 +41,8 @@ export interface UnifiedSale {
   utm_content: string | null;
   is_paid_traffic: boolean;
   ingestion_type: string;
+  affiliate_name: string | null;
+  affiliate_commission: number | null;
 }
 
 async function fetchAllSalesRows(dateFrom: string, dateTo: string, funnelId?: string | null, ingestionType?: string | null) {
