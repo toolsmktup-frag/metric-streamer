@@ -831,8 +831,8 @@ export default function FunilKpi() {
             </thead>
             <tbody>
               {dailyRows.map((row, i) => {
-                const dayRev = row.rev_principal + row.rev_bump1 + row.rev_upsell1;
-                const dayTotalVendas = row.vendas_principal + row.vendas_bump1 + row.vendas_upsell1;
+                const dayRev = row.rev_principal + row.rev_bump1 + row.rev_upsell1 + row.rev_upsell2 + row.rev_upsell3;
+                const dayTotalVendas = row.vendas_principal + row.vendas_bump1 + row.vendas_upsell1 + row.vendas_upsell2 + row.vendas_upsell3;
                 const dayRoi = row.spend > 0 ? ((dayRev - row.spend) / row.spend) * 100 : 0;
                 const dayCpa = row.vendas_principal > 0 ? row.spend / row.vendas_principal : 0;
                 const dayLucro = dayRev - row.spend;
