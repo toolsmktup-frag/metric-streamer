@@ -15,7 +15,7 @@ import { formatCurrency } from '@/lib/formatters';
 import { Target, ChevronLeft, ChevronRight, Save, Users } from 'lucide-react';
 
 export default function ConfigMetas() {
-  const { data: role } = useCurrentUserRole();
+  const { data: role, isLoading: roleLoading } = useCurrentUserRole();
   const isAdmin = role === 'admin' || role === 'gestor';
 
   const [selectedMonth, setSelectedMonth] = useState(new Date());
