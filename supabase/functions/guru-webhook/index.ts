@@ -64,6 +64,9 @@ Deno.serve(async (req) => {
     const customer = payload.customer || payload.buyer    || payload.contact || {};
     const tracking = payload.tracking || payload.utm_data || payload.source || {};
     const payment  = payload.payment  || {};
+    const affiliations = payload.affiliations || [];
+    const affiliateName = affiliations[0]?.contact_name || affiliations[0]?.name || null;
+    const affiliateCommission = Number(affiliations[0]?.commission?.amount || 0) || null;
     const dates    = payload.dates    || {};
 
     const productName = product.name || product.product_name || payload.product_name || "";
