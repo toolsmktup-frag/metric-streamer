@@ -10,7 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { formatCurrency } from '@/lib/formatters';
 import { useSellerGoal } from '@/hooks/useSellerGoals';
 import { useSellerStats } from '@/hooks/useSellerStats';
-import { useSellerAchievements, ACHIEVEMENTS, getSellerLevel } from '@/hooks/useSellerAchievements';
+import { useSellerAchievements, useAutoUnlockAchievements, ACHIEVEMENTS, getSellerLevel } from '@/hooks/useSellerAchievements';
 import {
   Trophy, Target, Flame, TrendingUp, DollarSign, ShoppingCart,
   Bell, BarChart3
@@ -116,6 +116,13 @@ export default function MinhasMetas() {
 
   const level = getSellerLevel(stats?.monthSales || 0);
   const unlockedKeys = new Set(achievements.map(a => a.achievement_key));
+
+  // Auto-unlock achievements based on current stats
+  useAutoUnlockAchievements(userId, stats, achievements, {
+    goal1: goal?.goal_amount || 0,
+    goal2: goal?.goal_amount_2 || 0,
+    goal3: goal?.goal_amount_3 || 0,
+  });
 
   // Confetti when all goals beaten
   useEffect(() => {
