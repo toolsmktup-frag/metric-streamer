@@ -346,6 +346,7 @@ const PerformanceTable = React.memo(function PerformanceTable({ data, level = 'c
               <td className="px-3 py-2.5 font-mono-value">{totals.front_sales > 0 ? totals.front_sales : '—'}</td>
               <td className="px-3 py-2.5 font-mono-value">{totals.bump_sales > 0 ? totals.bump_sales : '—'}</td>
               <td className="px-3 py-2.5 font-mono-value">{totals.upsell_sales > 0 ? totals.upsell_sales : '—'}</td>
+              <td className="px-3 py-2.5 font-mono-value">{totals.downsell_sales > 0 ? totals.downsell_sales : '—'}</td>
               <td className="px-3 py-2.5 font-mono-value font-semibold">{totals.sales}</td>
               <td className="px-3 py-2.5 font-mono-value">{formatCurrency(totals.cpa)}</td>
               <td className={`px-3 py-2.5 font-mono-value font-semibold ${getRoasColor(totals.roas)}`}>{formatRoas(totals.roas)}</td>
