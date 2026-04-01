@@ -862,6 +862,8 @@ export default function FunilKpi() {
                     <td className="px-3 py-2 text-right font-mono-value font-semibold border-l border-border">{row.vendas_principal}</td>
                     <td className="px-3 py-2 text-right font-mono-value">{row.vendas_bump1 || '—'}</td>
                     <td className="px-3 py-2 text-right font-mono-value">{row.vendas_upsell1 || '—'}</td>
+                    {hasUpsell2 && <td className="px-3 py-2 text-right font-mono-value">{row.vendas_upsell2 || '—'}</td>}
+                    {hasUpsell3 && <td className="px-3 py-2 text-right font-mono-value">{row.vendas_upsell3 || '—'}</td>}
                     <td className={`px-3 py-2 text-right font-mono-value border-l border-border ${ctrColor}`}>{dayCtr.toFixed(2)}%</td>
                     <td className="px-3 py-2 text-right font-mono-value">{formatCurrency(dayCpc)}</td>
                     <td className={`px-3 py-2 text-right font-mono-value ${pvColor}`}>{dayPvCliq.toFixed(1)}%</td>
