@@ -266,6 +266,15 @@ export default function MinhasMetas() {
                         <p className={`text-sm font-bold ${beaten ? 'text-emerald-600' : 'text-foreground'}`}>
                           {formatCurrency(g.amount)}
                         </p>
+                        {idx === 2 && (
+                          <div className={`mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            beaten
+                              ? 'bg-gradient-to-r from-amber-400 to-yellow-500 text-white animate-pulse'
+                              : 'bg-muted text-muted-foreground'
+                          }`}>
+                            {beaten ? '🎁 Bônus desbloqueado!' : '🎁 Bônus extra'}
+                          </div>
+                        )}
                         <div className="mt-1.5 h-1.5 w-full bg-secondary rounded-full overflow-hidden">
                           <motion.div
                             initial={{ width: 0 }}
