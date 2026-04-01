@@ -161,11 +161,24 @@ export default function CrmAnalytics() {
     });
   }, [sellers, leads, sales, daysInPeriod, tableSortKey, tableSortDir]);
 
-  // Global KPIs
-  const totalLeads = leads.length;
-  const totalSales = sales.length;
-  const totalRevenue = sales.reduce((s, v) => s + v.revenue, 0);
-  const totalCommission = sales.reduce((s, v) => s + (v.affiliate_commission || v.revenue * COMMISSION_RATE), 0);
+  // KPIs filtered by selected seller (only seller-attributed sales)
+  const kpiStats = useMemo(() => {
+    if (selectedSeller === 'all') {
+      // Sum all sellers' stats (only sales attributed to any seller)
+      const totalLeads = sellerStats.reduce((s, v) => s + v.leads, 0);
+      const totalSales = sellerStats.reduce((s, v) => s + v.sales, 0);
+      const totalRevenue = sellerStats.reduce((s, v) => s + v.revenue, 0);
+      const totalCommission = sellerStats.reduce((s, v) => s + v.commission, 0);
+      return { totalLeads, totalSales, totalRevenue, totalCommission };
+    }
+    const stat = sellerStats.find(s => s.id === selectedSeller);
+    return {
+      totalLeads: stat?.leads ?? 0,
+      totalSales: stat?.sales ?? 0,
+      totalRevenue: stat?.revenue ?? 0,
+      totalCommission: stat?.commission ?? 0,
+    };
+  }, [sellerStats, selectedSeller]);
 
   // Filter by selected seller for leads
   const filteredLeads = selectedSeller === 'all' ? leads : leads.filter(l => l.assigned_to === selectedSeller);
@@ -318,27 +331,27 @@ export default function CrmAnalytics() {
         <KpiCard
           icon={Users}
           label="Leads Atendidos"
-          value={isLoading ? null : formatNumber(filteredLeads.length)}
-          tooltip="Total de leads criados no período filtrado"
+          value={isLoading ? null : formatNumber(kpiStats.totalLeads)}
+          tooltip="Total de leads atribuídos às vendedoras no período"
         />
         <KpiCard
           icon={ShoppingCart}
           label="Vendas Geradas"
-          value={isLoading ? null : formatNumber(totalSales)}
-          tooltip="Total de vendas autorizadas no período (todas as plataformas)"
+          value={isLoading ? null : formatNumber(kpiStats.totalSales)}
+          tooltip="Vendas atribuídas às vendedoras (por afiliado no webhook)"
         />
         <KpiCard
           icon={DollarSign}
           label="Receita Total"
-          value={isLoading ? null : formatCurrency(totalRevenue)}
-          tooltip="Soma da receita bruta das vendas no período"
+          value={isLoading ? null : formatCurrency(kpiStats.totalRevenue)}
+          tooltip="Receita gerada pelas vendedoras no período"
         />
         <KpiCard
           icon={Award}
           label="Comissão Total"
-          value={isLoading ? null : formatCurrency(totalCommission)}
-          tooltip={`Estimativa com taxa de ${(COMMISSION_RATE * 100).toFixed(0)}% sobre a receita`}
-          sub={`${(COMMISSION_RATE * 100).toFixed(0)}% estimado`}
+          value={isLoading ? null : formatCurrency(kpiStats.totalCommission)}
+          tooltip="Comissão total das vendedoras (webhook ou 10% estimado)"
+          sub={kpiStats.totalCommission > 0 ? undefined : `${(COMMISSION_RATE * 100).toFixed(0)}% estimado`}
         />
       </div>
 
