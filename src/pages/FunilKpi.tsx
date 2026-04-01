@@ -36,30 +36,38 @@ function classifyByFunnelProducts(
   return null;
 }
 
-/** Map funnel_products roles to our 3-slot system */
-function roleToSlot(role: FunnelRole): 'principal' | 'bump1' | 'upsell1' | null {
+type SlotKey = 'principal' | 'bump1' | 'upsell1' | 'upsell2' | 'upsell3';
+
+/** Map funnel_products roles to slot keys */
+function roleToSlot(role: FunnelRole): SlotKey | null {
   if (role === 'front') return 'principal';
   if (role === 'order_bump') return 'bump1';
   if (role === 'upsell1') return 'upsell1';
-  return null; // upsell2, upsell3, downsell — could be expanded later
+  if (role === 'upsell2') return 'upsell2';
+  if (role === 'upsell3') return 'upsell3';
+  return null; // downsell — could be expanded later
 }
 
 /** Get display info for each slot from funnel_products */
 function getSlotLabels(funnelProducts: FunnelProduct[]) {
-  const front = funnelProducts.filter(p => p.role === 'front');
-  const bump = funnelProducts.filter(p => p.role === 'order_bump');
-  const upsell = funnelProducts.filter(p => p.role === 'upsell1');
+  const byRole = (r: string) => funnelProducts.filter(p => p.role === r);
+  const label = (fps: FunnelProduct[], fallback: string) =>
+    fps.length > 0 ? fps.map(p => p.display_name || p.product_name_contains).join(', ') : fallback;
   return {
-    principal: front.length > 0
-      ? front.map(p => p.display_name || p.product_name_contains).join(', ')
-      : 'Produto Principal',
-    bump1: bump.length > 0
-      ? bump.map(p => p.display_name || p.product_name_contains).join(', ')
-      : 'Order Bump',
-    upsell1: upsell.length > 0
-      ? upsell.map(p => p.display_name || p.product_name_contains).join(', ')
-      : 'Upsell',
+    principal: label(byRole('front'), 'Produto Principal'),
+    bump1: label(byRole('order_bump'), 'Order Bump'),
+    upsell1: label(byRole('upsell1'), 'Upsell 1'),
+    upsell2: label(byRole('upsell2'), 'Upsell 2'),
+    upsell3: label(byRole('upsell3'), 'Upsell 3'),
   };
+}
+
+/** Check which extra slots actually have products configured */
+function getActiveSlots(funnelProducts: FunnelProduct[]): SlotKey[] {
+  const slots: SlotKey[] = ['principal', 'bump1', 'upsell1'];
+  if (funnelProducts.some(p => p.role === 'upsell2')) slots.push('upsell2');
+  if (funnelProducts.some(p => p.role === 'upsell3')) slots.push('upsell3');
+  return slots;
 }
 
 function getActionValue(actions: any[] | null, actionType: string): number {
@@ -320,7 +328,7 @@ export default function FunilKpi() {
       const meta = metaByDate[date] || { spend: 0, impressions: 0, link_clicks: 0, landing_page_views: 0, checkouts: 0 };
       const dayTx = approved.filter((t: any) => t.purchased_at?.startsWith(date));
 
-      let vp = 0, vb1 = 0, vu1 = 0, rp = 0, rb1 = 0, ru1 = 0;
+      let vp = 0, vb1 = 0, vu1 = 0, vu2 = 0, vu3 = 0, rp = 0, rb1 = 0, ru1 = 0, ru2 = 0, ru3 = 0;
       for (const tx of dayTx) {
         const role = classifyByFunnelProducts(tx, funnelProducts);
         const slot = role ? roleToSlot(role) : null;
@@ -328,6 +336,8 @@ export default function FunilKpi() {
         if (slot === 'principal') { vp++; rp += rev; }
         else if (slot === 'bump1') { vb1++; rb1 += rev; }
         else if (slot === 'upsell1') { vu1++; ru1 += rev; }
+        else if (slot === 'upsell2') { vu2++; ru2 += rev; }
+        else if (slot === 'upsell3') { vu3++; ru3 += rev; }
       }
 
       return {
@@ -340,9 +350,13 @@ export default function FunilKpi() {
         vendas_principal: vp,
         vendas_bump1: vb1,
         vendas_upsell1: vu1,
+        vendas_upsell2: vu2,
+        vendas_upsell3: vu3,
         rev_principal: rp,
         rev_bump1: rb1,
         rev_upsell1: ru1,
+        rev_upsell2: ru2,
+        rev_upsell3: ru3,
       };
     });
   }, [metaInsights, approved, allDays, funnelProducts]);
@@ -350,22 +364,27 @@ export default function FunilKpi() {
   // ─── Totals ───
   const totals = useMemo(() => {
     const t = { spend: 0, impressions: 0, clicks: 0, pageviews: 0, checkouts: 0,
-      vendas_principal: 0, vendas_bump1: 0, vendas_upsell1: 0,
-      rev_principal: 0, rev_bump1: 0, rev_upsell1: 0 };
+      vendas_principal: 0, vendas_bump1: 0, vendas_upsell1: 0, vendas_upsell2: 0, vendas_upsell3: 0,
+      rev_principal: 0, rev_bump1: 0, rev_upsell1: 0, rev_upsell2: 0, rev_upsell3: 0 };
     for (const r of dailyRows) {
       t.spend += r.spend; t.impressions += r.impressions; t.clicks += r.clicks;
       t.pageviews += r.pageviews; t.checkouts += r.checkouts;
       t.vendas_principal += r.vendas_principal; t.vendas_bump1 += r.vendas_bump1;
-      t.vendas_upsell1 += r.vendas_upsell1;
+      t.vendas_upsell1 += r.vendas_upsell1; t.vendas_upsell2 += r.vendas_upsell2;
+      t.vendas_upsell3 += r.vendas_upsell3;
       t.rev_principal += r.rev_principal; t.rev_bump1 += r.rev_bump1;
-      t.rev_upsell1 += r.rev_upsell1;
+      t.rev_upsell1 += r.rev_upsell1; t.rev_upsell2 += r.rev_upsell2;
+      t.rev_upsell3 += r.rev_upsell3;
     }
     return t;
   }, [dailyRows]);
 
   // ─── Computed metrics ───
-  const totalVendasFunil = totals.vendas_principal + totals.vendas_bump1 + totals.vendas_upsell1;
-  const totalRevenue = totals.rev_principal + totals.rev_bump1 + totals.rev_upsell1;
+  const activeSlots = getActiveSlots(funnelProducts);
+  const hasUpsell2 = activeSlots.includes('upsell2');
+  const hasUpsell3 = activeSlots.includes('upsell3');
+  const totalVendasFunil = totals.vendas_principal + totals.vendas_bump1 + totals.vendas_upsell1 + totals.vendas_upsell2 + totals.vendas_upsell3;
+  const totalRevenue = totals.rev_principal + totals.rev_bump1 + totals.rev_upsell1 + totals.rev_upsell2 + totals.rev_upsell3;
   const ctr = totals.impressions > 0 ? (totals.clicks / totals.impressions) * 100 : 0;
   const cpc = totals.clicks > 0 ? totals.spend / totals.clicks : 0;
   const pvSobreClicks = totals.clicks > 0 ? (totals.pageviews / totals.clicks) * 100 : 0;
@@ -378,6 +397,8 @@ export default function FunilKpi() {
   const acv = totals.vendas_principal > 0 ? totalRevenue / totals.vendas_principal : 0;
   const pctBump1 = totals.vendas_principal > 0 ? (totals.vendas_bump1 / totals.vendas_principal) * 100 : 0;
   const pctUpsell1 = totals.vendas_principal > 0 ? (totals.vendas_upsell1 / totals.vendas_principal) * 100 : 0;
+  const pctUpsell2 = totals.vendas_principal > 0 ? (totals.vendas_upsell2 / totals.vendas_principal) * 100 : 0;
+  const pctUpsell3 = totals.vendas_principal > 0 ? (totals.vendas_upsell3 / totals.vendas_principal) * 100 : 0;
   const daysWithData = dailyRows.filter(r => r.spend > 0).length || 1;
   const vendasDia = totals.vendas_principal / daysWithData;
   const investDiario = totals.spend / daysWithData;
@@ -575,7 +596,52 @@ export default function FunilKpi() {
               </div>
             </div>
 
-            {/* Revenue breakdown */}
+            {/* Upsell 2 — only if configured */}
+            {hasUpsell2 && (
+              <div className="rounded-lg bg-violet-500/5 p-3 border border-violet-500/20">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-semibold text-foreground">{slotLabels.upsell2}</span>
+                  <span className="text-[10px] bg-violet-500/10 text-violet-500 px-2 py-0.5 rounded-full font-medium">Upsell 2</span>
+                </div>
+                <div className="flex items-baseline gap-3 mt-2">
+                  <span className="text-2xl font-bold font-mono-value text-foreground">{totals.vendas_upsell2}</span>
+                  <span className="text-xs text-muted-foreground">vendas</span>
+                  <span className="text-xs font-mono-value font-semibold text-kpi-positive ml-auto">{formatCurrency(totals.rev_upsell2)}</span>
+                </div>
+                <div className="flex items-center justify-between mt-1">
+                  <span className="text-[11px] text-muted-foreground">
+                    {totalVendasFunil > 0 ? ((totals.vendas_upsell2 / totalVendasFunil) * 100).toFixed(1) : 0}% do funil
+                  </span>
+                  <span className="text-[11px] text-muted-foreground">
+                    <span className="font-mono-value font-medium">{pctUpsell2.toFixed(1)}%</span> das vendas P1
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Upsell 3 — only if configured */}
+            {hasUpsell3 && (
+              <div className="rounded-lg bg-pink-500/5 p-3 border border-pink-500/20">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-semibold text-foreground">{slotLabels.upsell3}</span>
+                  <span className="text-[10px] bg-pink-500/10 text-pink-500 px-2 py-0.5 rounded-full font-medium">Upsell 3</span>
+                </div>
+                <div className="flex items-baseline gap-3 mt-2">
+                  <span className="text-2xl font-bold font-mono-value text-foreground">{totals.vendas_upsell3}</span>
+                  <span className="text-xs text-muted-foreground">vendas</span>
+                  <span className="text-xs font-mono-value font-semibold text-kpi-positive ml-auto">{formatCurrency(totals.rev_upsell3)}</span>
+                </div>
+                <div className="flex items-center justify-between mt-1">
+                  <span className="text-[11px] text-muted-foreground">
+                    {totalVendasFunil > 0 ? ((totals.vendas_upsell3 / totalVendasFunil) * 100).toFixed(1) : 0}% do funil
+                  </span>
+                  <span className="text-[11px] text-muted-foreground">
+                    <span className="font-mono-value font-medium">{pctUpsell3.toFixed(1)}%</span> das vendas P1
+                  </span>
+                </div>
+              </div>
+            )}
+
             <div className="mt-3 pt-3 border-t border-border text-xs text-center">
               <span className="text-muted-foreground">Total Faturamento:</span>{' '}
               <span className="font-mono-value font-bold text-foreground">{formatCurrency(totalRevenue)}</span>
@@ -745,6 +811,8 @@ export default function FunilKpi() {
                 <th className="px-3 py-2.5 text-right font-semibold text-foreground whitespace-nowrap border-l border-border">Vendas P1</th>
                 <th className="px-3 py-2.5 text-right font-semibold text-kpi-warning whitespace-nowrap">Bump</th>
                 <th className="px-3 py-2.5 text-right font-semibold text-blue-500 whitespace-nowrap">Upsell</th>
+                {hasUpsell2 && <th className="px-3 py-2.5 text-right font-semibold text-violet-500 whitespace-nowrap">Up2</th>}
+                {hasUpsell3 && <th className="px-3 py-2.5 text-right font-semibold text-pink-500 whitespace-nowrap">Up3</th>}
                 <th className="px-3 py-2.5 text-right font-semibold text-muted-foreground whitespace-nowrap border-l border-border">CTR</th>
                 <th className="px-3 py-2.5 text-right font-semibold text-muted-foreground whitespace-nowrap">CPC</th>
                 <th className="px-3 py-2.5 text-right font-semibold text-muted-foreground whitespace-nowrap">PV/Cliq.</th>
@@ -763,8 +831,8 @@ export default function FunilKpi() {
             </thead>
             <tbody>
               {dailyRows.map((row, i) => {
-                const dayRev = row.rev_principal + row.rev_bump1 + row.rev_upsell1;
-                const dayTotalVendas = row.vendas_principal + row.vendas_bump1 + row.vendas_upsell1;
+                const dayRev = row.rev_principal + row.rev_bump1 + row.rev_upsell1 + row.rev_upsell2 + row.rev_upsell3;
+                const dayTotalVendas = row.vendas_principal + row.vendas_bump1 + row.vendas_upsell1 + row.vendas_upsell2 + row.vendas_upsell3;
                 const dayRoi = row.spend > 0 ? ((dayRev - row.spend) / row.spend) * 100 : 0;
                 const dayCpa = row.vendas_principal > 0 ? row.spend / row.vendas_principal : 0;
                 const dayLucro = dayRev - row.spend;
@@ -794,6 +862,8 @@ export default function FunilKpi() {
                     <td className="px-3 py-2 text-right font-mono-value font-semibold border-l border-border">{row.vendas_principal}</td>
                     <td className="px-3 py-2 text-right font-mono-value">{row.vendas_bump1 || '—'}</td>
                     <td className="px-3 py-2 text-right font-mono-value">{row.vendas_upsell1 || '—'}</td>
+                    {hasUpsell2 && <td className="px-3 py-2 text-right font-mono-value">{row.vendas_upsell2 || '—'}</td>}
+                    {hasUpsell3 && <td className="px-3 py-2 text-right font-mono-value">{row.vendas_upsell3 || '—'}</td>}
                     <td className={`px-3 py-2 text-right font-mono-value border-l border-border ${ctrColor}`}>{dayCtr.toFixed(2)}%</td>
                     <td className="px-3 py-2 text-right font-mono-value">{formatCurrency(dayCpc)}</td>
                     <td className={`px-3 py-2 text-right font-mono-value ${pvColor}`}>{dayPvCliq.toFixed(1)}%</td>
@@ -823,6 +893,8 @@ export default function FunilKpi() {
                 <td className="px-3 py-2.5 text-right font-mono-value border-l border-border">{totals.vendas_principal}</td>
                 <td className="px-3 py-2.5 text-right font-mono-value">{totals.vendas_bump1}</td>
                 <td className="px-3 py-2.5 text-right font-mono-value">{totals.vendas_upsell1}</td>
+                {hasUpsell2 && <td className="px-3 py-2.5 text-right font-mono-value">{totals.vendas_upsell2}</td>}
+                {hasUpsell3 && <td className="px-3 py-2.5 text-right font-mono-value">{totals.vendas_upsell3}</td>}
                 <td className={`px-3 py-2.5 text-right font-mono-value border-l border-border ${diagCtr === 'good' ? 'text-kpi-positive' : diagCtr === 'warn' ? 'text-kpi-warning' : 'text-destructive'}`}>{ctr.toFixed(2)}%</td>
                 <td className="px-3 py-2.5 text-right font-mono-value">{formatCurrency(cpc)}</td>
                 <td className={`px-3 py-2.5 text-right font-mono-value ${diagPv === 'good' ? 'text-kpi-positive' : diagPv === 'warn' ? 'text-kpi-warning' : 'text-destructive'}`}>{pvSobreClicks.toFixed(1)}%</td>
