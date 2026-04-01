@@ -249,6 +249,8 @@ Deno.serve(async (req) => {
       funnel_id:              funnelId,
       imported_from:          "webhook",
       raw_data:               payload,
+      affiliate_name:         affiliateName,
+      affiliate_commission:   affiliateCommission,
     };
 
     const { error } = await supabase
