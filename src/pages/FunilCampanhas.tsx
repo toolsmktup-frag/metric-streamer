@@ -27,11 +27,12 @@ type Tab = 'ads' | 'organic';
 export default function FunilCampanhas() {
   const { id } = useParams<{ id: string }>();
   const { data: funnel } = useFunnel(id!);
+  const funnelProducts = funnel?.funnel_products || [];
 
   const { data: campaigns = [], isLoading: loadingCampaigns } = useMetaCampaigns(id);
   const { data: adsets = [], isLoading: loadingAdsets } = useMetaAdsets(id);
   const { data: ads = [], isLoading: loadingAds } = useMetaAds(id);
-  const { byCampaign, byAdset, byAd, organicSales, organicTransactions } = useAllSalesAggregation(id);
+  const { byCampaign, byAdset, byAd, organicSales, organicTransactions } = useAllSalesAggregation(id, 'webhook', funnelProducts);
   const [search, setSearch] = useState('');
   const [view, setView] = useState<View>({ level: 'campaigns' });
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
