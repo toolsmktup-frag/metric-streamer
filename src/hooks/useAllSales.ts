@@ -122,12 +122,14 @@ function classifyWithProducts(
         if (fp.role === 'front') return 'principal';
         if (fp.role === 'order_bump') return 'bump1';
         if (fp.role === 'upsell1') return 'upsell1';
+        if (fp.role === 'downsell') return 'downsell';
         return 'other';
       }
       if (name && fp.product_name_contains && name.includes(fp.product_name_contains.toLowerCase())) {
         if (fp.role === 'front') return 'principal';
         if (fp.role === 'order_bump') return 'bump1';
         if (fp.role === 'upsell1') return 'upsell1';
+        if (fp.role === 'downsell') return 'downsell';
         return 'other';
       }
     }
