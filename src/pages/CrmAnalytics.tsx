@@ -410,7 +410,7 @@ export default function CrmAnalytics() {
                       <TableCell className="font-mono">{s.avgDailyLeads.toFixed(1)}</TableCell>
                       <TableCell className="font-mono">{s.sales}</TableCell>
                       <TableCell className="font-mono">{formatCurrency(s.revenue)}</TableCell>
-                      <TableCell className="font-mono text-green-600">{formatCurrency(s.commission)}</TableCell>
+                      <TableCell className="font-mono text-primary">{formatCurrency(s.commission)}</TableCell>
                       <TableCell className="font-mono">{s.ticketMedio > 0 ? formatCurrency(s.ticketMedio) : '—'}</TableCell>
                       <TableCell className="text-muted-foreground">—</TableCell>
                       <TableCell className="font-mono">{s.conversionRate > 0 ? `${s.conversionRate.toFixed(1)}%` : '—'}</TableCell>
