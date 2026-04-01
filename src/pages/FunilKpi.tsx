@@ -380,8 +380,11 @@ export default function FunilKpi() {
   }, [dailyRows]);
 
   // ─── Computed metrics ───
-  const totalVendasFunil = totals.vendas_principal + totals.vendas_bump1 + totals.vendas_upsell1;
-  const totalRevenue = totals.rev_principal + totals.rev_bump1 + totals.rev_upsell1;
+  const activeSlots = getActiveSlots(funnelProducts);
+  const hasUpsell2 = activeSlots.includes('upsell2');
+  const hasUpsell3 = activeSlots.includes('upsell3');
+  const totalVendasFunil = totals.vendas_principal + totals.vendas_bump1 + totals.vendas_upsell1 + totals.vendas_upsell2 + totals.vendas_upsell3;
+  const totalRevenue = totals.rev_principal + totals.rev_bump1 + totals.rev_upsell1 + totals.rev_upsell2 + totals.rev_upsell3;
   const ctr = totals.impressions > 0 ? (totals.clicks / totals.impressions) * 100 : 0;
   const cpc = totals.clicks > 0 ? totals.spend / totals.clicks : 0;
   const pvSobreClicks = totals.clicks > 0 ? (totals.pageviews / totals.clicks) * 100 : 0;
@@ -394,6 +397,8 @@ export default function FunilKpi() {
   const acv = totals.vendas_principal > 0 ? totalRevenue / totals.vendas_principal : 0;
   const pctBump1 = totals.vendas_principal > 0 ? (totals.vendas_bump1 / totals.vendas_principal) * 100 : 0;
   const pctUpsell1 = totals.vendas_principal > 0 ? (totals.vendas_upsell1 / totals.vendas_principal) * 100 : 0;
+  const pctUpsell2 = totals.vendas_principal > 0 ? (totals.vendas_upsell2 / totals.vendas_principal) * 100 : 0;
+  const pctUpsell3 = totals.vendas_principal > 0 ? (totals.vendas_upsell3 / totals.vendas_principal) * 100 : 0;
   const daysWithData = dailyRows.filter(r => r.spend > 0).length || 1;
   const vendasDia = totals.vendas_principal / daysWithData;
   const investDiario = totals.spend / daysWithData;
