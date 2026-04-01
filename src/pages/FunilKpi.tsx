@@ -893,6 +893,8 @@ export default function FunilKpi() {
                 <td className="px-3 py-2.5 text-right font-mono-value border-l border-border">{totals.vendas_principal}</td>
                 <td className="px-3 py-2.5 text-right font-mono-value">{totals.vendas_bump1}</td>
                 <td className="px-3 py-2.5 text-right font-mono-value">{totals.vendas_upsell1}</td>
+                {hasUpsell2 && <td className="px-3 py-2.5 text-right font-mono-value">{totals.vendas_upsell2}</td>}
+                {hasUpsell3 && <td className="px-3 py-2.5 text-right font-mono-value">{totals.vendas_upsell3}</td>}
                 <td className={`px-3 py-2.5 text-right font-mono-value border-l border-border ${diagCtr === 'good' ? 'text-kpi-positive' : diagCtr === 'warn' ? 'text-kpi-warning' : 'text-destructive'}`}>{ctr.toFixed(2)}%</td>
                 <td className="px-3 py-2.5 text-right font-mono-value">{formatCurrency(cpc)}</td>
                 <td className={`px-3 py-2.5 text-right font-mono-value ${diagPv === 'good' ? 'text-kpi-positive' : diagPv === 'warn' ? 'text-kpi-warning' : 'text-destructive'}`}>{pvSobreClicks.toFixed(1)}%</td>
