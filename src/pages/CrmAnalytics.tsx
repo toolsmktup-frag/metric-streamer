@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { formatCurrency, formatNumber, formatPercent } from '@/lib/formatters';
-import { BarChart3, Users, ShoppingCart, DollarSign, Award, Info } from 'lucide-react';
+import { BarChart3, Users, ShoppingCart, DollarSign, Award, Info, UserX } from 'lucide-react';
 import { startOfDay, endOfDay, subDays, startOfWeek, startOfMonth, differenceInDays, format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -202,6 +202,9 @@ export default function CrmAnalytics() {
       const ticketMedio = salesCount > 0 ? revenue / salesCount : 0;
       const conversionRate = leadsCount > 0 ? (salesCount / leadsCount) * 100 : 0;
 
+      const lostLeads = Math.max(0, leadsCount - salesCount);
+      const lostValue = lostLeads * ticketMedio;
+
       return {
         id: seller.id,
         name: sellerName || 'Sem nome',
@@ -213,6 +216,8 @@ export default function CrmAnalytics() {
         ticketMedio,
         convTime: null as string | null,
         conversionRate,
+        lostLeads,
+        lostValue,
       };
     }).sort((a, b) => {
       const aVal = (a as any)[tableSortKey] ?? -Infinity;
@@ -228,14 +233,22 @@ export default function CrmAnalytics() {
       const totalSales = sellerStats.reduce((s, v) => s + v.sales, 0);
       const totalRevenue = sellerStats.reduce((s, v) => s + v.revenue, 0);
       const totalCommission = sellerStats.reduce((s, v) => s + v.commission, 0);
-      return { totalLeads, totalSales, totalRevenue, totalCommission };
+      const totalLostLeads = sellerStats.reduce((s, v) => s + v.lostLeads, 0);
+      const totalLostValue = sellerStats.reduce((s, v) => s + v.lostValue, 0);
+      const avgLostValue = totalLostLeads > 0 ? totalLostValue / totalLostLeads : 0;
+      return { totalLeads, totalSales, totalRevenue, totalCommission, totalLostLeads, totalLostValue, avgLostValue };
     }
     const stat = sellerStats.find(s => s.id === selectedSeller);
+    const lostLeads = stat?.lostLeads ?? 0;
+    const lostValue = stat?.lostValue ?? 0;
     return {
       totalLeads: stat?.leads ?? 0,
       totalSales: stat?.sales ?? 0,
       totalRevenue: stat?.revenue ?? 0,
       totalCommission: stat?.commission ?? 0,
+      totalLostLeads: lostLeads,
+      totalLostValue: lostValue,
+      avgLostValue: lostLeads > 0 ? lostValue / lostLeads : 0,
     };
   }, [sellerStats, selectedSeller]);
 
@@ -444,7 +457,56 @@ export default function CrmAnalytics() {
         />
       </div>
 
-      {/* Performance Table */}
+      {/* Vendas Perdidas */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <Card className="border-destructive/30 bg-destructive/5">
+          <CardContent className="pt-4 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-destructive/10">
+                <UserX className="h-5 w-5 text-destructive" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Contatos que Não Fecharam</p>
+                <p className="text-2xl font-semibold font-mono-value text-destructive">
+                  {isLoading ? '...' : formatNumber(kpiStats.totalLostLeads)}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-destructive/30 bg-destructive/5">
+          <CardContent className="pt-4 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-destructive/10">
+                <DollarSign className="h-5 w-5 text-destructive" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Valor Total Perdido (estimado)</p>
+                <p className="text-2xl font-semibold font-mono-value text-destructive">
+                  {isLoading ? '...' : formatCurrency(kpiStats.totalLostValue)}
+                </p>
+                <p className="text-xs text-muted-foreground">Baseado no ticket médio das vendedoras</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-destructive/30 bg-destructive/5">
+          <CardContent className="pt-4 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-destructive/10">
+                <DollarSign className="h-5 w-5 text-destructive" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Valor Médio Perdido por Lead</p>
+                <p className="text-2xl font-semibold font-mono-value text-destructive">
+                  {isLoading ? '...' : formatCurrency(kpiStats.avgLostValue)}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
       <Card>
         <CardHeader>
           <CardTitle className="text-lg">Performance por Vendedora</CardTitle>
@@ -490,6 +552,9 @@ export default function CrmAnalytics() {
                     <TableHead className="cursor-pointer select-none" onClick={() => handleSort('conversionRate')}>
                       Conversão{sortIcon('conversionRate')}
                     </TableHead>
+                    <TableHead className="cursor-pointer select-none text-destructive" onClick={() => handleSort('lostLeads')}>
+                      Não Fechou{sortIcon('lostLeads')}
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -516,6 +581,7 @@ export default function CrmAnalytics() {
                       <TableCell className="font-mono">{s.ticketMedio > 0 ? formatCurrency(s.ticketMedio) : '—'}</TableCell>
                       <TableCell className="text-muted-foreground">—</TableCell>
                       <TableCell className="font-mono">{s.conversionRate > 0 ? `${s.conversionRate.toFixed(1)}%` : '—'}</TableCell>
+                      <TableCell className="font-mono text-destructive">{s.lostLeads > 0 ? `${s.lostLeads} (${formatCurrency(s.lostValue)})` : '—'}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
