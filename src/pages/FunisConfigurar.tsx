@@ -269,11 +269,12 @@ export default function FunisConfigurar() {
         funnelId = editingId!;
       }
 
-      const validProducts = products.filter(p => p.product_name_contains.trim());
+      const validProducts = products.filter(p => p.product_id.trim() || p.product_name_contains.trim());
       await upsertProducts.mutateAsync({
         funnelId,
         products: validProducts.map(p => ({
-          product_name_contains: p.product_name_contains.trim(),
+          product_id: p.product_id.trim() || null,
+          product_name_contains: p.product_name_contains.trim() || p.display_name.trim() || p.product_id.trim(),
           role: p.role,
           display_name: p.display_name.trim() || null,
           recontact_days: p.recontact_days,
