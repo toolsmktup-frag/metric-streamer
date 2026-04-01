@@ -10,7 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { formatCurrency } from '@/lib/formatters';
 import { useSellerGoal } from '@/hooks/useSellerGoals';
 import { useSellerStats } from '@/hooks/useSellerStats';
-import { useSellerAchievements, ACHIEVEMENTS, getSellerLevel } from '@/hooks/useSellerAchievements';
+import { useSellerAchievements, useAutoUnlockAchievements, ACHIEVEMENTS, getSellerLevel } from '@/hooks/useSellerAchievements';
 import {
   Trophy, Target, Flame, TrendingUp, DollarSign, ShoppingCart,
   Bell, BarChart3
