@@ -33,6 +33,7 @@ const COLORS = ['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#3b82f6'
 
 interface ProductRow {
   id?: string;
+  product_id: string;
   product_name_contains: string;
   role: FunnelProduct['role'];
   display_name: string;
@@ -102,41 +103,33 @@ function ProductsEditor({ products, funnelId, onAdd, onRemove, onUpdate, onUpdat
         </Button>
       </div>
       <p className="text-xs text-muted-foreground">
-        Selecione o <strong>produto</strong> que chega via webhook, defina o <strong>papel</strong> no funil (Front-end, Bump, Upsell) e um <strong>nome amigável</strong> para exibição.
+        Informe o <strong>ID do produto</strong> na plataforma, o <strong>papel</strong> no funil, um <strong>nome amigável</strong> e os <strong>dias de recontato</strong>.
       </p>
       <div className="space-y-2">
         {products.map((p, idx) => (
           <div key={idx} className="flex gap-2 items-center">
-            {/* Product name selector */}
-            {allOptions.length > 0 ? (
-              <Select value={p.product_name_contains} onValueChange={v => onUpdate(idx, 'product_name_contains', v)}>
-                <SelectTrigger className="flex-1 text-xs"><SelectValue placeholder="Selecione o produto..." /></SelectTrigger>
-                <SelectContent>
-                  {allOptions.map(name => (
-                    <SelectItem key={name} value={name} className="text-xs">{name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : (
-              <Input
-                className="flex-1"
-                placeholder={isLoading ? "Carregando produtos..." : "Nome do produto"}
-                value={p.product_name_contains}
-                onChange={e => onUpdate(idx, 'product_name_contains', e.target.value)}
-              />
-            )}
+            {/* Product ID */}
+            <Input
+              className="w-36"
+              placeholder="ID do produto"
+              value={p.product_id}
+              onChange={e => onUpdate(idx, 'product_id', e.target.value)}
+            />
+            {/* Role */}
             <Select value={p.role} onValueChange={v => onUpdate(idx, 'role', v)}>
               <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {ROLE_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
               </SelectContent>
             </Select>
+            {/* Display name */}
             <Input
-              className="w-40"
+              className="flex-1"
               placeholder="Nome amigável"
               value={p.display_name}
               onChange={e => onUpdate(idx, 'display_name', e.target.value)}
             />
+            {/* Recontact days */}
             <Input
               className="w-20"
               type="number"
@@ -201,6 +194,7 @@ export default function FunisConfigurar() {
     });
     setProducts((funnel.funnel_products || []).map(fp => ({
       id: fp.id,
+      product_id: fp.product_id || '',
       product_name_contains: fp.product_name_contains,
       role: fp.role,
       display_name: fp.display_name || '',
@@ -226,7 +220,7 @@ export default function FunisConfigurar() {
   }
 
   function addProduct() {
-    setProducts(p => [...p, { product_name_contains: '', role: 'front', display_name: '', recontact_days: null }]);
+    setProducts(p => [...p, { product_id: '', product_name_contains: '', role: 'front', display_name: '', recontact_days: null }]);
   }
 
   function removeProduct(idx: number) {
@@ -267,11 +261,12 @@ export default function FunisConfigurar() {
         funnelId = editingId!;
       }
 
-      const validProducts = products.filter(p => p.product_name_contains.trim());
+      const validProducts = products.filter(p => p.product_id.trim() || p.product_name_contains.trim());
       await upsertProducts.mutateAsync({
         funnelId,
         products: validProducts.map(p => ({
-          product_name_contains: p.product_name_contains.trim(),
+          product_id: p.product_id.trim() || null,
+          product_name_contains: p.product_name_contains.trim() || p.display_name.trim() || p.product_id.trim(),
           role: p.role,
           display_name: p.display_name.trim() || null,
           recontact_days: p.recontact_days,
