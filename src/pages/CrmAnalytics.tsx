@@ -280,7 +280,7 @@ export default function CrmAnalytics() {
     ? revenuePerDayData.reduce((s, d) => s + d.revenue, 0) / revenuePerDayData.length
     : 0;
 
-  // Top 10 products
+  // Top 10 products (general)
   const topProducts = useMemo(() => {
     const map: Record<string, { qty: number; revenue: number }> = {};
     sales.forEach(s => {
@@ -297,6 +297,34 @@ export default function CrmAnalytics() {
         pos: i + 1, name, qty, revenue, pct: total > 0 ? (revenue / total) * 100 : 0,
       }));
   }, [sales]);
+
+  // Top products per seller (filtered by selectedSeller or showing per-seller breakdown)
+  const topProductsBySeller = useMemo(() => {
+    // Filter sales by selected seller or all sellers
+    const relevantSales = selectedSeller === 'all'
+      ? sales.filter(s => s.affiliate_name && sellers.some(sel => matchesSellerName(sel.full_name || '', s.affiliate_name)))
+      : sales.filter(s => {
+          const sel = sellers.find(sl => sl.id === selectedSeller);
+          return sel?.full_name && s.affiliate_name && matchesSellerName(sel.full_name, s.affiliate_name);
+        });
+
+    if (relevantSales.length === 0) return [];
+
+    const map: Record<string, { qty: number; revenue: number }> = {};
+    relevantSales.forEach(s => {
+      const name = s.product_name || 'Sem nome';
+      if (!map[name]) map[name] = { qty: 0, revenue: 0 };
+      map[name].qty += 1;
+      map[name].revenue += s.revenue;
+    });
+    const total = relevantSales.reduce((s, v) => s + v.revenue, 0);
+    return Object.entries(map)
+      .sort((a, b) => b[1].revenue - a[1].revenue)
+      .slice(0, 10)
+      .map(([name, { qty, revenue }], i) => ({
+        pos: i + 1, name, qty, revenue, pct: total > 0 ? (revenue / total) * 100 : 0,
+      }));
+  }, [sales, sellers, selectedSeller]);
 
   // Ranking by revenue (with fallback to leads)
   const topSellers = useMemo(() => {
@@ -603,12 +631,34 @@ export default function CrmAnalytics() {
             <CardTitle className="text-lg">Top Produtos — {selectedSellerName}</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center gap-2 py-8 justify-center">
-              <Info className="h-4 w-4 text-muted-foreground" />
-              <p className="text-sm text-muted-foreground">
-                Vendas não podem ser filtradas por vendedora — tabelas de vendas não possuem vínculo com seller_id
-              </p>
-            </div>
+            {isLoading ? (
+              <Skeleton className="h-48 w-full" />
+            ) : topProductsBySeller.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-8 text-center">Sem vendas de vendedoras no período</p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-10">#</TableHead>
+                    <TableHead>Produto</TableHead>
+                    <TableHead>Qtd</TableHead>
+                    <TableHead>Receita</TableHead>
+                    <TableHead>%</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {topProductsBySeller.map(p => (
+                    <TableRow key={p.name}>
+                      <TableCell className="font-mono text-muted-foreground">{p.pos}</TableCell>
+                      <TableCell className="font-medium max-w-[200px] truncate">{p.name}</TableCell>
+                      <TableCell className="font-mono">{p.qty}</TableCell>
+                      <TableCell className="font-mono">{formatCurrency(p.revenue)}</TableCell>
+                      <TableCell className="font-mono">{formatPercent(p.pct)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
           </CardContent>
         </Card>
       </div>
