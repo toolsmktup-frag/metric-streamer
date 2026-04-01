@@ -552,6 +552,9 @@ export default function CrmAnalytics() {
                     <TableHead className="cursor-pointer select-none" onClick={() => handleSort('conversionRate')}>
                       Conversão{sortIcon('conversionRate')}
                     </TableHead>
+                    <TableHead className="cursor-pointer select-none text-destructive" onClick={() => handleSort('lostLeads')}>
+                      Não Fechou{sortIcon('lostLeads')}
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
