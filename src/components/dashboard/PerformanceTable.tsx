@@ -122,6 +122,15 @@ const PerformanceTable = React.memo(function PerformanceTable({ data, level = 'c
         size: 70,
       },
       {
+        accessorKey: 'downsell_sales',
+        header: 'Downsell',
+        cell: ({ getValue }) => {
+          const v = getValue() as number;
+          return <span className="font-mono-value">{v > 0 ? v : '—'}</span>;
+        },
+        size: 80,
+      },
+      {
         accessorKey: 'sales',
         header: 'Total Vendas',
         cell: ({ getValue }) => <span className="font-mono-value font-semibold">{getValue() as number}</span>,
