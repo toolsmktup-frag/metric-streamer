@@ -280,7 +280,7 @@ export default function CrmAnalytics() {
     ? revenuePerDayData.reduce((s, d) => s + d.revenue, 0) / revenuePerDayData.length
     : 0;
 
-  // Top 10 products
+  // Top 10 products (general)
   const topProducts = useMemo(() => {
     const map: Record<string, { qty: number; revenue: number }> = {};
     sales.forEach(s => {
@@ -297,6 +297,34 @@ export default function CrmAnalytics() {
         pos: i + 1, name, qty, revenue, pct: total > 0 ? (revenue / total) * 100 : 0,
       }));
   }, [sales]);
+
+  // Top products per seller (filtered by selectedSeller or showing per-seller breakdown)
+  const topProductsBySeller = useMemo(() => {
+    // Filter sales by selected seller or all sellers
+    const relevantSales = selectedSeller === 'all'
+      ? sales.filter(s => s.affiliate_name && sellers.some(sel => matchesSellerName(sel.full_name || '', s.affiliate_name)))
+      : sales.filter(s => {
+          const sel = sellers.find(sl => sl.id === selectedSeller);
+          return sel?.full_name && s.affiliate_name && matchesSellerName(sel.full_name, s.affiliate_name);
+        });
+
+    if (relevantSales.length === 0) return [];
+
+    const map: Record<string, { qty: number; revenue: number }> = {};
+    relevantSales.forEach(s => {
+      const name = s.product_name || 'Sem nome';
+      if (!map[name]) map[name] = { qty: 0, revenue: 0 };
+      map[name].qty += 1;
+      map[name].revenue += s.revenue;
+    });
+    const total = relevantSales.reduce((s, v) => s + v.revenue, 0);
+    return Object.entries(map)
+      .sort((a, b) => b[1].revenue - a[1].revenue)
+      .slice(0, 10)
+      .map(([name, { qty, revenue }], i) => ({
+        pos: i + 1, name, qty, revenue, pct: total > 0 ? (revenue / total) * 100 : 0,
+      }));
+  }, [sales, sellers, selectedSeller]);
 
   // Ranking by revenue (with fallback to leads)
   const topSellers = useMemo(() => {
