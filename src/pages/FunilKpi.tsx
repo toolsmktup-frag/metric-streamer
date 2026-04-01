@@ -36,30 +36,38 @@ function classifyByFunnelProducts(
   return null;
 }
 
-/** Map funnel_products roles to our 3-slot system */
-function roleToSlot(role: FunnelRole): 'principal' | 'bump1' | 'upsell1' | null {
+type SlotKey = 'principal' | 'bump1' | 'upsell1' | 'upsell2' | 'upsell3';
+
+/** Map funnel_products roles to slot keys */
+function roleToSlot(role: FunnelRole): SlotKey | null {
   if (role === 'front') return 'principal';
   if (role === 'order_bump') return 'bump1';
   if (role === 'upsell1') return 'upsell1';
-  return null; // upsell2, upsell3, downsell — could be expanded later
+  if (role === 'upsell2') return 'upsell2';
+  if (role === 'upsell3') return 'upsell3';
+  return null; // downsell — could be expanded later
 }
 
 /** Get display info for each slot from funnel_products */
 function getSlotLabels(funnelProducts: FunnelProduct[]) {
-  const front = funnelProducts.filter(p => p.role === 'front');
-  const bump = funnelProducts.filter(p => p.role === 'order_bump');
-  const upsell = funnelProducts.filter(p => p.role === 'upsell1');
+  const byRole = (r: string) => funnelProducts.filter(p => p.role === r);
+  const label = (fps: FunnelProduct[], fallback: string) =>
+    fps.length > 0 ? fps.map(p => p.display_name || p.product_name_contains).join(', ') : fallback;
   return {
-    principal: front.length > 0
-      ? front.map(p => p.display_name || p.product_name_contains).join(', ')
-      : 'Produto Principal',
-    bump1: bump.length > 0
-      ? bump.map(p => p.display_name || p.product_name_contains).join(', ')
-      : 'Order Bump',
-    upsell1: upsell.length > 0
-      ? upsell.map(p => p.display_name || p.product_name_contains).join(', ')
-      : 'Upsell',
+    principal: label(byRole('front'), 'Produto Principal'),
+    bump1: label(byRole('order_bump'), 'Order Bump'),
+    upsell1: label(byRole('upsell1'), 'Upsell 1'),
+    upsell2: label(byRole('upsell2'), 'Upsell 2'),
+    upsell3: label(byRole('upsell3'), 'Upsell 3'),
   };
+}
+
+/** Check which extra slots actually have products configured */
+function getActiveSlots(funnelProducts: FunnelProduct[]): SlotKey[] {
+  const slots: SlotKey[] = ['principal', 'bump1', 'upsell1'];
+  if (funnelProducts.some(p => p.role === 'upsell2')) slots.push('upsell2');
+  if (funnelProducts.some(p => p.role === 'upsell3')) slots.push('upsell3');
+  return slots;
 }
 
 function getActionValue(actions: any[] | null, actionType: string): number {
