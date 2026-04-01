@@ -202,6 +202,7 @@ export default function FunisConfigurar() {
     });
     setProducts((funnel.funnel_products || []).map(fp => ({
       id: fp.id,
+      product_id: fp.product_id || '',
       product_name_contains: fp.product_name_contains,
       role: fp.role,
       display_name: fp.display_name || '',
