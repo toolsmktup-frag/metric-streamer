@@ -628,7 +628,83 @@ export default function CrmAnalytics() {
         </Card>
       </div>
 
+      {/* Tempo de Atividade */}
       <Card>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Clock className="h-5 w-5" />
+            Tempo Ativo na Plataforma
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {loadingActivity ? (
+            <Skeleton className="h-32 w-full" />
+          ) : sellers.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-8 text-center">Sem vendedoras cadastradas</p>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {(selectedSeller === 'all' ? sellers : sellers.filter(s => s.id === selectedSeller)).map(seller => {
+                const stats = activityStats[seller.id];
+                const totalMin = stats?.totalMinutes || 0;
+                const avgMin = stats?.avgMinutesPerDay || 0;
+                const todayStr = format(new Date(), 'yyyy-MM-dd');
+                const todayMin = stats?.dailyBreakdown.find(d => d.date === todayStr)?.minutes || 0;
+
+                return (
+                  <div key={seller.id} className="rounded-lg border border-border bg-card p-4">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-sm font-bold text-primary">
+                        {(seller.full_name?.[0] || '?').toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="font-medium text-sm text-foreground">{seller.full_name || 'Sem nome'}</p>
+                        <p className="text-xs text-muted-foreground">
+                          Hoje: <span className="font-mono font-semibold text-foreground">{formatTime(todayMin)}</span>
+                        </p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-center">
+                      <div className="rounded-md bg-secondary p-2">
+                        <p className="text-xs text-muted-foreground">Total no período</p>
+                        <p className="font-mono font-semibold text-foreground">{formatTime(totalMin)}</p>
+                      </div>
+                      <div className="rounded-md bg-secondary p-2">
+                        <p className="text-xs text-muted-foreground">Média/dia</p>
+                        <p className="font-mono font-semibold text-foreground">{formatTime(avgMin)}</p>
+                      </div>
+                    </div>
+                    {stats && stats.dailyBreakdown.length > 0 && (
+                      <div className="mt-3">
+                        <p className="text-xs text-muted-foreground mb-1">Últimos dias:</p>
+                        <div className="flex gap-1 items-end h-12">
+                          {stats.dailyBreakdown.slice(-14).map(d => {
+                            const maxMin = Math.max(...stats.dailyBreakdown.map(x => x.minutes), 1);
+                            const pct = (d.minutes / maxMin) * 100;
+                            return (
+                              <Tooltip key={d.date}>
+                                <TooltipTrigger asChild>
+                                  <div
+                                    className="flex-1 bg-primary/30 rounded-t-sm min-w-[4px] hover:bg-primary/60 transition-colors cursor-help"
+                                    style={{ height: `${Math.max(pct, 4)}%` }}
+                                  />
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p className="text-xs">{format(parseISO(d.date), 'dd/MM', { locale: ptBR })}: {formatTime(d.minutes)}</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
         <CardHeader>
           <CardTitle className="text-lg">Performance por Vendedora</CardTitle>
         </CardHeader>
