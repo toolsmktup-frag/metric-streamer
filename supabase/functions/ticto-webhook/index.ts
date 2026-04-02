@@ -382,17 +382,19 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ── Forward to wz-receiver ──
+    // ── Forward to wz-receiver (awaited to prevent premature termination) ──
     try {
       const wzUrl = `${supabaseUrl}/functions/v1/wz-receiver?platform=ticto`;
-      fetch(wzUrl, {
+      const wzRes = await fetch(wzUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${supabaseKey}`,
         },
         body: JSON.stringify(payload),
-      }).catch((e) => console.error("[ticto-webhook] wz-receiver forward error:", e));
+      });
+      const wzBody = await wzRes.text();
+      console.log(`[ticto-webhook] wz-receiver response: ${wzRes.status} ${wzBody.slice(0, 300)}`);
     } catch (fwdErr) {
       console.error("[ticto-webhook] wz-receiver forward error (non-fatal):", fwdErr);
     }
