@@ -316,6 +316,47 @@ Deno.serve(async (req) => {
       return jsonResponse({ message: "No active flows", matched: 0 });
     }
 
+    // ─── Auto-cancel: compra aprovada cancela execuções pendentes de pré-venda ───
+    const preSaleTriggers = ["pix_generated", "boleto_generated", "cart_abandoned", "pix_expired", "payment_refused"];
+    if (event.status === "purchase_approved" && event.contact_phone) {
+      console.log(`[wz-receiver] purchase_approved detected for phone=${event.contact_phone} product=${event.product_id} — cancelling pre-sale executions`);
+
+      // Find running/waiting executions for same phone with pre-sale triggers
+      const { data: pendingExecs, error: pendErr } = await supabase
+        .from("wz_executions")
+        .select("id, trigger_event, variables")
+        .eq("contact_phone", event.contact_phone)
+        .in("status", ["running", "waiting"])
+        .in("trigger_event", preSaleTriggers);
+
+      if (!pendErr && pendingExecs && pendingExecs.length > 0) {
+        // Filter by same product if product_id is available
+        const toCancel = event.product_id
+          ? pendingExecs.filter((ex: any) => {
+              const exProd = ex.variables?.product_id;
+              return !exProd || String(exProd) === String(event.product_id);
+            })
+          : pendingExecs;
+
+        if (toCancel.length > 0) {
+          const cancelIds = toCancel.map((ex: any) => ex.id);
+          console.log(`[wz-receiver] Cancelling ${cancelIds.length} pre-sale executions: ${cancelIds.join(", ")}`);
+
+          await supabase
+            .from("wz_executions")
+            .update({ status: "cancelled", finished_at: new Date().toISOString() })
+            .in("id", cancelIds);
+
+          // Also cancel any scheduled steps
+          await supabase
+            .from("wz_scheduled_steps")
+            .update({ status: "cancelled" })
+            .in("execution_id", cancelIds)
+            .eq("status", "pending");
+        }
+      }
+    }
+
     // Check each flow for matching triggers
     let matched = 0;
     const executionIds: string[] = [];
