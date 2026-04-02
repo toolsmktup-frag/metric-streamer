@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { formatCurrency, formatNumber, formatPercent } from '@/lib/formatters';
-import { BarChart3, Users, ShoppingCart, DollarSign, Award, Info, UserX } from 'lucide-react';
+import { BarChart3, Users, ShoppingCart, DollarSign, Award, Info, UserX, Clock } from 'lucide-react';
 import { startOfDay, endOfDay, subDays, startOfWeek, startOfMonth, differenceInDays, format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
