@@ -95,6 +95,18 @@ function normalizeTicto(body: Record<string, any>): NormalizedEvent {
   // ─── Status ───
   const rawStatus = invoice.status || body.status || transaction.status || "";
 
+  // ─── PIX / Boleto codes ───
+  const payment = invoice.payment || body.payment || {};
+  const pixCode = invoice.pix_code || invoice.pix_emv || invoice.pix_qrcode ||
+    payment.pix_code || payment.pix_emv || payment.pix_qrcode ||
+    body.pix_code || body.pix_emv || null;
+  const boletoCode = invoice.digitable_line || invoice.boleto_digitable_line ||
+    payment.digitable_line || payment.boleto_digitable_line ||
+    body.digitable_line || null;
+  const boletoUrl = invoice.boleto_url || invoice.boleto_link ||
+    payment.boleto_url || payment.boleto_link ||
+    body.boleto_url || null;
+
   return {
     contact_phone: phone,
     contact_name: name,
@@ -110,6 +122,9 @@ function normalizeTicto(body: Record<string, any>): NormalizedEvent {
       invoice.payment_method || body.payment_method || transaction.payment_method
     ),
     installments: Number(invoice.installments || transaction.installments || 1),
+    pix_code: pixCode,
+    boleto_code: boletoCode,
+    boleto_url: boletoUrl,
     raw_payload: body,
   };
 }
