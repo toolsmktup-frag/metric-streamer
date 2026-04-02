@@ -346,6 +346,9 @@ Deno.serve(async (req) => {
         payment_method: event.payment_method,
         installments: event.installments,
         platform: event.platform,
+        pix_code: event.pix_code,
+        boleto_code: event.boleto_code,
+        boleto_url: event.boleto_url,
       };
 
       const { data: execution, error: execErr } = await supabase
