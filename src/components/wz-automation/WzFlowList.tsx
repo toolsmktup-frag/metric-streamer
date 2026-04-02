@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Zap, MoreVertical, Pencil, Trash2, Play, Pause } from 'lucide-react';
+import { Plus, Zap, MoreVertical, Pencil, Trash2, Play, Pause, Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { useWzFlows, useDeleteWzFlow, useToggleWzFlow } from '@/hooks/useWzFlows';
+import { useWzFlows, useDeleteWzFlow, useToggleWzFlow, useDuplicateWzFlow } from '@/hooks/useWzFlows';
 import type { WzFlow } from '@/types/wz-automation';
 
 const platformLabels: Record<string, string> = {
