@@ -343,22 +343,26 @@ Deno.serve(async (req) => {
       const edges = (flow.edges || []) as Record<string, any>[];
       const nextEdge = edges.find((e) => e.source === triggerNode.id);
       if (nextEdge) {
-        // Fire-and-forget call to wz-executor
+        // Awaited call to wz-executor to prevent premature termination
         const execUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/wz-executor`;
-        const bgTask = fetch(execUrl, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-          },
-          body: JSON.stringify({
-            execution_id: execution.id,
-            flow_id: flow.id,
-            current_node_id: nextEdge.target,
-          }),
-        }).catch((err) => console.error("Error calling wz-executor:", err));
-
-        void bgTask;
+        try {
+          const execRes = await fetch(execUrl, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+            },
+            body: JSON.stringify({
+              execution_id: execution.id,
+              flow_id: flow.id,
+              current_node_id: nextEdge.target,
+            }),
+          });
+          const execBody = await execRes.text();
+          console.log(`[wz-receiver] wz-executor response for exec ${execution.id}: ${execRes.status} ${execBody.slice(0, 300)}`);
+        } catch (err) {
+          console.error("Error calling wz-executor:", err);
+        }
       } else {
         // No edge from trigger — mark completed
         await supabase

@@ -92,14 +92,16 @@ Deno.serve(async (req) => {
     // ── Forward to wz-receiver BEFORE skipping — automations need pending/pix events ──
     try {
       const wzUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/wz-receiver?platform=guru`;
-      fetch(wzUrl, {
+      const wzRes = await fetch(wzUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
         },
         body: JSON.stringify(payload),
-      }).catch((e) => console.error("[guru-webhook] wz-receiver forward error:", e));
+      });
+      const wzBody = await wzRes.text();
+      console.log(`[guru-webhook] wz-receiver response: ${wzRes.status} ${wzBody.slice(0, 300)}`);
     } catch (fwdErr) {
       console.error("[guru-webhook] wz-receiver forward error (non-fatal):", fwdErr);
     }
