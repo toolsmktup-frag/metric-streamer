@@ -29,6 +29,9 @@ interface NormalizedEvent {
   platform: string;
   payment_method: string | null;
   installments: number;
+  pix_code: string | null;
+  boleto_code: string | null;
+  boleto_url: string | null;
   raw_payload: Record<string, unknown>;
 }
 
