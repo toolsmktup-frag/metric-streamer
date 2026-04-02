@@ -237,6 +237,25 @@ export default function CrmAnalytics() {
     },
   });
 
+  // Fetch activity time from user_activity_logs
+  const { data: activityData = [] as Array<{ user_id: string; active_at: string; page_path: string | null }>, isLoading: loadingActivity } = useQuery({
+    queryKey: ['crm-activity-time', dateFrom, dateTo],
+    queryFn: async () => {
+      try {
+        const { data, error } = await (supabase as any)
+          .from('user_activity_logs')
+          .select('user_id, active_at, page_path')
+          .gte('active_at', dateFrom)
+          .lte('active_at', dateTo);
+        if (error) { console.error('Activity fetch error:', error); return []; }
+        return data || [];
+      } catch {
+        return [];
+      }
+    },
+    staleTime: 60_000,
+  });
+
   const isLoading = loadingSellers || loadingLeads || loadingSales;
 
   // Match sales to sellers by affiliate_name ↔ full_name (fuzzy first-name match)
