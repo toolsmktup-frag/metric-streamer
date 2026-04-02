@@ -383,6 +383,19 @@ function WhatsAppConfig({ data, update }: { data: any; update: (k: string, v: an
                         </div>
                       </>
                     )}
+
+                    {/* Skip if replied toggle */}
+                    <div className="flex items-center justify-between pt-2 border-t border-border/50">
+                      <div className="flex items-center gap-1.5">
+                        <MessageCircleOff className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span className="text-[11px] text-muted-foreground">Só enviar se não respondeu</span>
+                      </div>
+                      <Switch
+                        checked={block.skipIfReplied || false}
+                        onCheckedChange={(v) => updateBlock(i, bi, 'skipIfReplied', v as any)}
+                        className="scale-75"
+                      />
+                    </div>
                   </div>
                 ))}
 
