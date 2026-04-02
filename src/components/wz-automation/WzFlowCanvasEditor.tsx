@@ -159,10 +159,6 @@ export default function WzFlowCanvasEditor() {
   const handleNodeDuplicate = useCallback((nodeId: string) => {
     const original = nodes.find((n) => n.id === nodeId);
     if (!original) return;
-    if (original.type === 'trigger') {
-      toast.error('Apenas 1 gatilho por fluxo');
-      return;
-    }
     const newNode: Node = {
       ...original,
       id: getNodeId(),
