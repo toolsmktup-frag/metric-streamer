@@ -705,6 +705,7 @@ export default function CrmAnalytics() {
         </CardContent>
       </Card>
 
+      <Card>
         <CardHeader>
           <CardTitle className="text-lg">Performance por Vendedora</CardTitle>
         </CardHeader>
