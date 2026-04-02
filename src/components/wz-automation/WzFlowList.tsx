@@ -119,11 +119,13 @@ function FlowCard({
   flow,
   onEdit,
   onDelete,
+  onDuplicate,
   onToggle,
 }: {
   flow: WzFlow;
   onEdit: () => void;
   onDelete: () => void;
+  onDuplicate: () => void;
   onToggle: (active: boolean) => void;
 }) {
   const triggerNodes = (flow.nodes || []).filter((n: any) => n.type === 'trigger');
