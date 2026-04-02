@@ -153,6 +153,9 @@ function FlowCard({
             <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit(); }}>
               <Pencil className="h-4 w-4 mr-2" /> Editar
             </DropdownMenuItem>
+            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onDuplicate(); }}>
+              <Copy className="h-4 w-4 mr-2" /> Duplicar
+            </DropdownMenuItem>
             <DropdownMenuItem
               onClick={(e) => { e.stopPropagation(); onDelete(); }}
               className="text-destructive focus:text-destructive"
