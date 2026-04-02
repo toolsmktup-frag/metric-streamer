@@ -256,6 +256,7 @@ export default function WzFlowCanvasEditor() {
             onConnect={onConnect}
             onInit={setReactFlowInstance}
             onNodeClick={onNodeClick}
+            onEdgeClick={onEdgeClick}
             onPaneClick={onPaneClick}
             onDrop={onDrop}
             onDragOver={onDragOver}
