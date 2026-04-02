@@ -8,6 +8,7 @@ import { useMetaSyncStatus } from '@/hooks/useMetaData';
 import { Suspense } from 'react';
 import UserMenu from './UserMenu';
 import { useTheme } from '@/hooks/useTheme';
+import { useActivityTracker } from '@/hooks/useActivityTracker';
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -54,6 +55,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
   const { refresh } = useFilterStore();
   const [refreshing, setRefreshing] = useState(false);
   useTheme(); // Initialize theme on app load
+  useActivityTracker(); // Track user activity for CRM analytics
 
   const handleRefresh = () => {
     setRefreshing(true);

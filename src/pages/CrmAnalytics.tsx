@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { formatCurrency, formatNumber, formatPercent } from '@/lib/formatters';
-import { BarChart3, Users, ShoppingCart, DollarSign, Award, Info, UserX } from 'lucide-react';
+import { BarChart3, Users, ShoppingCart, DollarSign, Award, Info, UserX, Clock } from 'lucide-react';
 import { startOfDay, endOfDay, subDays, startOfWeek, startOfMonth, differenceInDays, format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -237,6 +237,25 @@ export default function CrmAnalytics() {
     },
   });
 
+  // Fetch activity time from user_activity_logs
+  const { data: activityData = [] as Array<{ user_id: string; active_at: string; page_path: string | null }>, isLoading: loadingActivity } = useQuery({
+    queryKey: ['crm-activity-time', dateFrom, dateTo],
+    queryFn: async () => {
+      try {
+        const { data, error } = await (supabase as any)
+          .from('user_activity_logs')
+          .select('user_id, active_at, page_path')
+          .gte('active_at', dateFrom)
+          .lte('active_at', dateTo);
+        if (error) { console.error('Activity fetch error:', error); return []; }
+        return data || [];
+      } catch {
+        return [];
+      }
+    },
+    staleTime: 60_000,
+  });
+
   const isLoading = loadingSellers || loadingLeads || loadingSales;
 
   // Match sales to sellers by affiliate_name ↔ full_name (fuzzy first-name match)
@@ -290,6 +309,43 @@ export default function CrmAnalytics() {
       return tableSortDir === 'desc' ? bVal - aVal : aVal - bVal;
     });
   }, [sellers, leadActivityData, sales, daysInPeriod, tableSortKey, tableSortDir, lostLeadsData]);
+
+  // Activity time per seller (each heartbeat = 1 minute)
+  const activityStats = useMemo(() => {
+    const sellerMinutes: Record<string, number> = {};
+    const sellerDayMinutes: Record<string, Record<string, number>> = {};
+    
+    for (const log of activityData) {
+      const sellerId = log.user_id;
+      if (!sellers.some(s => s.id === sellerId)) continue;
+      sellerMinutes[sellerId] = (sellerMinutes[sellerId] || 0) + 1;
+      const day = (log.active_at || '').slice(0, 10);
+      if (!sellerDayMinutes[sellerId]) sellerDayMinutes[sellerId] = {};
+      sellerDayMinutes[sellerId][day] = (sellerDayMinutes[sellerId][day] || 0) + 1;
+    }
+
+    const result: Record<string, { totalMinutes: number; avgMinutesPerDay: number; dailyBreakdown: Array<{ date: string; minutes: number }> }> = {};
+    for (const seller of sellers) {
+      const total = sellerMinutes[seller.id] || 0;
+      const dayData = sellerDayMinutes[seller.id] || {};
+      const activeDays = Object.keys(dayData).length || 1;
+      result[seller.id] = {
+        totalMinutes: total,
+        avgMinutesPerDay: total / activeDays,
+        dailyBreakdown: Object.entries(dayData)
+          .map(([date, minutes]) => ({ date, minutes }))
+          .sort((a, b) => a.date.localeCompare(b.date)),
+      };
+    }
+    return result;
+  }, [activityData, sellers]);
+
+  function formatTime(minutes: number): string {
+    const h = Math.floor(minutes / 60);
+    const m = Math.round(minutes % 60);
+    if (h === 0) return `${m}min`;
+    return `${h}h ${m}min`;
+  }
 
   // KPIs filtered by selected seller
   const kpiStats = useMemo(() => {
@@ -572,6 +628,83 @@ export default function CrmAnalytics() {
         </Card>
       </div>
 
+      {/* Tempo de Atividade */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Clock className="h-5 w-5" />
+            Tempo Ativo na Plataforma
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {loadingActivity ? (
+            <Skeleton className="h-32 w-full" />
+          ) : sellers.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-8 text-center">Sem vendedoras cadastradas</p>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {(selectedSeller === 'all' ? sellers : sellers.filter(s => s.id === selectedSeller)).map(seller => {
+                const stats = activityStats[seller.id];
+                const totalMin = stats?.totalMinutes || 0;
+                const avgMin = stats?.avgMinutesPerDay || 0;
+                const todayStr = format(new Date(), 'yyyy-MM-dd');
+                const todayMin = stats?.dailyBreakdown.find(d => d.date === todayStr)?.minutes || 0;
+
+                return (
+                  <div key={seller.id} className="rounded-lg border border-border bg-card p-4">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-sm font-bold text-primary">
+                        {(seller.full_name?.[0] || '?').toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="font-medium text-sm text-foreground">{seller.full_name || 'Sem nome'}</p>
+                        <p className="text-xs text-muted-foreground">
+                          Hoje: <span className="font-mono font-semibold text-foreground">{formatTime(todayMin)}</span>
+                        </p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-center">
+                      <div className="rounded-md bg-secondary p-2">
+                        <p className="text-xs text-muted-foreground">Total no período</p>
+                        <p className="font-mono font-semibold text-foreground">{formatTime(totalMin)}</p>
+                      </div>
+                      <div className="rounded-md bg-secondary p-2">
+                        <p className="text-xs text-muted-foreground">Média/dia</p>
+                        <p className="font-mono font-semibold text-foreground">{formatTime(avgMin)}</p>
+                      </div>
+                    </div>
+                    {stats && stats.dailyBreakdown.length > 0 && (
+                      <div className="mt-3">
+                        <p className="text-xs text-muted-foreground mb-1">Últimos dias:</p>
+                        <div className="flex gap-1 items-end h-12">
+                          {stats.dailyBreakdown.slice(-14).map(d => {
+                            const maxMin = Math.max(...stats.dailyBreakdown.map(x => x.minutes), 1);
+                            const pct = (d.minutes / maxMin) * 100;
+                            return (
+                              <Tooltip key={d.date}>
+                                <TooltipTrigger asChild>
+                                  <div
+                                    className="flex-1 bg-primary/30 rounded-t-sm min-w-[4px] hover:bg-primary/60 transition-colors cursor-help"
+                                    style={{ height: `${Math.max(pct, 4)}%` }}
+                                  />
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p className="text-xs">{format(parseISO(d.date), 'dd/MM', { locale: ptBR })}: {formatTime(d.minutes)}</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle className="text-lg">Performance por Vendedora</CardTitle>
@@ -613,7 +746,7 @@ export default function CrmAnalytics() {
                     <TableHead className="cursor-pointer select-none" onClick={() => handleSort('ticketMedio')}>
                       Ticket Médio{sortIcon('ticketMedio')}
                     </TableHead>
-                    <TableHead>Tempo Conversa</TableHead>
+                    <TableHead>Tempo Ativo</TableHead>
                     <TableHead className="cursor-pointer select-none" onClick={() => handleSort('conversionRate')}>
                       Conversão{sortIcon('conversionRate')}
                     </TableHead>
@@ -644,7 +777,7 @@ export default function CrmAnalytics() {
                       <TableCell className="font-mono">{formatCurrency(s.revenue)}</TableCell>
                       <TableCell className="font-mono text-primary">{formatCurrency(s.commission)}</TableCell>
                       <TableCell className="font-mono">{s.ticketMedio > 0 ? formatCurrency(s.ticketMedio) : '—'}</TableCell>
-                      <TableCell className="text-muted-foreground">—</TableCell>
+                      <TableCell className="font-mono">{activityStats[s.id]?.totalMinutes ? formatTime(activityStats[s.id].totalMinutes) : '—'}</TableCell>
                       <TableCell className="font-mono">{s.conversionRate > 0 ? `${s.conversionRate.toFixed(1)}%` : '—'}</TableCell>
                       <TableCell className="font-mono text-destructive">{s.lostLeads > 0 ? `${s.lostLeads} (${formatCurrency(s.lostValue)})` : '—'}</TableCell>
                     </TableRow>
