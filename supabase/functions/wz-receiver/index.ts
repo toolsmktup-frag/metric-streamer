@@ -29,6 +29,9 @@ interface NormalizedEvent {
   platform: string;
   payment_method: string | null;
   installments: number;
+  pix_code: string | null;
+  boleto_code: string | null;
+  boleto_url: string | null;
   raw_payload: Record<string, unknown>;
 }
 
@@ -92,6 +95,18 @@ function normalizeTicto(body: Record<string, any>): NormalizedEvent {
   // ─── Status ───
   const rawStatus = invoice.status || body.status || transaction.status || "";
 
+  // ─── PIX / Boleto codes ───
+  const payment = invoice.payment || body.payment || {};
+  const pixCode = invoice.pix_code || invoice.pix_emv || invoice.pix_qrcode ||
+    payment.pix_code || payment.pix_emv || payment.pix_qrcode ||
+    body.pix_code || body.pix_emv || null;
+  const boletoCode = invoice.digitable_line || invoice.boleto_digitable_line ||
+    payment.digitable_line || payment.boleto_digitable_line ||
+    body.digitable_line || null;
+  const boletoUrl = invoice.boleto_url || invoice.boleto_link ||
+    payment.boleto_url || payment.boleto_link ||
+    body.boleto_url || null;
+
   return {
     contact_phone: phone,
     contact_name: name,
@@ -107,6 +122,9 @@ function normalizeTicto(body: Record<string, any>): NormalizedEvent {
       invoice.payment_method || body.payment_method || transaction.payment_method
     ),
     installments: Number(invoice.installments || transaction.installments || 1),
+    pix_code: pixCode,
+    boleto_code: boletoCode,
+    boleto_url: boletoUrl,
     raw_payload: body,
   };
 }
@@ -126,6 +144,14 @@ function normalizeGuru(body: Record<string, any>): NormalizedEvent {
     ? Number(grossRaw) / 100
     : Number(grossRaw);
 
+  const paymentObj = body.payment || {};
+  const pixCode = paymentObj.pix_code || paymentObj.pix_emv || paymentObj.pix_qrcode ||
+    body.pix_code || body.pix_emv || null;
+  const boletoCode = paymentObj.digitable_line || paymentObj.boleto_digitable_line ||
+    body.digitable_line || null;
+  const boletoUrl = paymentObj.boleto_url || paymentObj.boleto_link ||
+    body.boleto_url || null;
+
   return {
     contact_phone: phone,
     contact_name: contact.name || contact.first_name || null,
@@ -137,8 +163,11 @@ function normalizeGuru(body: Record<string, any>): NormalizedEvent {
     paid_amount: gross,
     status: normalizeStatus(body.status || subscription.status || ""),
     platform: "guru",
-    payment_method: normalizePaymentMethod(body.payment?.method || body.payment_method),
-    installments: Number(body.payment?.installments || body.installments || 1),
+    payment_method: normalizePaymentMethod(paymentObj.method || body.payment_method),
+    installments: Number(paymentObj.installments || body.installments || 1),
+    pix_code: pixCode,
+    boleto_code: boletoCode,
+    boleto_url: boletoUrl,
     raw_payload: body,
   };
 }
@@ -157,6 +186,9 @@ function normalizeGeneric(body: Record<string, any>): NormalizedEvent {
     platform: body.platform || "unknown",
     payment_method: normalizePaymentMethod(body.payment_method),
     installments: Number(body.installments || 1),
+    pix_code: body.pix_code || body.pix_emv || null,
+    boleto_code: body.digitable_line || body.boleto_code || null,
+    boleto_url: body.boleto_url || null,
     raw_payload: body,
   };
 }
@@ -314,6 +346,9 @@ Deno.serve(async (req) => {
         payment_method: event.payment_method,
         installments: event.installments,
         platform: event.platform,
+        pix_code: event.pix_code,
+        boleto_code: event.boleto_code,
+        boleto_url: event.boleto_url,
       };
 
       const { data: execution, error: execErr } = await supabase

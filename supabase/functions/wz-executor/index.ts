@@ -27,6 +27,9 @@ function substituteVariables(text: string, vars: Record<string, any>): string {
     .replace(/\{\{parcelas\}\}/gi, String(vars.installments || 1))
     .replace(/\{\{metodo_pagamento\}\}/gi, vars.payment_method || "")
     .replace(/\{\{plataforma\}\}/gi, vars.platform || "")
+    .replace(/\{\{codigo_pix\}\}/gi, vars.pix_code || "")
+    .replace(/\{\{codigo_boleto\}\}/gi, vars.boleto_code || "")
+    .replace(/\{\{link_boleto\}\}/gi, vars.boleto_url || "")
     .trim();
 }
 

@@ -22,6 +22,9 @@ const variableChips = [
   { key: '{{parcelas}}', label: 'Parcelas' },
   { key: '{{metodo_pagamento}}', label: 'Método Pgto' },
   { key: '{{plataforma}}', label: 'Plataforma' },
+  { key: '{{codigo_pix}}', label: 'Código PIX' },
+  { key: '{{codigo_boleto}}', label: 'Código Boleto' },
+  { key: '{{link_boleto}}', label: 'Link Boleto' },
 ];
 
 const conditionVariables = [
