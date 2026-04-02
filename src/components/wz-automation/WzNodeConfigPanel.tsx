@@ -189,6 +189,7 @@ interface MessageVariation {
   type: string;
   imageUrl?: string;
   caption?: string;
+  skipIfReplied?: boolean;
   blocks?: MessageBlock[];
 }
 
