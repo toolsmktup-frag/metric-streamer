@@ -746,7 +746,7 @@ export default function CrmAnalytics() {
                     <TableHead className="cursor-pointer select-none" onClick={() => handleSort('ticketMedio')}>
                       Ticket Médio{sortIcon('ticketMedio')}
                     </TableHead>
-                    <TableHead>Tempo Conversa</TableHead>
+                    <TableHead>Tempo Ativo</TableHead>
                     <TableHead className="cursor-pointer select-none" onClick={() => handleSort('conversionRate')}>
                       Conversão{sortIcon('conversionRate')}
                     </TableHead>
