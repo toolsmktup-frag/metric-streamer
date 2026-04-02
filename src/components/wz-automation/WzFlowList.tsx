@@ -20,6 +20,7 @@ export default function WzFlowList({ embedded = false }: { embedded?: boolean })
   const { data: flows = [], isLoading } = useWzFlows();
   const deleteFlow = useDeleteWzFlow();
   const toggleFlow = useToggleWzFlow();
+  const duplicateFlow = useDuplicateWzFlow();
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   return (
