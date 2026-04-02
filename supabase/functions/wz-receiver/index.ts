@@ -144,6 +144,14 @@ function normalizeGuru(body: Record<string, any>): NormalizedEvent {
     ? Number(grossRaw) / 100
     : Number(grossRaw);
 
+  const paymentObj = body.payment || {};
+  const pixCode = paymentObj.pix_code || paymentObj.pix_emv || paymentObj.pix_qrcode ||
+    body.pix_code || body.pix_emv || null;
+  const boletoCode = paymentObj.digitable_line || paymentObj.boleto_digitable_line ||
+    body.digitable_line || null;
+  const boletoUrl = paymentObj.boleto_url || paymentObj.boleto_link ||
+    body.boleto_url || null;
+
   return {
     contact_phone: phone,
     contact_name: contact.name || contact.first_name || null,
@@ -155,8 +163,11 @@ function normalizeGuru(body: Record<string, any>): NormalizedEvent {
     paid_amount: gross,
     status: normalizeStatus(body.status || subscription.status || ""),
     platform: "guru",
-    payment_method: normalizePaymentMethod(body.payment?.method || body.payment_method),
-    installments: Number(body.payment?.installments || body.installments || 1),
+    payment_method: normalizePaymentMethod(paymentObj.method || body.payment_method),
+    installments: Number(paymentObj.installments || body.installments || 1),
+    pix_code: pixCode,
+    boleto_code: boletoCode,
+    boleto_url: boletoUrl,
     raw_payload: body,
   };
 }
