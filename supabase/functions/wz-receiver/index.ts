@@ -134,9 +134,19 @@ function normalizeGuru(body: Record<string, any>): NormalizedEvent {
   const product = body.product || {};
   const subscription = body.subscription || {};
 
-  let phone = contact.phone_number || contact.phone || null;
-  if (!phone && contact.ddi && contact.phone_number) {
-    phone = `${contact.ddi}${contact.phone_number}`;
+  // ─── Phone: concatenar phone_local_code + phone_number ───
+  let phone: string | null = null;
+  const ddi = contact.phone_local_code || contact.ddi || "";
+  const rawPhone = contact.phone_number || contact.phone || "";
+  if (rawPhone) {
+    const cleaned = String(rawPhone).replace(/\D/g, "");
+    const ddiClean = String(ddi).replace(/\D/g, "");
+    // Se já começa com o DDI, não duplicar
+    if (ddiClean && !cleaned.startsWith(ddiClean)) {
+      phone = `${ddiClean}${cleaned}`;
+    } else {
+      phone = cleaned || null;
+    }
   }
 
   const grossRaw = body.payment?.total || body.total || body.amount || 0;
@@ -145,12 +155,23 @@ function normalizeGuru(body: Record<string, any>): NormalizedEvent {
     : Number(grossRaw);
 
   const paymentObj = body.payment || {};
-  const pixCode = paymentObj.pix_code || paymentObj.pix_emv || paymentObj.pix_qrcode ||
+
+  // ─── PIX code: Guru coloca em payment.pix.qrcode.signature ───
+  const pixCode = paymentObj.pix?.qrcode?.signature || paymentObj.pix?.emv ||
+    paymentObj.pix_code || paymentObj.pix_emv || paymentObj.pix_qrcode ||
     body.pix_code || body.pix_emv || null;
+
   const boletoCode = paymentObj.digitable_line || paymentObj.boleto_digitable_line ||
     body.digitable_line || null;
   const boletoUrl = paymentObj.boleto_url || paymentObj.boleto_link ||
     body.boleto_url || null;
+
+  // ─── Installments: pode ser objeto {qty: N} ou número ───
+  const instRaw = paymentObj.installments || body.installments || 1;
+  const installments = typeof instRaw === "object" ? Number(instRaw.qty || 1) : Number(instRaw || 1);
+
+  // ─── Offer: pode estar em product.offer.name ───
+  const offerName = body.offer?.name || product.offer?.name || null;
 
   return {
     contact_phone: phone,
@@ -158,13 +179,13 @@ function normalizeGuru(body: Record<string, any>): NormalizedEvent {
     contact_email: contact.email || null,
     product_name: product.name || body.product_name || null,
     product_id: String(product.id || product.product_id || product.marketplace_id || ""),
-    offer_name: body.offer?.name || null,
+    offer_name: offerName,
     gross_amount: gross,
     paid_amount: gross,
     status: normalizeStatus(body.status || subscription.status || ""),
     platform: "guru",
     payment_method: normalizePaymentMethod(paymentObj.method || body.payment_method),
-    installments: Number(paymentObj.installments || body.installments || 1),
+    installments,
     pix_code: pixCode,
     boleto_code: boletoCode,
     boleto_url: boletoUrl,
