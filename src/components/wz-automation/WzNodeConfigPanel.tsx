@@ -172,15 +172,58 @@ function TriggerConfig({ data, update }: { data: any; update: (k: string, v: any
   );
 }
 
+interface MessageBlock {
+  text: string;
+  type: string;
+  imageUrl?: string;
+  caption?: string;
+}
+
+interface MessageVariation {
+  text: string;
+  type: string;
+  imageUrl?: string;
+  caption?: string;
+  blocks?: MessageBlock[];
+}
+
+function getBlocks(msg: MessageVariation): MessageBlock[] {
+  if (msg.blocks && msg.blocks.length > 0) return msg.blocks;
+  return [{ text: msg.text || '', type: msg.type || 'text', imageUrl: msg.imageUrl, caption: msg.caption }];
+}
+
 function WhatsAppConfig({ data, update }: { data: any; update: (k: string, v: any) => void }) {
   const { data: instances = [] } = useWzInstances();
-  const messages: Array<{ text: string; type: string; imageUrl?: string; caption?: string }> = data.messages || [{ text: '', type: 'text' }];
+  const messages: MessageVariation[] = data.messages || [{ text: '', type: 'text' }];
   const [activeTab, setActiveTab] = useState('0');
   const textareaRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
 
-  const updateMessage = (index: number, field: string, value: string) => {
+  const updateMessage = (index: number, field: string, value: any) => {
     const updated = [...messages];
     updated[index] = { ...updated[index], [field]: value };
+    update('messages', updated);
+  };
+
+  const updateBlock = (varIndex: number, blockIndex: number, field: string, value: string) => {
+    const updated = [...messages];
+    const blocks = [...getBlocks(updated[varIndex])];
+    blocks[blockIndex] = { ...blocks[blockIndex], [field]: value };
+    updated[varIndex] = { ...updated[varIndex], blocks, text: blocks[0]?.text || '', type: blocks[0]?.type || 'text' };
+    update('messages', updated);
+  };
+
+  const addBlock = (varIndex: number) => {
+    const updated = [...messages];
+    const blocks = [...getBlocks(updated[varIndex]), { text: '', type: 'text' }];
+    updated[varIndex] = { ...updated[varIndex], blocks, text: blocks[0]?.text || '', type: blocks[0]?.type || 'text' };
+    update('messages', updated);
+  };
+
+  const removeBlock = (varIndex: number, blockIndex: number) => {
+    const updated = [...messages];
+    const blocks = getBlocks(updated[varIndex]).filter((_, i) => i !== blockIndex);
+    if (blocks.length === 0) return;
+    updated[varIndex] = { ...updated[varIndex], blocks, text: blocks[0]?.text || '', type: blocks[0]?.type || 'text' };
     update('messages', updated);
   };
 
@@ -198,20 +241,22 @@ function WhatsAppConfig({ data, update }: { data: any; update: (k: string, v: an
     setActiveTab('0');
   };
 
-  const insertVariable = (index: number, variable: string) => {
-    const ta = textareaRefs.current[String(index)];
+  const insertVariable = (varIndex: number, blockIndex: number, variable: string) => {
+    const key = `${varIndex}-${blockIndex}`;
+    const ta = textareaRefs.current[key];
+    const blocks = getBlocks(messages[varIndex]);
+    const current = blocks[blockIndex]?.text || '';
     if (ta) {
       const start = ta.selectionStart;
       const end = ta.selectionEnd;
-      const current = messages[index].text;
       const newText = current.substring(0, start) + variable + current.substring(end);
-      updateMessage(index, 'text', newText);
+      updateBlock(varIndex, blockIndex, 'text', newText);
       setTimeout(() => {
         ta.focus();
         ta.setSelectionRange(start + variable.length, start + variable.length);
       }, 0);
     } else {
-      updateMessage(index, 'text', messages[index].text + variable);
+      updateBlock(varIndex, blockIndex, 'text', current + variable);
     }
   };
 
@@ -256,77 +301,102 @@ function WhatsAppConfig({ data, update }: { data: any; update: (k: string, v: an
             ))}
           </TabsList>
 
-          {messages.map((msg, i) => (
-            <TabsContent key={i} value={String(i)} className="space-y-3 mt-3">
-              <div className="space-y-2">
-                <Label className="text-xs">Tipo</Label>
-                <Select value={msg.type} onValueChange={(v) => updateMessage(i, 'type', v)}>
-                  <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="text">Texto</SelectItem>
-                    <SelectItem value="image">Imagem</SelectItem>
-                    <SelectItem value="audio">Áudio</SelectItem>
-                    <SelectItem value="document">Documento</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+          {messages.map((msg, i) => {
+            const blocks = getBlocks(msg);
+            return (
+              <TabsContent key={i} value={String(i)} className="space-y-3 mt-3">
+                {blocks.map((block, bi) => (
+                  <div key={bi} className="space-y-2 border border-border rounded-lg p-3 relative">
+                    {blocks.length > 1 && (
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] font-medium text-muted-foreground">Mensagem {bi + 1}</span>
+                        <Button variant="ghost" size="sm" className="h-5 w-5 p-0 text-destructive hover:text-destructive" onClick={() => removeBlock(i, bi)}>
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    )}
 
-              {/* Variable chips */}
-              <div className="flex flex-wrap gap-1">
-                {variableChips.map(v => (
-                  <Badge
-                    key={v.key}
-                    variant="outline"
-                    className="cursor-pointer hover:bg-primary/10 text-[10px] px-1.5 py-0.5"
-                    onClick={() => insertVariable(i, v.key)}
-                  >
-                    {v.label}
-                  </Badge>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Tipo</Label>
+                      <Select value={block.type} onValueChange={(v) => updateBlock(i, bi, 'type', v)}>
+                        <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="text">Texto</SelectItem>
+                          <SelectItem value="image">Imagem</SelectItem>
+                          <SelectItem value="audio">Áudio</SelectItem>
+                          <SelectItem value="document">Documento</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Variable chips */}
+                    <div className="flex flex-wrap gap-1">
+                      {variableChips.map(v => (
+                        <Badge
+                          key={v.key}
+                          variant="outline"
+                          className="cursor-pointer hover:bg-primary/10 text-[10px] px-1.5 py-0.5"
+                          onClick={() => insertVariable(i, bi, v.key)}
+                        >
+                          {v.label}
+                        </Badge>
+                      ))}
+                    </div>
+
+                    <Textarea
+                      ref={(el) => { textareaRefs.current[`${i}-${bi}`] = el; }}
+                      value={block.text}
+                      onChange={(e) => updateBlock(i, bi, 'text', e.target.value)}
+                      placeholder="Digite a mensagem..."
+                      rows={3}
+                      className="resize-none text-sm"
+                    />
+                    <div className="text-right text-[10px] text-muted-foreground">
+                      {block.text.length}/1024
+                    </div>
+
+                    {block.type === 'image' && (
+                      <>
+                        <div className="space-y-1">
+                          <Label className="text-xs">URL da imagem</Label>
+                          <Input
+                            value={block.imageUrl || ''}
+                            onChange={(e) => updateBlock(i, bi, 'imageUrl', e.target.value)}
+                            placeholder="https://..."
+                            className="h-8 text-xs"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">Legenda</Label>
+                          <Input
+                            value={block.caption || ''}
+                            onChange={(e) => updateBlock(i, bi, 'caption', e.target.value)}
+                            placeholder="Legenda da imagem"
+                            className="h-8 text-xs"
+                          />
+                        </div>
+                      </>
+                    )}
+                  </div>
                 ))}
-              </div>
 
-              <Textarea
-                ref={(el) => { textareaRefs.current[String(i)] = el; }}
-                value={msg.text}
-                onChange={(e) => updateMessage(i, 'text', e.target.value)}
-                placeholder="Digite a mensagem..."
-                rows={4}
-                className="resize-none text-sm"
-              />
-              <div className="text-right text-[10px] text-muted-foreground">
-                {msg.text.length}/1024
-              </div>
-
-              {msg.type === 'image' && (
-                <>
-                  <div className="space-y-1">
-                    <Label className="text-xs">URL da imagem</Label>
-                    <Input
-                      value={msg.imageUrl || ''}
-                      onChange={(e) => updateMessage(i, 'imageUrl', e.target.value)}
-                      placeholder="https://..."
-                      className="h-8 text-xs"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Legenda</Label>
-                    <Input
-                      value={msg.caption || ''}
-                      onChange={(e) => updateMessage(i, 'caption', e.target.value)}
-                      placeholder="Legenda da imagem"
-                      className="h-8 text-xs"
-                    />
-                  </div>
-                </>
-              )}
-
-              {messages.length > 1 && (
-                <Button variant="ghost" size="sm" className="text-xs text-destructive h-7" onClick={() => removeVariation(i)}>
-                  <X className="h-3 w-3 mr-1" /> Remover variação
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full text-xs h-8 gap-1 border-dashed"
+                  onClick={() => addBlock(i)}
+                >
+                  <Plus className="h-3 w-3" /> Adicionar mais mensagens
                 </Button>
-              )}
-            </TabsContent>
-          ))}
+
+                {messages.length > 1 && (
+                  <Button variant="ghost" size="sm" className="text-xs text-destructive h-7" onClick={() => removeVariation(i)}>
+                    <X className="h-3 w-3 mr-1" /> Remover variação
+                  </Button>
+                )}
+              </TabsContent>
+            );
+          })}
         </Tabs>
       </div>
 
