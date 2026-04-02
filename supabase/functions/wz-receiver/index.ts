@@ -1,4 +1,4 @@
-// v2.0.0 - Ticto v2 payload support + improved logging
+// v2.1.0 - atomic dedup by external event id + improved Guru parsing
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -32,6 +32,7 @@ interface NormalizedEvent {
   pix_code: string | null;
   boleto_code: string | null;
   boleto_url: string | null;
+  external_event_id: string | null;
   raw_payload: Record<string, unknown>;
 }
 
@@ -107,6 +108,10 @@ function normalizeTicto(body: Record<string, any>): NormalizedEvent {
     payment.boleto_url || payment.boleto_link ||
     body.boleto_url || null;
 
+  const externalEventId = String(
+    body.id || invoice.id || invoice.transaction_id || transaction.id || body.transaction_id || ""
+  ).trim() || null;
+
   return {
     contact_phone: phone,
     contact_name: name,
@@ -125,6 +130,7 @@ function normalizeTicto(body: Record<string, any>): NormalizedEvent {
     pix_code: pixCode,
     boleto_code: boletoCode,
     boleto_url: boletoUrl,
+    external_event_id: externalEventId,
     raw_payload: body,
   };
 }
@@ -141,7 +147,6 @@ function normalizeGuru(body: Record<string, any>): NormalizedEvent {
   if (rawPhone) {
     const cleaned = String(rawPhone).replace(/\D/g, "");
     const ddiClean = String(ddi).replace(/\D/g, "");
-    // Se já começa com o DDI, não duplicar
     if (ddiClean && !cleaned.startsWith(ddiClean)) {
       phone = `${ddiClean}${cleaned}`;
     } else {
@@ -172,6 +177,7 @@ function normalizeGuru(body: Record<string, any>): NormalizedEvent {
 
   // ─── Offer: pode estar em product.offer.name ───
   const offerName = body.offer?.name || product.offer?.name || null;
+  const externalEventId = String(body.id || paymentObj.marketplace_id || body.transaction_id || "").trim() || null;
 
   return {
     contact_phone: phone,
@@ -189,6 +195,7 @@ function normalizeGuru(body: Record<string, any>): NormalizedEvent {
     pix_code: pixCode,
     boleto_code: boletoCode,
     boleto_url: boletoUrl,
+    external_event_id: externalEventId,
     raw_payload: body,
   };
 }
@@ -210,6 +217,7 @@ function normalizeGeneric(body: Record<string, any>): NormalizedEvent {
     pix_code: body.pix_code || body.pix_emv || null,
     boleto_code: body.digitable_line || body.boleto_code || null,
     boleto_url: body.boleto_url || null,
+    external_event_id: String(body.id || body.transaction_id || body.order_id || "").trim() || null,
     raw_payload: body,
   };
 }
@@ -252,6 +260,28 @@ function normalizePaymentMethod(value: unknown): string | null {
   if (m.includes("boleto") || m.includes("bank_slip")) return "bank_slip";
   if (m.includes("card") || m.includes("cart")) return "credit_card";
   return m;
+}
+
+async function stableExecutionId(input: string): Promise<string> {
+  const bytes = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(input)));
+  const uuidBytes = bytes.slice(0, 16);
+  uuidBytes[6] = (uuidBytes[6] & 0x0f) | 0x40;
+  uuidBytes[8] = (uuidBytes[8] & 0x3f) | 0x80;
+
+  const hex = Array.from(uuidBytes, (b) => b.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+}
+
+function buildEventDedupKey(flowId: string, event: NormalizedEvent): string | null {
+  if (!event.external_event_id) return null;
+  return [flowId, event.platform, event.status, event.external_event_id].join(":");
+}
+
+function isDuplicateInsertError(error: any): boolean {
+  const code = String(error?.code || "");
+  const message = String(error?.message || "").toLowerCase();
+  const details = String(error?.details || "").toLowerCase();
+  return code === "23505" || message.includes("duplicate key") || details.includes("duplicate");
 }
 
 // ─── Detect platform from payload ───
@@ -319,7 +349,7 @@ Deno.serve(async (req) => {
     else if (platform === "guru") event = normalizeGuru(body);
     else event = normalizeGeneric(body);
 
-    console.log(`[wz-receiver] Platform=${event.platform} Status=${event.status} Phone=${event.contact_phone} ProductID=${event.product_id} ProductName=${event.product_name}`);
+    console.log(`[wz-receiver] Platform=${event.platform} Status=${event.status} EventID=${event.external_event_id} Phone=${event.contact_phone} ProductID=${event.product_id} ProductName=${event.product_name}`);
 
     // Fetch all active flows
     const { data: flows, error: flowsErr } = await supabase
@@ -398,10 +428,11 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        console.log(`[wz-receiver] Flow ${flow.id} trigger ${triggerNode.id} MATCHED! Checking dedup...`);
+        const eventDedupKey = buildEventDedupKey(flow.id, event);
+        console.log(`[wz-receiver] Flow ${flow.id} trigger ${triggerNode.id} MATCHED!${eventDedupKey ? ` DedupKey=${eventDedupKey}` : " Checking time-window dedup..."}`);
 
-        // ─── Deduplication: skip if same flow+phone+trigger in last 5 minutes ───
-        if (event.contact_phone) {
+        // ─── Fallback deduplication: only for payloads without stable external id ───
+        if (!eventDedupKey && event.contact_phone) {
           const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
           const { data: recentExecs } = await supabase
             .from("wz_executions")
@@ -418,9 +449,6 @@ Deno.serve(async (req) => {
           }
         }
 
-        matched++;
-
-        // Create execution
         const variables = {
           product_name: event.product_name,
           product_id: event.product_id,
@@ -433,29 +461,42 @@ Deno.serve(async (req) => {
           pix_code: event.pix_code,
           boleto_code: event.boleto_code,
           boleto_url: event.boleto_url,
+          external_event_id: event.external_event_id,
+          _dedup_key: eventDedupKey,
         };
+
+        const executionInsert: Record<string, any> = {
+          flow_id: flow.id,
+          contact_phone: event.contact_phone,
+          contact_name: event.contact_name,
+          contact_email: event.contact_email,
+          trigger_event: event.status,
+          trigger_payload: event.raw_payload,
+          variables,
+          status: "running",
+          current_node_id: triggerNode.id,
+        };
+
+        if (eventDedupKey) {
+          executionInsert.id = await stableExecutionId(eventDedupKey);
+        }
 
         const { data: execution, error: execErr } = await supabase
           .from("wz_executions")
-          .insert({
-            flow_id: flow.id,
-            contact_phone: event.contact_phone,
-            contact_name: event.contact_name,
-            contact_email: event.contact_email,
-            trigger_event: event.status,
-            trigger_payload: event.raw_payload,
-            variables,
-            status: "running",
-            current_node_id: triggerNode.id,
-          })
+          .insert(executionInsert)
           .select("id")
           .single();
 
         if (execErr) {
+          if (eventDedupKey && isDuplicateInsertError(execErr)) {
+            console.log(`[wz-receiver] DEDUP CONFLICT: skipping duplicated event for flow ${flow.id} trigger ${triggerNode.id} key=${eventDedupKey}`);
+            continue;
+          }
           console.error(`Error creating execution for flow ${flow.id} trigger ${triggerNode.id}:`, execErr);
           continue;
         }
 
+        matched++;
         executionIds.push(execution.id);
 
         // Find first node after this trigger
