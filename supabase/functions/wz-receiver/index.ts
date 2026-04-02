@@ -377,7 +377,26 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        console.log(`[wz-receiver] Flow ${flow.id} trigger ${triggerNode.id} MATCHED! Creating execution...`);
+        console.log(`[wz-receiver] Flow ${flow.id} trigger ${triggerNode.id} MATCHED! Checking dedup...`);
+
+        // ─── Deduplication: skip if same flow+phone+trigger in last 5 minutes ───
+        if (event.contact_phone) {
+          const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+          const { data: recentExecs } = await supabase
+            .from("wz_executions")
+            .select("id")
+            .eq("flow_id", flow.id)
+            .eq("contact_phone", event.contact_phone)
+            .eq("trigger_event", event.status)
+            .gte("started_at", fiveMinAgo)
+            .limit(1);
+
+          if (recentExecs && recentExecs.length > 0) {
+            console.log(`[wz-receiver] DEDUP: skipping flow ${flow.id} trigger ${triggerNode.id} — execution ${recentExecs[0].id} already exists for phone=${event.contact_phone}`);
+            continue;
+          }
+        }
+
         matched++;
 
         // Create execution
