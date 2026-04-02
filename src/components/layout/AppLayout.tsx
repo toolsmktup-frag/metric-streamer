@@ -55,6 +55,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
   const { refresh } = useFilterStore();
   const [refreshing, setRefreshing] = useState(false);
   useTheme(); // Initialize theme on app load
+  useActivityTracker(); // Track user activity for CRM analytics
 
   const handleRefresh = () => {
     setRefreshing(true);
