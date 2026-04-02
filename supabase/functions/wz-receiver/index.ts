@@ -186,6 +186,9 @@ function normalizeGeneric(body: Record<string, any>): NormalizedEvent {
     platform: body.platform || "unknown",
     payment_method: normalizePaymentMethod(body.payment_method),
     installments: Number(body.installments || 1),
+    pix_code: body.pix_code || body.pix_emv || null,
+    boleto_code: body.digitable_line || body.boleto_code || null,
+    boleto_url: body.boleto_url || null,
     raw_payload: body,
   };
 }
