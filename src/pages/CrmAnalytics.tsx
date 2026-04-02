@@ -310,6 +310,43 @@ export default function CrmAnalytics() {
     });
   }, [sellers, leadActivityData, sales, daysInPeriod, tableSortKey, tableSortDir, lostLeadsData]);
 
+  // Activity time per seller (each heartbeat = 1 minute)
+  const activityStats = useMemo(() => {
+    const sellerMinutes: Record<string, number> = {};
+    const sellerDayMinutes: Record<string, Record<string, number>> = {};
+    
+    for (const log of activityData) {
+      const sellerId = log.user_id;
+      if (!sellers.some(s => s.id === sellerId)) continue;
+      sellerMinutes[sellerId] = (sellerMinutes[sellerId] || 0) + 1;
+      const day = (log.active_at || '').slice(0, 10);
+      if (!sellerDayMinutes[sellerId]) sellerDayMinutes[sellerId] = {};
+      sellerDayMinutes[sellerId][day] = (sellerDayMinutes[sellerId][day] || 0) + 1;
+    }
+
+    const result: Record<string, { totalMinutes: number; avgMinutesPerDay: number; dailyBreakdown: Array<{ date: string; minutes: number }> }> = {};
+    for (const seller of sellers) {
+      const total = sellerMinutes[seller.id] || 0;
+      const dayData = sellerDayMinutes[seller.id] || {};
+      const activeDays = Object.keys(dayData).length || 1;
+      result[seller.id] = {
+        totalMinutes: total,
+        avgMinutesPerDay: total / activeDays,
+        dailyBreakdown: Object.entries(dayData)
+          .map(([date, minutes]) => ({ date, minutes }))
+          .sort((a, b) => a.date.localeCompare(b.date)),
+      };
+    }
+    return result;
+  }, [activityData, sellers]);
+
+  function formatTime(minutes: number): string {
+    const h = Math.floor(minutes / 60);
+    const m = Math.round(minutes % 60);
+    if (h === 0) return `${m}min`;
+    return `${h}h ${m}min`;
+  }
+
   // KPIs filtered by selected seller
   const kpiStats = useMemo(() => {
     if (selectedSeller === 'all') {
