@@ -322,88 +322,89 @@ Deno.serve(async (req) => {
 
     for (const flow of flows) {
       const nodes = (flow.nodes || []) as Record<string, any>[];
-      const triggerNode = nodes.find((n) => n.type === "trigger");
-      if (!triggerNode) continue;
-
-      const triggerData = triggerNode.data || {};
-      const isMatch = matchesTrigger(triggerData, event);
-
-      if (!isMatch) {
-        console.log(`[wz-receiver] Flow ${flow.id} NO MATCH: triggerType=${triggerData.triggerType} vs status=${event.status}, productFilter=${triggerData.productIdFilter} vs productId=${event.product_id}`);
-        continue;
-      }
-
-      console.log(`[wz-receiver] Flow ${flow.id} MATCHED! Creating execution...`);
-      matched++;
-
-      // Create execution
-      const variables = {
-        product_name: event.product_name,
-        product_id: event.product_id,
-        offer_name: event.offer_name,
-        gross_amount: event.gross_amount,
-        paid_amount: event.paid_amount,
-        payment_method: event.payment_method,
-        installments: event.installments,
-        platform: event.platform,
-        pix_code: event.pix_code,
-        boleto_code: event.boleto_code,
-        boleto_url: event.boleto_url,
-      };
-
-      const { data: execution, error: execErr } = await supabase
-        .from("wz_executions")
-        .insert({
-          flow_id: flow.id,
-          contact_phone: event.contact_phone,
-          contact_name: event.contact_name,
-          contact_email: event.contact_email,
-          trigger_event: event.status,
-          trigger_payload: event.raw_payload,
-          variables,
-          status: "running",
-          current_node_id: triggerNode.id,
-        })
-        .select("id")
-        .single();
-
-      if (execErr) {
-        console.error(`Error creating execution for flow ${flow.id}:`, execErr);
-        continue;
-      }
-
-      executionIds.push(execution.id);
-
-      // Find first node after trigger
       const edges = (flow.edges || []) as Record<string, any>[];
-      const nextEdge = edges.find((e) => e.source === triggerNode.id);
-      if (nextEdge) {
-        // Awaited call to wz-executor to prevent premature termination
-        const execUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/wz-executor`;
-        try {
-          const execRes = await fetch(execUrl, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-            },
-            body: JSON.stringify({
-              execution_id: execution.id,
-              flow_id: flow.id,
-              current_node_id: nextEdge.target,
-            }),
-          });
-          const execBody = await execRes.text();
-          console.log(`[wz-receiver] wz-executor response for exec ${execution.id}: ${execRes.status} ${execBody.slice(0, 300)}`);
-        } catch (err) {
-          console.error("Error calling wz-executor:", err);
+      // Find ALL trigger nodes in this flow (multiple triggers per flow supported)
+      const triggerNodes = nodes.filter((n) => n.type === "trigger");
+      if (triggerNodes.length === 0) continue;
+
+      for (const triggerNode of triggerNodes) {
+        const triggerData = triggerNode.data || {};
+        const isMatch = matchesTrigger(triggerData, event);
+
+        if (!isMatch) {
+          console.log(`[wz-receiver] Flow ${flow.id} trigger ${triggerNode.id} NO MATCH: triggerType=${triggerData.triggerType} vs status=${event.status}, productFilter=${triggerData.productIdFilter} vs productId=${event.product_id}`);
+          continue;
         }
-      } else {
-        // No edge from trigger — mark completed
-        await supabase
+
+        console.log(`[wz-receiver] Flow ${flow.id} trigger ${triggerNode.id} MATCHED! Creating execution...`);
+        matched++;
+
+        // Create execution
+        const variables = {
+          product_name: event.product_name,
+          product_id: event.product_id,
+          offer_name: event.offer_name,
+          gross_amount: event.gross_amount,
+          paid_amount: event.paid_amount,
+          payment_method: event.payment_method,
+          installments: event.installments,
+          platform: event.platform,
+          pix_code: event.pix_code,
+          boleto_code: event.boleto_code,
+          boleto_url: event.boleto_url,
+        };
+
+        const { data: execution, error: execErr } = await supabase
           .from("wz_executions")
-          .update({ status: "completed", finished_at: new Date().toISOString() })
-          .eq("id", execution.id);
+          .insert({
+            flow_id: flow.id,
+            contact_phone: event.contact_phone,
+            contact_name: event.contact_name,
+            contact_email: event.contact_email,
+            trigger_event: event.status,
+            trigger_payload: event.raw_payload,
+            variables,
+            status: "running",
+            current_node_id: triggerNode.id,
+          })
+          .select("id")
+          .single();
+
+        if (execErr) {
+          console.error(`Error creating execution for flow ${flow.id} trigger ${triggerNode.id}:`, execErr);
+          continue;
+        }
+
+        executionIds.push(execution.id);
+
+        // Find first node after this trigger
+        const nextEdge = edges.find((e) => e.source === triggerNode.id);
+        if (nextEdge) {
+          const execUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/wz-executor`;
+          try {
+            const execRes = await fetch(execUrl, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+              },
+              body: JSON.stringify({
+                execution_id: execution.id,
+                flow_id: flow.id,
+                current_node_id: nextEdge.target,
+              }),
+            });
+            const execBody = await execRes.text();
+            console.log(`[wz-receiver] wz-executor response for exec ${execution.id}: ${execRes.status} ${execBody.slice(0, 300)}`);
+          } catch (err) {
+            console.error("Error calling wz-executor:", err);
+          }
+        } else {
+          await supabase
+            .from("wz_executions")
+            .update({ status: "completed", finished_at: new Date().toISOString() })
+            .eq("id", execution.id);
+        }
       }
     }
 

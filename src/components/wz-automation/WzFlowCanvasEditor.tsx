@@ -104,14 +104,7 @@ export default function WzFlowCanvasEditor() {
 
     const dragData: WzDragData = JSON.parse(raw);
 
-    // Limit 1 trigger per flow
-    if (dragData.nodeType === 'trigger') {
-      const hasTrigger = nodes.some(n => n.type === 'trigger');
-      if (hasTrigger) {
-        toast.error('Apenas 1 gatilho por fluxo');
-        return;
-      }
-    }
+    // Multiple triggers allowed per flow
 
     const position = reactFlowInstance.screenToFlowPosition({
       x: e.clientX,
@@ -166,10 +159,6 @@ export default function WzFlowCanvasEditor() {
   const handleNodeDuplicate = useCallback((nodeId: string) => {
     const original = nodes.find((n) => n.id === nodeId);
     if (!original) return;
-    if (original.type === 'trigger') {
-      toast.error('Apenas 1 gatilho por fluxo');
-      return;
-    }
     const newNode: Node = {
       ...original,
       id: getNodeId(),
