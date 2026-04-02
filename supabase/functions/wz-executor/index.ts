@@ -177,8 +177,11 @@ async function processWhatsAppNode(
   nodeData: Record<string, any>,
   vars: Record<string, any>
 ) {
-  const messages: Array<{ text: string; type: string; imageUrl?: string; caption?: string }> =
-    nodeData.messages || [];
+  const messages: Array<{
+    text: string; type: string; imageUrl?: string; caption?: string;
+    skipIfReplied?: boolean;
+    blocks?: Array<{ text: string; type: string; imageUrl?: string; caption?: string; skipIfReplied?: boolean }>;
+  }> = nodeData.messages || [];
 
   if (messages.length === 0) {
     console.warn("WhatsApp node has no messages");
@@ -187,7 +190,6 @@ async function processWhatsAppNode(
 
   // Pick random variation
   const msg = messages[Math.floor(Math.random() * messages.length)];
-  const text = substituteVariables(msg.text, vars);
 
   // Get instance
   const instanceId = nodeData.instanceId;
@@ -213,57 +215,91 @@ async function processWhatsAppNode(
     return;
   }
 
-  // Humanization delay
-  const delayMin = nodeData.delayMin ?? 1;
-  const delayMax = nodeData.delayMax ?? 5;
-  await sleep(randomDelay(delayMin, delayMax));
-
-  // Send via UAZAPI — token header (v2), phone only in body
-  const apiUrl = instance.api_url.replace(/\/+$/, "");
   const cleanPhone = String(phone).replace(/\D/g, "");
+  const apiUrl = instance.api_url.replace(/\/+$/, "");
 
-  const isMedia = msg.type === "image";
-  const endpoint = isMedia
-    ? `${apiUrl}/send/media`
-    : `${apiUrl}/send/text`;
+  // Resolve blocks
+  const blocks = (msg.blocks && msg.blocks.length > 0)
+    ? msg.blocks
+    : [{ text: msg.text || "", type: msg.type || "text", imageUrl: msg.imageUrl, caption: msg.caption, skipIfReplied: msg.skipIfReplied }];
 
-  const body: Record<string, any> = isMedia
-    ? {
-        number: cleanPhone,
-        type: "image",
-        file: msg.imageUrl || "",
-        text: substituteVariables(msg.caption || "", vars),
-        readchat: true,
-        readmessages: true,
-        async: false,
-      }
-    : {
-        number: cleanPhone,
-        text,
-        readchat: true,
-        readmessages: true,
-        async: false,
-      };
-
-  try {
-    const res = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        token: instance.api_key,
-      },
-      body: JSON.stringify(body),
-    });
-
-    const result = await res.text();
-    console.log(`[wz-executor] WhatsApp sent to ${cleanPhone}: status=${res.status} body=${result.slice(0, 500)}`);
-
-    if (!res.ok) {
-      console.error(`[wz-executor] UAZAPI error: ${res.status} ${result.slice(0, 500)}`);
+  // Helper: check if contact replied since execution started
+  let hasReplied: boolean | null = null;
+  async function checkIfReplied(): Promise<boolean> {
+    if (hasReplied !== null) return hasReplied;
+    try {
+      const { data: replies } = await supabase
+        .from("whatsapp_messages")
+        .select("id")
+        .eq("phone", cleanPhone)
+        .eq("direction", "incoming")
+        .gte("created_at", execution.started_at)
+        .limit(1);
+      hasReplied = !!(replies && replies.length > 0);
+    } catch (err) {
+      console.warn("[wz-executor] Error checking replies:", err);
+      hasReplied = false;
     }
-  } catch (err) {
-    console.error(`[wz-executor] WhatsApp send error:`, err);
+    return hasReplied;
+  }
+
+  // Send each block sequentially
+  for (let bi = 0; bi < blocks.length; bi++) {
+    const block = blocks[bi];
+
+    // Check skipIfReplied condition
+    if (block.skipIfReplied) {
+      const replied = await checkIfReplied();
+      if (replied) {
+        console.log(`[wz-executor] Skipping block ${bi} — contact replied`);
+        continue;
+      }
+    }
+
+    const text = substituteVariables(block.text, vars);
+
+    // Humanization delay between blocks
+    const delayMin = nodeData.delayMin ?? 1;
+    const delayMax = nodeData.delayMax ?? 5;
+    await sleep(randomDelay(delayMin, delayMax));
+
+    const isMedia = block.type === "image";
+    const endpoint = isMedia ? `${apiUrl}/send/media` : `${apiUrl}/send/text`;
+
+    const body: Record<string, any> = isMedia
+      ? {
+          number: cleanPhone,
+          type: "image",
+          file: block.imageUrl || "",
+          text: substituteVariables(block.caption || "", vars),
+          readchat: true, readmessages: true, async: false,
+        }
+      : {
+          number: cleanPhone,
+          text,
+          readchat: true, readmessages: true, async: false,
+        };
+
+    try {
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          token: instance.api_key,
+        },
+        body: JSON.stringify(body),
+      });
+
+      const result = await res.text();
+      console.log(`[wz-executor] WhatsApp block ${bi} sent to ${cleanPhone}: status=${res.status}`);
+
+      if (!res.ok) {
+        console.error(`[wz-executor] UAZAPI error: ${res.status} ${result.slice(0, 500)}`);
+      }
+    } catch (err) {
+      console.error(`[wz-executor] WhatsApp send error block ${bi}:`, err);
+    }
   }
 }
 

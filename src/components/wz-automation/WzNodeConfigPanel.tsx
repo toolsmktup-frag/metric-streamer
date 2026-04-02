@@ -6,7 +6,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Trash2, Copy, Plus, X } from 'lucide-react';
+import { Trash2, Copy, Plus, X, MessageCircleOff } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useWzInstances } from '@/hooks/useWzInstances';
 import { triggerLabels } from './nodes/WzTriggerNode';
@@ -180,6 +181,7 @@ interface MessageBlock {
   type: string;
   imageUrl?: string;
   caption?: string;
+  skipIfReplied?: boolean;
 }
 
 interface MessageVariation {
@@ -187,6 +189,7 @@ interface MessageVariation {
   type: string;
   imageUrl?: string;
   caption?: string;
+  skipIfReplied?: boolean;
   blocks?: MessageBlock[];
 }
 
@@ -380,6 +383,19 @@ function WhatsAppConfig({ data, update }: { data: any; update: (k: string, v: an
                         </div>
                       </>
                     )}
+
+                    {/* Skip if replied toggle */}
+                    <div className="flex items-center justify-between pt-2 border-t border-border/50">
+                      <div className="flex items-center gap-1.5">
+                        <MessageCircleOff className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span className="text-[11px] text-muted-foreground">Só enviar se não respondeu</span>
+                      </div>
+                      <Switch
+                        checked={block.skipIfReplied || false}
+                        onCheckedChange={(v) => updateBlock(i, bi, 'skipIfReplied', v as any)}
+                        className="scale-75"
+                      />
+                    </div>
                   </div>
                 ))}
 
