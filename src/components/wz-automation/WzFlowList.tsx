@@ -81,6 +81,7 @@ export default function WzFlowList({ embedded = false }: { embedded?: boolean })
               flow={flow}
               onEdit={() => navigate(`/ferramentas/automacoes/${flow.id}`)}
               onDelete={() => setDeleteTarget(flow.id)}
+              onDuplicate={() => duplicateFlow.mutate(flow.id)}
               onToggle={(active) => toggleFlow.mutate({ id: flow.id, is_active: active })}
             />
           ))}
