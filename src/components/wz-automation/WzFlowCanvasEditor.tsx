@@ -91,6 +91,14 @@ export default function WzFlowCanvasEditor() {
     setConfigOpen(false);
   }, []);
 
+  const onEdgeClick = useCallback((_: React.MouseEvent, edge: Edge) => {
+    const confirmDelete = window.confirm('Deseja remover esta conexão?');
+    if (confirmDelete) {
+      setEdges((eds) => eds.filter((e) => e.id !== edge.id));
+      toast.success('Conexão removida');
+    }
+  }, [setEdges]);
+
   // Drop handler
   const onDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -248,6 +256,7 @@ export default function WzFlowCanvasEditor() {
             onConnect={onConnect}
             onInit={setReactFlowInstance}
             onNodeClick={onNodeClick}
+            onEdgeClick={onEdgeClick}
             onPaneClick={onPaneClick}
             onDrop={onDrop}
             onDragOver={onDragOver}
