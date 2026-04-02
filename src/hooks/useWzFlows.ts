@@ -100,3 +100,29 @@ export function useToggleWzFlow() {
     },
   });
 }
+
+export function useDuplicateWzFlow() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { data: original, error: fetchError } = await supabase
+        .from('wz_flows' as any)
+        .select('*')
+        .eq('id', id)
+        .single();
+      if (fetchError) throw fetchError;
+      const { id: _id, created_at, updated_at, ...rest } = original as any;
+      const { data, error } = await supabase
+        .from('wz_flows' as any)
+        .insert({ ...rest, name: `${rest.name} (cópia)`, is_active: false } as any)
+        .select()
+        .single();
+      if (error) throw error;
+      return data as unknown as WzFlow;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['wz-flows'] });
+      toast.success('Fluxo duplicado!');
+    },
+  });
+}

@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Zap, MoreVertical, Pencil, Trash2, Play, Pause } from 'lucide-react';
+import { Plus, Zap, MoreVertical, Pencil, Trash2, Play, Pause, Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { useWzFlows, useDeleteWzFlow, useToggleWzFlow } from '@/hooks/useWzFlows';
+import { useWzFlows, useDeleteWzFlow, useToggleWzFlow, useDuplicateWzFlow } from '@/hooks/useWzFlows';
 import type { WzFlow } from '@/types/wz-automation';
 
 const platformLabels: Record<string, string> = {
@@ -20,6 +20,7 @@ export default function WzFlowList({ embedded = false }: { embedded?: boolean })
   const { data: flows = [], isLoading } = useWzFlows();
   const deleteFlow = useDeleteWzFlow();
   const toggleFlow = useToggleWzFlow();
+  const duplicateFlow = useDuplicateWzFlow();
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   return (
@@ -80,6 +81,7 @@ export default function WzFlowList({ embedded = false }: { embedded?: boolean })
               flow={flow}
               onEdit={() => navigate(`/ferramentas/automacoes/${flow.id}`)}
               onDelete={() => setDeleteTarget(flow.id)}
+              onDuplicate={() => duplicateFlow.mutate(flow.id)}
               onToggle={(active) => toggleFlow.mutate({ id: flow.id, is_active: active })}
             />
           ))}
@@ -117,11 +119,13 @@ function FlowCard({
   flow,
   onEdit,
   onDelete,
+  onDuplicate,
   onToggle,
 }: {
   flow: WzFlow;
   onEdit: () => void;
   onDelete: () => void;
+  onDuplicate: () => void;
   onToggle: (active: boolean) => void;
 }) {
   const triggerNodes = (flow.nodes || []).filter((n: any) => n.type === 'trigger');
@@ -148,6 +152,9 @@ function FlowCard({
           <DropdownMenuContent align="end">
             <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit(); }}>
               <Pencil className="h-4 w-4 mr-2" /> Editar
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onDuplicate(); }}>
+              <Copy className="h-4 w-4 mr-2" /> Duplicar
             </DropdownMenuItem>
             <DropdownMenuItem
               onClick={(e) => { e.stopPropagation(); onDelete(); }}
