@@ -15,7 +15,7 @@ export interface WzDragData {
 
 const triggers: { triggerType: string; label: string; icon: React.ReactNode }[] = [
   { triggerType: 'purchase_approved', label: 'Compra aprovada', icon: <ShoppingCart className="h-4 w-4" /> },
-  { triggerType: 'pix_generated', label: 'PIX/Boleto gerado', icon: <CreditCard className="h-4 w-4" /> },
+  { triggerType: 'pix_generated', label: 'PIX gerado', icon: <CreditCard className="h-4 w-4" /> },
   { triggerType: 'boleto_generated', label: 'Boleto gerado', icon: <FileText className="h-4 w-4" /> },
   { triggerType: 'pix_expired', label: 'PIX expirado', icon: <Timer className="h-4 w-4" /> },
   { triggerType: 'payment_refused', label: 'Pagamento recusado', icon: <AlertTriangle className="h-4 w-4" /> },
