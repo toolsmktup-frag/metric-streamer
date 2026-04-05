@@ -1,42 +1,37 @@
-## Minhas Metas — Página Gamificada para Vendedoras
 
-### 1. Banco de dados (migrações)
-- **Tabela `seller_goals`**: `id`, `user_id`, `month` (YYYY-MM), `goal_amount` (meta em R$), `commission_percent` (% comissão configurável pelo admin), `created_by`, `created_at`
-- **Tabela `seller_achievements`**: `id`, `user_id`, `achievement_key` (ex: "first_sale_of_day", "5_sales_day", "streak_7"), `unlocked_at`, `month`
-- RLS: vendedora lê apenas seus registros; admin pode inserir/atualizar metas
 
-### 2. Lógica de negócio (hooks)
-- **`useSellerGoals`**: busca meta do mês atual do usuário logado
-- **`useSellerStats`**: calcula vendas, receita, comissão do mês a partir de `customer_purchases` (affiliate_name matching)
-- **`useSellerStreak`**: calcula dias consecutivos com venda
-- **`useSellerAchievements`**: lista conquistas desbloqueadas + verifica novas
+## Plano: Adicionar colunas de métricas de mídia na tabela de campanhas
 
-### 3. Níveis gamificados (baseado em vendas acumuladas no mês)
-- **Bronze**: 0-10 vendas
-- **Prata**: 11-25 vendas  
-- **Ouro**: 26-50 vendas
-- **Diamante**: 51+ vendas
+### Contexto
+A tabela `PerformanceTable.tsx` já possui **Conv. Chk.** (conversão de checkout em vendas), mas faltam métricas de custo unitário e eficiência de mídia. Algumas colunas solicitadas já existem parcialmente:
 
-### 4. Conquistas desbloqueáveis
-- "Primeira venda do dia" 🌅
-- "5 vendas em um dia" ⚡
-- "Meta batida" 🏆
-- "Streak de 7 dias" 🔥
-- "Meta batida 2 meses seguidos" 👑
+- **Conv. Chk.** → já existe (linha 175), mostra `vendas / initiate_checkout`
+- **Vis. Pág.** e **Init. Chk.** → já existem como contagens brutas
 
-### 5. Página `/leads/metas` 
-- Header com avatar + apelido + badge de nível + botão notificações
-- Card principal: meta do mês com barra de progresso animada + marcadores 25/50/75/100%
-- Mensagem motivacional dinâmica
-- Confetti ao bater 100% (canvas-confetti)
-- Grid 4 KPIs: leads chamados hoje, vendas R$ hoje, comissão acumulada, taxa conversão
-- Seção de streak (dias consecutivos)
-- Grid de conquistas (desbloqueadas vs travadas)
-- Mini gráfico histórico dos últimos 6 meses
+### Colunas a adicionar
 
-### 6. Menu lateral
-- Adicionar "Minhas Metas" como primeiro item da seção Leads
-- Rota: `/leads/metas`
+| Coluna | Fórmula | Posição |
+|---|---|---|
+| **Custo p/ Chk.** | `spend / initiate_checkout` | Após "Conv. Chk." |
+| **Custo p/ Vis. Pág.** | `spend / landing_page_views` | Após "Custo p/ Chk." |
+| **CPC** | `spend / link_clicks` | Após "CTR" |
+| **CPM** | `(spend / impressions) × 1000` | Após "CPC" |
 
-### 7. Admin: definir metas
-- Na página de Equipe, adicionar aba/modal para definir meta mensal por vendedora
+A coluna **Conv. Chk.** já está presente — nenhuma alteração necessária nela.
+
+### Alterações técnicas
+
+**Arquivo: `src/components/dashboard/PerformanceTable.tsx`**
+
+1. Adicionar 4 novas `ColumnDef` no array `columns` (após as colunas existentes de Conv. Chk. / antes das métricas brutas):
+   - `custo_checkout`: `spend / initiate_checkout`
+   - `custo_pageview`: `spend / landing_page_views`
+   - `cpc`: `spend / link_clicks`
+   - `cpm`: `(spend / impressions) * 1000`
+
+2. Atualizar o objeto `totals` para incluir os 4 novos cálculos agregados.
+
+3. Atualizar o `<tfoot>` para renderizar as 4 novas células de totais na posição correta, mantendo o alinhamento com os headers.
+
+Todas as fórmulas usam dados já disponíveis no objeto `Campaign` (spend, link_clicks, impressions, landing_page_views, initiate_checkout) — nenhuma alteração em hooks ou banco de dados é necessária.
+
