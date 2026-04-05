@@ -183,6 +183,26 @@ const PerformanceTable = React.memo(function PerformanceTable({ data, level = 'c
         size: 100,
       },
       {
+        id: 'custo_checkout',
+        header: 'Custo p/ Chk.',
+        accessorFn: (row) => row.initiate_checkout > 0 ? row.spend / row.initiate_checkout : 0,
+        cell: ({ getValue }) => {
+          const v = getValue() as number;
+          return <span className="font-mono-value">{v > 0 ? formatCurrency(v) : '—'}</span>;
+        },
+        size: 110,
+      },
+      {
+        id: 'custo_pageview',
+        header: 'Custo p/ Vis.',
+        accessorFn: (row) => row.landing_page_views > 0 ? row.spend / row.landing_page_views : 0,
+        cell: ({ getValue }) => {
+          const v = getValue() as number;
+          return <span className="font-mono-value">{v > 0 ? formatCurrency(v) : '—'}</span>;
+        },
+        size: 110,
+      },
+      {
         id: 'ticket_medio',
         header: 'Ticket Médio',
         accessorFn: (row) => row.sales > 0 ? row.revenue / row.sales : 0,
@@ -227,6 +247,26 @@ const PerformanceTable = React.memo(function PerformanceTable({ data, level = 'c
         size: 80,
       },
       {
+        id: 'cpc',
+        header: 'CPC',
+        accessorFn: (row) => row.link_clicks > 0 ? row.spend / row.link_clicks : 0,
+        cell: ({ getValue }) => {
+          const v = getValue() as number;
+          return <span className="font-mono-value">{v > 0 ? formatCurrency(v) : '—'}</span>;
+        },
+        size: 90,
+      },
+      {
+        id: 'cpm',
+        header: 'CPM',
+        accessorFn: (row) => row.impressions > 0 ? (row.spend / row.impressions) * 1000 : 0,
+        cell: ({ getValue }) => {
+          const v = getValue() as number;
+          return <span className="font-mono-value">{v > 0 ? formatCurrency(v) : '—'}</span>;
+        },
+        size: 90,
+      },
+      {
         accessorKey: 'impressions',
         header: 'Impressões',
         cell: ({ getValue }) => <span className="font-mono-value">{formatNumber(getValue() as number)}</span>,
@@ -259,6 +299,10 @@ const PerformanceTable = React.memo(function PerformanceTable({ data, level = 'c
       ctr: impressions > 0 ? (clicks / impressions) * 100 : 0,
       conv_pagina: landing_page_views > 0 ? (sales / landing_page_views) * 100 : 0,
       conv_checkout: initiate_checkout > 0 ? (sales / initiate_checkout) * 100 : 0,
+      custo_checkout: initiate_checkout > 0 ? spend / initiate_checkout : 0,
+      custo_pageview: landing_page_views > 0 ? spend / landing_page_views : 0,
+      cpc: link_clicks > 0 ? spend / link_clicks : 0,
+      cpm: impressions > 0 ? (spend / impressions) * 1000 : 0,
       ticket_medio: sales > 0 ? revenue / sales : 0,
       hook: impressions > 0 && video_views > 0 ? (video_views / impressions) * 100 : 0,
     };
@@ -353,12 +397,16 @@ const PerformanceTable = React.memo(function PerformanceTable({ data, level = 'c
               <td className={`px-3 py-2.5 font-mono-value font-semibold ${getProfitColor(totals.profit)}`}>{formatCurrency(totals.profit)}</td>
               <td className={`px-3 py-2.5 font-mono-value ${totals.conv_pagina >= 2.5 ? 'text-kpi-positive' : totals.conv_pagina >= 1.5 ? 'text-kpi-warning' : totals.conv_pagina > 0 ? 'text-destructive' : 'text-muted-foreground'}`}>{totals.conv_pagina > 0 ? `${totals.conv_pagina.toFixed(2)}%` : '—'}</td>
               <td className={`px-3 py-2.5 font-mono-value ${totals.conv_checkout >= 16 ? 'text-kpi-positive' : totals.conv_checkout >= 10 ? 'text-kpi-warning' : totals.conv_checkout > 0 ? 'text-destructive' : 'text-muted-foreground'}`}>{totals.conv_checkout > 0 ? `${totals.conv_checkout.toFixed(1)}%` : '—'}</td>
+              <td className="px-3 py-2.5 font-mono-value">{totals.custo_checkout > 0 ? formatCurrency(totals.custo_checkout) : '—'}</td>
+              <td className="px-3 py-2.5 font-mono-value">{totals.custo_pageview > 0 ? formatCurrency(totals.custo_pageview) : '—'}</td>
               <td className="px-3 py-2.5 font-mono-value">{totals.ticket_medio > 0 ? formatCurrency(totals.ticket_medio) : '—'}</td>
               <td className="px-3 py-2.5 font-mono-value">{totals.hook > 0 ? `${totals.hook.toFixed(2)}%` : '—'}</td>
               <td className="px-3 py-2.5 font-mono-value">{formatNumber(totals.landing_page_views)}</td>
               <td className="px-3 py-2.5 font-mono-value">{formatNumber(totals.initiate_checkout)}</td>
               <td className="px-3 py-2.5 font-mono-value">{formatNumber(totals.link_clicks)}</td>
               <td className="px-3 py-2.5 font-mono-value">{formatPercent(totals.ctr)}</td>
+              <td className="px-3 py-2.5 font-mono-value">{totals.cpc > 0 ? formatCurrency(totals.cpc) : '—'}</td>
+              <td className="px-3 py-2.5 font-mono-value">{totals.cpm > 0 ? formatCurrency(totals.cpm) : '—'}</td>
               <td className="px-3 py-2.5 font-mono-value">{formatNumber(totals.impressions)}</td>
             </tr>
           </tfoot>
