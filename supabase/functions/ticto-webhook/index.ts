@@ -243,21 +243,23 @@ Deno.serve(async (req) => {
     }
 
     // ── Audit: registrar ANTES do save principal ──
-    await supabase.from("webhook_audit").insert({
-      source: "ticto",
-      webhook_token: webhookToken,
-      funnel_id: funnelId,
-      order_id: orderId,
-      product_id: productId,
-      raw_status: rawStatus,
-      normalized_status: normalizedStatus,
-      paid_amount: amountInCents,
-      product_name: productName || null,
-      raw_payload: payload,
-      processing_ms: Date.now() - startMs,
-    }).catch((auditErr: any) => {
+    try {
+      await supabase.from("webhook_audit").insert({
+        source: "ticto",
+        webhook_token: webhookToken,
+        funnel_id: funnelId,
+        order_id: orderId,
+        product_id: productId,
+        raw_status: rawStatus,
+        normalized_status: normalizedStatus,
+        paid_amount: amountInCents,
+        product_name: productName || null,
+        raw_payload: payload,
+        processing_ms: Date.now() - startMs,
+      });
+    } catch (auditErr) {
       console.error("[ticto-webhook] Audit insert error (non-fatal):", auditErr);
-    });
+    }
 
     // ── Proteção contra sobrescrita ──
     let finalAmount = amountInCents;
