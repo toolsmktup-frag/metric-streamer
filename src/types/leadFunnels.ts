@@ -18,6 +18,7 @@ export interface LeadFunnel {
   webhook_token: string;
   is_active: boolean;
   sort_order: number;
+  traffic_funnel_id: string | null;
   created_at: string;
   updated_at: string;
   lead_funnel_stages?: LeadFunnelStage[];
