@@ -1,35 +1,58 @@
 
 
-## Plano: Permitir trocar o funil de leads pelo painel do WhatsApp + registrar evento
+## Diagnóstico: Por que o Resumo do Guia de Tinturas não mostra dados
 
-### O que muda
+### Causa raiz
 
-Hoje o dropdown no ContactPanel só troca a **etapa** dentro do mesmo funil. O usuário quer também poder **mover o lead para outro funil** direto da conversa, e registrar um evento claro no histórico.
+A view `v_all_sales` no banco de dados **não possui a coluna `ingestion_type`**. O código do `FunilResumo.tsx` (linha 44-45) chama:
 
-### Implementação
+```
+useAllSalesAggregation(id, 'webhook', funnelProducts)
+useAllSales(id, 'webhook')
+```
 
-**1. Novo hook `useMoveLeadFunnel`** (`src/hooks/useMoveLeadFunnel.ts`)
-- Recebe: `positionId`, `leadId`, `fromFunnelId`, `toFunnelId`, `toFunnelName`
-- Busca a primeira etapa (sort_order=0) do funil destino
-- Atualiza `lead_stage_positions` com o novo `funnel_id`, `stage_id` e `entered_at`
-- Insere evento em `lead_events` com `event_name: 'funnel_change'` e metadata: `{ from_funnel_id, to_funnel_id, moved_by: 'manual' }`
-- Invalida queries relevantes (`lead-funnel-journey`, `leads-by-funnel`, `funnel-lead-counts`, `lead-events`)
+Que internamente faz `.eq('ingestion_type', 'webhook')`. Como a coluna não existe na view, a query retorna erro/vazio.
 
-**2. Buscar todos os funis disponíveis no ContactPanel**
-- Importar `useLeadFunnels` no `ContactPanel.tsx`
-- Usar o resultado para popular um segundo `<Select>` de funil
+As colunas `ingestion_type`, `product_id`, `affiliate_name`, `affiliate_commission` e a view atualizada estão definidas em arquivos `docs/` (nunca foram migradas):
+- `docs/stabilize-webhook-pipeline.sql` -- adiciona colunas na tabela
+- `docs/enrich-v-all-sales.sql` -- recria a view com `ingestion_type`
+- `docs/add-affiliate-name.sql` -- view final com affiliate + product_id
 
-**3. Atualizar UI no ContactPanel** (`src/components/whatsapp/ContactPanel.tsx`)
-- Acima do select de etapa, adicionar um select de funil mostrando o funil atual
-- Opções: todos os funis da organização (exceto o atual, ou com o atual pré-selecionado)
-- Ao trocar funil, chamar `useMoveLeadFunnel` que move o lead para a 1ª etapa do novo funil
-- Toast: `"Lead movido para {novoFunil}"`
+### Solução
 
-**4. Evento no histórico**
-- O evento `funnel_change` será mapeado no `EVENT_MAP` do ContactPanel com label: `"Funil alterado manualmente"`, ícone `MapPin`, cor azul
-- Metadata incluirá nomes dos funis para exibição legível na timeline
+**Passo 1 -- Criar migration que adiciona colunas faltantes nas tabelas**
 
-### Arquivos
-- **Criar**: `src/hooks/useMoveLeadFunnel.ts`
-- **Editar**: `src/components/whatsapp/ContactPanel.tsx` (import do hook + select de funil + mapeamento de evento)
+Arquivo: `supabase/migrations/TIMESTAMP_add_missing_columns_and_view.sql`
+
+- `ALTER TABLE ticto_transactions ADD COLUMN IF NOT EXISTS source_platform text DEFAULT 'ticto'`
+- `ALTER TABLE ticto_transactions ADD COLUMN IF NOT EXISTS ingestion_type text DEFAULT 'webhook'`
+- `ALTER TABLE ticto_transactions ADD COLUMN IF NOT EXISTS affiliate_name text`
+- `ALTER TABLE ticto_transactions ADD COLUMN IF NOT EXISTS affiliate_commission numeric`
+- Mesmas colunas em `customer_purchases`
+
+**Passo 2 -- Recriar a view `v_all_sales` com todas as colunas**
+
+Incluir: `product_id`, `ingestion_type`, `affiliate_name`, `affiliate_commission`, `customer_phone`, `unified_customer_id` -- conforme definido em `docs/add-affiliate-name.sql`.
+
+**Passo 3 -- GRANT SELECT**
+
+```sql
+GRANT SELECT ON public.v_all_sales TO authenticated;
+GRANT SELECT ON public.v_all_sales TO service_role;
+```
+
+### Resultado
+
+Após aplicar a migration, a query `v_all_sales` com filtro `ingestion_type = 'webhook'` funcionará e o Resumo do Guia de Tinturas exibirá as vendas corretamente.
+
+### Nota
+
+Você provavelmente já rodou esses SQLs manualmente no Supabase Dashboard em algum momento (já que outros funis funcionam). Se esse for o caso, o problema pode ser diferente -- rode esta query de diagnóstico no SQL Editor para confirmar:
+
+```sql
+SELECT column_name FROM information_schema.columns 
+WHERE table_name = 'v_all_sales' ORDER BY ordinal_position;
+```
+
+Se `ingestion_type` já existir na view, o problema é outro (provavelmente `order_date` NULL nos registros recentes, fazendo com que `purchased_at` seja NULL e o filtro de datas exclua esses registros).
 
