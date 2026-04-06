@@ -377,6 +377,17 @@ const LeadFunnelDetail: React.FC = () => {
               funnelId={funnel.id}
               stages={stages}
               rules={rules}
+              trafficFunnels={paymentFunnels}
+              currentTrafficFunnelId={funnel.traffic_funnel_id}
+              onTrafficFunnelChange={async (tfId) => {
+                try {
+                  await updateLeadFunnel.mutateAsync({ id: funnel.id, traffic_funnel_id: tfId });
+                  toast.success('Funil de tráfego associado!');
+                } catch {
+                  toast.error('Erro ao associar funil de tráfego');
+                }
+              }}
+              savingTrafficFunnel={updateLeadFunnel.isPending}
               onSaveStages={async (newStages) => {
                 try {
                   await upsertStages.mutateAsync({ funnelId: funnel.id, stages: newStages });
