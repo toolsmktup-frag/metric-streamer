@@ -53,6 +53,7 @@ const LeadFunnelDetail: React.FC = () => {
   const { data: distinctLeadProducts = [], isLoading: loadingDistinctProducts } = useDistinctLeadProducts(id ?? null);
   const upsertStages = useUpsertStages();
   const upsertRules = useUpsertTransitionRules();
+  const updateLeadFunnel = useUpdateLeadFunnel();
   const upsertLeadProducts = useUpsertLeadFunnelProducts();
   const saveProductMappings = useSaveLeadProductMappings();
   const saveSourceNodes = useSaveFunnelSourceNodes();
