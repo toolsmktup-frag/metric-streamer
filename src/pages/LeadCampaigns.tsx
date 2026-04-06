@@ -16,6 +16,7 @@ const LeadCampaignsPage: React.FC = () => {
   const navigate = useNavigate();
   const { data: campaigns = [], isLoading, isError: campaignsError } = useLeadCampaigns();
   const { data: allFunnels = [], isError: funnelsError } = useLeadFunnels();
+  const { data: trafficFunnels = [] } = useFunnels();
   const { data: userRole = 'vendedor', isError: roleError } = useCurrentUserRole();
   const { data: myAccess = [], isError: accessError } = useMyFunnelAccess();
   const isAdmin = userRole === 'admin' || userRole === 'gestor';
@@ -31,6 +32,7 @@ const LeadCampaignsPage: React.FC = () => {
   const [newName, setNewName] = useState('');
   const [newColor, setNewColor] = useState('#6366f1');
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
+  const [selectedTrafficFunnelId, setSelectedTrafficFunnelId] = useState<string | null>(null);
   const [accessCampaignId, setAccessCampaignId] = useState<string | null>(null);
   const [accessFunnelId, setAccessFunnelId] = useState<string | null>(null);
 
