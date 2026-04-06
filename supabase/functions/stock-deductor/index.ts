@@ -56,16 +56,24 @@ Deno.serve(async (req) => {
       return jsonResponse({ skipped: true, reason: "no mappings configured" });
     }
 
-    // Match case-insensitive
-    const match = mappings.find((m: any) => {
-      const nameMatch = m.offer_name.trim().toLowerCase() === productNameLower;
-      if (!nameMatch) return false;
-      // Filtra por plataforma se não for 'both'
+    // Match: prioriza external_product_id, fallback para offer_name
+    const platformFilter = (m: any) => {
       if (m.platform && m.platform !== "both" && platform) {
         return m.platform.toLowerCase() === platform.toLowerCase();
       }
       return true;
-    });
+    };
+
+    let match = externalProductId
+      ? mappings.find((m: any) => m.external_product_id === String(externalProductId) && platformFilter(m))
+      : null;
+
+    if (!match && productNameLower) {
+      match = mappings.find((m: any) => {
+        const nameMatch = m.offer_name.trim().toLowerCase() === productNameLower;
+        return nameMatch && platformFilter(m);
+      });
+    }
 
     if (!match) {
       console.log(`[stock-deductor] No mapping found for "${product_name}"`);
