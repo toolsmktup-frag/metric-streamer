@@ -45,7 +45,7 @@ export interface UnifiedSale {
   affiliate_commission: number | null;
 }
 
-async function fetchAllSalesRows(dateFrom: string, dateTo: string, funnelId?: string | null, ingestionType?: string | null) {
+async function fetchAllSalesRows(dateFrom: string, dateTo: string, funnelId?: string | null, ingestionType?: string | null, paidTrafficOnly?: boolean) {
   const rows: UnifiedSale[] = [];
 
   for (let from = 0; ; from += SALES_PAGE_SIZE) {
@@ -65,6 +65,10 @@ async function fetchAllSalesRows(dateFrom: string, dateTo: string, funnelId?: st
       query = query.eq('ingestion_type', ingestionType);
     }
 
+    if (paidTrafficOnly) {
+      query = query.eq('is_paid_traffic', true);
+    }
+
     const { data, error } = await query;
     if (error) throw error;
 
@@ -81,14 +85,14 @@ async function fetchAllSalesRows(dateFrom: string, dateTo: string, funnelId?: st
  * Busca todas as vendas (Ticto + Guru + Eduzz + ...) via view v_all_sales.
  * Passe funnelId para filtrar por funil específico.
  */
-export function useAllSales(funnelId?: string | null, ingestionType?: string | null) {
+export function useAllSales(funnelId?: string | null, ingestionType?: string | null, paidTrafficOnly?: boolean) {
   const { dateRange, lastUpdated } = useFilterStore();
   const dateFrom = toLocalDate(dateRange.start);
   const dateTo = toLocalDate(dateRange.end);
 
   return useQuery({
-    queryKey: ['all-sales', dateFrom, dateTo, funnelId ?? 'all', ingestionType ?? 'all', lastUpdated.getTime()],
-    queryFn: async () => fetchAllSalesRows(dateFrom, dateTo, funnelId, ingestionType),
+    queryKey: ['all-sales', dateFrom, dateTo, funnelId ?? 'all', ingestionType ?? 'all', paidTrafficOnly ?? false, lastUpdated.getTime()],
+    queryFn: async () => fetchAllSalesRows(dateFrom, dateTo, funnelId, ingestionType, paidTrafficOnly),
     ...SHARED_QUERY_OPTIONS,
   });
 }
@@ -144,8 +148,8 @@ function classifyWithProducts(
  * Agrega vendas de todas as plataformas por campanha / adset / ad.
  * Quando funnelProducts é fornecido, usa classificação dinâmica.
  */
-export function useAllSalesAggregation(funnelId?: string | null, ingestionType?: string | null, funnelProducts?: FunnelProduct[]) {
-  const { data: allSales = [] } = useAllSales(funnelId, ingestionType);
+export function useAllSalesAggregation(funnelId?: string | null, ingestionType?: string | null, funnelProducts?: FunnelProduct[], paidTrafficOnly?: boolean) {
+  const { data: allSales = [] } = useAllSales(funnelId, ingestionType, paidTrafficOnly);
   const confirmed = allSales.filter(t => t.status === 'authorized');
 
   const byCampaign: Record<string, SalesAggregation> = {};
