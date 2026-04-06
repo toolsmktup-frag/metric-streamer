@@ -64,7 +64,7 @@ export default function ContactPanel({ phone, senderName }: ContactPanelProps) {
   const { data: journey = [] } = useLeadFunnelJourney(lead?.id ?? null);
   const { data: events = [] } = useLeadEvents(lead?.id ?? null);
 
-  const funnelIds = useMemo(() => [...new Set(journey.map((j: any) => j.funnel_id as string))], [journey]);
+  const funnelIds = useMemo(() => Array.from(new Set<string>(journey.map((j: any) => j.funnel_id))), [journey]);
   const { data: stagesByFunnel = {} } = useLeadFunnelStages(funnelIds);
   const moveLeadStage = useMoveLeadStage();
 
