@@ -1,31 +1,35 @@
 
 
-## Plano: Mover lead de etapa direto pelo painel do WhatsApp
+## Plano: Permitir trocar o funil de leads pelo painel do WhatsApp + registrar evento
 
-### Problema
-Hoje a seção "Funis" no painel lateral do WhatsApp apenas exibe em qual etapa o lead está. Para mover, o usuário precisa ir ao Kanban, encontrar o lead e arrastar. Em alto volume isso é impraticável.
+### O que muda
 
-### Solução
-Transformar cada item de funil no `ContactPanel.tsx` em um seletor de etapa. O usuário verá a etapa atual e poderá clicar para trocar, direto da conversa.
+Hoje o dropdown no ContactPanel só troca a **etapa** dentro do mesmo funil. O usuário quer também poder **mover o lead para outro funil** direto da conversa, e registrar um evento claro no histórico.
 
 ### Implementação
 
-**1. Buscar etapas disponíveis por funil**
-- Cada item do `journey` já traz `funnel_id` e `stage_id`. Precisamos buscar todas as etapas de cada funil envolvido.
-- Criar um hook simples `useLeadFunnelStages(funnelIds: string[])` que faz `SELECT * FROM lead_funnel_stages WHERE funnel_id IN (...)` agrupando por funil. Ou reutilizar dados já carregados se houver hook existente.
+**1. Novo hook `useMoveLeadFunnel`** (`src/hooks/useMoveLeadFunnel.ts`)
+- Recebe: `positionId`, `leadId`, `fromFunnelId`, `toFunnelId`, `toFunnelName`
+- Busca a primeira etapa (sort_order=0) do funil destino
+- Atualiza `lead_stage_positions` com o novo `funnel_id`, `stage_id` e `entered_at`
+- Insere evento em `lead_events` com `event_name: 'funnel_change'` e metadata: `{ from_funnel_id, to_funnel_id, moved_by: 'manual' }`
+- Invalida queries relevantes (`lead-funnel-journey`, `leads-by-funnel`, `funnel-lead-counts`, `lead-events`)
 
-**2. Adicionar Select de etapa no ContactPanel**
-- Na seção "Funis" (linhas ~206-225 de `ContactPanel.tsx`), substituir o badge estático da etapa por um `<Select>` compacto com as etapas do funil correspondente.
-- O select mostra a etapa atual selecionada, com bolinhas coloridas para cada opção.
+**2. Buscar todos os funis disponíveis no ContactPanel**
+- Importar `useLeadFunnels` no `ContactPanel.tsx`
+- Usar o resultado para popular um segundo `<Select>` de funil
 
-**3. Usar `useMoveLeadStage` ao trocar**
-- O hook `useMoveLeadStage` já existe e faz tudo: atualiza `lead_stage_positions`, insere evento `stage_change` e invalida queries.
-- Ao mudar o select, chamar `moveLeadStage.mutate({ positionId: j.id, leadId: lead.id, funnelId: j.funnel_id, fromStageId: j.stage_id, toStageId: novaEtapa, toStageName })`.
+**3. Atualizar UI no ContactPanel** (`src/components/whatsapp/ContactPanel.tsx`)
+- Acima do select de etapa, adicionar um select de funil mostrando o funil atual
+- Opções: todos os funis da organização (exceto o atual, ou com o atual pré-selecionado)
+- Ao trocar funil, chamar `useMoveLeadFunnel` que move o lead para a 1ª etapa do novo funil
+- Toast: `"Lead movido para {novoFunil}"`
 
-### Arquivos alterados
-- `src/components/whatsapp/ContactPanel.tsx` -- adicionar select de etapa + import do hook
-- `src/hooks/useLeadPurchases.ts` (ou novo hook) -- buscar etapas dos funis do journey
+**4. Evento no histórico**
+- O evento `funnel_change` será mapeado no `EVENT_MAP` do ContactPanel com label: `"Funil alterado manualmente"`, ícone `MapPin`, cor azul
+- Metadata incluirá nomes dos funis para exibição legível na timeline
 
-### Resultado
-O usuário poderá mover o lead de etapa do funil direto pela conversa do WhatsApp, sem sair do chat.
+### Arquivos
+- **Criar**: `src/hooks/useMoveLeadFunnel.ts`
+- **Editar**: `src/components/whatsapp/ContactPanel.tsx` (import do hook + select de funil + mapeamento de evento)
 
