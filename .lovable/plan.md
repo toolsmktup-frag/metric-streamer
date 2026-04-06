@@ -1,45 +1,105 @@
 
 
-## Plano: Linkar Funil de Tráfego na Campanha de Leads
+## Auditoria Completa: Modulo Automacoes WhatsApp
 
-### Contexto
-Hoje o campo `traffic_funnel_id` existe apenas em `lead_funnels`. Isso obriga o usuário a associar funil por funil. A proposta é adicionar esse link também na **campanha** (`lead_campaigns`), para que todos os funis daquela campanha herdem automaticamente o funil de tráfego — mas permitindo override individual.
+### Status Geral
 
-### Hierarquia de resolução
+O modulo esta **estruturalmente completo** para o fluxo basico (webhook -> trigger -> mensagem WhatsApp). Porem ha **1 problema critico** e **3 problemas importantes**.
+
+---
+
+### CRITICO: Nao existe `wz-scheduler` (Timer nao funciona)
+
+O `wz-executor` cria registros em `wz_scheduled_steps` com `run_at` e `status = 'pending'`, mas **nao existe nenhuma funcao que processe esses agendamentos**. Ou seja:
+
+- Fluxos com no de **Timer** (espera 1h, espera 1 dia, etc.) ficam **presos para sempre** no status `waiting`
+- O no apos o timer **nunca sera executado**
+
+**Solucao**: Criar uma Edge Function `wz-scheduler` que:
+1. Consulta `wz_scheduled_steps` onde `status = 'pending'` e `run_at <= now()`
+2. Para cada step, chama `wz-executor` com o proximo no (via edges)
+3. Marca o step como `completed`
+4. Configurar um cron job no Supabase (pg_cron ou cron externo) para chamar essa funcao a cada 1-2 minutos
+
+---
+
+### IMPORTANTE 1: Instancias WZ vs Instancias WhatsApp (tabelas separadas)
+
+O `WzInstanceManager` usa a tabela `wz_instances` (api_url + api_key). O `WzNodeConfigPanel` busca instancias de `wz_instances` via `useWzInstances`. Porem o modulo de WhatsApp principal (chat) usa `whatsapp_instances` (tabela diferente com `organization_id`, `api_token`, etc.).
+
+**Risco**: O usuario pode ter instancias configuradas no chat que nao aparecem na automacao e vice-versa. Funciona, mas requer configuracao duplicada.
+
+**Sugestao**: Unificar eventualmente, ou ao menos oferecer importacao cruzada.
+
+---
+
+### IMPORTANTE 2: `wz_instances` nao tem `organization_id`
+
+A tabela `wz_instances` nao tem filtro por organizacao. A RLS permite que qualquer usuario autenticado veja todas as instancias de automacao. Em ambiente multi-tenant isso e um problema de seguranca.
+
+---
+
+### IMPORTANTE 3: `wz_flows` nao tem `organization_id`
+
+Mesmo problema. Qualquer usuario autenticado pode ver/editar todos os fluxos de automacao de qualquer organizacao.
+
+---
+
+### O que FUNCIONA hoje (sem timer)
+
 ```text
-Funil de Leads → traffic_funnel_id (override individual)
-  ↑ herda se NULL
-Campanha → traffic_funnel_id (padrão para todos os funis da campanha)
+Ticto/Guru webhook
+  └─> ticto-webhook / guru-webhook
+       └─> wz-receiver (await, nao fire-and-forget)
+            ├─ Detecta plataforma
+            ├─ Normaliza payload (phone, produto, status, PIX, boleto)
+            ├─ Busca fluxos ativos (wz_flows.is_active = true)
+            ├─ Filtra por trigger (tipo evento + product_id)
+            ├─ Deduplicacao atomica (UUID v5 do event_id)
+            ├─ Auto-cancel pre-venda se compra aprovada
+            ├─ Cria execucao em wz_executions
+            └─> wz-executor (await)
+                 ├─ WhatsApp node: envia via UAZAPI (/send/text, /send/media)
+                 │   ├─ Variavel substitution ({{nome}}, {{codigo_pix}}, etc.)
+                 │   ├─ Multi-bloco (varias bolhas)
+                 │   ├─ skipIfReplied
+                 │   └─ Delay humanizado entre blocos
+                 ├─ Condition node: avalia e segue yes/no
+                 ├─ Stop node: para ou cancela anteriores
+                 └─ Timer node: agenda mas NAO EXECUTA (bug)
 ```
 
-### Implementação
+---
 
-**1. Migration: adicionar `traffic_funnel_id` em `lead_campaigns`**
-- `ALTER TABLE public.lead_campaigns ADD COLUMN IF NOT EXISTS traffic_funnel_id uuid REFERENCES public.funnels(id) ON DELETE SET NULL;`
+### Plano de Implementacao
 
-**2. Tipo TypeScript**
-- Em `src/types/leadFunnels.ts`, adicionar `traffic_funnel_id: string | null` em `LeadCampaign`.
+**Passo 1 -- Criar `wz-scheduler` Edge Function**
+- Nova funcao em `supabase/functions/wz-scheduler/index.ts`
+- Consulta steps pendentes com `run_at <= now()`
+- Para cada step: busca execucao, busca flow, encontra o proximo no via edges, chama `wz-executor`
+- Marca step como `completed` e execucao volta a `running`
 
-**3. UI da Campanha (`src/pages/LeadCampaigns.tsx`)**
-- No card/accordion de cada campanha, adicionar um dropdown para selecionar o funil de tráfego associado.
-- Ao criar campanha, permitir já selecionar o funil de tráfego.
-- Ao alterar, chamar `useUpdateLeadCampaign` (já existe no hook).
+**Passo 2 -- Configurar cron**
+- Fornecer SQL para criar um pg_cron job que chama `wz-scheduler` a cada 1 minuto
+- Alternativa: usar `pg_net` + `pg_cron` para chamar a Edge Function via HTTP
 
-**4. Hook de update da campanha**
-- `useUpdateLeadCampaign` em `useLeadCampaigns.ts` — já existe? Verificar. Se não, criar (padrão simples como `useUpdateLeadFunnel`).
+**Passo 3 (opcional) -- Adicionar `organization_id` a `wz_instances` e `wz_flows`**
+- Migration para adicionar a coluna
+- Atualizar RLS policies
+- Atualizar hooks do frontend para filtrar por org
 
-**5. Resolução no Resumo/Dados**
-- Onde o sistema usa `funnel.traffic_funnel_id`, aplicar fallback:
-  `const trafficId = funnel.traffic_funnel_id ?? campaign?.traffic_funnel_id ?? null`
-- Isso afeta principalmente `LeadFunnelDetail.tsx` e qualquer lugar que resolva o link de tráfego.
+### Arquivos a criar/editar
+- **Criar**: `supabase/functions/wz-scheduler/index.ts`
+- **Criar**: `docs/migration_wz_scheduler_cron.sql` (pg_cron setup)
+- Nenhuma alteracao no frontend necessaria para o scheduler
 
-### Arquivos
-- **Migration SQL** (doc para rodar no Supabase)
-- `src/types/leadFunnels.ts` — adicionar campo em `LeadCampaign`
-- `src/hooks/useLeadCampaigns.ts` — adicionar `useUpdateLeadCampaign` se não existir
-- `src/pages/LeadCampaigns.tsx` — dropdown de funil de tráfego por campanha
-- `src/pages/LeadFunnelDetail.tsx` — fallback para `campaign.traffic_funnel_id`
+### Para voce testar hoje (sem timer)
+Se seu fluxo usa apenas Trigger -> WhatsApp (sem Timer), esta pronto:
+1. Crie uma instancia WZ com URL e token da UAZAPI
+2. Crie um fluxo com trigger (ex: `pix_generated` + product_id do seu produto)
+3. Adicione um no WhatsApp, selecione a instancia, escreva a mensagem
+4. Ative o fluxo
+5. Simule um webhook da Ticto/Guru -- a mensagem deve ser enviada
 
-### Resultado
-O usuário poderá associar "Articulabem (campanha)" ao funil de tráfego do Articulabem uma única vez, e todos os funis de leads dentro dessa campanha herdarão automaticamente — sem precisar configurar um por um.
+Se precisar de Timer, precisamos implementar o scheduler primeiro.
 
