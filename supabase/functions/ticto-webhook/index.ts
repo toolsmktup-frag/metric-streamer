@@ -170,12 +170,23 @@ Deno.serve(async (req) => {
     const rawStatus = String(payload.status || order.status || invoice.status || contract.status || payload.event || "").toLowerCase();
     const late = rawStatus === "late" ? "pending" : null;
     const statusMap: Record<string, string> = {
+      // ── Aprovados / pagos ──
       approved: "authorized", authorized: "authorized", paid: "authorized",
+      sale_approved: "authorized", sale_completed: "authorized",
+      completed: "authorized", purchase_approved: "authorized",
+      purchase_complete: "authorized", transaction_approved: "authorized",
+      // ── Pendentes ──
       open: "open", pending: "pending", waiting_payment: "pending",
-      pix_created: "pending", pix_pending: "pending", pix_expired: "canceled",
-      bank_slip_created: "pending", bank_slip_delayed: "pending", bank_slip_expired: "canceled",
-      refunded: "refunded", refund: "refunded", chargeback: "chargeback",
+      pix_created: "pending", pix_pending: "pending",
+      bank_slip_created: "pending", bank_slip_delayed: "pending",
+      // ── Cancelados / expirados ──
+      pix_expired: "canceled", bank_slip_expired: "canceled",
       canceled: "canceled", cancelled: "canceled", expired: "canceled", refused: "refused",
+      // ── Estorno ──
+      refunded: "refunded", refund: "refunded", chargeback: "chargeback",
+      // ── Abandono ──
+      abandoned_cart: "abandoned_cart", cart_abandoned: "abandoned_cart",
+      abandoned: "abandoned_cart",
     };
     const normalizedStatus = late || statusMap[rawStatus] || rawStatus || "open";
 
