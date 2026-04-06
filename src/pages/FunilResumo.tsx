@@ -50,6 +50,8 @@ export default function FunilResumo() {
   const funnelProducts = funnel?.funnel_products || [];
   const { totalSales, byCampaign } = useAllSalesAggregation(id, 'webhook', funnelProducts);
   const { data: allSales = [] } = useAllSales(id, 'webhook');
+  const { data: availability } = useFunnelSalesAvailability(id);
+  const { dateRange, setDateRange } = useFilterStore();
   const syncMeta = useSyncMeta();
   const syncStatus = useSyncPollingRefetch();
 
