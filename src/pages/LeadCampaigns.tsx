@@ -373,15 +373,43 @@ const LeadCampaignsPage: React.FC = () => {
                 className="flex items-center justify-between px-4 py-3 hover:bg-muted/20 cursor-pointer transition-colors"
               >
                 <div
-                  className="flex items-center gap-2 flex-1"
+                  className="flex items-center gap-2 flex-1 min-w-0"
                   onClick={() => navigate(`/lead-funnels/${funnel.id}`)}
                 >
-                  <Layers className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm font-medium text-foreground">{funnel.name}</span>
+                  <Layers className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <span className="text-sm font-medium text-foreground truncate">{funnel.name}</span>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 shrink-0">
                   {isAdmin && (
                     <>
+                      <select
+                        value={funnel.traffic_funnel_id === IGNORE_FUNNEL_ID ? IGNORE_FUNNEL_ID : (funnel.traffic_funnel_id || '')}
+                        onChange={async (e) => {
+                          e.stopPropagation();
+                          const val = e.target.value === IGNORE_FUNNEL_ID ? IGNORE_FUNNEL_ID : (e.target.value || null);
+                          try {
+                            await updateLeadFunnel.mutateAsync({ id: funnel.id, traffic_funnel_id: val });
+                            toast.success(
+                              val === IGNORE_FUNNEL_ID
+                                ? 'Funil de tráfego ignorado'
+                                : val
+                                  ? 'Funil de tráfego associado!'
+                                  : 'Funil de tráfego removido'
+                            );
+                          } catch {
+                            toast.error('Erro ao atualizar funil');
+                          }
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        className="border border-input rounded-md px-2 py-1 text-xs bg-background max-w-[180px]"
+                        title="Funil de tráfego"
+                      >
+                        <option value="">Sem funil de tráfego</option>
+                        <option value={IGNORE_FUNNEL_ID}>🚫 Ignorar funil de tráfego</option>
+                        {trafficFunnels.map(tf => (
+                          <option key={tf.id} value={tf.id}>{tf.name}</option>
+                        ))}
+                      </select>
                       <Button
                         variant="ghost"
                         size="sm"
