@@ -347,6 +347,24 @@ function OverviewTab() {
                 </button>
               </div>
 
+              {/* Produzível */}
+              {(() => {
+                const produzivel = Math.min(p.stock_potes, p.stock_etiquetas);
+                return (
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">
+                      <Hammer className="h-3 w-3 inline mr-1" />
+                      Produzível: <strong className="text-foreground">{produzivel} un</strong>
+                    </span>
+                    <Button size="sm" variant="outline" className="h-7 text-xs"
+                      disabled={produzivel <= 0}
+                      onClick={() => setProducaoModal(p)}>
+                      <Hammer className="h-3 w-3 mr-1" />Registrar Produção
+                    </Button>
+                  </div>
+                );
+              })()}
+
               {/* Alertas */}
               <div className="flex flex-wrap gap-1.5">
                 {statusProduto !== 'ok' && (
