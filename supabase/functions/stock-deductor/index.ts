@@ -95,17 +95,13 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Product not found" }, 404);
     }
 
-    // Deduz estoque (não deixa ir abaixo de 0)
+    // Deduz estoque — apenas produto acabado (potes e etiquetas são consumidos na montagem/produção)
     const newStock = Math.max(0, product.current_stock - qty);
-    const newPotes = Math.max(0, product.stock_potes - qty);
-    const newEtiquetas = Math.max(0, product.stock_etiquetas - qty);
 
     const { error: updateErr } = await supabase
       .from("physical_products")
       .update({
         current_stock: newStock,
-        stock_potes: newPotes,
-        stock_etiquetas: newEtiquetas,
         updated_at: new Date().toISOString(),
       })
       .eq("id", product.id);
@@ -133,16 +129,14 @@ Deno.serve(async (req) => {
 
     console.log(
       `[stock-deductor] ✅ Deducted ${qty} from "${product.name}": ` +
-      `stock ${product.current_stock}→${newStock}, ` +
-      `potes ${product.stock_potes}→${newPotes}, ` +
-      `etiquetas ${product.stock_etiquetas}→${newEtiquetas}`
+      `stock ${product.current_stock}→${newStock}`
     );
 
     return jsonResponse({
       success: true,
       product: product.name,
       deducted: qty,
-      remaining: { stock: newStock, potes: newPotes, etiquetas: newEtiquetas },
+      remaining: { stock: newStock },
     });
   } catch (err) {
     console.error("[stock-deductor] Error:", err);

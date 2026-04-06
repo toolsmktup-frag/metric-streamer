@@ -194,6 +194,9 @@ function OverviewTab() {
   const [entradaModal, setEntradaModal] = useState<{ product: Product; field: 'produto' | 'potes' | 'etiquetas' } | null>(null);
   const [entradaQty, setEntradaQty] = useState('');
   const [entradaNotes, setEntradaNotes] = useState('');
+  const [producaoModal, setProducaoModal] = useState<Product | null>(null);
+  const [producaoQty, setProducaoQty] = useState('');
+  const [producaoNotes, setProducaoNotes] = useState('');
 
   const entradaMutation = useMutation({
     mutationFn: async ({ product, field, qty, notes }: { product: Product; field: 'produto' | 'potes' | 'etiquetas'; qty: number; notes: string }) => {
@@ -227,6 +230,36 @@ function OverviewTab() {
       setEntradaModal(null);
       setEntradaQty('');
       setEntradaNotes('');
+    },
+  });
+
+  const producaoMutation = useMutation({
+    mutationFn: async ({ product, qty, notes }: { product: Product; qty: number; notes: string }) => {
+      const maxProd = Math.min(product.stock_potes, product.stock_etiquetas);
+      const finalQty = Math.min(qty, maxProd);
+      if (finalQty <= 0) throw new Error('Sem insumos suficientes para produzir');
+
+      const { error: upErr } = await supabase.from('physical_products').update({
+        current_stock: product.current_stock + finalQty,
+        stock_potes: product.stock_potes - finalQty,
+        stock_etiquetas: product.stock_etiquetas - finalQty,
+        updated_at: new Date().toISOString(),
+      }).eq('id', product.id);
+      if (upErr) throw upErr;
+
+      const { error: mvErr } = await supabase.from('inventory_movements').insert({
+        product_id: product.id, type: 'production', quantity: finalQty,
+        source: 'Produção manual', reference_id: `PROD-${Date.now()}`,
+        notes: notes || `Produção de ${finalQty} unidades`,
+      });
+      if (mvErr) throw mvErr;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['physical_products'] });
+      qc.invalidateQueries({ queryKey: ['inventory_movements'] });
+      setProducaoModal(null);
+      setProducaoQty('');
+      setProducaoNotes('');
     },
   });
 
