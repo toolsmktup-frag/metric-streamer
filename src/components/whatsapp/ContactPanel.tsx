@@ -3,10 +3,13 @@ import { User, Tag, StickyNote, Trash2, Send, ShoppingCart, DollarSign, MapPin, 
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useContactNotes } from '@/hooks/useContactNotes';
 import { useLeadByPhone } from '@/hooks/useLeadByPhone';
 import { useLeadPurchases, useLeadFunnelJourney } from '@/hooks/useLeadPurchases';
 import { useLeadEvents } from '@/hooks/useLeads';
+import { useLeadFunnelStages } from '@/hooks/useLeadFunnelStages';
+import { useMoveLeadStage } from '@/hooks/useMoveLeadStage';
 import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { formatCurrency } from '@/lib/formatters';
