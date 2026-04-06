@@ -33,20 +33,19 @@ Deno.serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseKey);
 
   try {
-    const { product_name, platform, order_id } = await req.json();
+    const { product_name, product_id: externalProductId, platform, order_id } = await req.json();
 
-    if (!product_name) {
-      return jsonResponse({ skipped: true, reason: "no product_name" });
+    if (!product_name && !externalProductId) {
+      return jsonResponse({ skipped: true, reason: "no product_name or product_id" });
     }
 
-    const productNameLower = product_name.trim().toLowerCase();
-    console.log(`[stock-deductor] Looking up: "${productNameLower}" platform=${platform || "any"}`);
+    const productNameLower = product_name ? product_name.trim().toLowerCase() : "";
+    console.log(`[stock-deductor] Looking up: name="${productNameLower}" ext_id="${externalProductId || ""}" platform=${platform || "any"}`);
 
     // Busca todos os mappings
     const { data: mappings, error: mapErr } = await supabase
       .from("product_offer_mappings")
-      .select("id, product_id, offer_name, quantity, platform");
-
+      .select("id, product_id, offer_name, quantity, platform, external_product_id");
     if (mapErr) {
       console.error("[stock-deductor] Error fetching mappings:", mapErr);
       return jsonResponse({ error: "Failed to fetch mappings" }, 500);
@@ -57,16 +56,24 @@ Deno.serve(async (req) => {
       return jsonResponse({ skipped: true, reason: "no mappings configured" });
     }
 
-    // Match case-insensitive
-    const match = mappings.find((m: any) => {
-      const nameMatch = m.offer_name.trim().toLowerCase() === productNameLower;
-      if (!nameMatch) return false;
-      // Filtra por plataforma se não for 'both'
+    // Match: prioriza external_product_id, fallback para offer_name
+    const platformFilter = (m: any) => {
       if (m.platform && m.platform !== "both" && platform) {
         return m.platform.toLowerCase() === platform.toLowerCase();
       }
       return true;
-    });
+    };
+
+    let match = externalProductId
+      ? mappings.find((m: any) => m.external_product_id === String(externalProductId) && platformFilter(m))
+      : null;
+
+    if (!match && productNameLower) {
+      match = mappings.find((m: any) => {
+        const nameMatch = m.offer_name.trim().toLowerCase() === productNameLower;
+        return nameMatch && platformFilter(m);
+      });
+    }
 
     if (!match) {
       console.log(`[stock-deductor] No mapping found for "${product_name}"`);
