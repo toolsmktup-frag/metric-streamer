@@ -33,20 +33,19 @@ Deno.serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseKey);
 
   try {
-    const { product_name, platform, order_id } = await req.json();
+    const { product_name, product_id: externalProductId, platform, order_id } = await req.json();
 
-    if (!product_name) {
-      return jsonResponse({ skipped: true, reason: "no product_name" });
+    if (!product_name && !externalProductId) {
+      return jsonResponse({ skipped: true, reason: "no product_name or product_id" });
     }
 
-    const productNameLower = product_name.trim().toLowerCase();
-    console.log(`[stock-deductor] Looking up: "${productNameLower}" platform=${platform || "any"}`);
+    const productNameLower = product_name ? product_name.trim().toLowerCase() : "";
+    console.log(`[stock-deductor] Looking up: name="${productNameLower}" ext_id="${externalProductId || ""}" platform=${platform || "any"}`);
 
     // Busca todos os mappings
     const { data: mappings, error: mapErr } = await supabase
       .from("product_offer_mappings")
-      .select("id, product_id, offer_name, quantity, platform");
-
+      .select("id, product_id, offer_name, quantity, platform, external_product_id");
     if (mapErr) {
       console.error("[stock-deductor] Error fetching mappings:", mapErr);
       return jsonResponse({ error: "Failed to fetch mappings" }, 500);
