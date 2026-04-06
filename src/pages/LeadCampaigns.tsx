@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useLeadCampaigns, useCreateLeadCampaign, useDeleteLeadCampaign } from '@/hooks/useLeadCampaigns';
 import { useLeadFunnels, useCreateLeadFunnel, useDeleteLeadFunnel } from '@/hooks/useLeadFunnels';
+import { useFunnels } from '@/hooks/useFunnels';
 import { useCurrentUserRole } from '@/hooks/useCurrentUserRole';
 import { useMyFunnelAccess } from '@/hooks/useLeadFunnelAccess';
 import FunnelAccessManager from '@/components/lead-funnels/FunnelAccessManager';
@@ -15,6 +16,7 @@ const LeadCampaignsPage: React.FC = () => {
   const navigate = useNavigate();
   const { data: campaigns = [], isLoading, isError: campaignsError } = useLeadCampaigns();
   const { data: allFunnels = [], isError: funnelsError } = useLeadFunnels();
+  const { data: trafficFunnels = [] } = useFunnels();
   const { data: userRole = 'vendedor', isError: roleError } = useCurrentUserRole();
   const { data: myAccess = [], isError: accessError } = useMyFunnelAccess();
   const isAdmin = userRole === 'admin' || userRole === 'gestor';
@@ -30,6 +32,7 @@ const LeadCampaignsPage: React.FC = () => {
   const [newName, setNewName] = useState('');
   const [newColor, setNewColor] = useState('#6366f1');
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
+  const [selectedTrafficFunnelId, setSelectedTrafficFunnelId] = useState<string | null>(null);
   const [accessCampaignId, setAccessCampaignId] = useState<string | null>(null);
   const [accessFunnelId, setAccessFunnelId] = useState<string | null>(null);
 
@@ -79,10 +82,12 @@ const LeadCampaignsPage: React.FC = () => {
         name: newName,
         color: newColor,
         campaign_id: selectedCampaignId,
+        traffic_funnel_id: selectedTrafficFunnelId,
       });
       toast.success('Funil criado!');
       setShowNewFunnel(false);
       setNewName('');
+      setSelectedTrafficFunnelId(null);
       navigate(`/lead-funnels/${funnel.id}`);
     } catch (err: any) {
       toast.error(err?.message || 'Erro ao criar funil');
@@ -165,7 +170,7 @@ const LeadCampaignsPage: React.FC = () => {
 
             <Dialog open={showNewFunnel} onOpenChange={setShowNewFunnel}>
               <DialogTrigger asChild>
-                <Button onClick={() => { setNewName(''); setNewColor('#10b981'); setSelectedCampaignId(null); }}>
+                <Button onClick={() => { setNewName(''); setNewColor('#10b981'); setSelectedCampaignId(null); setSelectedTrafficFunnelId(null); }}>
                   <Plus className="h-4 w-4 mr-1" /> Novo Funil
                 </Button>
               </DialogTrigger>
@@ -187,6 +192,16 @@ const LeadCampaignsPage: React.FC = () => {
                     <option value="">Sem campanha</option>
                     {campaigns.map(c => (
                       <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={selectedTrafficFunnelId || ''}
+                    onChange={e => setSelectedTrafficFunnelId(e.target.value || null)}
+                    className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background"
+                  >
+                    <option value="">Sem funil de tráfego associado</option>
+                    {trafficFunnels.map(f => (
+                      <option key={f.id} value={f.id}>{f.name}</option>
                     ))}
                   </select>
                   <Button onClick={handleCreateFunnel} className="w-full" disabled={createFunnel.isPending}>
