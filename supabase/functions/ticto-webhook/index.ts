@@ -98,13 +98,15 @@ Deno.serve(async (req) => {
     urlToken = new URL(req.url).searchParams.get("token");
   } catch (parseErr) {
     // Audit even parse failures
-    await supabase.from("webhook_audit").insert({
-      source: "ticto",
-      webhook_token: urlToken,
-      error_message: `JSON parse error: ${String(parseErr)}`,
-      raw_payload: null,
-      processing_ms: Date.now() - startMs,
-    }).catch(() => {});
+    try {
+      await supabase.from("webhook_audit").insert({
+        source: "ticto",
+        webhook_token: urlToken,
+        error_message: `JSON parse error: ${String(parseErr)}`,
+        raw_payload: null,
+        processing_ms: Date.now() - startMs,
+      });
+    } catch (_) {}
     return new Response(JSON.stringify({ error: "Invalid JSON" }), {
       status: 400,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
