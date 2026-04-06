@@ -98,13 +98,15 @@ Deno.serve(async (req) => {
     urlToken = new URL(req.url).searchParams.get("token");
   } catch (parseErr) {
     // Audit even parse failures
-    await supabase.from("webhook_audit").insert({
-      source: "ticto",
-      webhook_token: urlToken,
-      error_message: `JSON parse error: ${String(parseErr)}`,
-      raw_payload: null,
-      processing_ms: Date.now() - startMs,
-    }).catch(() => {});
+    try {
+      await supabase.from("webhook_audit").insert({
+        source: "ticto",
+        webhook_token: urlToken,
+        error_message: `JSON parse error: ${String(parseErr)}`,
+        raw_payload: null,
+        processing_ms: Date.now() - startMs,
+      });
+    } catch (_) {}
     return new Response(JSON.stringify({ error: "Invalid JSON" }), {
       status: 400,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -141,13 +143,15 @@ Deno.serve(async (req) => {
     const hasEvent = payload.event || payload.status || invoice.status;
     if (!hasSale && !hasProduct && !hasEvent) {
       // Audit ping
-      await supabase.from("webhook_audit").insert({
-        source: "ticto",
-        webhook_token: urlToken,
-        normalized_status: "ping",
-        raw_payload: payload,
-        processing_ms: Date.now() - startMs,
-      }).catch(() => {});
+      try {
+        await supabase.from("webhook_audit").insert({
+          source: "ticto",
+          webhook_token: urlToken,
+          normalized_status: "ping",
+          raw_payload: payload,
+          processing_ms: Date.now() - startMs,
+        });
+      } catch (_) {}
       return new Response(JSON.stringify({ success: true, message: "ping ok" }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -239,21 +243,23 @@ Deno.serve(async (req) => {
     }
 
     // ── Audit: registrar ANTES do save principal ──
-    await supabase.from("webhook_audit").insert({
-      source: "ticto",
-      webhook_token: webhookToken,
-      funnel_id: funnelId,
-      order_id: orderId,
-      product_id: productId,
-      raw_status: rawStatus,
-      normalized_status: normalizedStatus,
-      paid_amount: amountInCents,
-      product_name: productName || null,
-      raw_payload: payload,
-      processing_ms: Date.now() - startMs,
-    }).catch((auditErr: any) => {
+    try {
+      await supabase.from("webhook_audit").insert({
+        source: "ticto",
+        webhook_token: webhookToken,
+        funnel_id: funnelId,
+        order_id: orderId,
+        product_id: productId,
+        raw_status: rawStatus,
+        normalized_status: normalizedStatus,
+        paid_amount: amountInCents,
+        product_name: productName || null,
+        raw_payload: payload,
+        processing_ms: Date.now() - startMs,
+      });
+    } catch (auditErr) {
       console.error("[ticto-webhook] Audit insert error (non-fatal):", auditErr);
-    });
+    }
 
     // ── Proteção contra sobrescrita ──
     let finalAmount = amountInCents;
@@ -364,18 +370,20 @@ Deno.serve(async (req) => {
     if (saveError) {
       console.error("[ticto-webhook] DB error:", saveError);
       // Update audit with error
-      await supabase.from("webhook_audit").insert({
-        source: "ticto",
-        webhook_token: webhookToken,
-        funnel_id: funnelId,
-        order_id: orderId,
-        product_id: productId,
-        raw_status: rawStatus,
-        normalized_status: normalizedStatus,
-        error_message: `Save error: ${saveError.message}`,
-        raw_payload: payload,
-        processing_ms: Date.now() - startMs,
-      }).catch(() => {});
+      try {
+        await supabase.from("webhook_audit").insert({
+          source: "ticto",
+          webhook_token: webhookToken,
+          funnel_id: funnelId,
+          order_id: orderId,
+          product_id: productId,
+          raw_status: rawStatus,
+          normalized_status: normalizedStatus,
+          error_message: `Save error: ${saveError.message}`,
+          raw_payload: payload,
+          processing_ms: Date.now() - startMs,
+        });
+      } catch (_) {}
       return new Response(
         JSON.stringify({ error: "Failed to save transaction", detail: saveError.message }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -468,13 +476,15 @@ Deno.serve(async (req) => {
   } catch (err) {
     console.error("[ticto-webhook] Webhook error:", err);
     // Audit the crash
-    await supabase.from("webhook_audit").insert({
-      source: "ticto",
-      webhook_token: urlToken,
-      error_message: `Unhandled: ${String(err)}`,
-      raw_payload: payload,
-      processing_ms: Date.now() - startMs,
-    }).catch(() => {});
+    try {
+      await supabase.from("webhook_audit").insert({
+        source: "ticto",
+        webhook_token: urlToken,
+        error_message: `Unhandled: ${String(err)}`,
+        raw_payload: payload,
+        processing_ms: Date.now() - startMs,
+      });
+    } catch (_) {}
     return new Response(
       JSON.stringify({ error: "Internal server error", detail: String(err) }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
