@@ -64,7 +64,7 @@ export default function ContactPanel({ phone, senderName }: ContactPanelProps) {
   const { data: journey = [] } = useLeadFunnelJourney(lead?.id ?? null);
   const { data: events = [] } = useLeadEvents(lead?.id ?? null);
 
-  const funnelIds = useMemo(() => [...new Set(journey.map((j: any) => j.funnel_id))], [journey]);
+  const funnelIds = useMemo(() => [...new Set(journey.map((j: any) => j.funnel_id as string))], [journey]);
   const { data: stagesByFunnel = {} } = useLeadFunnelStages(funnelIds);
   const moveLeadStage = useMoveLeadStage();
 
@@ -211,25 +211,60 @@ export default function ContactPanel({ phone, senderName }: ContactPanelProps) {
           <p className="text-xs text-muted-foreground italic">Nenhum funil vinculado</p>
         ) : (
           <div className="space-y-1.5">
-            {journey.map((j: any) => (
-              <div key={j.id} className="rounded-lg border border-border p-2 flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: j.funnel?.color || 'hsl(var(--primary))' }} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-[11px] font-medium text-foreground truncate">{j.funnel?.name || 'Funil'}</p>
-                  <div className="flex items-center gap-1 mt-0.5">
-                    <span className="text-[9px] px-1.5 py-0.5 rounded font-medium" style={{
-                      backgroundColor: `${j.stage?.color || '#888'}20`,
-                      color: j.stage?.color || '#888',
-                    }}>
-                      {j.stage?.name || 'Etapa'}
-                    </span>
-                    <span className="text-[9px] text-muted-foreground">
-                      {formatDistanceToNow(new Date(j.entered_at), { locale: ptBR, addSuffix: true })}
-                    </span>
+            {journey.map((j: any) => {
+              const stages = stagesByFunnel[j.funnel_id] || [];
+              return (
+                <div key={j.id} className="rounded-lg border border-border p-2">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: j.funnel?.color || 'hsl(var(--primary))' }} />
+                    <p className="text-[11px] font-medium text-foreground truncate flex-1">{j.funnel?.name || 'Funil'}</p>
                   </div>
+                  {stages.length > 1 ? (
+                    <Select
+                      value={j.stage_id}
+                      onValueChange={(newStageId) => {
+                        if (newStageId === j.stage_id) return;
+                        const targetStage = stages.find((s: any) => s.id === newStageId);
+                        moveLeadStage.mutate({
+                          positionId: j.id,
+                          leadId: j.lead_id,
+                          funnelId: j.funnel_id,
+                          fromStageId: j.stage_id,
+                          toStageId: newStageId,
+                          toStageName: targetStage?.name,
+                        });
+                      }}
+                    >
+                      <SelectTrigger className="h-7 text-[10px] px-2 border-none bg-muted/50">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {stages.map((s: any) => (
+                          <SelectItem key={s.id} value={s.id} className="text-xs">
+                            <div className="flex items-center gap-1.5">
+                              <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: s.color || '#888' }} />
+                              {s.name}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <div className="flex items-center gap-1 mt-0.5">
+                      <span className="text-[9px] px-1.5 py-0.5 rounded font-medium" style={{
+                        backgroundColor: `${j.stage?.color || '#888'}20`,
+                        color: j.stage?.color || '#888',
+                      }}>
+                        {j.stage?.name || 'Etapa'}
+                      </span>
+                      <span className="text-[9px] text-muted-foreground">
+                        {formatDistanceToNow(new Date(j.entered_at), { locale: ptBR, addSuffix: true })}
+                      </span>
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
