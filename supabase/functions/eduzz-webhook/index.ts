@@ -332,6 +332,28 @@ Deno.serve(async (req) => {
       console.error("[eduzz-webhook] wz-receiver forward error (non-fatal):", wzErr);
     }
 
+    // ── Stock deduction (apenas vendas aprovadas) ──
+    if (normalizedStatus === "authorized" && productName) {
+      try {
+        const stockRes = await fetch(`${supabaseUrl}/functions/v1/stock-deductor`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${supabaseKey}`,
+          },
+          body: JSON.stringify({
+            product_name: productName,
+            platform: "eduzz",
+            order_id: invoiceId || null,
+          }),
+        });
+        const stockBody = await stockRes.text();
+        console.log(`[eduzz-webhook] stock-deductor: ${stockRes.status} ${stockBody.slice(0, 200)}`);
+      } catch (stockErr) {
+        console.error("[eduzz-webhook] stock-deductor error (non-fatal):", stockErr);
+      }
+    }
+
     return jsonResponse({ success: true });
   } catch (err) {
     console.error("Webhook error:", err);
