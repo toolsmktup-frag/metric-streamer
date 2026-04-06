@@ -170,7 +170,7 @@ const LeadCampaignsPage: React.FC = () => {
 
             <Dialog open={showNewFunnel} onOpenChange={setShowNewFunnel}>
               <DialogTrigger asChild>
-                <Button onClick={() => { setNewName(''); setNewColor('#10b981'); setSelectedCampaignId(null); }}>
+                <Button onClick={() => { setNewName(''); setNewColor('#10b981'); setSelectedCampaignId(null); setSelectedTrafficFunnelId(null); }}>
                   <Plus className="h-4 w-4 mr-1" /> Novo Funil
                 </Button>
               </DialogTrigger>
@@ -192,6 +192,16 @@ const LeadCampaignsPage: React.FC = () => {
                     <option value="">Sem campanha</option>
                     {campaigns.map(c => (
                       <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={selectedTrafficFunnelId || ''}
+                    onChange={e => setSelectedTrafficFunnelId(e.target.value || null)}
+                    className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background"
+                  >
+                    <option value="">Sem funil de tráfego associado</option>
+                    {trafficFunnels.map(f => (
+                      <option key={f.id} value={f.id}>{f.name}</option>
                     ))}
                   </select>
                   <Button onClick={handleCreateFunnel} className="w-full" disabled={createFunnel.isPending}>
