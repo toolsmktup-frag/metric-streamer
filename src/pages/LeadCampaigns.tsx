@@ -27,6 +27,9 @@ const LeadCampaignsPage: React.FC = () => {
   const updateCampaign = useUpdateLeadCampaign();
   const createFunnel = useCreateLeadFunnel();
   const deleteFunnel = useDeleteLeadFunnel();
+  const updateLeadFunnel = useUpdateLeadFunnel();
+
+  const IGNORE_FUNNEL_ID = '00000000-0000-0000-0000-000000000000';
 
   const [showNewCampaign, setShowNewCampaign] = useState(false);
   const [showNewFunnel, setShowNewFunnel] = useState(false);
