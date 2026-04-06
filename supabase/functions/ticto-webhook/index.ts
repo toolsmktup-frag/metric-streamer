@@ -370,18 +370,20 @@ Deno.serve(async (req) => {
     if (saveError) {
       console.error("[ticto-webhook] DB error:", saveError);
       // Update audit with error
-      await supabase.from("webhook_audit").insert({
-        source: "ticto",
-        webhook_token: webhookToken,
-        funnel_id: funnelId,
-        order_id: orderId,
-        product_id: productId,
-        raw_status: rawStatus,
-        normalized_status: normalizedStatus,
-        error_message: `Save error: ${saveError.message}`,
-        raw_payload: payload,
-        processing_ms: Date.now() - startMs,
-      }).catch(() => {});
+      try {
+        await supabase.from("webhook_audit").insert({
+          source: "ticto",
+          webhook_token: webhookToken,
+          funnel_id: funnelId,
+          order_id: orderId,
+          product_id: productId,
+          raw_status: rawStatus,
+          normalized_status: normalizedStatus,
+          error_message: `Save error: ${saveError.message}`,
+          raw_payload: payload,
+          processing_ms: Date.now() - startMs,
+        });
+      } catch (_) {}
       return new Response(
         JSON.stringify({ error: "Failed to save transaction", detail: saveError.message }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -474,13 +476,15 @@ Deno.serve(async (req) => {
   } catch (err) {
     console.error("[ticto-webhook] Webhook error:", err);
     // Audit the crash
-    await supabase.from("webhook_audit").insert({
-      source: "ticto",
-      webhook_token: urlToken,
-      error_message: `Unhandled: ${String(err)}`,
-      raw_payload: payload,
-      processing_ms: Date.now() - startMs,
-    }).catch(() => {});
+    try {
+      await supabase.from("webhook_audit").insert({
+        source: "ticto",
+        webhook_token: urlToken,
+        error_message: `Unhandled: ${String(err)}`,
+        raw_payload: payload,
+        processing_ms: Date.now() - startMs,
+      });
+    } catch (_) {}
     return new Response(
       JSON.stringify({ error: "Internal server error", detail: String(err) }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
