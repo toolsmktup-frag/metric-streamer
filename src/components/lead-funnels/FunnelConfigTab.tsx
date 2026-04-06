@@ -117,6 +117,27 @@ const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSave
 
   return (
     <div className="space-y-8 max-w-2xl">
+      {/* Traffic Funnel Association */}
+      {onTrafficFunnelChange && trafficFunnels.length > 0 && (
+        <div>
+          <h3 className="text-lg font-semibold text-foreground mb-3">Funil de Tráfego Associado</h3>
+          <p className="text-sm text-muted-foreground mb-2">
+            Vincule este funil de leads a um funil de tráfego para unificar dados de receita e CRM.
+          </p>
+          <select
+            value={currentTrafficFunnelId || ''}
+            onChange={e => onTrafficFunnelChange(e.target.value || null)}
+            disabled={savingTrafficFunnel}
+            className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background"
+          >
+            <option value="">Nenhum funil de tráfego</option>
+            {trafficFunnels.map(f => (
+              <option key={f.id} value={f.id}>{f.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
       {/* Stages Section */}
       <div>
         <div className="flex items-center justify-between mb-3">
