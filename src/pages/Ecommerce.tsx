@@ -433,6 +433,74 @@ function OverviewTab() {
           </div>
         </div>
       )}
+
+      {/* Modal produção */}
+      {producaoModal && (() => {
+        const maxProd = Math.min(producaoModal.stock_potes, producaoModal.stock_etiquetas);
+        const qtyNum = Math.min(parseInt(producaoQty) || 0, maxProd);
+        return (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div className="bg-card border border-border rounded-xl p-6 w-full max-w-sm space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold">Registrar Produção — {producaoModal.name}</h3>
+                <button onClick={() => setProducaoModal(null)}><X className="h-4 w-4" /></button>
+              </div>
+              <div className="rounded-lg bg-muted/30 p-3 text-xs space-y-1">
+                <p>Potes disponíveis: <strong>{producaoModal.stock_potes}</strong></p>
+                <p>Etiquetas disponíveis: <strong>{producaoModal.stock_etiquetas}</strong></p>
+                <p className="font-semibold text-foreground">Máximo produzível: <strong>{maxProd} un</strong></p>
+              </div>
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs text-muted-foreground">Quantidade a produzir (máx: {maxProd})</label>
+                  <input type="number" min="1" max={maxProd} value={producaoQty}
+                    onChange={e => {
+                      const v = parseInt(e.target.value);
+                      setProducaoQty(v > maxProd ? String(maxProd) : e.target.value);
+                    }}
+                    className="w-full mt-1 rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    placeholder={`Ex: ${Math.min(100, maxProd)}`} autoFocus />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">Observação (opcional)</label>
+                  <input type="text" value={producaoNotes}
+                    onChange={e => setProducaoNotes(e.target.value)}
+                    className="w-full mt-1 rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    placeholder="Ex: Lote #42" />
+                </div>
+              </div>
+              {qtyNum > 0 && (
+                <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-1 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Potes</span>
+                    <span className="text-destructive">-{qtyNum} → {producaoModal.stock_potes - qtyNum}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Etiquetas</span>
+                    <span className="text-destructive">-{qtyNum} → {producaoModal.stock_etiquetas - qtyNum}</span>
+                  </div>
+                  <div className="flex justify-between pt-1 border-t border-border font-medium">
+                    <span>Produto acabado</span>
+                    <span className="text-kpi-positive">+{qtyNum} → {producaoModal.current_stock + qtyNum}</span>
+                  </div>
+                </div>
+              )}
+              <Button className="w-full" disabled={!producaoQty || qtyNum <= 0 || producaoMutation.isPending}
+                onClick={() => producaoMutation.mutate({
+                  product: producaoModal,
+                  qty: qtyNum,
+                  notes: producaoNotes,
+                })}>
+                <Hammer className="h-4 w-4 mr-1.5" />
+                {producaoMutation.isPending ? 'Registrando...' : `Produzir ${qtyNum} unidades`}
+              </Button>
+              {producaoMutation.isError && (
+                <p className="text-xs text-destructive">❌ {(producaoMutation.error as Error)?.message}</p>
+              )}
+            </div>
+          </div>
+        );
+      })()}
     </>
   );
 }
