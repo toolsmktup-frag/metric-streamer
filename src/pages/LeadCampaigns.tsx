@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useLeadCampaigns, useCreateLeadCampaign, useDeleteLeadCampaign } from '@/hooks/useLeadCampaigns';
 import { useLeadFunnels, useCreateLeadFunnel, useDeleteLeadFunnel } from '@/hooks/useLeadFunnels';
+import { useFunnels } from '@/hooks/useFunnels';
 import { useCurrentUserRole } from '@/hooks/useCurrentUserRole';
 import { useMyFunnelAccess } from '@/hooks/useLeadFunnelAccess';
 import FunnelAccessManager from '@/components/lead-funnels/FunnelAccessManager';
