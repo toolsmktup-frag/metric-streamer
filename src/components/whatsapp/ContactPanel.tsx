@@ -44,6 +44,8 @@ const EVENT_MAP: Record<string, EventMapping> = {
   bank_slip_created: { label: 'Boleto Gerado', icon: FileText, colorClass: 'bg-amber-500/10 text-amber-500' },
   open: { label: 'Checkout Aberto', icon: Eye, colorClass: 'bg-muted text-muted-foreground' },
   waiting_payment: { label: 'Aguardando Pagamento', icon: Clock, colorClass: 'bg-amber-500/10 text-amber-500' },
+  funnel_change: { label: 'Funil alterado manualmente', icon: MapPin, colorClass: 'bg-blue-500/10 text-blue-500' },
+  stage_change: { label: 'Etapa alterada', icon: Activity, colorClass: 'bg-primary/10 text-primary' },
 };
 
 const DEFAULT_EVENT: EventMapping = { label: '', icon: Activity, colorClass: 'bg-primary/10 text-primary' };
@@ -68,7 +70,9 @@ export default function ContactPanel({ phone, senderName }: ContactPanelProps) {
 
   const funnelIds = useMemo(() => Array.from(new Set<string>(journey.map((j: any) => j.funnel_id))), [journey]);
   const { data: stagesByFunnel = {} } = useLeadFunnelStages(funnelIds);
+  const { data: allFunnels = [] } = useLeadFunnels();
   const moveLeadStage = useMoveLeadStage();
+  const moveLeadFunnel = useMoveLeadFunnel();
 
   const sortedEvents = useMemo(
     () => [...events].sort((a, b) => getEventDate(b).getTime() - getEventDate(a).getTime()),
