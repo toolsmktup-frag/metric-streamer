@@ -220,11 +220,41 @@ export default function ContactPanel({ phone, senderName }: ContactPanelProps) {
             {journey.map((j: any) => {
               const stages = stagesByFunnel[j.funnel_id] || [];
               return (
-                <div key={j.id} className="rounded-lg border border-border p-2">
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: j.funnel?.color || 'hsl(var(--primary))' }} />
-                    <p className="text-[11px] font-medium text-foreground truncate flex-1">{j.funnel?.name || 'Funil'}</p>
-                  </div>
+                <div key={j.id} className="rounded-lg border border-border p-2 space-y-1.5">
+                  {/* Funnel selector */}
+                  <Select
+                    value={j.funnel_id}
+                    onValueChange={(newFunnelId) => {
+                      if (newFunnelId === j.funnel_id) return;
+                      const targetFunnel = allFunnels.find((f: any) => f.id === newFunnelId);
+                      moveLeadFunnel.mutate({
+                        positionId: j.id,
+                        leadId: j.lead_id,
+                        fromFunnelId: j.funnel_id,
+                        toFunnelId: newFunnelId,
+                        toFunnelName: targetFunnel?.name,
+                      });
+                    }}
+                  >
+                    <SelectTrigger className="h-7 text-[10px] px-2 border-none bg-muted/50">
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: j.funnel?.color || 'hsl(var(--primary))' }} />
+                        <SelectValue />
+                      </div>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {allFunnels.map((f: any) => (
+                        <SelectItem key={f.id} value={f.id} className="text-xs">
+                          <div className="flex items-center gap-1.5">
+                            <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: f.color || 'hsl(var(--primary))' }} />
+                            {f.name}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  {/* Stage selector */}
                   {stages.length > 1 ? (
                     <Select
                       value={j.stage_id}
@@ -241,7 +271,7 @@ export default function ContactPanel({ phone, senderName }: ContactPanelProps) {
                         });
                       }}
                     >
-                      <SelectTrigger className="h-7 text-[10px] px-2 border-none bg-muted/50">
+                      <SelectTrigger className="h-7 text-[10px] px-2 border-none bg-muted/30">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
