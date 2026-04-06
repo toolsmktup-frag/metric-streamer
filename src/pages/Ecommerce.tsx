@@ -729,7 +729,10 @@ function ProductsTab() {
                   )}
                   {mappings.map(m => (
                     <div key={m.id} className="flex items-center justify-between rounded-md bg-muted/30 px-3 py-1.5 text-xs">
-                      <span>"{m.offer_name}"</span>
+                      <span>
+                        {m.external_product_id && <span className="font-mono text-muted-foreground mr-1">[{m.external_product_id}]</span>}
+                        "{m.offer_name}"
+                      </span>
                       <div className="flex items-center gap-3">
                         <span className="text-muted-foreground">→ {m.quantity} un · {m.platform}</span>
                         <button onClick={() => deleteMappingMutation.mutate(m.id)} className="text-destructive/60 hover:text-destructive">
@@ -739,10 +742,13 @@ function ProductsTab() {
                     </div>
                   ))}
                 </div>
-                <div className="flex gap-2">
-                  <input className="flex-1 rounded-md border border-border bg-background px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+                <div className="flex gap-2 flex-wrap">
+                  <input className="w-28 rounded-md border border-border bg-background px-2 py-1.5 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-ring"
+                    value={newMapping.external_product_id} onChange={e => setNewMapping(n => ({ ...n, external_product_id: e.target.value }))}
+                    placeholder='ID do produto' />
+                  <input className="flex-1 min-w-[180px] rounded-md border border-border bg-background px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
                     value={newMapping.offer_name} onChange={e => setNewMapping(n => ({ ...n, offer_name: e.target.value }))}
-                    placeholder='Nome exato na plataforma (ex: "3 potes Articulabem")' />
+                    placeholder='Nome exato na plataforma (fallback)' />
                   <input type="number" min="1" className="w-16 rounded-md border border-border bg-background px-2 py-1.5 text-xs focus:outline-none"
                     value={newMapping.quantity} onChange={e => setNewMapping(n => ({ ...n, quantity: e.target.value }))} placeholder="Qtd" />
                   <select className="rounded-md border border-border bg-background px-2 py-1.5 text-xs focus:outline-none"
@@ -750,8 +756,9 @@ function ProductsTab() {
                     <option value="both">Ambas</option>
                     <option value="guru">Guru</option>
                     <option value="ticto">Ticto</option>
+                    <option value="eduzz">Eduzz</option>
                   </select>
-                  <Button size="sm" disabled={!newMapping.offer_name || addMappingMutation.isPending}
+                  <Button size="sm" disabled={(!newMapping.offer_name && !newMapping.external_product_id) || addMappingMutation.isPending}
                     onClick={() => addMappingMutation.mutate(p.id)}>
                     <Plus className="h-3.5 w-3.5" />
                   </Button>
