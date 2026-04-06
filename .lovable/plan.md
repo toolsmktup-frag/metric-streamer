@@ -1,42 +1,45 @@
 
-Diagnóstico confirmado
 
-- O `FunilResumo.tsx` lê vendas via `useAllSales(id, 'webhook')` e `useAllSalesAggregation(id, 'webhook', funnelProducts)`.
-- O `useAllSales.ts` filtra `v_all_sales.purchased_at` estritamente pelo período global do `DateRangePicker`.
-- Nos prints, o resumo continua em `04/04 - 05/04`, mas as vendas aprovadas do Guia de Tinturas estão em `02/04`.
-- Então o pipeline não parece estar “sem trazer”; o problema é que a UI zera silenciosamente quando há vendas fora do período e isso parece erro.
+## Plano: Linkar Funil de Tráfego na Campanha de Leads
 
-Plano de implementação
+### Contexto
+Hoje o campo `traffic_funnel_id` existe apenas em `lead_funnels`. Isso obriga o usuário a associar funil por funil. A proposta é adicionar esse link também na **campanha** (`lead_campaigns`), para que todos os funis daquela campanha herdem automaticamente o funil de tráfego — mas permitindo override individual.
 
-1. Adicionar um hook de diagnóstico do funil
-- Criar um hook leve para consultar em `v_all_sales`:
-  - primeira venda aprovada do funil
-  - última venda aprovada do funil
-  - quantidade de vendas aprovadas no período atual
-- Não precisa migration nova; é só leitura.
+### Hierarquia de resolução
+```text
+Funil de Leads → traffic_funnel_id (override individual)
+  ↑ herda se NULL
+Campanha → traffic_funnel_id (padrão para todos os funis da campanha)
+```
 
-2. Melhorar o estado vazio do `FunilResumo`
-- Em `src/pages/FunilResumo.tsx`, quando `sales = 0` no período atual mas existirem vendas fora dele, exibir aviso claro:
-  - “Sem vendas aprovadas entre 04/04 e 05/04. Última venda aprovada deste funil: 02/04.”
-- Deixar explícito que pode haver gasto da Meta no período mesmo sem venda aprovada.
+### Implementação
 
-3. Adicionar ações rápidas de período
-- Botões no alerta para:
-  - “Ver última venda”
-  - “Últimos 7 dias”
-  - “Todo o período”
-- Esses botões usarão `setDateRange` do `useFilterStore`.
+**1. Migration: adicionar `traffic_funnel_id` em `lead_campaigns`**
+- `ALTER TABLE public.lead_campaigns ADD COLUMN IF NOT EXISTS traffic_funnel_id uuid REFERENCES public.funnels(id) ON DELETE SET NULL;`
 
-4. Reduzir confusão de filtro
-- Revisar o uso duplicado do `DateRangePicker` no layout e na página do funil.
-- Melhor caminho: manter um filtro principal visível e evitar a sensação de que há dois períodos diferentes.
+**2. Tipo TypeScript**
+- Em `src/types/leadFunnels.ts`, adicionar `traffic_funnel_id: string | null` em `LeadCampaign`.
 
-Arquivos previstos
-- `src/pages/FunilResumo.tsx`
-- `src/hooks/useAllSales.ts` ou novo hook dedicado, como `useFunnelSalesAvailability.ts`
-- possivelmente `src/components/dashboard/DateRangePicker.tsx` se precisarmos reaproveitar presets/atalhos
+**3. UI da Campanha (`src/pages/LeadCampaigns.tsx`)**
+- No card/accordion de cada campanha, adicionar um dropdown para selecionar o funil de tráfego associado.
+- Ao criar campanha, permitir já selecionar o funil de tráfego.
+- Ao alterar, chamar `useUpdateLeadCampaign` (já existe no hook).
 
-Critérios de aceite
-- Em `04/04–05/04`, o resumo não fica “mudo”: mostra o aviso com a data real da última venda.
-- Ao clicar em “Ver última venda” ou “Últimos 7 dias”, o resumo passa a exibir as vendas de `02/04`.
-- Mantém a regra atual: só `authorized` conta como venda e o funil de tráfego continua filtrando `ingestion_type = 'webhook'`.
+**4. Hook de update da campanha**
+- `useUpdateLeadCampaign` em `useLeadCampaigns.ts` — já existe? Verificar. Se não, criar (padrão simples como `useUpdateLeadFunnel`).
+
+**5. Resolução no Resumo/Dados**
+- Onde o sistema usa `funnel.traffic_funnel_id`, aplicar fallback:
+  `const trafficId = funnel.traffic_funnel_id ?? campaign?.traffic_funnel_id ?? null`
+- Isso afeta principalmente `LeadFunnelDetail.tsx` e qualquer lugar que resolva o link de tráfego.
+
+### Arquivos
+- **Migration SQL** (doc para rodar no Supabase)
+- `src/types/leadFunnels.ts` — adicionar campo em `LeadCampaign`
+- `src/hooks/useLeadCampaigns.ts` — adicionar `useUpdateLeadCampaign` se não existir
+- `src/pages/LeadCampaigns.tsx` — dropdown de funil de tráfego por campanha
+- `src/pages/LeadFunnelDetail.tsx` — fallback para `campaign.traffic_funnel_id`
+
+### Resultado
+O usuário poderá associar "Articulabem (campanha)" ao funil de tráfego do Articulabem uma única vez, e todos os funis de leads dentro dessa campanha herdarão automaticamente — sem precisar configurar um por um.
+
