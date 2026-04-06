@@ -85,14 +85,14 @@ async function fetchAllSalesRows(dateFrom: string, dateTo: string, funnelId?: st
  * Busca todas as vendas (Ticto + Guru + Eduzz + ...) via view v_all_sales.
  * Passe funnelId para filtrar por funil específico.
  */
-export function useAllSales(funnelId?: string | null, ingestionType?: string | null) {
+export function useAllSales(funnelId?: string | null, ingestionType?: string | null, paidTrafficOnly?: boolean) {
   const { dateRange, lastUpdated } = useFilterStore();
   const dateFrom = toLocalDate(dateRange.start);
   const dateTo = toLocalDate(dateRange.end);
 
   return useQuery({
-    queryKey: ['all-sales', dateFrom, dateTo, funnelId ?? 'all', ingestionType ?? 'all', lastUpdated.getTime()],
-    queryFn: async () => fetchAllSalesRows(dateFrom, dateTo, funnelId, ingestionType),
+    queryKey: ['all-sales', dateFrom, dateTo, funnelId ?? 'all', ingestionType ?? 'all', paidTrafficOnly ?? false, lastUpdated.getTime()],
+    queryFn: async () => fetchAllSalesRows(dateFrom, dateTo, funnelId, ingestionType, paidTrafficOnly),
     ...SHARED_QUERY_OPTIONS,
   });
 }
