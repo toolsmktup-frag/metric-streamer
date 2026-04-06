@@ -82,10 +82,12 @@ const LeadCampaignsPage: React.FC = () => {
         name: newName,
         color: newColor,
         campaign_id: selectedCampaignId,
+        traffic_funnel_id: selectedTrafficFunnelId,
       });
       toast.success('Funil criado!');
       setShowNewFunnel(false);
       setNewName('');
+      setSelectedTrafficFunnelId(null);
       navigate(`/lead-funnels/${funnel.id}`);
     } catch (err: any) {
       toast.error(err?.message || 'Erro ao criar funil');
