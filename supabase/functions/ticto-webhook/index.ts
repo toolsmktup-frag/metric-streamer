@@ -143,13 +143,15 @@ Deno.serve(async (req) => {
     const hasEvent = payload.event || payload.status || invoice.status;
     if (!hasSale && !hasProduct && !hasEvent) {
       // Audit ping
-      await supabase.from("webhook_audit").insert({
-        source: "ticto",
-        webhook_token: urlToken,
-        normalized_status: "ping",
-        raw_payload: payload,
-        processing_ms: Date.now() - startMs,
-      }).catch(() => {});
+      try {
+        await supabase.from("webhook_audit").insert({
+          source: "ticto",
+          webhook_token: urlToken,
+          normalized_status: "ping",
+          raw_payload: payload,
+          processing_ms: Date.now() - startMs,
+        });
+      } catch (_) {}
       return new Response(JSON.stringify({ success: true, message: "ping ok" }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
