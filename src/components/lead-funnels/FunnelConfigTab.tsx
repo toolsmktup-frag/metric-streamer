@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { LeadFunnelStage, StageTransitionRule, LeadStagePosition, Lead } from '@/types/leadFunnels';
+import { Funnel } from '@/hooks/useFunnels';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -36,11 +37,16 @@ interface FunnelConfigTabProps {
   loadingDistinctProducts?: boolean;
   // Redistribute
   positions?: (LeadStagePosition & { lead?: Lead })[];
+  // Traffic funnel association
+  trafficFunnels?: Funnel[];
+  currentTrafficFunnelId?: string | null;
+  onTrafficFunnelChange?: (id: string | null) => void;
+  savingTrafficFunnel?: boolean;
 }
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
 
-const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSaveStages, onSaveRules, saving, funnelId, leadFunnelProducts = [], catalogProducts = [], onSaveProducts, savingProducts, onBulkMoveOverdue, bulkMoving, distinctLeadProducts = [], existingMappings = [], onSaveMappings, savingMappings, loadingDistinctProducts, positions = [] }) => {
+const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSaveStages, onSaveRules, saving, funnelId, leadFunnelProducts = [], catalogProducts = [], onSaveProducts, savingProducts, onBulkMoveOverdue, bulkMoving, distinctLeadProducts = [], existingMappings = [], onSaveMappings, savingMappings, loadingDistinctProducts, positions = [], trafficFunnels = [], currentTrafficFunnelId, onTrafficFunnelChange, savingTrafficFunnel }) => {
   const [localStages, setLocalStages] = useState<Partial<LeadFunnelStage>[]>(
     stages.length ? stages : [{ name: 'Novo Lead', color: COLORS[0], sort_order: 0 }]
   );
