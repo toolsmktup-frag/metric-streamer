@@ -32,7 +32,7 @@ export default function FunilCampanhas() {
   const { data: campaigns = [], isLoading: loadingCampaigns } = useMetaCampaigns(id);
   const { data: adsets = [], isLoading: loadingAdsets } = useMetaAdsets(id);
   const { data: ads = [], isLoading: loadingAds } = useMetaAds(id);
-  const { byCampaign, byAdset, byAd, organicSales, organicTransactions } = useAllSalesAggregation(id, 'webhook', funnelProducts);
+  const { byCampaign, byAdset, byAd, organicSales, organicTransactions } = useAllSalesAggregation(id, undefined, funnelProducts, true);
   const [search, setSearch] = useState('');
   const [view, setView] = useState<View>({ level: 'campaigns' });
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
