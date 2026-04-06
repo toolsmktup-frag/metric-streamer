@@ -45,7 +45,7 @@ export interface UnifiedSale {
   affiliate_commission: number | null;
 }
 
-async function fetchAllSalesRows(dateFrom: string, dateTo: string, funnelId?: string | null, ingestionType?: string | null) {
+async function fetchAllSalesRows(dateFrom: string, dateTo: string, funnelId?: string | null, ingestionType?: string | null, paidTrafficOnly?: boolean) {
   const rows: UnifiedSale[] = [];
 
   for (let from = 0; ; from += SALES_PAGE_SIZE) {
@@ -63,6 +63,10 @@ async function fetchAllSalesRows(dateFrom: string, dateTo: string, funnelId?: st
 
     if (ingestionType) {
       query = query.eq('ingestion_type', ingestionType);
+    }
+
+    if (paidTrafficOnly) {
+      query = query.eq('is_paid_traffic', true);
     }
 
     const { data, error } = await query;
