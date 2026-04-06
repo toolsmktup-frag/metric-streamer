@@ -289,6 +289,49 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ── Forward para wz-receiver (automações WhatsApp) ──
+    try {
+      const wzPayload = {
+        platform: "eduzz",
+        event_type: payload.event || rawStatus,
+        event_id: `eduzz_${invoiceId}_${normalizedStatus}`,
+        contact: {
+          name: clientName,
+          email: clientEmail,
+          phone: clientPhone,
+        },
+        product: {
+          id: productId,
+          name: productName,
+          offer_name: offerName,
+        },
+        transaction: {
+          id: transactionHash,
+          status: normalizedStatus,
+          payment_method: paymentMethod,
+          gross_amount: amountReais,
+          installments: installments,
+          pix_code: null,
+          boleto_code: null,
+          boleto_url: null,
+        },
+      };
+
+      const wzRes = await fetch(`${supabaseUrl}/functions/v1/wz-receiver`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${supabaseKey}`,
+        },
+        body: JSON.stringify(wzPayload),
+      });
+
+      const wzResult = await wzRes.text();
+      console.log(`[eduzz-webhook] wz-receiver: ${wzRes.status} ${wzResult.slice(0, 200)}`);
+    } catch (wzErr) {
+      console.error("[eduzz-webhook] wz-receiver forward error (non-fatal):", wzErr);
+    }
+
     return jsonResponse({ success: true });
   } catch (err) {
     console.error("Webhook error:", err);

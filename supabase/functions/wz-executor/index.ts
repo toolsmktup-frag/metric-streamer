@@ -258,10 +258,12 @@ async function processWhatsAppNode(
 
     const text = substituteVariables(block.text, vars);
 
-    // Humanization delay between blocks
-    const delayMin = nodeData.delayMin ?? 1;
-    const delayMax = nodeData.delayMax ?? 5;
-    await sleep(randomDelay(delayMin, delayMax));
+    // Humanization delay between blocks (skip before first block)
+    if (bi > 0) {
+      const delayMin = nodeData.delayMin ?? 1;
+      const delayMax = nodeData.delayMax ?? 5;
+      await sleep(randomDelay(delayMin, delayMax));
+    }
 
     const isMedia = block.type === "image";
     const endpoint = isMedia ? `${apiUrl}/send/media` : `${apiUrl}/send/text`;
