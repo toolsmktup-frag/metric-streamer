@@ -10,6 +10,8 @@ import { useLeadPurchases, useLeadFunnelJourney } from '@/hooks/useLeadPurchases
 import { useLeadEvents } from '@/hooks/useLeads';
 import { useLeadFunnelStages } from '@/hooks/useLeadFunnelStages';
 import { useMoveLeadStage } from '@/hooks/useMoveLeadStage';
+import { useMoveLeadFunnel } from '@/hooks/useMoveLeadFunnel';
+import { useLeadFunnels } from '@/hooks/useLeadFunnels';
 import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { formatCurrency } from '@/lib/formatters';
