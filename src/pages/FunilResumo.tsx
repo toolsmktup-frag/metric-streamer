@@ -33,6 +33,8 @@ import { useFunnel } from '@/hooks/useFunnels';
 import { useFunnelSalesAvailability } from '@/hooks/useFunnelSalesAvailability';
 import { useFilterStore } from '@/stores/filterStore';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+
+const emptyKpi = {
   revenue: 0, revenueVar: 0, spend: 0, spendVar: 0, roas: 0, roasVar: 0,
   profit: 0, profitVar: 0, sales: 0, salesVar: 0, cpa: 0, cpaVar: 0,
   ctr: 0, ctrVar: 0, impressions: 0, impressionsVar: 0,
