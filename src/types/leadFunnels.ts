@@ -4,6 +4,7 @@ export interface LeadCampaign {
   name: string;
   description: string | null;
   color: string;
+  traffic_funnel_id: string | null;
   created_at: string;
   updated_at: string;
 }

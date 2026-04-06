@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useLeadFunnel, useUpdateLeadFunnel, useUpsertStages, useUpsertTransitionRules, useFunnelSourceNodes, useFunnelEdges, useSaveFunnelSourceNodes, useSaveFunnelEdges } from '@/hooks/useLeadFunnels';
+import { useLeadCampaign } from '@/hooks/useLeadCampaigns';
 import { useLeadsByFunnel, useFunnelLeadCounts } from '@/hooks/useLeads';
 import { useBulkLeadPurchases } from '@/hooks/useBulkLeadPurchases';
 import { useFunnels } from '@/hooks/useFunnels';
@@ -43,6 +44,7 @@ const LeadFunnelDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { data: funnel, isLoading } = useLeadFunnel(id ?? null);
+  const { data: campaign } = useLeadCampaign(funnel?.campaign_id ?? null);
   const { data: positions = [] } = useLeadsByFunnel(id ?? null);
   const { data: leadCounts = {} } = useFunnelLeadCounts(id ?? null);
   const { data: sourceNodes = [] } = useFunnelSourceNodes(id ?? null);
@@ -378,7 +380,7 @@ const LeadFunnelDetail: React.FC = () => {
               stages={stages}
               rules={rules}
               trafficFunnels={paymentFunnels}
-              currentTrafficFunnelId={funnel.traffic_funnel_id}
+              currentTrafficFunnelId={funnel.traffic_funnel_id ?? campaign?.traffic_funnel_id ?? null}
               onTrafficFunnelChange={async (tfId) => {
                 try {
                   await updateLeadFunnel.mutateAsync({ id: funnel.id, traffic_funnel_id: tfId });

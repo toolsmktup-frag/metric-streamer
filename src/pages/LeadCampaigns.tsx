@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { useLeadCampaigns, useCreateLeadCampaign, useDeleteLeadCampaign } from '@/hooks/useLeadCampaigns';
+import { useLeadCampaigns, useCreateLeadCampaign, useDeleteLeadCampaign, useUpdateLeadCampaign } from '@/hooks/useLeadCampaigns';
 import { useLeadFunnels, useCreateLeadFunnel, useDeleteLeadFunnel } from '@/hooks/useLeadFunnels';
 import { useFunnels } from '@/hooks/useFunnels';
 import { useCurrentUserRole } from '@/hooks/useCurrentUserRole';
@@ -8,7 +8,7 @@ import FunnelAccessManager from '@/components/lead-funnels/FunnelAccessManager';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Plus, Trash2, ChevronRight, Layers, Users } from 'lucide-react';
+import { Plus, Trash2, ChevronRight, Layers, Users, Link2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
@@ -24,6 +24,7 @@ const LeadCampaignsPage: React.FC = () => {
 
   const createCampaign = useCreateLeadCampaign();
   const deleteCampaign = useDeleteLeadCampaign();
+  const updateCampaign = useUpdateLeadCampaign();
   const createFunnel = useCreateLeadFunnel();
   const deleteFunnel = useDeleteLeadFunnel();
 
@@ -243,6 +244,25 @@ const LeadCampaignsPage: React.FC = () => {
               </div>
               {isAdmin && (
                 <div className="flex items-center gap-1">
+                  <select
+                    value={campaign.traffic_funnel_id || ''}
+                    onChange={async (e) => {
+                      const val = e.target.value || null;
+                      try {
+                        await updateCampaign.mutateAsync({ id: campaign.id, traffic_funnel_id: val });
+                        toast.success(val ? 'Funil de tráfego associado à campanha!' : 'Funil de tráfego desvinculado');
+                      } catch {
+                        toast.error('Erro ao atualizar campanha');
+                      }
+                    }}
+                    className="border border-input rounded-md px-2 py-1 text-xs bg-background max-w-[180px]"
+                    title="Funil de tráfego da campanha"
+                  >
+                    <option value="">Sem funil de tráfego</option>
+                    {trafficFunnels.map(f => (
+                      <option key={f.id} value={f.id}>{f.name}</option>
+                    ))}
+                  </select>
                   <Button
                     variant="ghost"
                     size="sm"

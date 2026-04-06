@@ -78,7 +78,10 @@ export function useUpdateLeadCampaign() {
       if (error) throw error;
       return data as LeadCampaign;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['lead-campaigns'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['lead-campaigns'] });
+      qc.invalidateQueries({ queryKey: ['lead-campaign'] });
+    },
   });
 }
 
