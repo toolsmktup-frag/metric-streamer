@@ -1,59 +1,31 @@
 
 
-## Plano: Vincular Funil de Tráfego ao Funil de Leads + Ajustes Pendentes
+## Plano: Mover lead de etapa direto pelo painel do WhatsApp
 
-Você tem razão -- eu mencionei que faltava esse link e outras coisas, mas depois disse "nenhuma alteração de código necessária". Vamos corrigir isso.
+### Problema
+Hoje a seção "Funis" no painel lateral do WhatsApp apenas exibe em qual etapa o lead está. Para mover, o usuário precisa ir ao Kanban, encontrar o lead e arrastar. Em alto volume isso é impraticável.
 
-### O que realmente falta (código/schema)
+### Solução
+Transformar cada item de funil no `ContactPanel.tsx` em um seletor de etapa. O usuário verá a etapa atual e poderá clicar para trocar, direto da conversa.
 
-**1. Coluna `traffic_funnel_id` em `lead_funnels`**
+### Implementação
 
-Hoje os dois mundos (funil de tráfego = tabela `funnels`, funil de leads = tabela `lead_funnels`) não têm nenhuma referência cruzada. Isso impede:
-- Ver KPIs de receita dentro do painel de leads
-- Saber qual funil de tráfego corresponde a qual funil de leads
-- Unificar a experiência no dashboard
+**1. Buscar etapas disponíveis por funil**
+- Cada item do `journey` já traz `funnel_id` e `stage_id`. Precisamos buscar todas as etapas de cada funil envolvido.
+- Criar um hook simples `useLeadFunnelStages(funnelIds: string[])` que faz `SELECT * FROM lead_funnel_stages WHERE funnel_id IN (...)` agrupando por funil. Ou reutilizar dados já carregados se houver hook existente.
 
-**Alteração:**
-- Migration: `ALTER TABLE lead_funnels ADD COLUMN traffic_funnel_id UUID REFERENCES funnels(id) ON DELETE SET NULL;`
-- Atualizar o tipo `LeadFunnel` em `src/types/leadFunnels.ts` com `traffic_funnel_id?: string | null`
-- Atualizar hooks de criação/edição para aceitar o campo
-- Na UI de criação/edição do funil de leads (`LeadCampaigns.tsx` / `LeadFunnelDetail.tsx`), adicionar um dropdown "Funil de Tráfego associado" que lista os funis da tabela `funnels`
+**2. Adicionar Select de etapa no ContactPanel**
+- Na seção "Funis" (linhas ~206-225 de `ContactPanel.tsx`), substituir o badge estático da etapa por um `<Select>` compacto com as etapas do funil correspondente.
+- O select mostra a etapa atual selecionada, com bolinhas coloridas para cada opção.
 
-**2. UI para configurar `stage_transition_rules` por evento**
+**3. Usar `useMoveLeadStage` ao trocar**
+- O hook `useMoveLeadStage` já existe e faz tudo: atualiza `lead_stage_positions`, insere evento `stage_change` e invalida queries.
+- Ao mudar o select, chamar `moveLeadStage.mutate({ positionId: j.id, leadId: lead.id, funnelId: j.funnel_id, fromStageId: j.stage_id, toStageId: novaEtapa, toStageName })`.
 
-O banco já suporta `stage_transition_rules` (evento → mover lead de etapa), mas preciso verificar se a UI de configuração já existe no detalhe do funil.
-
-**3. UI para vincular produtos ao funil de leads (`lead_product_mappings`)**
-
-O hook `useLeadProductMappings` já existe, mas preciso verificar se há uma interface na tela do funil para o usuário fazer o mapeamento "nome do produto na plataforma → funil de leads".
-
-### O que NÃO precisa de código (configuração manual)
-
-- Ativar eventos de Venda Aprovada na Ticto
-- Criar etapas no funil de leads via UI existente
-- Configurar fluxos de automação WhatsApp via editor existente
-
----
-
-### Passos de implementação
-
-**Passo 1 -- Migration: adicionar `traffic_funnel_id`**
-- Criar migration SQL adicionando a coluna nullable com FK para `funnels(id)`
-
-**Passo 2 -- Atualizar tipos e hooks**
-- `src/types/leadFunnels.ts`: adicionar `traffic_funnel_id`
-- `src/hooks/useLeadFunnels.ts`: incluir campo nas mutations de create/update
-- Criar hook `useTrafficFunnels()` (ou reutilizar o existente que busca da tabela `funnels`) para popular o dropdown
-
-**Passo 3 -- UI: dropdown de associação**
-- Na tela de criação/edição de funil de leads, adicionar select "Funil de Tráfego associado"
-- Listar funis da tabela `funnels` como opções
-- Salvar o `traffic_funnel_id` selecionado
-
-**Passo 4 -- Verificar e completar UI de transition rules e product mappings**
-- Confirmar se as telas de configuração de regras de transição e mapeamento de produtos já estão acessíveis na UI do funil de leads
-- Se não estiverem, expor na interface
+### Arquivos alterados
+- `src/components/whatsapp/ContactPanel.tsx` -- adicionar select de etapa + import do hook
+- `src/hooks/useLeadPurchases.ts` (ou novo hook) -- buscar etapas dos funis do journey
 
 ### Resultado
-O usuário poderá associar um funil de tráfego a um funil de leads, ver dados de receita no contexto do CRM, e configurar todo o pipeline (etapas, transições, produtos, automações) por uma interface unificada.
+O usuário poderá mover o lead de etapa do funil direto pela conversa do WhatsApp, sem sair do chat.
 
