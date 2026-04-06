@@ -26,7 +26,7 @@ CREATE OR REPLACE VIEW public.v_all_sales AS
     t.source_platform                  AS platform,
     t.funnel_id,
     t.status,
-    t.order_date::timestamptz          AS purchased_at,
+    COALESCE(t.order_date, t.created_at)::timestamptz AS purchased_at,
     (t.paid_amount / 100.0)::numeric   AS revenue,
     t.product_name,
     t.product_id::text                 AS product_id,
