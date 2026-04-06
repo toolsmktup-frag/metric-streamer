@@ -402,7 +402,7 @@ function ProductsTab() {
 
   const [form, setForm] = useState(emptyForm);
   const [costForm, setCostForm] = useState(emptyCost);
-  const [newMapping, setNewMapping] = useState({ offer_name: '', quantity: '1', platform: 'both' });
+  const [newMapping, setNewMapping] = useState({ offer_name: '', quantity: '1', platform: 'both', external_product_id: '' });
 
   const inputCls = "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring";
 
