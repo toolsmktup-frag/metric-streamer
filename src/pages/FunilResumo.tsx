@@ -199,6 +199,63 @@ export default function FunilResumo() {
         </div>
       )}
 
+      {/* Aviso: sem vendas no período mas existem vendas históricas */}
+      {approved.length === 0 && availability && availability.totalApproved > 0 && (
+        <Alert className="border-amber-500/50 bg-amber-50 dark:bg-amber-950/20">
+          <AlertTriangle className="h-4 w-4 text-amber-600" />
+          <AlertDescription className="ml-2">
+            <p className="text-sm text-foreground">
+              Sem vendas aprovadas entre{' '}
+              <strong>{format(dateRange.start, 'dd/MM', { locale: ptBR })}</strong> e{' '}
+              <strong>{format(dateRange.end, 'dd/MM', { locale: ptBR })}</strong>.
+              {availability.lastSaleDate && (
+                <> Última venda aprovada deste funil:{' '}
+                  <strong>{format(new Date(availability.lastSaleDate), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}</strong>.
+                </>
+              )}
+            </p>
+            <div className="flex flex-wrap gap-2 mt-3">
+              {availability.lastSaleDate && (
+                <button
+                  onClick={() => {
+                    const lastDate = new Date(availability.lastSaleDate!);
+                    const start = new Date(lastDate);
+                    start.setHours(0, 0, 0, 0);
+                    const end = new Date(lastDate);
+                    end.setHours(23, 59, 59, 999);
+                    setDateRange({ start, end, label: format(start, 'dd/MM/yyyy', { locale: ptBR }) });
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-amber-600 text-primary-foreground px-3 py-1.5 text-xs font-medium hover:bg-amber-700 transition-colors"
+                >
+                  <Calendar className="h-3 w-3" />
+                  Ver última venda
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  const end = new Date(); end.setHours(23, 59, 59, 999);
+                  const start = new Date(); start.setDate(start.getDate() - 6); start.setHours(0, 0, 0, 0);
+                  setDateRange({ start, end, label: 'Últimos 7 dias' });
+                }}
+                className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium hover:bg-muted transition-colors"
+              >
+                Últimos 7 dias
+              </button>
+              <button
+                onClick={() => {
+                  const start = new Date(2020, 0, 1);
+                  const end = new Date(); end.setHours(23, 59, 59, 999);
+                  setDateRange({ start, end, label: 'Todo o período' });
+                }}
+                className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium hover:bg-muted transition-colors"
+              >
+                Todo o período
+              </button>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* KPI Cards */}
       {loadingKpi ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
