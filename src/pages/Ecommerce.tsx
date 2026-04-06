@@ -31,6 +31,7 @@ interface OfferMapping {
   platform: string;
   offer_name: string;
   quantity: number;
+  external_product_id: string | null;
 }
 
 interface CostConfig {
@@ -477,12 +478,13 @@ function ProductsTab() {
       const { error } = await supabase.from('product_offer_mappings').insert({
         product_id: productId, offer_name: newMapping.offer_name,
         quantity: parseInt(newMapping.quantity), platform: newMapping.platform,
+        external_product_id: newMapping.external_product_id || null,
       });
       if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['offer_mappings'] });
-      setNewMapping({ offer_name: '', quantity: '1', platform: 'both' });
+      setNewMapping({ offer_name: '', quantity: '1', platform: 'both', external_product_id: '' });
     },
   });
 
