@@ -51,5 +51,8 @@ verify_jwt = false
 [functions.wz-executor]
 verify_jwt = false
 
+[functions.wz-scheduler]
+verify_jwt = false
+
 [functions.admin-reset-password]
 verify_jwt = false
