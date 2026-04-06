@@ -461,6 +461,7 @@ function ProductsTab() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['physical_products'] });
       qc.invalidateQueries({ queryKey: ['product_cost_config'] });
+      qc.invalidateQueries({ queryKey: ['daily_sales_rate_ecommerce'] });
       setShowForm(false);
       setEditProduct(null);
       setForm(emptyForm);
