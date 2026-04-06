@@ -148,8 +148,8 @@ function classifyWithProducts(
  * Agrega vendas de todas as plataformas por campanha / adset / ad.
  * Quando funnelProducts é fornecido, usa classificação dinâmica.
  */
-export function useAllSalesAggregation(funnelId?: string | null, ingestionType?: string | null, funnelProducts?: FunnelProduct[]) {
-  const { data: allSales = [] } = useAllSales(funnelId, ingestionType);
+export function useAllSalesAggregation(funnelId?: string | null, ingestionType?: string | null, funnelProducts?: FunnelProduct[], paidTrafficOnly?: boolean) {
+  const { data: allSales = [] } = useAllSales(funnelId, ingestionType, paidTrafficOnly);
   const confirmed = allSales.filter(t => t.status === 'authorized');
 
   const byCampaign: Record<string, SalesAggregation> = {};
