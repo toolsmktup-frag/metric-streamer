@@ -1,56 +1,59 @@
 
-Objetivo: corrigir o pipeline do Guia de Tinturas porque o print mostra eventos `abandoned_cart` com `paid_amount = 0`, `product_name` vazio e `order_date = NULL`, o que não faz sentido como base principal de vendas.
 
-O que isso indica
-- Não, não faz sentido tratar isso como “o normal” do funil.
-- O token/funil parece estar funcionando, porque essas linhas já chegam com o `funnel_id` correto do Guia.
-- O print também pode estar enganando parcialmente: como a consulta usa `ORDER BY order_date DESC`, linhas com `order_date NULL` tendem a aparecer primeiro, então esses 10 registros não provam sozinhos que não existam compras aprovadas mais abaixo.
-- Mesmo assim, existe um problema real no código: o `ticto-webhook` está mais fraco que os outros pipelines e o dashboard só conta `status = 'authorized'`.
+## Plano: Vincular Funil de Tráfego ao Funil de Leads + Ajustes Pendentes
 
-Plano
-1. Auditar os eventos reais que estão chegando
-   - Usar `webhook_audit` para ver quais `raw_status` a Ticto está enviando para o token do Guia.
-   - Separar eventos de abandono dos eventos de compra/pagamento.
-   - Se a auditoria mostrar que só chega `abandoned_cart`, então além do código haverá ajuste operacional na configuração da Ticto.
+Você tem razão -- eu mencionei que faltava esse link e outras coisas, mas depois disse "nenhuma alteração de código necessária". Vamos corrigir isso.
 
-2. Corrigir a normalização do `ticto-webhook`
-   - Atualizar `supabase/functions/ticto-webhook/index.ts`.
-   - Incluir os mesmos status que já são aceitos em outros pontos do projeto:
-     - `sale_approved`, `sale_completed`, `completed`, `purchase_approved` -> `authorized`
-   - Manter `abandoned` / `cart_abandoned` como não-venda.
-   - Reforçar a extração de `order_date`, `paid_amount` e `product_name` com base nos payloads reais da auditoria.
+### O que realmente falta (código/schema)
 
-3. Fazer backfill dos registros já gravados
-   - Criar um SQL idempotente para corrigir registros antigos do Guia de Tinturas.
-   - Preencher `status`, `paid_amount`, `product_name` e `order_date` a partir do `raw_payload` quando houver dados reais de compra.
-   - Não converter abandono real em venda.
+**1. Coluna `traffic_funnel_id` em `lead_funnels`**
 
-4. Validar o contrato com o dashboard
-   - Confirmar que `v_all_sales` continua entregando compras com `purchased_at` válido.
-   - Confirmar que `FunilResumo` e `useAllSalesAggregation` seguem contando apenas `authorized`.
-   - Se o problema for só status não normalizado, não precisaremos mexer no frontend.
+Hoje os dois mundos (funil de tráfego = tabela `funnels`, funil de leads = tabela `lead_funnels`) não têm nenhuma referência cruzada. Isso impede:
+- Ver KPIs de receita dentro do painel de leads
+- Saber qual funil de tráfego corresponde a qual funil de leads
+- Unificar a experiência no dashboard
 
-5. Teste ponta a ponta
-   - Validar com 1 evento de abandono e 1 evento de compra aprovada.
-   - Resultado esperado:
-     - abandono continua como `abandoned_cart`
-     - compra aprovada entra como `authorized`
-     - `order_date` / `purchased_at` ficam preenchidos
-     - a venda aparece em `v_all_sales`
-     - o resumo do funil sai do zero
-     - CRM e automações só disparam para compra aprovada
+**Alteração:**
+- Migration: `ALTER TABLE lead_funnels ADD COLUMN traffic_funnel_id UUID REFERENCES funnels(id) ON DELETE SET NULL;`
+- Atualizar o tipo `LeadFunnel` em `src/types/leadFunnels.ts` com `traffic_funnel_id?: string | null`
+- Atualizar hooks de criação/edição para aceitar o campo
+- Na UI de criação/edição do funil de leads (`LeadCampaigns.tsx` / `LeadFunnelDetail.tsx`), adicionar um dropdown "Funil de Tráfego associado" que lista os funis da tabela `funnels`
 
-Detalhes técnicos
-- Arquivos principais:
-  - `supabase/functions/ticto-webhook/index.ts`
-  - `src/hooks/useAllSales.ts`
-  - `src/pages/FunilResumo.tsx`
-  - `docs/backfill-guia-tinturas.sql`
-  - `docs/stabilize-webhook-pipeline.sql`
-- Evidência importante:
-  - `FunilResumo` só contabiliza `status === 'authorized'`.
-  - O `ticto-webhook` atual não mapeia `sale_approved` / `sale_completed`, enquanto `import-ticto-csv` e `guru-webhook` já mapeiam.
+**2. UI para configurar `stage_transition_rules` por evento**
 
-Conclusão prática
-- Sim, há um problema do nosso lado para normalização e backfill.
-- E pode haver um segundo problema na Ticto, se a auditoria confirmar que eventos aprovados nem estão chegando ao endpoint.
+O banco já suporta `stage_transition_rules` (evento → mover lead de etapa), mas preciso verificar se a UI de configuração já existe no detalhe do funil.
+
+**3. UI para vincular produtos ao funil de leads (`lead_product_mappings`)**
+
+O hook `useLeadProductMappings` já existe, mas preciso verificar se há uma interface na tela do funil para o usuário fazer o mapeamento "nome do produto na plataforma → funil de leads".
+
+### O que NÃO precisa de código (configuração manual)
+
+- Ativar eventos de Venda Aprovada na Ticto
+- Criar etapas no funil de leads via UI existente
+- Configurar fluxos de automação WhatsApp via editor existente
+
+---
+
+### Passos de implementação
+
+**Passo 1 -- Migration: adicionar `traffic_funnel_id`**
+- Criar migration SQL adicionando a coluna nullable com FK para `funnels(id)`
+
+**Passo 2 -- Atualizar tipos e hooks**
+- `src/types/leadFunnels.ts`: adicionar `traffic_funnel_id`
+- `src/hooks/useLeadFunnels.ts`: incluir campo nas mutations de create/update
+- Criar hook `useTrafficFunnels()` (ou reutilizar o existente que busca da tabela `funnels`) para popular o dropdown
+
+**Passo 3 -- UI: dropdown de associação**
+- Na tela de criação/edição de funil de leads, adicionar select "Funil de Tráfego associado"
+- Listar funis da tabela `funnels` como opções
+- Salvar o `traffic_funnel_id` selecionado
+
+**Passo 4 -- Verificar e completar UI de transition rules e product mappings**
+- Confirmar se as telas de configuração de regras de transição e mapeamento de produtos já estão acessíveis na UI do funil de leads
+- Se não estiverem, expor na interface
+
+### Resultado
+O usuário poderá associar um funil de tráfego a um funil de leads, ver dados de receita no contexto do CRM, e configurar todo o pipeline (etapas, transições, produtos, automações) por uma interface unificada.
+
