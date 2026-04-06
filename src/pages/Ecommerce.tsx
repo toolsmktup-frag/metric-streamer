@@ -425,7 +425,10 @@ function ProductsTab() {
       let productId = editProduct?.id;
 
       if (editProduct) {
-        const { error } = await supabase.from('physical_products').update(productPayload).eq('id', editProduct.id);
+        const { error } = await supabase.from('physical_products').update({
+          ...productPayload,
+          current_stock: parseInt(form.current_stock || '0'),
+        }).eq('id', editProduct.id);
         if (error) throw error;
       } else {
         const { data, error } = await supabase.from('physical_products')
@@ -557,13 +560,11 @@ function ProductsTab() {
               <input className={`${inputCls} mt-1`} value={form.sku}
                 onChange={e => setForm(f => ({ ...f, sku: e.target.value }))} placeholder="ART-001" />
             </div>
-            {!editProduct && (
-              <div>
-                <label className="text-xs text-muted-foreground">Produto acabado (estoque inicial)</label>
-                <input type="number" className={`${inputCls} mt-1`} value={form.current_stock}
-                  onChange={e => setForm(f => ({ ...f, current_stock: e.target.value }))} placeholder="0" />
-              </div>
-            )}
+            <div>
+              <label className="text-xs text-muted-foreground">{editProduct ? 'Produto acabado (estoque atual)' : 'Produto acabado (estoque inicial)'}</label>
+              <input type="number" className={`${inputCls} mt-1`} value={form.current_stock}
+                onChange={e => setForm(f => ({ ...f, current_stock: e.target.value }))} placeholder="0" />
+            </div>
             <div>
               <label className="text-xs text-muted-foreground">Alerta mínimo — produto (un)</label>
               <input type="number" className={`${inputCls} mt-1`} value={form.min_stock_alert}
