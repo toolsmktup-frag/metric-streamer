@@ -303,6 +303,27 @@ Deno.serve(async (req) => {
 
     // wz-receiver forward already done at the top (before status filtering)
 
+    // ── Stock deduction (apenas vendas aprovadas) ──
+    if (normalizedStatus === "authorized" && productName) {
+      try {
+        const stockRes = await fetch(`${supabaseUrl}/functions/v1/stock-deductor`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${supabaseKey}`,
+          },
+          body: JSON.stringify({
+            product_name: productName,
+            platform: "guru",
+            order_id: transactionId || null,
+          }),
+        });
+        const stockBody = await stockRes.text();
+        console.log(`[guru-webhook] stock-deductor: ${stockRes.status} ${stockBody.slice(0, 200)}`);
+      } catch (stockErr) {
+        console.error("[guru-webhook] stock-deductor error (non-fatal):", stockErr);
+      }
+    }
 
     return jsonResponse({ success: true });
   } catch (err) {

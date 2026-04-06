@@ -410,6 +410,28 @@ Deno.serve(async (req) => {
       console.error("[ticto-webhook] wz-receiver forward error (non-fatal):", fwdErr);
     }
 
+    // ── Stock deduction (apenas vendas aprovadas) ──
+    if (record.status === "authorized" && record.product_name) {
+      try {
+        const stockRes = await fetch(`${supabaseUrl}/functions/v1/stock-deductor`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${supabaseKey}`,
+          },
+          body: JSON.stringify({
+            product_name: record.product_name,
+            platform: "ticto",
+            order_id: record.order_id || null,
+          }),
+        });
+        const stockBody = await stockRes.text();
+        console.log(`[ticto-webhook] stock-deductor: ${stockRes.status} ${stockBody.slice(0, 200)}`);
+      } catch (stockErr) {
+        console.error("[ticto-webhook] stock-deductor error (non-fatal):", stockErr);
+      }
+    }
+
     return new Response(JSON.stringify({ success: true }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
