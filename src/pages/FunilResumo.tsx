@@ -1,6 +1,10 @@
 import React, { useMemo } from 'react';
 import { useParams } from 'react-router-dom';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import {
+  AlertTriangle,
+  Calendar,
   DollarSign,
   TrendingUp,
   Target,
@@ -26,6 +30,9 @@ import PerformanceTable from '@/components/dashboard/PerformanceTable';
 import { SkeletonCard, SkeletonChart, SkeletonTable } from '@/components/dashboard/SkeletonCard';
 import { toast } from 'sonner';
 import { useFunnel } from '@/hooks/useFunnels';
+import { useFunnelSalesAvailability } from '@/hooks/useFunnelSalesAvailability';
+import { useFilterStore } from '@/stores/filterStore';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 const emptyKpi = {
   revenue: 0, revenueVar: 0, spend: 0, spendVar: 0, roas: 0, roasVar: 0,
@@ -43,6 +50,8 @@ export default function FunilResumo() {
   const funnelProducts = funnel?.funnel_products || [];
   const { totalSales, byCampaign } = useAllSalesAggregation(id, 'webhook', funnelProducts);
   const { data: allSales = [] } = useAllSales(id, 'webhook');
+  const { data: availability } = useFunnelSalesAvailability(id);
+  const { dateRange, setDateRange } = useFilterStore();
   const syncMeta = useSyncMeta();
   const syncStatus = useSyncPollingRefetch();
 
@@ -188,6 +197,63 @@ export default function FunilResumo() {
         <div className="rounded-lg border border-border bg-accent/50 p-4 text-sm text-muted-foreground">
           ⚠️ Nenhum dado encontrado. Clique em "Sincronizar Meta" para importar os dados da sua conta do Meta Ads.
         </div>
+      )}
+
+      {/* Aviso: sem vendas no período mas existem vendas históricas */}
+      {approved.length === 0 && availability && availability.totalApproved > 0 && (
+        <Alert className="border-amber-500/50 bg-amber-50 dark:bg-amber-950/20">
+          <AlertTriangle className="h-4 w-4 text-amber-600" />
+          <AlertDescription className="ml-2">
+            <p className="text-sm text-foreground">
+              Sem vendas aprovadas entre{' '}
+              <strong>{format(dateRange.start, 'dd/MM', { locale: ptBR })}</strong> e{' '}
+              <strong>{format(dateRange.end, 'dd/MM', { locale: ptBR })}</strong>.
+              {availability.lastSaleDate && (
+                <> Última venda aprovada deste funil:{' '}
+                  <strong>{format(new Date(availability.lastSaleDate), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}</strong>.
+                </>
+              )}
+            </p>
+            <div className="flex flex-wrap gap-2 mt-3">
+              {availability.lastSaleDate && (
+                <button
+                  onClick={() => {
+                    const lastDate = new Date(availability.lastSaleDate!);
+                    const start = new Date(lastDate);
+                    start.setHours(0, 0, 0, 0);
+                    const end = new Date(lastDate);
+                    end.setHours(23, 59, 59, 999);
+                    setDateRange({ start, end, label: format(start, 'dd/MM/yyyy', { locale: ptBR }) });
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-amber-600 text-primary-foreground px-3 py-1.5 text-xs font-medium hover:bg-amber-700 transition-colors"
+                >
+                  <Calendar className="h-3 w-3" />
+                  Ver última venda
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  const end = new Date(); end.setHours(23, 59, 59, 999);
+                  const start = new Date(); start.setDate(start.getDate() - 6); start.setHours(0, 0, 0, 0);
+                  setDateRange({ start, end, label: 'Últimos 7 dias' });
+                }}
+                className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium hover:bg-muted transition-colors"
+              >
+                Últimos 7 dias
+              </button>
+              <button
+                onClick={() => {
+                  const start = new Date(2020, 0, 1);
+                  const end = new Date(); end.setHours(23, 59, 59, 999);
+                  setDateRange({ start, end, label: 'Todo o período' });
+                }}
+                className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium hover:bg-muted transition-colors"
+              >
+                Todo o período
+              </button>
+            </div>
+          </AlertDescription>
+        </Alert>
       )}
 
       {/* KPI Cards */}
