@@ -115,6 +115,25 @@ Deno.serve(async (req) => {
     const topKeys = Object.keys(payload).join(", ");
     console.log(`[ticto-webhook] Top-level keys: ${topKeys}`);
 
+    // ── Normalizar payload de abandono (estrutura alternativa da Ticto) ──
+    if (payload.name_prod && !payload.item) {
+      payload.item = {
+        product_name: payload.name_prod,
+        product_id: payload.id_prod,
+        offer_name: payload.name_offer,
+        offer_id: payload.id_offer,
+      };
+      payload.customer = {
+        name: payload.name_customer,
+        email: payload.email_customer,
+        phone_number: payload.phone_number_customer,
+      };
+      if (!payload.status && payload.status !== "") {
+        payload.status = "abandoned_cart";
+      }
+      console.log("[ticto-webhook] Normalized abandoned_cart alt payload");
+    }
+
     const invoice = payload.data?.invoice || payload.invoice || payload.data || {};
 
     const hasSale = payload.sale || payload.order || payload.payment || invoice.id;
@@ -183,7 +202,7 @@ Deno.serve(async (req) => {
       pix_expired: "canceled", bank_slip_expired: "canceled",
       canceled: "canceled", cancelled: "canceled", expired: "canceled", refused: "refused",
       // ── Estorno ──
-      refunded: "refunded", refund: "refunded", chargeback: "chargeback",
+      refunded: "refunded", refund: "refunded", chargeback: "chargeback", claimed: "refunded",
       // ── Abandono ──
       abandoned_cart: "abandoned_cart", cart_abandoned: "abandoned_cart",
       abandoned: "abandoned_cart",
@@ -365,8 +384,17 @@ Deno.serve(async (req) => {
 
     console.log(`[ticto-webhook] Saved: status=${record.status} product="${record.product_name}" amount=${record.paid_amount} funnel=${funnelId} order=${record.order_id}`);
 
-    // ── Sync lead ──
-    if (record.status === "authorized") {
+    // ── Sync lead (authorized + eventos de timeline) ──
+    const leadSyncEvents: Record<string, string> = {
+      authorized: "purchase",
+      pending: "pix_generated",
+      abandoned_cart: "abandoned_cart",
+      refused: "refused",
+      refunded: "refunded",
+      chargeback: "chargeback",
+    };
+    const leadEventName = leadSyncEvents[record.status];
+    if (leadEventName && (record.customer_phone || record.customer_email)) {
       try {
         await supabase.rpc("sync_lead_from_sale", {
           p_phone: record.customer_phone,
@@ -377,7 +405,7 @@ Deno.serve(async (req) => {
           p_utm_campaign: record.utm_campaign,
           p_utm_content: record.utm_content,
           p_utm_term: record.utm_term,
-          p_event_name: "purchase",
+          p_event_name: leadEventName,
           p_product_name: record.product_name || null,
           p_purchased_at: orderDate || new Date().toISOString(),
           p_metadata: {
@@ -421,6 +449,7 @@ Deno.serve(async (req) => {
           },
           body: JSON.stringify({
             product_name: record.product_name,
+            product_id: record.product_id ? String(record.product_id) : null,
             platform: "ticto",
             order_id: record.order_id || null,
           }),
