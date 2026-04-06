@@ -1,60 +1,56 @@
 
-## Plano: estabilizar o webhook do Guia de Tinturas e alinhar o Supabase
+Objetivo: corrigir o pipeline do Guia de Tinturas porque o print mostra eventos `abandoned_cart` com `paid_amount = 0`, `product_name` vazio e `order_date = NULL`, o que não faz sentido como base principal de vendas.
 
-### O que identifiquei
-- O `ticto-webhook` grava em `webhook_audit` antes de salvar a venda. Se essa tabela continua vazia, o gargalo está antes do CRM e antes do `wz-receiver`.
-- O código atual do `ticto-webhook` usa colunas que não aparecem nas migrations/tipos gerados do projeto, como `source_platform`, `ingestion_type`, `affiliate_name` e `affiliate_commission`. Isso indica drift entre Edge Function e schema real.
-- O resumo do funil lê `v_all_sales` filtrando `ingestion_type = 'webhook'`. Então não basta salvar a venda: a view e as colunas precisam estar consistentes.
-- Deploy de Edge Function não retroprocessa vendas antigas. Para histórico aparecer no funil, precisa backfill.
+O que isso indica
+- Não, não faz sentido tratar isso como “o normal” do funil.
+- O token/funil parece estar funcionando, porque essas linhas já chegam com o `funnel_id` correto do Guia.
+- O print também pode estar enganando parcialmente: como a consulta usa `ORDER BY order_date DESC`, linhas com `order_date NULL` tendem a aparecer primeiro, então esses 10 registros não provam sozinhos que não existam compras aprovadas mais abaixo.
+- Mesmo assim, existe um problema real no código: o `ticto-webhook` está mais fraco que os outros pipelines e o dashboard só conta `status = 'authorized'`.
 
-### Do I know what the issue is?
-Sim: o problema principal está no pipeline do `ticto-webhook`/banco, não no `wz-receiver`. O cenário mais provável é:
-1. a Ticto não enviou nenhum evento novo após o deploy; ou
-2. o evento chegou, mas o schema do Supabase está desalinhado com o código e a gravação falhou.
+Plano
+1. Auditar os eventos reais que estão chegando
+   - Usar `webhook_audit` para ver quais `raw_status` a Ticto está enviando para o token do Guia.
+   - Separar eventos de abandono dos eventos de compra/pagamento.
+   - Se a auditoria mostrar que só chega `abandoned_cart`, então além do código haverá ajuste operacional na configuração da Ticto.
 
-### Plano de implementação
-1. **Formalizar o schema faltante em migration**
-   - Garantir no banco:
-     - `ticto_transactions`: `funnel_id`, `source_platform`, `ingestion_type`, `affiliate_name`, `affiliate_commission`
-     - `customer_purchases`: `ingestion_type`, `affiliate_name`, `affiliate_commission`
-     - `webhook_audit` com as colunas usadas pela função
-   - Recriar/atualizar `v_all_sales` para expor exatamente os campos consumidos pelo frontend.
+2. Corrigir a normalização do `ticto-webhook`
+   - Atualizar `supabase/functions/ticto-webhook/index.ts`.
+   - Incluir os mesmos status que já são aceitos em outros pontos do projeto:
+     - `sale_approved`, `sale_completed`, `completed`, `purchase_approved` -> `authorized`
+   - Manter `abandoned` / `cart_abandoned` como não-venda.
+   - Reforçar a extração de `order_date`, `paid_amount` e `product_name` com base nos payloads reais da auditoria.
 
-2. **Endurecer o `ticto-webhook`**
-   - Manter uma auditoria mínima que sempre consiga persistir.
-   - Melhorar o tratamento de erro quando houver coluna ausente ou falha de insert.
-   - Garantir a resolução do `funnel_id` por token e fallback por `resolve_funnel_id(product_name)`.
+3. Fazer backfill dos registros já gravados
+   - Criar um SQL idempotente para corrigir registros antigos do Guia de Tinturas.
+   - Preencher `status`, `paid_amount`, `product_name` e `order_date` a partir do `raw_payload` quando houver dados reais de compra.
+   - Não converter abandono real em venda.
 
-3. **Separar “evento novo” de “histórico”**
-   - Evento novo: validar que um teste da Ticto gera linha em `webhook_audit` e em `ticto_transactions`.
-   - Histórico: aplicar o backfill já documentado (`tag_historical_transactions()` e, se necessário, o SQL de `docs/fix-guia-tinturas-pipeline.sql`).
+4. Validar o contrato com o dashboard
+   - Confirmar que `v_all_sales` continua entregando compras com `purchased_at` válido.
+   - Confirmar que `FunilResumo` e `useAllSalesAggregation` seguem contando apenas `authorized`.
+   - Se o problema for só status não normalizado, não precisaremos mexer no frontend.
 
-4. **Validar CRM e automações só depois da venda existir**
-   - `sync_lead_from_sale` deve rodar apenas quando a venda estiver `authorized`.
-   - `wz-receiver` deve receber o forward e criar `wz_executions` só para flows ativos compatíveis.
+5. Teste ponta a ponta
+   - Validar com 1 evento de abandono e 1 evento de compra aprovada.
+   - Resultado esperado:
+     - abandono continua como `abandoned_cart`
+     - compra aprovada entra como `authorized`
+     - `order_date` / `purchased_at` ficam preenchidos
+     - a venda aparece em `v_all_sales`
+     - o resumo do funil sai do zero
+     - CRM e automações só disparam para compra aprovada
 
-5. **Alinhar contratos do projeto**
-   - Atualizar os tipos gerados do Supabase para refletir o schema real e evitar novas divergências entre frontend, funções e banco.
-
-### Validação esperada
-- Após um novo teste da Ticto:
-  1. aparece linha em `webhook_audit`
-  2. aparece/atualiza linha em `ticto_transactions`
-  3. a venda entra em `v_all_sales` com `funnel_id` do Guia de Tinturas
-  4. o `/funis/10000000-0000-0000-0000-000000000001/resumo` deixa de mostrar receita zerada
-  5. se o status for aprovado, o lead entra no CRM e a automação pode disparar
-- Para vendas antigas, o funil só atualiza depois do backfill; deploy sozinho não basta.
-
-### Detalhes técnicos
-- Arquivos centrais:
+Detalhes técnicos
+- Arquivos principais:
   - `supabase/functions/ticto-webhook/index.ts`
-  - `supabase/functions/wz-receiver/index.ts`
   - `src/hooks/useAllSales.ts`
   - `src/pages/FunilResumo.tsx`
-  - `src/integrations/supabase/types.ts`
-- SQLs de referência já existentes:
-  - `docs/enrich-v-all-sales.sql`
-  - `docs/add-affiliate-name.sql`
-  - `docs/fix-guia-tinturas-pipeline.sql`
-  - `supabase/migrations/20260313120000_multi_funnel_foundation.sql`
-- Risco atual: a função já pressupõe colunas que não estão refletidas nas migrations/tipos do repositório, o que explica falhas silenciosas e inconsistência no dashboard.
+  - `docs/backfill-guia-tinturas.sql`
+  - `docs/stabilize-webhook-pipeline.sql`
+- Evidência importante:
+  - `FunilResumo` só contabiliza `status === 'authorized'`.
+  - O `ticto-webhook` atual não mapeia `sale_approved` / `sale_completed`, enquanto `import-ticto-csv` e `guru-webhook` já mapeiam.
+
+Conclusão prática
+- Sim, há um problema do nosso lado para normalização e backfill.
+- E pode haver um segundo problema na Ticto, se a auditoria confirmar que eventos aprovados nem estão chegando ao endpoint.
