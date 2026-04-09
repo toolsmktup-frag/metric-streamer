@@ -224,6 +224,62 @@ Deno.serve(async (req) => {
     const productId = Number(item.product_id || item.id || invoice.product_id || invoice.product?.id || payload.product_id || 0) || null;
     const installments = Number(order.installments || payment.installments?.qty || invoice.installments || 1) || 1;
 
+    // ── UTM Inheritance: se UTMs estão vazios, herdar da venda mais recente do mesmo cliente (24h) ──
+    const customerEmail = clean(customer.email);
+    if (!utmSource && (customerEmail || phone)) {
+      try {
+        // Try by email first
+        let donor: any = null;
+        const selectCols = "id, utm_source, utm_campaign, utm_medium, utm_content, utm_term, meta_campaign_id, meta_adset_id, meta_ad_id";
+        const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+        if (customerEmail) {
+          const { data } = await supabase
+            .from("ticto_transactions")
+            .select(selectCols)
+            .eq("status", "authorized")
+            .ilike("customer_email", customerEmail)
+            .not("utm_source", "is", null)
+            .gte("order_date", cutoff)
+            .order("order_date", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          donor = data;
+        }
+
+        if (!donor && phone) {
+          const phoneDigits = phone.replace(/\D/g, "");
+          if (phoneDigits.length >= 10) {
+            const { data } = await supabase
+              .from("ticto_transactions")
+              .select(selectCols)
+              .eq("status", "authorized")
+              .like("customer_phone", `%${phoneDigits.slice(-10)}`)
+              .not("utm_source", "is", null)
+              .gte("order_date", cutoff)
+              .order("order_date", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            donor = data;
+          }
+        }
+
+        if (donor) {
+          utmSource   = donor.utm_source;
+          utmCampaign = donor.utm_campaign;
+          utmMedium   = donor.utm_medium;
+          utmContent  = donor.utm_content;
+          utmTerm     = donor.utm_term;
+          inheritedCampaignId = donor.meta_campaign_id;
+          inheritedAdsetId    = donor.meta_adset_id;
+          inheritedAdId       = donor.meta_ad_id;
+          console.log(`[ticto-webhook] UTM inherited from transaction ${donor.id}`);
+        }
+      } catch (inheritErr) {
+        console.error("[ticto-webhook] UTM inheritance error (non-fatal):", inheritErr);
+      }
+    }
+
     console.log(`[ticto-webhook] Extracted: status=${normalizedStatus} rawStatus=${rawStatus} amount=${amountInCents} product="${productName}" orderId=${orderId} productId=${productId}`);
 
     const bodyToken = clean(payload.token);
