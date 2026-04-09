@@ -173,13 +173,16 @@ Deno.serve(async (req) => {
     const adsetParsed = parseUtmPair(tracking.utm_medium);
     const adParsed = parseUtmPair(tracking.utm_content);
 
-    const utmSource = clean(tracking.utm_source);
-    const utmMedium = clean(tracking.utm_medium);
-    const utmCampaign = clean(tracking.utm_campaign);
-    const utmContent = clean(tracking.utm_content);
-    const utmTerm = clean(tracking.utm_term);
+    let utmSource = clean(tracking.utm_source);
+    let utmMedium = clean(tracking.utm_medium);
+    let utmCampaign = clean(tracking.utm_campaign);
+    let utmContent = clean(tracking.utm_content);
+    let utmTerm = clean(tracking.utm_term);
     const src = clean(tracking.src);
     const sck = clean(tracking.sck);
+    let inheritedCampaignId: string | null = null;
+    let inheritedAdsetId: string | null = null;
+    let inheritedAdId: string | null = null;
 
     const phone = customer.phone
       ? `${customer.phone.ddi || customer.phone_local_code || ""}${customer.phone.ddd || ""}${customer.phone.number || customer.phone_number || ""}`
@@ -220,6 +223,62 @@ Deno.serve(async (req) => {
     const orderId = Number(order.id || invoice.id || contract.id || payload.order_id || 0) || null;
     const productId = Number(item.product_id || item.id || invoice.product_id || invoice.product?.id || payload.product_id || 0) || null;
     const installments = Number(order.installments || payment.installments?.qty || invoice.installments || 1) || 1;
+
+    // ── UTM Inheritance: se UTMs estão vazios, herdar da venda mais recente do mesmo cliente (24h) ──
+    const customerEmail = clean(customer.email);
+    if (!utmSource && (customerEmail || phone)) {
+      try {
+        // Try by email first
+        let donor: any = null;
+        const selectCols = "id, utm_source, utm_campaign, utm_medium, utm_content, utm_term, meta_campaign_id, meta_adset_id, meta_ad_id";
+        const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+        if (customerEmail) {
+          const { data } = await supabase
+            .from("ticto_transactions")
+            .select(selectCols)
+            .eq("status", "authorized")
+            .ilike("customer_email", customerEmail)
+            .not("utm_source", "is", null)
+            .gte("order_date", cutoff)
+            .order("order_date", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          donor = data;
+        }
+
+        if (!donor && phone) {
+          const phoneDigits = phone.replace(/\D/g, "");
+          if (phoneDigits.length >= 10) {
+            const { data } = await supabase
+              .from("ticto_transactions")
+              .select(selectCols)
+              .eq("status", "authorized")
+              .like("customer_phone", `%${phoneDigits.slice(-10)}`)
+              .not("utm_source", "is", null)
+              .gte("order_date", cutoff)
+              .order("order_date", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            donor = data;
+          }
+        }
+
+        if (donor) {
+          utmSource   = donor.utm_source;
+          utmCampaign = donor.utm_campaign;
+          utmMedium   = donor.utm_medium;
+          utmContent  = donor.utm_content;
+          utmTerm     = donor.utm_term;
+          inheritedCampaignId = donor.meta_campaign_id;
+          inheritedAdsetId    = donor.meta_adset_id;
+          inheritedAdId       = donor.meta_ad_id;
+          console.log(`[ticto-webhook] UTM inherited from transaction ${donor.id}`);
+        }
+      } catch (inheritErr) {
+        console.error("[ticto-webhook] UTM inheritance error (non-fatal):", inheritErr);
+      }
+    }
 
     console.log(`[ticto-webhook] Extracted: status=${normalizedStatus} rawStatus=${rawStatus} amount=${amountInCents} product="${productName}" orderId=${orderId} productId=${productId}`);
 
@@ -316,13 +375,13 @@ Deno.serve(async (req) => {
       utm_term: utmTerm,
       src,
       sck,
-      meta_campaign_id: campaignParsed.id,
+      meta_campaign_id: inheritedCampaignId || campaignParsed.id,
       meta_campaign_name: campaignParsed.name,
-      meta_adset_id: adsetParsed.id,
+      meta_adset_id: inheritedAdsetId || adsetParsed.id,
       meta_adset_name: adsetParsed.name,
-      meta_ad_id: adParsed.id,
+      meta_ad_id: inheritedAdId || adParsed.id,
       meta_ad_name: adParsed.name,
-      is_paid_traffic: isPaidTraffic(tracking),
+      is_paid_traffic: utmSource ? isPaidTraffic({ ...tracking, utm_source: utmSource }) : isPaidTraffic(tracking),
       funnel_id: funnelId,
       raw_payload: payload,
       ingestion_type: 'webhook',
