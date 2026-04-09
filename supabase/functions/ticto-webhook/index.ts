@@ -173,13 +173,16 @@ Deno.serve(async (req) => {
     const adsetParsed = parseUtmPair(tracking.utm_medium);
     const adParsed = parseUtmPair(tracking.utm_content);
 
-    const utmSource = clean(tracking.utm_source);
-    const utmMedium = clean(tracking.utm_medium);
-    const utmCampaign = clean(tracking.utm_campaign);
-    const utmContent = clean(tracking.utm_content);
-    const utmTerm = clean(tracking.utm_term);
+    let utmSource = clean(tracking.utm_source);
+    let utmMedium = clean(tracking.utm_medium);
+    let utmCampaign = clean(tracking.utm_campaign);
+    let utmContent = clean(tracking.utm_content);
+    let utmTerm = clean(tracking.utm_term);
     const src = clean(tracking.src);
     const sck = clean(tracking.sck);
+    let inheritedCampaignId: string | null = null;
+    let inheritedAdsetId: string | null = null;
+    let inheritedAdId: string | null = null;
 
     const phone = customer.phone
       ? `${customer.phone.ddi || customer.phone_local_code || ""}${customer.phone.ddd || ""}${customer.phone.number || customer.phone_number || ""}`

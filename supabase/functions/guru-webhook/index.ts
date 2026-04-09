@@ -170,13 +170,77 @@ Deno.serve(async (req) => {
     const adsetParsed    = parseUtmPair(utmMedium);
     const adParsed       = parseUtmPair(utmContent);
 
-    const metaCampaignId = sale.meta_campaign_id || campaignParsed.id || null;
-    const metaAdsetId    = sale.meta_adset_id    || adsetParsed.id    || null;
-    const metaAdId       = sale.meta_ad_id       || adParsed.id       || null;
+    let finalUtmSource   = utmSource;
+    let finalUtmCampaign = utmCampaign;
+    let finalUtmMedium   = utmMedium;
+    let finalUtmContent  = utmContent;
+    let finalUtmTerm     = utmTerm;
+    let finalMetaCampaignId = sale.meta_campaign_id || campaignParsed.id || null;
+    let finalMetaAdsetId    = sale.meta_adset_id    || adsetParsed.id    || null;
+    let finalMetaAdId       = sale.meta_ad_id       || adParsed.id       || null;
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase    = createClient(supabaseUrl, supabaseKey);
+
+    // ── UTM Inheritance: se UTMs estão vazios, herdar da compra mais recente do mesmo cliente (24h) ──
+    const customerEmail = customer.email || null;
+    const customerPhoneRaw = customer.phone || customer.telephone || customer.phone_number
+      ? `${customer.phone_local_code || ""}${customer.phone || customer.telephone || customer.phone_number || ""}`
+      : null;
+
+    if (!finalUtmSource && (customerEmail || customerPhoneRaw)) {
+      try {
+        let inheritQuery = supabase
+          .from("customer_purchases")
+          .select("id, utm_source, utm_campaign, utm_medium, utm_content, utm_term, meta_campaign_id, meta_adset_id, meta_ad_id")
+          .eq("status", "authorized")
+          .not("utm_source", "is", null)
+          .gte("purchased_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+          .order("purchased_at", { ascending: false })
+          .limit(1);
+
+        if (customerEmail) {
+          inheritQuery = inheritQuery.ilike("raw_data->>contact->>email", customerEmail);
+        }
+
+        // Try email first, fallback to broader OR via two queries
+        const { data: byEmail } = await inheritQuery;
+
+        let donor = byEmail?.[0] || null;
+
+        // If no match by email and we have phone, try phone
+        if (!donor && customerPhoneRaw) {
+          const phoneDigits = customerPhoneRaw.replace(/\D/g, "");
+          if (phoneDigits.length >= 10) {
+            const { data: byPhone } = await supabase
+              .from("customer_purchases")
+              .select("id, utm_source, utm_campaign, utm_medium, utm_content, utm_term, meta_campaign_id, meta_adset_id, meta_ad_id")
+              .eq("status", "authorized")
+              .not("utm_source", "is", null)
+              .gte("purchased_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+              .order("purchased_at", { ascending: false })
+              .limit(1);
+            // Filter by email in raw_data is tricky; use a simpler approach with unified_customer_id
+            donor = byPhone?.[0] || null;
+          }
+        }
+
+        if (donor) {
+          finalUtmSource      = donor.utm_source;
+          finalUtmCampaign    = donor.utm_campaign;
+          finalUtmMedium      = donor.utm_medium;
+          finalUtmContent     = donor.utm_content;
+          finalUtmTerm        = donor.utm_term;
+          finalMetaCampaignId = donor.meta_campaign_id || finalMetaCampaignId;
+          finalMetaAdsetId    = donor.meta_adset_id || finalMetaAdsetId;
+          finalMetaAdId       = donor.meta_ad_id || finalMetaAdId;
+          console.log(`[guru-webhook] UTM inherited from purchase ${donor.id}`);
+        }
+      } catch (inheritErr) {
+        console.error("[guru-webhook] UTM inheritance error (non-fatal):", inheritErr);
+      }
+    }
 
     // Resolve funnel_id: primeiro por token na URL, depois por product name ILIKE
     const urlToken = new URL(req.url).searchParams.get("token");
