@@ -100,6 +100,7 @@ Deno.serve(async (req) => {
     const customer = data.customer    || {};
     const content  = data.content     || data.product || {};
     const tracking = data.tracking    || data.utm     || {};
+    const queryParams = data.query_params || payload.query_params || {};
 
     const invoiceId = String(invoice.id || "");
 
@@ -127,6 +128,12 @@ Deno.serve(async (req) => {
     const utmCampaign = tracking.utm_campaign || payload.utm_campaign || null;
     const utmContent  = tracking.utm_content  || payload.utm_content  || null;
     const utmTerm     = tracking.utm_term     || payload.utm_term     || null;
+
+    // ── Tracking IDs do Facebook/Google ──
+    const fbc    = queryParams.fbc || tracking.fbc || null;
+    const fbp    = queryParams.fbp || tracking.fbp || null;
+    const fbclid = queryParams.fbclid || tracking.fbclid || null;
+    const gclid  = queryParams.gclid || tracking.gclid || null;
 
     const campaignParsed = parseUtmPair(utmCampaign);
     const adsetParsed    = parseUtmPair(utmMedium);
@@ -203,6 +210,10 @@ Deno.serve(async (req) => {
       funnel_id:              funnelId,
       imported_from:          "webhook",
       raw_data:               payload,
+      fbc,
+      fbp,
+      fbclid,
+      gclid,
     };
 
     const { error: cpError } = await supabase
@@ -246,6 +257,10 @@ Deno.serve(async (req) => {
       funnel_id:          funnelId,
       raw_payload:        payload,
       updated_at:         new Date().toISOString(),
+      fbc,
+      fbp,
+      fbclid,
+      gclid,
     };
 
     const { error: ttError } = await supabase
