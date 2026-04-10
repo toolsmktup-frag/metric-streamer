@@ -1,40 +1,41 @@
 
 
-## Plano: Botão "Atualizar Funil" no Kanban + Cron Automático
+## Diagnóstico: Lead duplicado no Kanban
 
-### Decisão
+### O que aconteceu
 
-Implementar **ambos** — não são excludentes:
+Existem **dois problemas** que explicam por que Dani e Gabi viram o mesmo lead (Maria Dulce):
 
-- **Cron automático** (1x/dia, meia-noite BRT): garante consistência sem intervenção humana. É leve — uma query SQL por funil.
-- **Botão no Kanban**: dá controle imediato ao vendedor para forçar atualização antes de uma sessão de ligações.
+### Problema 1: Regra de visibilidade do Kanban
 
-### Alterações
+A regra atual no `KanbanBoard.tsx` (linha 74) é:
 
-**1. Botão "Atualizar Funil" no KanbanBoard**
-- Adicionar prop `onBulkMoveOverdue` e `bulkMoving` ao `KanbanBoard`
-- Renderizar o botão com ícone `RefreshCw` no header do Kanban (junto aos controles de busca/sort)
-- Só aparece se existem produtos com `auto_move_stage_id` + `recontact_days` configurados
-- Passar as props desde `LeadFunnelDetail.tsx` (já existe a lógica de bulk move lá)
+```text
+Vendedor vê: leads SEM vendedor atribuído + leads atribuídos A ELE
+```
 
-**2. Edge Function `recontact-cron`**
-- Nova função em `supabase/functions/recontact-cron/index.ts`
-- Autenticação via `service_role_key`
-- Busca todos os `lead_funnel_products` com `recontact_days` + `auto_move_stage_id`
-- Para cada produto, identifica leads vencidos e faz UPDATE em batch
-- Registra eventos `auto_recontact_move` em `lead_events`
+Isso significa que **enquanto um lead não tem vendedora atribuída, TODAS as vendedoras o veem**. Quando a Gabi atribuiu o lead a si mesma, a Dani continuou vendo até dar refresh — não há sincronização em tempo real.
 
-**3. SQL do Cron Job** (doc para rodar no Supabase SQL Editor)
-- `cron.schedule('recontact-daily', '0 3 * * *', ...)` — 3:00 UTC = 0:00 BRT
-- Mesmo padrão do `wz-scheduler-cron` existente
+### Problema 2: Possível posição duplicada no funil
 
-**4. Texto atualizado no FunnelProductsConfig**
-- Informar que a atualização roda automaticamente à meia-noite, além do botão manual
+A tabela `lead_stage_positions` **não tem constraint UNIQUE** em `(lead_id, funnel_id)`. Se dois webhooks (ex: compra dos 3 potes + upsell dos 9 potes) chegaram quase ao mesmo tempo, a verificação via `SELECT ... LIMIT 1` na RPC `sync_lead_from_sale` pode falhar por race condition, criando **duas entradas** para o mesmo lead no mesmo funil. Isso faria o lead aparecer duas vezes no Kanban.
 
-### Arquivos modificados
-- `src/components/lead-funnels/KanbanBoard.tsx` — adicionar botão
-- `src/pages/LeadFunnelDetail.tsx` — passar props de bulk move ao KanbanBoard
-- `supabase/functions/recontact-cron/index.ts` — nova Edge Function
-- `docs/migration_recontact_cron.sql` — SQL do cron job
-- `src/components/lead-funnels/FunnelProductsConfig.tsx` — atualizar texto descritivo
+### Correções propostas
+
+**1. Constraint UNIQUE no banco** (SQL no Supabase)
+- `ALTER TABLE lead_stage_positions ADD CONSTRAINT unique_lead_per_funnel UNIQUE (lead_id, funnel_id);`
+- Limpar duplicatas existentes antes de aplicar
+- Trocar `INSERT` por `INSERT ... ON CONFLICT DO NOTHING` na RPC
+
+**2. Melhorar visibilidade no Kanban** (KanbanBoard.tsx)
+- Quando um lead **já tem vendedora atribuída**, só essa vendedora o vê (já funciona assim)
+- Adicionar invalidação de cache quando `assigned_to` muda, via subscription Supabase Realtime ou refetch mais frequente
+
+**3. SQL de limpeza de duplicatas**
+- Script para identificar e remover posições duplicadas mantendo apenas a mais antiga
+
+### Arquivos alterados
+- `KanbanBoard.tsx` — ajustar filtro + adicionar realtime subscription
+- `docs/sql/unique-lead-stage-positions.sql` — migration com cleanup + constraint
+- `docs/sql/alter-sync-lead-add-purchased-at.sql` — documentar uso de `ON CONFLICT`
 
