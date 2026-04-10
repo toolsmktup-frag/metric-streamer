@@ -159,6 +159,7 @@ Deno.serve(async (req) => {
     }
 
     const tracking = payload.tracking || invoice.tracking || invoice.utm_data || payload.utm_data || payload.source || {};
+    const queryParams = payload.query_params || {};
     const contract = payload.contract || {};
     const order = payload.order || payload.sale || invoice || contract || payload.payment || {};
     const item = payload.item || payload.product || invoice.product || payload.items?.[0] || invoice.items?.[0] || {};
@@ -183,6 +184,12 @@ Deno.serve(async (req) => {
     let inheritedCampaignId: string | null = null;
     let inheritedAdsetId: string | null = null;
     let inheritedAdId: string | null = null;
+
+    // ── Tracking IDs do Facebook/Google (de query_params) ──
+    let fbc    = clean(queryParams.fbc);
+    let fbp    = clean(queryParams.fbp);
+    let fbclid = clean(queryParams.fbclid);
+    let gclid  = clean(queryParams.gclid);
 
     const phone = customer.phone
       ? `${customer.phone.ddi || customer.phone_local_code || ""}${customer.phone.ddd || ""}${customer.phone.number || customer.phone_number || ""}`
@@ -230,7 +237,7 @@ Deno.serve(async (req) => {
       try {
         // Try by email first
         let donor: any = null;
-        const selectCols = "id, utm_source, utm_campaign, utm_medium, utm_content, utm_term, meta_campaign_id, meta_adset_id, meta_ad_id";
+        const selectCols = "id, utm_source, utm_campaign, utm_medium, utm_content, utm_term, meta_campaign_id, meta_adset_id, meta_ad_id, fbc, fbp, fbclid, gclid";
         const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
         if (customerEmail) {
@@ -273,6 +280,10 @@ Deno.serve(async (req) => {
           inheritedCampaignId = donor.meta_campaign_id;
           inheritedAdsetId    = donor.meta_adset_id;
           inheritedAdId       = donor.meta_ad_id;
+          if (!fbc)    fbc    = donor.fbc;
+          if (!fbp)    fbp    = donor.fbp;
+          if (!fbclid) fbclid = donor.fbclid;
+          if (!gclid)  gclid  = donor.gclid;
           console.log(`[ticto-webhook] UTM inherited from transaction ${donor.id}`);
         }
       } catch (inheritErr) {
@@ -389,6 +400,10 @@ Deno.serve(async (req) => {
       updated_at: new Date().toISOString(),
       affiliate_name: affiliateName,
       affiliate_commission: affiliateCommission,
+      fbc,
+      fbp,
+      fbclid,
+      gclid,
     };
 
     // ── Save: select+insert/update manual ──

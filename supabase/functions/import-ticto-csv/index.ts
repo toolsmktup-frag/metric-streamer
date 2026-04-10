@@ -116,6 +116,10 @@ Deno.serve(async (req) => {
         source_platform: sourcePlatform,
         ingestion_type: 'import',
         updated_at: new Date().toISOString(),
+        fbc: r.fbc || null,
+        fbp: r.fbp || null,
+        fbclid: r.fbclid || null,
+        gclid: r.gclid || null,
       };
     });
 
