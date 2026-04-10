@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { LeadFunnelStage, Lead, LeadStagePosition } from '@/types/leadFunnels';
 import LeadCard from './LeadCard';
-import { Search, ArrowUpDown, DollarSign, TrendingDown, ChevronDown } from 'lucide-react';
+import { Search, ArrowUpDown, DollarSign, TrendingDown, ChevronDown, RefreshCw } from 'lucide-react';
 import { formatCurrency } from '@/lib/formatters';
 import { isRevenueStage } from '@/lib/revenueStage';
 import { Input } from '@/components/ui/input';
@@ -32,6 +32,9 @@ interface KanbanBoardProps {
   recontactMap?: Map<string, RecontactInfo>;
   userRole?: string;
   currentUserId?: string | null;
+  onBulkMoveOverdue?: () => void;
+  bulkMoving?: boolean;
+  hasAutoMoveProducts?: boolean;
 }
 
 type SortMode = 'recent' | 'value' | 'orders' | 'ltv' | 'recontact';
@@ -61,7 +64,7 @@ const DroppableColumn: React.FC<{ id: string; isOver: boolean; children: React.R
   );
 };
 
-const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClick, onWhatsAppClick, funnelId, recontactMap, userRole, currentUserId }) => {
+const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClick, onWhatsAppClick, funnelId, recontactMap, userRole, currentUserId, onBulkMoveOverdue, bulkMoving, hasAutoMoveProducts }) => {
   const isSeller = userRole === 'vendedor' || userRole === 'vendedora' || userRole === 'suporte';
   const isAdmin = userRole === 'admin' || userRole === 'gestor';
 
@@ -247,6 +250,18 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
           <ArrowUpDown className="h-3.5 w-3.5" />
           {SORT_LABELS[sortMode]}
         </Button>
+        {onBulkMoveOverdue && hasAutoMoveProducts && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onBulkMoveOverdue}
+            disabled={bulkMoving}
+            className="gap-1.5 text-xs"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${bulkMoving ? 'animate-spin' : ''}`} />
+            Atualizar Funil
+          </Button>
+        )}
         <span className="text-xs text-muted-foreground">
           {totalFiltered === totalAll
             ? `${totalAll} leads`
