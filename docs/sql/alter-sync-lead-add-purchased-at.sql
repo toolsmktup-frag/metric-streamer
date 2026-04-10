@@ -110,7 +110,8 @@ BEGIN
 
     IF v_stage_id IS NOT NULL THEN
       INSERT INTO lead_stage_positions (lead_id, funnel_id, stage_id)
-      VALUES (v_lead_id, v_base_funnel_id, v_stage_id);
+      VALUES (v_lead_id, v_base_funnel_id, v_stage_id)
+      ON CONFLICT (lead_id, funnel_id) DO NOTHING;
     END IF;
   END IF;
 
@@ -153,7 +154,8 @@ BEGIN
 
         IF v_stage_id IS NOT NULL THEN
           INSERT INTO lead_stage_positions (lead_id, funnel_id, stage_id)
-          VALUES (v_lead_id, v_prod_funnel_id, v_stage_id);
+          VALUES (v_lead_id, v_prod_funnel_id, v_stage_id)
+          ON CONFLICT (lead_id, funnel_id) DO NOTHING;
         END IF;
       END IF;
     END IF;

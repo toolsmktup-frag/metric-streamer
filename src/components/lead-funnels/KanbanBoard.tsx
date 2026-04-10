@@ -20,6 +20,8 @@ import {
 import { useMoveLeadStage } from '@/hooks/useMoveLeadStage';
 import { useBulkLeadPurchases, type PurchaseSummary } from '@/hooks/useBulkLeadPurchases';
 import type { RecontactInfo } from '@/hooks/useRecontactDeadlines';
+import { supabase } from '@/integrations/supabase/client';
+import { useQueryClient } from '@tanstack/react-query';
 
 const CARDS_PER_PAGE = 50;
 
@@ -65,8 +67,27 @@ const DroppableColumn: React.FC<{ id: string; isOver: boolean; children: React.R
 };
 
 const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClick, onWhatsAppClick, funnelId, recontactMap, userRole, currentUserId, onBulkMoveOverdue, bulkMoving, hasAutoMoveProducts }) => {
+  const queryClient = useQueryClient();
   const isSeller = userRole === 'vendedor' || userRole === 'vendedora' || userRole === 'suporte';
   const isAdmin = userRole === 'admin' || userRole === 'gestor';
+
+  // Realtime: when a lead's assigned_to changes, refetch kanban data instantly
+  useEffect(() => {
+    const channel = supabase
+      .channel('kanban-leads-assign')
+      .on(
+        'postgres_changes' as any,
+        { event: 'UPDATE', schema: 'public', table: 'leads' },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['leads-by-funnel'] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
 
   // Filter positions: sellers only see leads assigned to them or unassigned
   const visiblePositions = useMemo(() => {
