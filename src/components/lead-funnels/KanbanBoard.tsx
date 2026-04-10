@@ -20,6 +20,8 @@ import {
 import { useMoveLeadStage } from '@/hooks/useMoveLeadStage';
 import { useBulkLeadPurchases, type PurchaseSummary } from '@/hooks/useBulkLeadPurchases';
 import type { RecontactInfo } from '@/hooks/useRecontactDeadlines';
+import { supabase } from '@/integrations/supabase/client';
+import { useQueryClient } from '@tanstack/react-query';
 
 const CARDS_PER_PAGE = 50;
 
