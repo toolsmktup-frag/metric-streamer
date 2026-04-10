@@ -63,6 +63,7 @@ Deno.serve(async (req) => {
     const product  = payload.product  || payload.item     || payload.items?.[0] || {};
     const customer = payload.customer || payload.buyer    || payload.contact || {};
     const tracking = payload.tracking || payload.utm_data || payload.source || {};
+    const queryParams = payload.query_params || {};
     const payment  = payload.payment  || {};
     const affiliations = payload.affiliations || [];
     const affiliateName = affiliations[0]?.contact_name || affiliations[0]?.name || null;
@@ -179,6 +180,12 @@ Deno.serve(async (req) => {
     let finalMetaAdsetId    = sale.meta_adset_id    || adsetParsed.id    || null;
     let finalMetaAdId       = sale.meta_ad_id       || adParsed.id       || null;
 
+    // ── Tracking IDs do Facebook/Google ──
+    let fbc    = queryParams.fbc || tracking.fbc || null;
+    let fbp    = queryParams.fbp || tracking.fbp || null;
+    let fbclid = queryParams.fbclid || tracking.fbclid || null;
+    let gclid  = queryParams.gclid || tracking.gclid || null;
+
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase    = createClient(supabaseUrl, supabaseKey);
@@ -223,7 +230,7 @@ Deno.serve(async (req) => {
       try {
         const { data: donor } = await supabase
           .from("customer_purchases")
-          .select("id, utm_source, utm_campaign, utm_medium, utm_content, utm_term, meta_campaign_id, meta_adset_id, meta_ad_id")
+          .select("id, utm_source, utm_campaign, utm_medium, utm_content, utm_term, meta_campaign_id, meta_adset_id, meta_ad_id, fbc, fbp, fbclid, gclid")
           .eq("unified_customer_id", unifiedCustomerId)
           .eq("status", "authorized")
           .not("utm_source", "is", null)
@@ -241,6 +248,10 @@ Deno.serve(async (req) => {
           finalMetaCampaignId = donor.meta_campaign_id || finalMetaCampaignId;
           finalMetaAdsetId    = donor.meta_adset_id || finalMetaAdsetId;
           finalMetaAdId       = donor.meta_ad_id || finalMetaAdId;
+          if (!fbc)    fbc    = donor.fbc;
+          if (!fbp)    fbp    = donor.fbp;
+          if (!fbclid) fbclid = donor.fbclid;
+          if (!gclid)  gclid  = donor.gclid;
           console.log(`[guru-webhook] UTM inherited from purchase ${donor.id}`);
         }
       } catch (inheritErr) {
@@ -288,6 +299,10 @@ Deno.serve(async (req) => {
       raw_data:               payload,
       affiliate_name:         affiliateName,
       affiliate_commission:   affiliateCommission,
+      fbc,
+      fbp,
+      fbclid,
+      gclid,
     };
 
     const { error } = await supabase
