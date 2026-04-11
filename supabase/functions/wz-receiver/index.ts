@@ -309,16 +309,20 @@ function matchesTrigger(triggerData: Record<string, any>, event: NormalizedEvent
   // Platform filter
   if (triggerData.platform && triggerData.platform !== "any" && triggerData.platform !== event.platform) return false;
 
-  // Product ID filter (exact match)
+  // Product ID filter (supports single string or array)
   if (triggerData.productIdFilter) {
-    if (!event.product_id || String(event.product_id) !== String(triggerData.productIdFilter)) return false;
+    const filterIds = Array.isArray(triggerData.productIdFilter)
+      ? triggerData.productIdFilter.map((id: any) => String(id))
+      : [String(triggerData.productIdFilter)];
+    if (!event.product_id || !filterIds.includes(String(event.product_id))) return false;
   }
 
-  // Offer filter
-  if (triggerData.offerFilter && event.offer_name) {
-    if (!event.offer_name.toLowerCase().includes(triggerData.offerFilter.toLowerCase())) return false;
-  } else if (triggerData.offerFilter && !event.offer_name) {
-    return false;
+  // Offer filter (supports single string or array)
+  if (triggerData.offerFilter) {
+    const filterOffers = Array.isArray(triggerData.offerFilter)
+      ? triggerData.offerFilter.map((o: any) => String(o).toLowerCase())
+      : [String(triggerData.offerFilter).toLowerCase()];
+    if (!event.offer_name || !filterOffers.some(f => event.offer_name!.toLowerCase().includes(f))) return false;
   }
 
   return true;

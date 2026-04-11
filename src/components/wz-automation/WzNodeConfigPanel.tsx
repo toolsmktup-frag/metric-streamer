@@ -11,6 +11,7 @@ import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useWzInstances } from '@/hooks/useWzInstances';
 import { triggerLabels } from './nodes/WzTriggerNode';
+import WzProductSelector from './WzProductSelector';
 import type { Node } from '@xyflow/react';
 
 const variableChips = [
@@ -129,6 +130,40 @@ const WzNodeConfigPanel: React.FC<WzNodeConfigPanelProps> = ({
   );
 };
 
+/* ─── Helper: Multi-input with chips ─── */
+
+function WzMultiInput({ values, onChange, label, placeholder }: { values: string[]; onChange: (v: string[]) => void; label: string; placeholder: string }) {
+  const [input, setInput] = React.useState('');
+  const add = () => {
+    const v = input.trim();
+    if (v && !values.includes(v)) onChange([...values, v]);
+    setInput('');
+  };
+  return (
+    <div className="space-y-2">
+      <Label className="text-xs">{label}</Label>
+      {values.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {values.map(v => (
+            <Badge key={v} variant="secondary" className="text-[10px] gap-1 pr-1">
+              {v}
+              <button type="button" className="ml-0.5 hover:text-destructive" onClick={() => onChange(values.filter(i => i !== v))}>
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          ))}
+        </div>
+      )}
+      <div className="flex gap-1">
+        <Input value={input} onChange={e => setInput(e.target.value)} placeholder={placeholder} className="h-8 text-xs flex-1" onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), add())} />
+        <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={add} disabled={!input.trim()}>
+          <Plus className="h-3 w-3" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 /* ─── Sub-panels ─── */
 
 function TriggerConfig({ data, update }: { data: any; update: (k: string, v: any) => void }) {
@@ -156,22 +191,17 @@ function TriggerConfig({ data, update }: { data: any; update: (k: string, v: any
           </SelectContent>
         </Select>
       </div>
-      <div className="space-y-2">
-        <Label>Filtrar por ID do produto (opcional)</Label>
-        <Input
-          value={data.productIdFilter || ''}
-          onChange={(e) => update('productIdFilter', e.target.value)}
-          placeholder="ID do produto (ex: 46342)"
-        />
-      </div>
-      <div className="space-y-2">
-        <Label>Filtrar por oferta (opcional)</Label>
-        <Input
-          value={data.offerFilter || ''}
-          onChange={(e) => update('offerFilter', e.target.value)}
-          placeholder="Nome da oferta"
-        />
-      </div>
+      <WzProductSelector
+        selectedIds={Array.isArray(data.productIdFilter) ? data.productIdFilter : (data.productIdFilter ? [data.productIdFilter] : [])}
+        onChange={(ids) => update('productIdFilter', ids)}
+        label="Filtrar por produto(s) (opcional)"
+      />
+      <WzMultiInput
+        values={Array.isArray(data.offerFilter) ? data.offerFilter : (data.offerFilter ? [data.offerFilter] : [])}
+        onChange={(vals) => update('offerFilter', vals)}
+        label="Filtrar por oferta(s) (opcional)"
+        placeholder="Nome da oferta"
+      />
     </>
   );
 }

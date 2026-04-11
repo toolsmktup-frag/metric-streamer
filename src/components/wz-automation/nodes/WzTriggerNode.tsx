@@ -20,7 +20,8 @@ interface WzTriggerNodeData {
   triggerType?: string;
   events?: string[];
   platform?: string;
-  productIdFilter?: string;
+  productIdFilter?: string | string[];
+  offerFilter?: string | string[];
   notes?: string;
   [key: string]: unknown;
 }
@@ -28,6 +29,7 @@ interface WzTriggerNodeData {
 function WzTriggerNode({ data, selected }: { data: WzTriggerNodeData; selected?: boolean }) {
   const hasNotes = !!data.notes?.trim();
   const eventLabel = data.triggerType ? (triggerLabels[data.triggerType] || data.triggerType) : 'Configurar...';
+  const productIds = Array.isArray(data.productIdFilter) ? data.productIdFilter : (data.productIdFilter ? [data.productIdFilter] : []);
 
   return (
     <div
@@ -61,6 +63,18 @@ function WzTriggerNode({ data, selected }: { data: WzTriggerNodeData; selected?:
           <span className="text-[10px] text-muted-foreground mt-1 block">
             Plataforma: {data.platform}
           </span>
+        )}
+        {productIds.length > 0 && (
+          <div className="flex flex-wrap gap-0.5 mt-1">
+            {productIds.slice(0, 3).map(id => (
+              <span key={id} className="text-[9px] bg-pink-500/10 text-pink-700 dark:text-pink-300 px-1 py-0.5 rounded">
+                {id}
+              </span>
+            ))}
+            {productIds.length > 3 && (
+              <span className="text-[9px] text-muted-foreground">+{productIds.length - 3}</span>
+            )}
+          </div>
         )}
       </div>
 
