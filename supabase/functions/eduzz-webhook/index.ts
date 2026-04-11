@@ -267,6 +267,8 @@ Deno.serve(async (req) => {
       fbp,
       fbclid,
       gclid,
+      checkout_url:       checkoutUrl,
+      page_url:           pageUrl,
     };
 
     const { error: ttError } = await supabase
