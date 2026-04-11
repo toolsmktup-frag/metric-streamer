@@ -397,6 +397,7 @@ Deno.serve(async (req) => {
       } catch (capiErr) {
         console.error("[guru-webhook] meta-capi-sync error (non-fatal):", capiErr);
       }
+    }
 
     // wz-receiver forward already done at the top (before status filtering)
 
