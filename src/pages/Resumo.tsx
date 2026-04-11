@@ -376,7 +376,7 @@ export default function Resumo() {
       )}
 
       {/* Charts Row 2: Pagamento + Taxa de Aprovação + Top Campanhas */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Vendas por Pagamento */}
         <div className="rounded-lg border border-border bg-card p-4">
           <h3 className="text-sm font-semibold text-foreground mb-3">Vendas por Pagamento</h3>

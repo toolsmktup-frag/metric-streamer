@@ -91,7 +91,7 @@ const LeadsDashboard: React.FC = () => {
             <p className="text-sm text-muted-foreground mt-1 animate-pulse">Carregando dados...</p>
           </div>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {kpiPlaceholders.map((kpi, i) => (
             <Card key={i}>
               <CardContent className="flex items-center gap-3 p-4">
@@ -154,7 +154,7 @@ const LeadsDashboard: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {kpis.map(k => (
           <Card key={k.label}>
             <CardContent className="p-5 flex items-center gap-4">

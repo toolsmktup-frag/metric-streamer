@@ -258,11 +258,11 @@ export default function FunilResumo() {
 
       {/* KPI Cards */}
       {loadingKpi ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {Array.from({ length: 8 }, (_, i) => <SkeletonCard key={i} />)}
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           <KPICard label="Faturamento Líquido" value={formatCurrency(kpi.revenue)} variation={kpi.revenueVar} icon={DollarSign} colorClass="text-kpi-positive" tooltip="Receita total das vendas aprovadas" />
           <KPICard label="Gastos com Anúncios" value={formatCurrency(kpi.spend)} variation={kpi.spendVar} icon={Wallet} tooltip="Total investido em anúncios" />
           <KPICard label="ROAS" value={formatRoas(kpi.roas)} variation={kpi.roasVar} icon={TrendingUp} colorClass={getRoasColor(kpi.roas)} tooltip="Return on Ad Spend - Receita / Gasto" />
@@ -339,7 +339,7 @@ export default function FunilResumo() {
       )}
 
       {/* Charts Row 2: Pagamento + Taxa de Aprovação + Top Campanhas */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Vendas por Pagamento */}
         <div className="rounded-lg border border-border bg-card p-4">
           <h3 className="text-sm font-semibold text-foreground mb-3">Vendas por Pagamento</h3>
