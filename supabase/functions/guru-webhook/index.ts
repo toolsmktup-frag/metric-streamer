@@ -266,6 +266,10 @@ Deno.serve(async (req) => {
     const parsedNetAmount = parseAmount(sale.net_amount ?? sale.commission ?? payment.net ?? null);
     const netAmount = parsedNetAmount > grossAmount ? grossAmount : parsedNetAmount;
 
+    // ── Extrair checkout_url e page_url ──
+    const checkoutUrl = tracking.checkout_url || sale.checkout_url || payload.checkout_url || queryParams.checkout_url || null;
+    const pageUrl = tracking.page_url || queryParams.page || payload.page_url || payload.page || null;
+
     const record = {
       organization_id:        "00000000-0000-0000-0000-000000000001",
       unified_customer_id:    unifiedCustomerId,
@@ -300,6 +304,8 @@ Deno.serve(async (req) => {
       fbp,
       fbclid,
       gclid,
+      checkout_url:           checkoutUrl,
+      page_url:               pageUrl,
     };
 
     const { error } = await supabase

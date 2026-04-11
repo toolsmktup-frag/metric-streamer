@@ -184,6 +184,10 @@ Deno.serve(async (req) => {
     }
 
     // ── FIX CRÍTICO #2: Gravar em customer_purchases (como Guru) ──
+    // ── Extrair checkout_url e page_url ──
+    const checkoutUrl = tracking.checkout_url || data.checkout_url || invoice.checkout_url || queryParams.checkout_url || payload.checkout_url || null;
+    const pageUrl = tracking.page_url || queryParams.page || data.page_url || payload.page_url || null;
+
     const purchaseRecord = {
       organization_id:        "00000000-0000-0000-0000-000000000001",
       unified_customer_id:    unifiedCustomerId,
@@ -214,6 +218,8 @@ Deno.serve(async (req) => {
       fbp,
       fbclid,
       gclid,
+      checkout_url:           checkoutUrl,
+      page_url:               pageUrl,
     };
 
     const { error: cpError } = await supabase
@@ -261,6 +267,8 @@ Deno.serve(async (req) => {
       fbp,
       fbclid,
       gclid,
+      checkout_url:       checkoutUrl,
+      page_url:           pageUrl,
     };
 
     const { error: ttError } = await supabase

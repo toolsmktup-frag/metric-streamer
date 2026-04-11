@@ -360,6 +360,10 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ── Extrair checkout_url e page_url ──
+    const checkoutUrl = clean(tracking.checkout_url || queryParams.checkout_url || payload.checkout_url || payload.checkout_page) || null;
+    const pageUrl = clean(tracking.page_url || queryParams.page || payload.page_url || payload.page) || null;
+
     const record = {
       order_id: orderId,
       order_hash: clean(order.hash || order.marketplace_id || payload.id),
@@ -404,6 +408,8 @@ Deno.serve(async (req) => {
       fbp,
       fbclid,
       gclid,
+      checkout_url: checkoutUrl,
+      page_url: pageUrl,
     };
 
     // ── Save: select+insert/update manual ──
