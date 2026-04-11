@@ -294,7 +294,7 @@ const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSave
                   }
                 }}
               >
-                <SelectTrigger className="w-40">
+                <SelectTrigger className="min-w-[140px] flex-1">
                   <SelectValue placeholder="De (qualquer)" />
                 </SelectTrigger>
                 <SelectContent>
@@ -309,7 +309,7 @@ const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSave
                 value={rule.to_stage_id || ''}
                 onValueChange={v => updateRule(idx, 'to_stage_id', v)}
               >
-                <SelectTrigger className="w-40">
+                <SelectTrigger className="min-w-[140px] flex-1">
                   <SelectValue placeholder="Para..." />
                 </SelectTrigger>
                 <SelectContent>
