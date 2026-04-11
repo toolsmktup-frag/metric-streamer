@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
@@ -24,6 +24,16 @@ function sanitizeString(val: unknown, maxLen = 500): string | undefined {
   return val.slice(0, maxLen).trim() || undefined;
 }
 
+async function parseBody(req: Request): Promise<unknown> {
+  const ct = (req.headers.get("content-type") || "").toLowerCase();
+  if (ct.includes("application/json")) {
+    return await req.json();
+  }
+  // sendBeacon may send as text/plain — try parsing as JSON
+  const text = await req.text();
+  return JSON.parse(text);
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -37,10 +47,12 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const body = await req.json();
+    const body = await parseBody(req);
 
-    const visitorId = sanitizeString(body.visitor_id, 36);
-    const event = sanitizeString(body.event, 100);
+    console.log("[track-event] received:", JSON.stringify(body));
+
+    const visitorId = sanitizeString((body as any).visitor_id, 36);
+    const event = sanitizeString((body as any).event, 100);
 
     if (!visitorId || !isValidUUID(visitorId)) {
       return new Response(
@@ -62,25 +74,25 @@ Deno.serve(async (req) => {
     const record = {
       visitor_id: visitorId,
       event_type: event,
-      funnel_id: sanitizeString(body.funnel_id, 36),
-      stage_id: sanitizeString(body.stage_id, 36),
-      page_url: sanitizeString(body.page_url, 2000),
-      page_title: sanitizeString(body.page_title, 500),
-      referrer: sanitizeString(body.referrer, 2000),
-      utm_source: sanitizeString(body.utm_source, 200),
-      utm_medium: sanitizeString(body.utm_medium, 200),
-      utm_campaign: sanitizeString(body.utm_campaign, 500),
-      utm_content: sanitizeString(body.utm_content, 500),
-      utm_term: sanitizeString(body.utm_term, 500),
-      fbclid: sanitizeString(body.fbclid, 500),
-      fbc: sanitizeString(body.fbc, 500),
-      fbp: sanitizeString(body.fbp, 500),
-      gclid: sanitizeString(body.gclid, 500),
+      funnel_id: sanitizeString((body as any).funnel_id, 36),
+      stage_id: sanitizeString((body as any).stage_id, 36),
+      page_url: sanitizeString((body as any).page_url, 2000),
+      page_title: sanitizeString((body as any).page_title, 500),
+      referrer: sanitizeString((body as any).referrer, 2000),
+      utm_source: sanitizeString((body as any).utm_source, 200),
+      utm_medium: sanitizeString((body as any).utm_medium, 200),
+      utm_campaign: sanitizeString((body as any).utm_campaign, 500),
+      utm_content: sanitizeString((body as any).utm_content, 500),
+      utm_term: sanitizeString((body as any).utm_term, 500),
+      fbclid: sanitizeString((body as any).fbclid, 500),
+      fbc: sanitizeString((body as any).fbc, 500),
+      fbp: sanitizeString((body as any).fbp, 500),
+      gclid: sanitizeString((body as any).gclid, 500),
       ip_address: clientIP,
-      user_agent: sanitizeString(body.user_agent, 500) || serverUserAgent,
-      screen_resolution: sanitizeString(body.screen_resolution, 20),
-      timezone: sanitizeString(body.timezone, 100),
-      email: sanitizeString(body.email, 320),
+      user_agent: sanitizeString((body as any).user_agent, 500) || serverUserAgent,
+      screen_resolution: sanitizeString((body as any).screen_resolution, 20),
+      timezone: sanitizeString((body as any).timezone, 100),
+      email: sanitizeString((body as any).email, 320),
     };
 
     // Remove undefined fields
@@ -101,6 +113,8 @@ Deno.serve(async (req) => {
       console.error("[track-event] DB insert error:", dbError.message);
       // Fallback: log payload so data is not lost
       console.log("[track-event] fallback-log:", JSON.stringify(cleanRecord));
+    } else {
+      console.log("[track-event] inserted OK:", cleanRecord.event_type, cleanRecord.visitor_id);
     }
 
     return new Response(
