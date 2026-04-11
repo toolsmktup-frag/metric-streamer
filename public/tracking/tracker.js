@@ -105,11 +105,17 @@
     return fbp;
   }
 
+  // ── Funnel / Stage IDs (optional) ───────────────────────
+  var FUNNEL_ID = (scriptTag && scriptTag.getAttribute("data-funnel-id")) || undefined;
+  var STAGE_ID = (scriptTag && scriptTag.getAttribute("data-stage-id")) || undefined;
+
   // ── Build payload ──────────────────────────────────────
   function buildPayload(eventName) {
     return {
       visitor_id: getOrCreateVisitorId(),
       event: eventName,
+      funnel_id: FUNNEL_ID,
+      stage_id: STAGE_ID,
       page_url: window.location.href,
       page_title: document.title,
       referrer: document.referrer || undefined,

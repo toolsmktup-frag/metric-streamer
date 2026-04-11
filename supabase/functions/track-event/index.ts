@@ -10,6 +10,8 @@ const corsHeaders = {
 interface TrackingPayload {
   visitor_id: string;
   event: string;
+  funnel_id?: string;
+  stage_id?: string;
   page_url?: string;
   page_title?: string;
   referrer?: string;
@@ -88,6 +90,8 @@ Deno.serve(async (req) => {
     const payload: TrackingPayload & { client_ip: string; server_user_agent: string } = {
       visitor_id: visitorId,
       event,
+      funnel_id: sanitizeString(body.funnel_id, 36),
+      stage_id: sanitizeString(body.stage_id, 36),
       page_url: sanitizeString(body.page_url, 2000),
       page_title: sanitizeString(body.page_title, 500),
       referrer: sanitizeString(body.referrer, 2000),

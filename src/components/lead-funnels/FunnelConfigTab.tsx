@@ -8,6 +8,7 @@ import { Switch } from '@/components/ui/switch';
 import { Plus, Trash2, GripVertical, ArrowRight, EyeOff, Shuffle } from 'lucide-react';
 import { toast } from 'sonner';
 import FunnelProductsConfig from './FunnelProductsConfig';
+import TrackingSnippetPopover from './TrackingSnippetPopover';
 import RedistributeLeadsDialog from './RedistributeLeadsDialog';
 import ProductMappingConfig from './ProductMappingConfig';
 
@@ -169,6 +170,14 @@ const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSave
                 placeholder="URL da página (opcional)"
                 className="flex-1"
               />
+              {stage.page_url && funnelId && stage.id && (
+                <TrackingSnippetPopover
+                  funnelId={funnelId}
+                  stageId={stage.id}
+                  stageName={stage.name || `Etapa ${idx + 1}`}
+                  pageUrl={stage.page_url}
+                />
+              )}
               <div className="flex items-center gap-1.5 shrink-0" title="Ocultar valores para vendedores">
                 <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
                 <Switch
