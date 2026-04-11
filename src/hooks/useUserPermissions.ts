@@ -20,7 +20,7 @@ export const MODULE_LABELS: Record<ModuleKey, string> = {
   mod_inteligencia: 'Inteligência',
   mod_leads: 'Leads',
   mod_whatsapp: 'WhatsApp',
-  mod_ferramentas: 'Ferramentas',
+  mod_ferramentas: 'Configurações & Automações',
   mod_resumo: 'Resumo Geral',
 };
 

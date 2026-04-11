@@ -337,11 +337,11 @@ const AppSidebar = React.memo(function AppSidebar({ collapsed, onToggle }: AppSi
         )}
 
         {/* ── WHATSAPP ── */}
-        {can('mod_whatsapp') && (
+        {(can('mod_whatsapp') || can('mod_ferramentas')) && (
           <>
             {sectionLabel('WhatsApp')}
-            {navLink('/whatsapp', 'Chat', MessageCircle)}
-            {navLink('/ferramentas/automacoes', 'Automações', Zap)}
+            {can('mod_whatsapp') && navLink('/whatsapp', 'Chat', MessageCircle)}
+            {can('mod_ferramentas') && navLink('/ferramentas/automacoes', 'Automações', Zap)}
           </>
         )}
 
