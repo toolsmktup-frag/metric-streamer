@@ -20,7 +20,7 @@ const KPICard = React.memo(function KPICard({ label, value, variation, icon: Ico
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary">
             <Icon className="h-5 w-5 text-muted-foreground" />
           </div>
-          <div>
+          <div className="min-w-0">
             <div className="flex items-center gap-1.5">
               <span className="text-sm text-muted-foreground">{label}</span>
               {tooltip && (
@@ -32,7 +32,7 @@ const KPICard = React.memo(function KPICard({ label, value, variation, icon: Ico
                 </Tooltip>
               )}
             </div>
-            <p className={`text-2xl font-semibold font-mono-value tracking-tight ${colorClass}`}>
+            <p className={`text-lg sm:text-2xl font-semibold font-mono-value tracking-tight truncate ${colorClass}`} title={value}>
               {value}
             </p>
           </div>

@@ -291,11 +291,11 @@ export default function Resumo() {
 
       {/* KPI Cards */}
       {loadingKpi ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {Array.from({ length: 8 }, (_, i) => <SkeletonCard key={i} />)}
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           <KPICard label="Faturamento Líquido" value={formatCurrency(kpi.revenue)} variation={calcVar(kpi.revenue, prevRevenue)} icon={DollarSign} colorClass="text-kpi-positive" tooltip="Receita total das vendas aprovadas" />
           <KPICard label="Gastos com Anúncios" value={formatCurrency(kpi.spend)} variation={calcVar(kpi.spend, prevSpend)} icon={Wallet} tooltip="Total investido em anúncios" />
           <KPICard label="ROAS" value={formatRoas(kpi.roas)} variation={calcVar(kpi.roas, prevRoas)} icon={TrendingUp} colorClass={getRoasColor(kpi.roas)} tooltip="Return on Ad Spend" />
