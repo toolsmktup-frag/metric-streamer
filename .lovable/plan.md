@@ -1,61 +1,49 @@
 
 
-# Backfill: Aplicar regras de transição nos leads existentes
+## Plano: Capturar URLs de Checkout e Página em Todos os Webhooks
 
-## Situação atual
+### O que muda
 
-As regras que você configurou estão corretas e vão funcionar para **novos eventos** que chegarem via webhook. A RPC `sync_lead_from_sale` v5 já consulta a tabela `stage_transition_rules` e move o lead automaticamente.
+Adicionar duas colunas novas em todas as tabelas de transação para guardar:
+- **`checkout_url`** — URL original do checkout da plataforma (onde o cliente fez o pagamento)
+- **`page_url`** — página de origem/vendas (de onde o cliente veio antes do checkout)
 
-O problema é que os leads que já existem no funil (com eventos históricos já registrados em `lead_events`) **não foram reprocessados** — eles continuam na etapa onde estavam antes das regras existirem.
+Isso será extraído dos payloads de **Ticto, Eduzz e Guru** e exposto na view `v_all_sales`.
 
-## O que vamos fazer
+### Etapas
 
-Criar e rodar uma migration SQL que reprocessa os leads existentes com base nos eventos históricos:
+**1. Migration SQL** — Adicionar colunas nas tabelas e recriar a view
+- `ALTER TABLE ticto_transactions ADD COLUMN IF NOT EXISTS checkout_url text, ADD COLUMN IF NOT EXISTS page_url text`
+- `ALTER TABLE customer_purchases ADD COLUMN IF NOT EXISTS checkout_url text, ADD COLUMN IF NOT EXISTS page_url text`
+- Recriar `v_all_sales` incluindo `checkout_url` e `page_url`
 
-1. Para cada lead posicionado neste funil, buscar o **último evento** registrado em `lead_events`
-2. Verificar se existe uma `stage_transition_rule` correspondente (evento + from_stage_id)
-3. Se sim, mover o lead para a etapa de destino (`to_stage_id`)
+**2. Edge Function: ticto-webhook** — Extrair URLs do payload
+- Buscar em caminhos como `tracking.checkout_url`, `query_params.page`, `payload.checkout_url`, `payload.page_url`, `payload.checkout_page`
+- Salvar no record antes do insert/update
 
-Isso vai aplicar as regras retroativamente. Por exemplo, um lead que já teve evento `abandoned_cart` será movido para "Recuperar", e um que teve `purchase` vai para "Compra Aprovada".
+**3. Edge Function: guru-webhook** — Extrair URLs do payload
+- Buscar em `tracking.checkout_url`, `sale.checkout_url`, `queryParams.page`, etc.
+- Salvar no `purchaseRecord`
 
-## Detalhes técnicos
+**4. Edge Function: eduzz-webhook** — Extrair URLs do payload
+- Buscar em `data.checkout_url`, `tracking.checkout_url`, `invoice.checkout_url`, etc.
+- Salvar no `purchaseRecord`
 
-**Migration SQL** — um script único que:
+**5. Backfill** — Extrair dos `raw_payload` existentes
+- SQL para preencher `checkout_url` e `page_url` retroativamente a partir dos payloads já salvos em `ticto_transactions` e `customer_purchases`
 
-```sql
--- Para cada lead no funil, pegar o evento mais recente
--- e aplicar a regra de transição correspondente
-WITH latest_events AS (
-  SELECT DISTINCT ON (le.lead_id)
-    le.lead_id, le.event_name, lsp.id AS position_id, 
-    lsp.stage_id AS current_stage, lsp.funnel_id
-  FROM lead_events le
-  JOIN lead_stage_positions lsp 
-    ON lsp.lead_id = le.lead_id AND lsp.funnel_id = le.funnel_id
-  WHERE le.funnel_id = '<FUNNEL_ID>'
-  ORDER BY le.lead_id, le.created_at DESC
-),
-matched_rules AS (
-  SELECT le.*, str.to_stage_id
-  FROM latest_events le
-  JOIN stage_transition_rules str
-    ON str.funnel_id = le.funnel_id
-   AND str.event_name = le.event_name
-   AND (str.from_stage_id IS NULL OR str.from_stage_id = le.current_stage)
-  WHERE str.to_stage_id <> le.current_stage
-)
-UPDATE lead_stage_positions lsp
-SET stage_id = mr.to_stage_id, entered_at = NOW()
-FROM matched_rules mr
-WHERE lsp.id = mr.position_id;
+### Detalhes Técnicos
+
+Cada webhook parser terá lógica genérica que tenta múltiplos caminhos JSON:
+
+```text
+checkout_url = tracking.checkout_url || payload.checkout_url 
+             || payload.checkout_page || sale.checkout_url
+             || queryParams.checkout_url
+
+page_url     = tracking.page_url || queryParams.page 
+             || payload.page_url || payload.page
 ```
 
-- Será executado como migration via Supabase
-- Preciso do ID do funil (vou buscar automaticamente pela rota atual: `19f75912-295e-4c67-acad-275ce6849c5c`)
-- Seguro: só move leads que têm regra correspondente e estão em etapa diferente da destino
-
-## Resultado
-- Leads existentes serão reposicionados conforme as regras configuradas
-- Novos eventos continuam sendo processados automaticamente pela RPC v5
-- Nenhuma alteração de código frontend necessária
+Como os payloads reais podem ter caminhos diferentes, a query de backfill vai inspecionar o `raw_payload` JSONB para encontrar os valores corretos. Sugiro rodar primeiro uma query diagnóstica no Supabase para identificar os caminhos exatos antes do backfill definitivo.
 
