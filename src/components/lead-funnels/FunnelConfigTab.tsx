@@ -91,11 +91,18 @@ const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSave
   }, []);
 
   // Sync local state when props update (e.g. after save)
+  // Only reset if the actual stage composition changed (not just reference)
   useEffect(() => {
     if (stages.length > 0) {
-      setLocalStages(stages);
+      const sorted = [...stages].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+      const incomingKey = sorted.map(s => s.id).filter(Boolean).join(',');
+      const localKey = localStages.map(s => s.id).filter(Boolean).join(',');
+      // Only reset if stages were added/removed, not just reordered locally
+      if (incomingKey !== localKey || localStages.length === 0) {
+        setLocalStages(sorted);
+      }
     }
-  }, [stages]);
+  }, [stages]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     setLocalRules(rules);
