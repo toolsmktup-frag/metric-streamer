@@ -276,8 +276,18 @@ Deno.serve(async (req) => {
       ` | product "${productName}" | funnel_id: ${funnelId} | R$${amountReais}`
     );
 
-    // ── FIX #5: Só sincronizar lead quando status === "authorized" ──
-    if (normalizedStatus === "authorized") {
+    // ── Sincronizar lead para TODOS os eventos processáveis ──
+    const eventMap: Record<string, string> = {
+      authorized: "purchase",
+      pending:    "pix_generated",
+      refused:    "refused",
+      refunded:   "refunded",
+      chargeback: "chargeback",
+      canceled:   "canceled",
+    };
+    const leadEventName = eventMap[normalizedStatus];
+
+    if (leadEventName) {
       try {
         await supabase.rpc("sync_lead_from_sale", {
           p_phone: clientPhone,
@@ -288,7 +298,7 @@ Deno.serve(async (req) => {
           p_utm_campaign: utmCampaign,
           p_utm_content: utmContent,
           p_utm_term: utmTerm,
-          p_event_name: "purchase",
+          p_event_name: leadEventName,
           p_product_name: productName || null,
           p_purchased_at: new Date(datePaid).toISOString(),
           p_metadata: {
@@ -303,37 +313,39 @@ Deno.serve(async (req) => {
         console.error("Lead sync error (non-fatal):", leadErr);
       }
 
-      // ── Meta CAPI: enviar evento de conversão server-side ──
-      try {
-        const { data: matchedFunnels } = await supabase
-          .from("lead_funnels")
-          .select("id")
-          .not("meta_pixel_id", "is", null)
-          .eq("is_active", true);
+      // ── Meta CAPI: enviar evento de conversão server-side (só purchase) ──
+      if (normalizedStatus === "authorized") {
+        try {
+          const { data: matchedFunnels } = await supabase
+            .from("lead_funnels")
+            .select("id")
+            .not("meta_pixel_id", "is", null)
+            .eq("is_active", true);
 
-        if (matchedFunnels && matchedFunnels.length > 0) {
-          const capiRes = await fetch(`${supabaseUrl}/functions/v1/meta-capi-sync`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${supabaseKey}`,
-            },
-            body: JSON.stringify({
-              email: clientEmail,
-              phone: clientPhone,
-              amount_cents: paidAmountCentavos,
-              currency: "BRL",
-              order_id: transactionHash,
-              product_name: productName,
-              event_name: "Purchase",
-              funnel_ids: matchedFunnels.map((f: any) => f.id),
-            }),
-          });
-          const capiBody = await capiRes.text();
-          console.log(`[eduzz-webhook] meta-capi-sync: ${capiRes.status} ${capiBody.slice(0, 300)}`);
+          if (matchedFunnels && matchedFunnels.length > 0) {
+            const capiRes = await fetch(`${supabaseUrl}/functions/v1/meta-capi-sync`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${supabaseKey}`,
+              },
+              body: JSON.stringify({
+                email: clientEmail,
+                phone: clientPhone,
+                amount_cents: paidAmountCentavos,
+                currency: "BRL",
+                order_id: transactionHash,
+                product_name: productName,
+                event_name: "Purchase",
+                funnel_ids: matchedFunnels.map((f: any) => f.id),
+              }),
+            });
+            const capiBody = await capiRes.text();
+            console.log(`[eduzz-webhook] meta-capi-sync: ${capiRes.status} ${capiBody.slice(0, 300)}`);
+          }
+        } catch (capiErr) {
+          console.error("[eduzz-webhook] meta-capi-sync error (non-fatal):", capiErr);
         }
-      } catch (capiErr) {
-        console.error("[eduzz-webhook] meta-capi-sync error (non-fatal):", capiErr);
       }
     }
 
