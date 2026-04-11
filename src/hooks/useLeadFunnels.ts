@@ -181,17 +181,29 @@ export function useUpsertTransitionRules() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ funnelId, rules }: { funnelId: string; rules: Partial<StageTransitionRule>[] }) => {
-      await (supabase as any).from('stage_transition_rules').delete().eq('funnel_id', funnelId);
-      if (rules.length === 0) return [];
+      const { error: deleteError } = await (supabase as any).from('stage_transition_rules').delete().eq('funnel_id', funnelId);
+      if (deleteError) throw deleteError;
+      if (rules.length === 0) return [] as StageTransitionRule[];
       const { data, error } = await (supabase as any)
         .from('stage_transition_rules')
-        .insert(rules.map(r => ({ ...r, funnel_id: funnelId })))
+        .insert(rules.map(r => ({
+          event_name: r.event_name,
+          from_stage_id: r.from_stage_id || null,
+          to_stage_id: r.to_stage_id,
+          funnel_id: funnelId,
+        })))
         .select();
       if (error) throw error;
       return data as StageTransitionRule[];
     },
-    onSuccess: (_, { funnelId }) => {
+    onSuccess: (savedRules, { funnelId }) => {
+      // Immediately update the cached funnel with saved rules
+      qc.setQueryData(['lead-funnel', funnelId], (old: any) => {
+        if (!old) return old;
+        return { ...old, stage_transition_rules: savedRules };
+      });
       qc.invalidateQueries({ queryKey: ['lead-funnel', funnelId] });
+      qc.invalidateQueries({ queryKey: ['lead-funnels'] });
     },
   });
 }

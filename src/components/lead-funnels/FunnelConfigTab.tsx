@@ -105,8 +105,12 @@ const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSave
   }, [stages]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    setLocalRules(rules);
-  }, [rules]);
+    const incomingKey = rules.map(r => [r.id ?? '', r.event_name ?? '', r.from_stage_id ?? '', r.to_stage_id ?? ''].join(':')).join('|');
+    const localKey = localRules.map(r => [r.id ?? '', r.event_name ?? '', r.from_stage_id ?? '', r.to_stage_id ?? ''].join(':')).join('|');
+    if (incomingKey !== localKey) {
+      setLocalRules(rules);
+    }
+  }, [rules]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const addStage = () => {
     setLocalStages(prev => [
@@ -150,6 +154,15 @@ const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSave
     const valid = localRules.every(r => r.event_name?.trim() && r.to_stage_id);
     if (!valid) {
       toast.error('Todas as regras precisam de evento e etapa destino');
+      return;
+    }
+    // Block save if any rule references temp stage IDs
+    const hasTemp = localRules.some(r =>
+      (r.to_stage_id && r.to_stage_id.startsWith('temp-')) ||
+      (r.from_stage_id && r.from_stage_id.startsWith('temp-'))
+    );
+    if (hasTemp) {
+      toast.error('Salve as etapas antes de salvar as regras');
       return;
     }
     onSaveRules(localRules);
