@@ -1,84 +1,57 @@
 
 
-## Fase 5: Motor de Regras Automáticas (Auto-Rules)
+## Revisão do Plano v2 — Status de Implementação por Fase
 
-Pagina global separada em `/auto-rules` com criacao/edicao de regras que monitoram metricas e executam acoes automaticas na API do Meta Ads.
+### FASE 1: Fundação do Tracking Server-Side ✅ COMPLETA
+- **Script JS leve** para landing pages — implementado (gera `visitor_id`, captura UTMs, `fbclid`, `fbc`, `fbp`, `gclid`, fingerprinting)
+- **Edge Function `track-event`** — implementada e deployada, recebe eventos via `sendBeacon`/`fetch`, extrai IP real dos headers
 
----
+### FASE 2: Banco de Dados de Jornada e Captura de E-mail ✅ COMPLETA
+- **Tabela `clicks`** — criada no Supabase (visitor_id, event_type, UTMs, fbclid, fbc, fbp, gclid, ip_address, user_agent, email)
+- **Edge Function `track-event`** — faz INSERT na tabela `clicks` usando `service_role`
+- **Captura de e-mail** — script JS escuta evento `blur` em campos de e-mail e envia `email_capture` para o `track-event`
 
-### O que sera construido
+### FASE 3: Integração Meta CAPI e Deduplicação ✅ COMPLETA
+- **Edge Function `meta-capi-sync`** — criada e funcionando
+- **Webhooks chamam CAPI** — Ticto, Eduzz e Guru webhooks fazem `await fetch()` para `meta-capi-sync` após salvar venda
+- **Enriquecimento via `clicks`** — a função busca o registro de clique pelo e-mail do comprador para resgatar IP, User-Agent, `fbp`, `fbc`
+- **Deduplicação** — usa `external_id` (transaction hash/order ID)
+- **Hash SHA-256** — aplicado em e-mail e telefone
 
-**1. Migration: tabela `automation_rules`**
-```sql
-CREATE TABLE automation_rules (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  organization_id UUID NOT NULL REFERENCES organizations(id),
-  name TEXT NOT NULL,
-  is_active BOOLEAN DEFAULT true,
-  -- Condicoes (array de condicoes AND)
-  conditions JSONB NOT NULL DEFAULT '[]',
-  -- Ex: [{"metric":"cpa","operator":">","value":50},{"metric":"roi","operator":"<","value":0}]
-  action TEXT NOT NULL, -- 'pause_campaign' | 'reduce_budget' | 'alert'
-  action_params JSONB DEFAULT '{}',
-  -- Escopo
-  scope_type TEXT DEFAULT 'campaign', -- 'campaign' | 'adset' | 'ad'
-  scope_ids TEXT[] DEFAULT '{}', -- IDs especificos ou vazio = todos
-  funnel_id UUID REFERENCES funnels(id),
-  -- Controle
-  check_interval_minutes INT DEFAULT 15,
-  last_checked_at TIMESTAMPTZ,
-  last_triggered_at TIMESTAMPTZ,
-  created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now()
-);
-```
+### FASE 4: Sincronização de Custos e Dashboard de ROI ✅ COMPLETA
+- **Edge Function `sync-meta`** — busca `spend` por campaign/adset/ad via Meta Ads API
+- **Tabela `meta_insights`** — armazena custos diários (spend, impressions, clicks, reach, actions)
+- **Dashboard de ROI** — cruza receita das vendas com custos do `meta_insights`, exibindo Custo, Receita, Lucro e ROI
 
-**2. Migration: tabela `automation_rule_logs`**
-```sql
-CREATE TABLE automation_rule_logs (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  rule_id UUID NOT NULL REFERENCES automation_rules(id) ON DELETE CASCADE,
-  triggered_at TIMESTAMPTZ DEFAULT now(),
-  conditions_snapshot JSONB,
-  action_taken TEXT,
-  target_id TEXT, -- campaign/adset/ad ID
-  meta_response JSONB,
-  status TEXT DEFAULT 'success' -- 'success' | 'error'
-);
-```
+### FASE 5: Motor de Regras Automáticas (Auto-Rules) ⚠️ PARCIALMENTE COMPLETA
 
-**3. Pagina `src/pages/AutoRules.tsx`**
-- Lista de regras com toggle ativo/inativo
-- Botao "Nova Regra" abre dialog/drawer
-- Formulario: nome, condicoes (metric + operator + value), acao, escopo
-- Metricas disponiveis: CPA, ROI, ROAS, Spend, Revenue
-- Acoes: Pausar Campanha, Reduzir Orcamento (%), Enviar Alerta
-- Tabela de logs recentes mostrando quando cada regra disparou
+**O que está pronto:**
+- Página `/auto-rules` com UI completa (lista, toggle ativo/inativo, criação/edição de regras)
+- Hook `useAutoRules.ts` com CRUD completo
+- Edge Function `auto-rules-engine` com lógica de avaliação de métricas
+- Rota no `App.tsx` e item na Sidebar
+- Configuração no `config.toml`
 
-**4. Sidebar: novo item em "Trafego & ADS"**
-- Icone `Zap` ou `Shield`, label "Auto-Rules"
-- Path: `/auto-rules`
-
-**5. Rota em `App.tsx`**
-- `<Route path="/auto-rules" element={<Protected><AutoRules /></Protected>} />`
-
-**6. Edge Function `auto-rules-engine/index.ts`**
-- Chamada via pg_cron a cada 15 min
-- Busca regras ativas, calcula metricas cruzando `meta_insights` + `v_all_sales`
-- Se condicoes atendidas: executa acao via Meta Ads API (pause/budget)
-- Registra log em `automation_rule_logs`
+**O que falta:**
+1. **Migration SQL não foi aplicada** — as tabelas `automation_rules` e `automation_rule_logs` não existem no banco. A migration nunca foi criada como arquivo em `supabase/migrations/`. O SQL foi fornecido para execução manual, mas precisa ser confirmado se foi rodado no Supabase Dashboard.
+2. **pg_cron não configurado** — a migration de cron para rodar a Edge Function a cada 15 minutos não foi criada
+3. **Integração real com Meta Ads API** — as ações `pause_campaign` e `reduce_budget` estão como placeholder (logam "pending"), não executam chamadas reais à API do Meta
 
 ---
 
-### Arquivos
+### Resumo
 
-| Arquivo | Acao |
-|---------|------|
-| `supabase/migrations/xxx_automation_rules.sql` | Criar tabelas |
-| `src/pages/AutoRules.tsx` | Criar pagina |
-| `src/hooks/useAutoRules.ts` | Criar hook CRUD |
-| `src/components/layout/AppSidebar.tsx` | Adicionar item |
-| `src/App.tsx` | Adicionar rota |
-| `supabase/functions/auto-rules-engine/index.ts` | Criar Edge Function |
-| `supabase/migrations/xxx_auto_rules_cron.sql` | pg_cron a cada 15min |
+| Fase | Status |
+|------|--------|
+| 1 - Tracking Server-Side | ✅ Completa |
+| 2 - Banco de Jornada + E-mail | ✅ Completa |
+| 3 - Meta CAPI + Deduplicação | ✅ Completa |
+| 4 - Sync Custos + Dashboard ROI | ✅ Completa |
+| 5 - Auto-Rules Engine | ⚠️ 70% — falta migration no banco, pg_cron e ações reais na Meta API |
+
+### Próximos passos para fechar a Fase 5
+
+1. **Criar migration** para as tabelas `automation_rules` e `automation_rule_logs` com RLS policies (via ferramenta de migration do Lovable)
+2. **Criar migration pg_cron** para agendar execução da Edge Function a cada 15 minutos
+3. **Implementar ações reais na Meta API** dentro da Edge Function (pausar campanha, alterar orçamento) — requer o `access_token` do Meta por funil/organização
 
