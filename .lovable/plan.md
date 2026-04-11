@@ -1,28 +1,32 @@
 
 
-# Fix: Drag-and-drop para reordenar etapas do funil
+# Fix: Drag-and-drop das etapas não persiste a ordem
 
-## Problema
-O ícone de arrastar (GripVertical) aparece ao lado de cada etapa, mas não há nenhuma lógica de drag-and-drop implementada. As etapas não podem ser reordenadas.
+## Problemas identificados
 
-## Solução
-Implementar reordenação via drag-and-drop usando `@dnd-kit/core` + `@dnd-kit/sortable`, que é a biblioteca padrão para React.
+1. **useEffect sobrescreve o estado local** (linha 94-98): Sempre que o array `stages` muda de referência (mesmo sem mudança real), o `useEffect` reseta `localStages`, desfazendo qualquer reordenação feita via drag.
 
-## Passos
+2. **Stages não são ordenados por `sort_order`** ao carregar do banco — o Supabase pode retornar em qualquer ordem se não houver `.order('sort_order')` explícito.
 
-### 1. Instalar dependência
-- `@dnd-kit/core` e `@dnd-kit/sortable` e `@dnd-kit/utilities`
+## Correções
 
-### 2. Criar componente `SortableStageItem`
-- Extrair cada linha de etapa para um componente separado que usa `useSortable` do dnd-kit
-- O GripVertical vira o handle de arraste
+### 1. Ordenar stages por `sort_order` no useEffect
+No `FunnelConfigTab.tsx`, o `useEffect` que sincroniza `stages` → `localStages` deve ordenar por `sort_order` antes de setar:
+```ts
+useEffect(() => {
+  if (stages.length > 0) {
+    const sorted = [...stages].sort((a, b) => a.sort_order - b.sort_order);
+    setLocalStages(sorted);
+  }
+}, [stages]);
+```
 
-### 3. Atualizar `FunnelConfigTab.tsx`
-- Envolver a lista de etapas com `DndContext` + `SortableContext`
-- No `onDragEnd`, reordenar o array `localStages` movendo o item da posição antiga para a nova
-- Usar `verticalListSortingStrategy`
+### 2. Garantir que a query de stages retorna ordenada
+No `useLeadFunnels.ts`, a query já faz `.select('*, lead_funnel_stages(*)')` mas não ordena os stages. Vamos adicionar ordenação no `useUpsertStages` (já retorna com `.order('sort_order')`), e ordenar no frontend como fallback.
 
-## Detalhes técnicos
-- A reordenação é local (state) até o usuário clicar "Salvar Etapas", que já envia `sort_order` baseado no índice
-- Sem mudanças no backend — o `handleSaveStages` já faz `localStages.map((s, i) => ({ ...s, sort_order: i }))`
+### 3. Evitar reset desnecessário após drag
+Usar comparação de IDs para não resetar se a composição não mudou — apenas a ordem. Serializar os IDs+ordem como chave de comparação.
+
+## Arquivos modificados
+- `src/components/lead-funnels/FunnelConfigTab.tsx` — ordenar no useEffect + evitar reset pós-drag
 
