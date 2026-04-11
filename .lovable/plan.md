@@ -1,24 +1,34 @@
 
 
-## Corrigir Overflow de Valores nos KPI Cards
+## Fase 1: Fundação do Tracking Server-Side
 
-### Problema
-Na screenshot, valores monetários longos (ex: "R$ 118.928,3...", "R$ 71.135,90...") estão sendo cortados porque o texto `text-2xl` não tem proteção contra overflow dentro do card.
+### Escopo (2 entregas isoladas, zero impacto no app atual)
 
-### Correções
+**Entrega 1: Edge Function `track-event`**
+- Nova Edge Function em `supabase/functions/track-event/index.ts`
+- Recebe POST com payload JSON (visitor_id, UTMs, fbclid, fbc, fbp, gclid, user-agent, resolução, timezone)
+- Extrai IP real dos headers (`x-forwarded-for`, `x-real-ip`)
+- Por enquanto, retorna 200 OK com log (a tabela `clicks` vem na Fase 2)
+- Validação básica do payload
+- CORS configurado para aceitar requests das landing pages
 
-**1. `src/components/dashboard/KPICard.tsx`**
-- Adicionar `truncate` no parágrafo do valor para não quebrar o layout
-- Reduzir fonte responsivamente: `text-lg sm:text-2xl` para valores caberem em telas menores
-- Adicionar `min-w-0` no container flex para permitir truncamento correto
-- Adicionar `title={value}` para o usuário ver o valor completo no hover
+**Entrega 2: Script JS para Landing Pages**
+- Arquivo estático gerado em `public/tracking/tracker.js` (para download/cópia)
+- Gera `visitor_id` UUID e persiste em cookie first-party (1 ano) + localStorage backup
+- Captura UTMs: `utm_source`, `utm_medium`, `utm_campaign`, `utm_content`, `utm_term`
+- Captura click IDs: `fbclid`, `fbc`, `fbp`, `gclid`
+- Coleta fingerprint básico: userAgent, resolução de tela, timezone
+- Envia via `navigator.sendBeacon()` com fallback para `fetch()`
+- O script é standalone — não depende de React, Tailwind, nem do app
 
-**2. `src/pages/Resumo.tsx`**
-- O grid `lg:grid-cols-4` com 9 cards já está correto, mas em viewport ~1187px (entre `lg` e `xl`) os 4 cards ficam apertados
-- Ajustar para `lg:grid-cols-3 xl:grid-cols-4` para dar mais espaço em telas intermediárias
+### O que NÃO muda
+- Nenhuma página do dashboard é alterada
+- Nenhuma tabela existente é modificada
+- Nenhum webhook existente é tocado
+- Nenhuma Edge Function existente é editada
 
-### Resultado
-- Valores nunca serão cortados visualmente
-- Em telas menores a fonte reduz automaticamente
-- Hover mostra valor completo quando truncado
+### Resultado da Fase 1
+- Script JS pronto para copiar/colar no `<head>` das LPs
+- Endpoint `track-event` rodando no Supabase, recebendo e logando eventos
+- Base pronta para a Fase 2 (criar tabela `clicks` e começar a persistir)
 
