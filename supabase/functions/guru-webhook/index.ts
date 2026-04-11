@@ -107,11 +107,8 @@ Deno.serve(async (req) => {
       console.error("[guru-webhook] wz-receiver forward error (non-fatal):", fwdErr);
     }
 
-    // PIX pendente não deve gerar erro nem salvar, para a Guru não retentar à toa
-    if (normalizedStatus === "pending") {
-      console.log(`Skipping pending Guru transaction with status "${status}"`);
-      return jsonResponse({ success: true, message: "pending order, skipping" }, 200);
-    }
+    // PIX pendente: salvar na tabela de compras e sincronizar lead, mas NÃO gerar erro
+    // (removido o return precoce para permitir sync do lead com evento pix_generated)
 
     // Status desconhecido nunca deve quebrar o webhook
     if (!normalizedStatus) {
@@ -323,8 +320,18 @@ Deno.serve(async (req) => {
 
     console.log(`Guru webhook processed: ${normalizedStatus} - product "${productName}" - funnel_id: ${funnelId}`);
 
-    // ── Sincronizar lead — só quando status === "authorized" ──
-    if (normalizedStatus === "authorized") {
+    // ── Sincronizar lead para TODOS os eventos processáveis ──
+    const eventMap: Record<string, string> = {
+      authorized: "purchase",
+      pending:    "pix_generated",
+      refused:    "refused",
+      refunded:   "refunded",
+      chargeback: "chargeback",
+      canceled:   "canceled",
+    };
+    const leadEventName = eventMap[normalizedStatus];
+
+    if (leadEventName) {
       try {
         await supabase.rpc("sync_lead_from_sale", {
           p_phone: customerPhone,
@@ -335,7 +342,7 @@ Deno.serve(async (req) => {
           p_utm_campaign: finalUtmCampaign,
           p_utm_content: finalUtmContent,
           p_utm_term: finalUtmTerm,
-          p_event_name: "purchase",
+          p_event_name: leadEventName,
           p_product_name: productName || null,
           p_purchased_at: new Date(purchasedAt).toISOString(),
           p_metadata: {
@@ -349,7 +356,10 @@ Deno.serve(async (req) => {
         console.error("Lead sync error (non-fatal):", leadErr);
       }
 
-      // ── Meta CAPI: enviar evento de conversão server-side ──
+    }
+
+    // ── Meta CAPI: enviar evento de conversão server-side (só purchase) ──
+    if (normalizedStatus === "authorized") {
       try {
         const { data: matchedFunnels } = await supabase
           .from("lead_funnels")
@@ -381,8 +391,6 @@ Deno.serve(async (req) => {
       } catch (capiErr) {
         console.error("[guru-webhook] meta-capi-sync error (non-fatal):", capiErr);
       }
-    }
-
 
     // wz-receiver forward already done at the top (before status filtering)
 
