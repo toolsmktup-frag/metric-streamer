@@ -45,6 +45,7 @@ import WzInstancias from "./pages/WzInstancias";
 import WzExecucoes from "./pages/WzExecucoes";
 import MinhasMetas from "./pages/MinhasMetas";
 import ConfigMetas from "./pages/ConfigMetas";
+import AutoRules from "./pages/AutoRules";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -114,6 +115,8 @@ const App = () => (
           <Route path="/ferramentas/automacoes/:id" element={<Protected><WzFlowCanvas /></Protected>} />
           <Route path="/ferramentas/automacoes/instancias" element={<Protected><WzInstancias /></Protected>} />
           <Route path="/ferramentas/automacoes/execucoes" element={<Protected><WzExecucoes /></Protected>} />
+          {/* Auto-Rules */}
+          <Route path="/auto-rules" element={<Protected><AutoRules /></Protected>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
         </ErrorBoundary>
