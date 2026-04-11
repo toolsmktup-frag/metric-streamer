@@ -1,45 +1,72 @@
 
 
-## Snippet de Tracking por Etapa do Funil + Validador
+## Fase 2: Persistir Eventos na Tabela `clicks`
 
-### Ideia
-Ao lado do campo "URL da página" de cada etapa, adicionar um botão que abre um popover/dialog com:
-1. **Snippet gerado automaticamente** — `<script>` tag com `data-endpoint`, `data-funnel-id` e `data-stage-id` preenchidos
-2. **Botão "Copiar"** com feedback visual
-3. **Botão "Testar"** que faz um POST de teste ao endpoint e mostra ✅ ou ❌
-4. O botão só aparece quando a etapa tem `page_url` preenchida
+### Escopo (3 entregas)
 
-### Arquivos
+**Entrega 1: SQL para rodar no Supabase Dashboard**
 
-**1. Novo: `src/components/lead-funnels/TrackingSnippetPopover.tsx`**
-- Recebe `funnelId`, `stageId`, `stageName`, `pageUrl`
-- Gera o snippet:
-```html
-<script src="https://metric-streamer.lovable.app/tracking/tracker.js"
-        data-endpoint="https://emfbocpmphtftqcezaib.supabase.co/functions/v1/track-event"
-        data-funnel-id="ID"
-        data-stage-id="ID"
-        defer></script>
+Criar tabela `clicks` com todos os campos do payload atual:
+
+```sql
+CREATE TABLE public.clicks (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  visitor_id uuid NOT NULL,
+  event_type text NOT NULL DEFAULT 'pageview',
+  funnel_id text,
+  stage_id text,
+  page_url text,
+  page_title text,
+  referrer text,
+  utm_source text,
+  utm_medium text,
+  utm_campaign text,
+  utm_content text,
+  utm_term text,
+  fbclid text,
+  fbc text,
+  fbp text,
+  gclid text,
+  ip_address text,
+  user_agent text,
+  screen_resolution text,
+  timezone text,
+  email text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_clicks_visitor_id ON public.clicks(visitor_id);
+CREATE INDEX idx_clicks_email ON public.clicks(email) WHERE email IS NOT NULL;
+CREATE INDEX idx_clicks_created_at ON public.clicks(created_at);
+CREATE INDEX idx_clicks_funnel_id ON public.clicks(funnel_id) WHERE funnel_id IS NOT NULL;
+
+ALTER TABLE public.clicks ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Service role full access" ON public.clicks
+  FOR ALL TO service_role USING (true) WITH CHECK (true);
 ```
-- Botão copiar com `navigator.clipboard` + toast
-- Botão "Testar" que envia evento `tracking_test` via fetch e mostra resultado
-- Usa Popover do shadcn (já existe no projeto)
 
-**2. Editar: `src/components/lead-funnels/FunnelConfigTab.tsx`**
-- Ao lado do input `page_url`, adicionar o `<TrackingSnippetPopover>` (ícone `<Code>` do Lucide)
-- Aparece só quando `page_url` não está vazio
+**Entrega 2: Atualizar `supabase/functions/track-event/index.ts`**
+- Substituir o `console.log` por um `INSERT` na tabela `clicks` usando `createClient` com `service_role`
+- Manter log como fallback se o insert falhar
+- O `import` do Supabase client já existe no arquivo
 
-**3. Editar: `public/tracking/tracker.js`**
-- Ler `data-funnel-id` e `data-stage-id` do script tag
-- Incluir `funnel_id` e `stage_id` no payload enviado ao endpoint
-- Campos opcionais — retrocompatível
-
-**4. Editar: `supabase/functions/track-event/index.ts`**
-- Aceitar `funnel_id` e `stage_id` opcionais no payload
-- Incluir no log
+**Entrega 3: Captura de email no `public/tracking/tracker.js`**
+- Adicionar listener `blur` em `input[type=email]` e `input[name*=email]`
+- Ao detectar email válido, enviar evento `email_capture` com campo `email` no payload
+- Retrocompatível — não quebra nada se não houver campo de email na página
 
 ### O que NÃO muda
-- Nenhuma tabela criada/alterada
-- Nenhum outro componente tocado
-- tracker.js continua funcionando sem os novos atributos
+- Nenhuma página do dashboard é alterada
+- Nenhum webhook existente é tocado
+- Nenhuma tabela existente é modificada
+- `v_all_sales` permanece igual
+
+### Resultado
+- Cada pageview e email capturado fica salvo na tabela `clicks`
+- Jornada completa do visitante pode ser reconstruída por `visitor_id`
+- Base pronta para Fase 3 (Meta CAPI — cruzar vendas com cliques)
+
+### Para o usuário
+Vou gerar o SQL completo para copiar/colar no Supabase Dashboard, atualizar a Edge Function (que também precisa de re-deploy manual), e atualizar o `tracker.js`.
 
