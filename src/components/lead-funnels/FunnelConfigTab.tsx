@@ -52,6 +52,16 @@ interface FunnelConfigTabProps {
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
 
+const CANONICAL_EVENTS = [
+  { value: 'purchase', label: 'Compra Aprovada' },
+  { value: 'pix_generated', label: 'PIX/Boleto Gerado' },
+  { value: 'abandoned_cart', label: 'Carrinho Abandonado' },
+  { value: 'refused', label: 'Pagamento Recusado' },
+  { value: 'refunded', label: 'Reembolso' },
+  { value: 'chargeback', label: 'Chargeback' },
+  { value: 'canceled', label: 'Cancelado' },
+];
+
 const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSaveStages, onSaveRules, saving, funnelId, leadFunnelProducts = [], catalogProducts = [], onSaveProducts, savingProducts, onBulkMoveOverdue, bulkMoving, distinctLeadProducts = [], existingMappings = [], onSaveMappings, savingMappings, loadingDistinctProducts, positions = [], trafficFunnels = [], currentTrafficFunnelId, onTrafficFunnelChange, savingTrafficFunnel, metaPixelId, metaAccessToken, onMetaPixelChange, savingMetaPixel }) => {
   const [localStages, setLocalStages] = useState<Partial<LeadFunnelStage>[]>(
     stages.length ? stages : [{ name: 'Novo Lead', color: COLORS[0], sort_order: 0 }]
@@ -85,6 +95,8 @@ const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSave
   const updateStage = (idx: number, field: string, value: string | boolean) => {
     setLocalStages(prev => prev.map((s, i) => i === idx ? { ...s, [field]: value } : s));
   };
+
+  const [customEventMode, setCustomEventMode] = useState<Record<number, boolean>>({});
 
   const addRule = () => {
     setLocalRules(prev => [...prev, { event_name: '', from_stage_id: null, to_stage_id: '' }]);
@@ -213,14 +225,49 @@ const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSave
         </div>
 
         <div className="space-y-2">
-          {localRules.map((rule, idx) => (
+          {localRules.map((rule, idx) => {
+            const isCanonical = CANONICAL_EVENTS.some(e => e.value === rule.event_name);
+            const isCustom = customEventMode[idx] || (!isCanonical && !!rule.event_name);
+            return (
             <div key={idx} className="flex items-center gap-2 bg-muted/50 rounded-lg p-2">
-              <Input
-                value={rule.event_name || ''}
-                onChange={e => updateRule(idx, 'event_name', e.target.value)}
-                placeholder="Nome do evento (ex: signup)"
-                className="flex-1"
-              />
+              {isCustom ? (
+                <div className="flex-1 flex gap-1">
+                  <Input
+                    value={rule.event_name || ''}
+                    onChange={e => updateRule(idx, 'event_name', e.target.value)}
+                    placeholder="Nome do evento personalizado"
+                    className="flex-1"
+                  />
+                  <Button variant="ghost" size="sm" onClick={() => {
+                    setCustomEventMode(prev => ({ ...prev, [idx]: false }));
+                    updateRule(idx, 'event_name', '');
+                  }} className="text-xs shrink-0">
+                    Voltar
+                  </Button>
+                </div>
+              ) : (
+                <Select
+                  value={rule.event_name || ''}
+                  onValueChange={v => {
+                    if (v === '__custom__') {
+                      setCustomEventMode(prev => ({ ...prev, [idx]: true }));
+                      updateRule(idx, 'event_name', '');
+                    } else {
+                      updateRule(idx, 'event_name', v);
+                    }
+                  }}
+                >
+                  <SelectTrigger className="flex-1">
+                    <SelectValue placeholder="Selecione o evento" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CANONICAL_EVENTS.map(e => (
+                      <SelectItem key={e.value} value={e.value}>{e.label}</SelectItem>
+                    ))}
+                    <SelectItem value="__custom__">Outro (personalizado)</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
               <Select
                 value={rule.from_stage_id || 'any'}
                 onValueChange={v => updateRule(idx, 'from_stage_id', v === 'any' ? null : v)}
@@ -253,7 +300,8 @@ const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSave
                 <Trash2 className="h-4 w-4 text-destructive" />
               </Button>
             </div>
-          ))}
+            );
+          })}
 
           {localRules.length === 0 && (
             <p className="text-sm text-muted-foreground py-4">
