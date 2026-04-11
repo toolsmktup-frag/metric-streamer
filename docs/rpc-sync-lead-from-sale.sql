@@ -1,8 +1,16 @@
 -- ============================================================
--- RPC: sync_lead_from_sale  (v2 — com roteamento por produto)
+-- RPC: sync_lead_from_sale  (v4 — roteamento MULTI-FUNIL)
 -- Centraliza dedup + criação de lead + posicionamento no funil.
 --
--- Mudanças v2:
+-- Mudanças v4:
+--   - MULTI-FUNNEL: Lead é posicionado em TODOS os funis que
+--     fazem match com o produto (não mais LIMIT 1)
+--   - FOR LOOP itera sobre UNION de lead_product_mappings
+--     (match exato) e lead_funnel_products (ILIKE fallback)
+--   - ON CONFLICT (lead_id, funnel_id) DO NOTHING protege
+--     contra duplicatas em webhooks simultâneos
+--
+-- Mudanças v3 (anteriores):
 --   - Novo param p_product_name: roteia o lead para o funil do
 --     produto correspondente (via lead_funnel_products)
 --   - Dedup case-insensitive com LOWER()
@@ -132,54 +140,49 @@ BEGIN
     END IF;
   END IF;
 
-  -- ─── 6. Posicionar no funil do PRODUTO ───
+  -- ─── 6. Posicionar em TODOS os funis do PRODUTO (multi-funnel) ───
   IF p_product_name IS NOT NULL AND p_product_name <> '' THEN
-    -- Tentativa 1: match exato via lead_product_mappings (vínculo manual da UI)
-    SELECT lf.id INTO v_prod_funnel_id
-    FROM lead_product_mappings lpm
-    JOIN lead_funnels lf ON lf.id = lpm.lead_funnel_id
-    WHERE lf.organization_id = v_org_id
-      AND LOWER(lpm.raw_product_name) = LOWER(p_product_name)
-      AND lf.is_active = true
-    LIMIT 1;
+    FOR v_prod_funnel_id IN
+      -- Match exato via lead_product_mappings
+      SELECT DISTINCT lf.id
+      FROM lead_product_mappings lpm
+      JOIN lead_funnels lf ON lf.id = lpm.lead_funnel_id
+      WHERE lf.organization_id = v_org_id
+        AND LOWER(lpm.raw_product_name) = LOWER(p_product_name)
+        AND lf.is_active = true
 
-    -- Tentativa 2: match por fragmento via lead_funnel_products (ILIKE)
-    IF v_prod_funnel_id IS NULL THEN
-      SELECT lfp.lead_funnel_id INTO v_prod_funnel_id
+      UNION
+
+      -- Fallback: match por fragmento via lead_funnel_products (ILIKE)
+      SELECT DISTINCT lfp.lead_funnel_id
       FROM lead_funnel_products lfp
       JOIN lead_funnels lf ON lf.id = lfp.lead_funnel_id
       WHERE lf.organization_id = v_org_id
         AND p_product_name ILIKE '%' || lfp.product_name_contains || '%'
         AND lf.is_active = true
-      ORDER BY length(lfp.product_name_contains) DESC
-      LIMIT 1;
-    END IF;
+    LOOP
+      -- Pular se for o próprio funil BASE DE LEADS
+      IF v_prod_funnel_id = v_base_funnel_id THEN
+        CONTINUE;
+      END IF;
 
-    -- Se encontrou funil do produto, posicionar lá também
-    IF v_prod_funnel_id IS NOT NULL AND v_prod_funnel_id <> v_base_funnel_id THEN
       -- Log event no funil do produto
       INSERT INTO lead_events (lead_id, funnel_id, event_name, metadata)
       VALUES (v_lead_id, v_prod_funnel_id, p_event_name, p_metadata);
 
-      -- Posicionar no primeiro stage do funil do produto (se não posicionado)
-      SELECT id INTO v_existing_pos
-      FROM lead_stage_positions
-      WHERE lead_id = v_lead_id AND funnel_id = v_prod_funnel_id
+      -- Posicionar no primeiro stage do funil (ON CONFLICT protege duplicatas)
+      SELECT id INTO v_stage_id
+      FROM lead_funnel_stages
+      WHERE funnel_id = v_prod_funnel_id
+      ORDER BY sort_order ASC
       LIMIT 1;
 
-      IF v_existing_pos IS NULL THEN
-        SELECT id INTO v_stage_id
-        FROM lead_funnel_stages
-        WHERE funnel_id = v_prod_funnel_id
-        ORDER BY sort_order ASC
-        LIMIT 1;
-
-        IF v_stage_id IS NOT NULL THEN
-          INSERT INTO lead_stage_positions (lead_id, funnel_id, stage_id)
-          VALUES (v_lead_id, v_prod_funnel_id, v_stage_id);
-        END IF;
+      IF v_stage_id IS NOT NULL THEN
+        INSERT INTO lead_stage_positions (lead_id, funnel_id, stage_id)
+        VALUES (v_lead_id, v_prod_funnel_id, v_stage_id)
+        ON CONFLICT (lead_id, funnel_id) DO NOTHING;
       END IF;
-    END IF;
+    END LOOP;
   END IF;
 
   RETURN v_lead_id;
@@ -191,4 +194,4 @@ GRANT EXECUTE ON FUNCTION public.sync_lead_from_sale TO authenticated;
 GRANT EXECUTE ON FUNCTION public.sync_lead_from_sale TO service_role;
 
 COMMENT ON FUNCTION public.sync_lead_from_sale IS
-  'v3: Dedup case-insensitive + criação de lead + posicionamento em BASE DE LEADS e funil do produto (match exato via mappings → fallback ILIKE via product_name_contains). Chamada por todos os webhooks e importadores.';
+  'v4: Multi-funnel routing — posiciona lead em TODOS os funis que fazem match com o produto (via mappings exato + ILIKE fallback). Dedup case-insensitive. Chamada por todos os webhooks e importadores.';
