@@ -1,49 +1,29 @@
 
 
-## Fase 2.5 (Revisão): Diagnosticar e Corrigir Tracking que Não Salva
+## Diagnóstico e Correção: UTMs não sendo capturados na LP
 
-### Problema Identificado
+### Problema
+Os pageviews da LP chegam na tabela `clicks` mas com TODOS os campos de UTM, fbclid e gclid como NULL — mesmo quando presentes na URL. O `tracker.js` v1.2 neste projeto extrai corretamente, mas a LP pode estar servindo uma versão cacheada ou diferente.
 
-O tracker.js usa `navigator.sendBeacon()` como método primário de envio. O `sendBeacon`:
-- Envia como **preflight-free** (sem CORS OPTIONS)
-- Mas o Supabase Edge Functions pode rejeitar requests sem o header `apikey`
-- O `sendBeacon` **não permite headers customizados** — então `apikey` e `Authorization` nunca são enviados
-- Resultado: a request pode estar sendo **bloqueada pelo gateway do Supabase** antes de chegar na função
+### Ações
 
-Além disso, a imagem mostra apenas 1 registro `tracking_test` (enviado pelo botão Testar da plataforma, que usa `fetch` com headers corretos) — os acessos reais da LP não chegaram.
+**1. Forçar cache-bust no tracker.js**
+- Renomear ou adicionar versão no path: `public/tracking/tracker.js` → servir com query string de versão
+- Atualizar o `TrackingSnippetPopover` para gerar snippet com `?v=1.2` no src do script
 
-### Solução (2 arquivos)
+**2. Verificar se a LP está carregando o script correto**
+- Acessar a LP e verificar no DevTools (Network tab) se o `tracker.js` que carrega é o v1.2
+- Se for versão antiga, o problema é cache do CDN/browser
 
-**1. Atualizar `public/tracking/tracker.js`**
+**3. Instruções para o outro chat Lovable**
+- Gerar o texto exato para o usuário enviar ao outro chat pedindo para limpar cache e verificar a versão do script
 
-- Inverter a prioridade: usar `fetch()` como método primário (permite enviar `apikey` no header)
-- Manter `sendBeacon` apenas como fallback para `visibilitychange`/`beforeunload`
-- Adicionar o header `apikey` (anon key pública) em todas as requests
-- Adicionar log de erro em modo debug para facilitar diagnóstico
+### Mudanças no código (este projeto)
 
-```
-Ordem de envio:
-1. fetch() com headers { Content-Type, apikey } + keepalive: true
-2. Se fetch falhar → fallback sendBeacon (sem headers, melhor que nada)
-```
+| Arquivo | Mudança |
+|---------|---------|
+| `src/components/lead-funnels/TrackingSnippetPopover.tsx` | Adicionar `?v=1.2` ao TRACKER_SRC para bust de cache |
 
-**2. Atualizar `supabase/functions/track-event/index.ts`**
-
-- Aceitar `Content-Type: text/plain` além de `application/json` (para requests vindos de `sendBeacon`)
-- Adicionar log estruturado do payload recebido para debug
-- Manter tudo mais igual
-
-### O que NÃO muda
-- Nenhuma tabela alterada
-- Webhooks e sync_lead_from_sale inalterados
-- A Fase 2.5 (bridge clicks → leads) fica para o próximo passo
-
-### Deploy necessário
-- Re-deploy da Edge Function `track-event` no Supabase Dashboard
-- O `tracker.js` atualiza automaticamente no próximo deploy do Lovable (ou cache clear na LP)
-
-### Resultado esperado
-- Cada aba anônima acessando a LP gera 1 registro `pageview` na tabela `clicks`
-- UTMs, fbclid, gclid aparecem preenchidos quando presentes na URL
-- `fbp` sempre preenchido (gerado pelo tracker)
+### Verificação imediata
+Após o deploy, pedir ao usuário para acessar a LP em aba anônima novamente e conferir se os UTMs aparecem preenchidos na tabela `clicks`.
 
