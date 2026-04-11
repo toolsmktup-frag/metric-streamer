@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Plus, Trash2, ArrowRight, Shuffle } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
-import { restrictToVerticalAxis } from '@dnd-kit/core';
+
 import SortableStageItem from './SortableStageItem';
 import { toast } from 'sonner';
 import FunnelProductsConfig from './FunnelProductsConfig';
@@ -169,49 +169,24 @@ const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSave
           </Button>
         </div>
 
-        <div className="space-y-2">
-          {localStages.map((stage, idx) => (
-            <div key={idx} className="flex items-center gap-2 bg-muted/50 rounded-lg p-2">
-              <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
-              <input
-                type="color"
-                value={stage.color || COLORS[0]}
-                onChange={e => updateStage(idx, 'color', e.target.value)}
-                className="w-8 h-8 rounded border-0 cursor-pointer"
-              />
-              <Input
-                value={stage.name || ''}
-                onChange={e => updateStage(idx, 'name', e.target.value)}
-                placeholder="Nome da etapa"
-                className="flex-1"
-              />
-              <Input
-                value={stage.page_url || ''}
-                onChange={e => updateStage(idx, 'page_url', e.target.value)}
-                placeholder="URL da página (opcional)"
-                className="flex-1"
-              />
-              {stage.page_url && funnelId && stage.id && (
-                <TrackingSnippetPopover
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={localStages.map((s, i) => s.id || `temp-${i}`)} strategy={verticalListSortingStrategy}>
+            <div className="space-y-2">
+              {localStages.map((stage, idx) => (
+                <SortableStageItem
+                  key={stage.id || `temp-${idx}`}
+                  stage={stage}
+                  idx={idx}
+                  sortableId={stage.id || `temp-${idx}`}
                   funnelId={funnelId}
-                  stageId={stage.id}
-                  stageName={stage.name || `Etapa ${idx + 1}`}
-                  pageUrl={stage.page_url}
+                  defaultColor={COLORS[idx % COLORS.length]}
+                  onUpdate={updateStage}
+                  onRemove={removeStage}
                 />
-              )}
-              <div className="flex items-center gap-1.5 shrink-0" title="Ocultar valores para vendedores">
-                <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
-                <Switch
-                  checked={!!stage.hide_values}
-                  onCheckedChange={checked => updateStage(idx, 'hide_values', checked as any)}
-                />
-              </div>
-              <Button variant="ghost" size="icon" onClick={() => removeStage(idx)} className="shrink-0">
-                <Trash2 className="h-4 w-4 text-destructive" />
-              </Button>
+              ))}
             </div>
-          ))}
-        </div>
+          </SortableContext>
+        </DndContext>
 
         <Button onClick={handleSaveStages} className="mt-3" disabled={saving}>
           Salvar Etapas
