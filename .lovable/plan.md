@@ -1,47 +1,72 @@
 
 
-## Roteamento Multi-Funil por Produto
+## Reorganização do Menu Lateral
 
-### Problema
-A RPC `sync_lead_from_sale` usa `LIMIT 1` no match de produto — se "Guia de Tinturas" está configurado em 2+ funis (ex: "Recontato 90d" e "Infoprodutos Geral"), apenas um recebe o lead.
+### Problemas Identificados
 
-### Solução
-Substituir o bloco de match único por um loop que posiciona o lead em **todos** os funis que fazem match com o produto.
+1. **"Gerenciar Funis" aparece 2x** — dentro de Tráfego ("+ Novo funil") e no rodapé da sidebar
+2. **Leads tem 6 itens** — "Minhas Metas" e "Config. de Metas" poluem a seção principal
+3. **WhatsApp flutua sozinho** entre Leads e Ferramentas, sem contexto
+4. **Automações está em Ferramentas** mas é automação de WhatsApp — deveria estar junto
+5. **"Equipe" em Ferramentas** — é gestão/admin, não ferramenta
+6. **Anúncios só tem 2 itens** ("Geral ADS" e "Vendas") e conceitualmente se mistura com Tráfego
+7. **Ecommerce em Inteligência** — parece deslocado
 
-### Etapas
-
-**1. Migration SQL — atualizar `sync_lead_from_sale` (v4)**
-
-Reescrever o bloco 6 da função: trocar as duas queries com `LIMIT 1` + `IF` por um `FOR ... LOOP` que itera sobre todos os funis com match:
+### Proposta de Estrutura Nova
 
 ```text
-FOR v_prod_funnel_id IN
-  SELECT DISTINCT lf.id
-  FROM lead_product_mappings lpm
-  JOIN lead_funnels lf ON lf.id = lpm.lead_funnel_id
-  WHERE ... LOWER match exato ...
-  UNION
-  SELECT DISTINCT lfp.lead_funnel_id
-  FROM lead_funnel_products lfp
-  JOIN lead_funnels lf ON lf.id = lfp.lead_funnel_id
-  WHERE ... ILIKE match fragmento ...
-LOOP
-  -- Log lead_event no funil
-  -- Posicionar no primeiro stage (ON CONFLICT DO NOTHING)
-END LOOP;
+📊 AdMetrics
+─────────────────────
+Resumo Geral
+
+▸ TRÁFEGO & ADS
+  ├ [funis dinâmicos...]
+  ├ + Novo funil
+  ├ Geral ADS          (era Anúncios)
+  └ Vendas             (era Anúncios)
+
+▸ LEADS & CRM
+  ├ Dashboard Leads
+  ├ Todos os Leads
+  ├ Funis de Leads
+  ├ Fontes / UTMs
+  └ Metas              (sub-menu: Minhas Metas + Config.)
+
+▸ WHATSAPP
+  ├ Chat
+  └ Automações          (movido de Ferramentas)
+
+▸ INTELIGÊNCIA
+  ├ Inteligência de Cliente
+  ├ Análise de CRM
+  └ Ecommerce
+
+▸ CONFIGURAÇÕES
+  ├ Equipe              (movido de Ferramentas)
+  ├ Integrações
+  ├ Importar
+  ├ Agente IA
+  └ Gerenciar Funis     (remove duplicata)
 ```
 
-A constraint `UNIQUE (lead_id, funnel_id)` em `lead_stage_positions` já existe, então `ON CONFLICT DO NOTHING` protege contra duplicatas.
+### O que muda
 
-**2. Atualizar documentação**
+| Mudança | Motivo |
+|---------|--------|
+| Seção "Anúncios" absorvida por "Tráfego & ADS" | Elimina seção com só 2 itens; contexto é o mesmo |
+| "Automações" move para "WhatsApp" | São automações de WhatsApp, faz sentido agrupar |
+| "Equipe" move para "Configurações" | É gestão de time, não ferramenta operacional |
+| "Ferramentas" vira "Configurações" | Nome mais preciso para o que sobra (integrações, importar, equipe) |
+| Metas vira sub-grupo dentro de Leads | Reduz itens visíveis; metas são contexto de leads |
+| Remove "Gerenciar Funis" duplicado do rodapé | Já existe dentro de Configurações |
 
-Sincronizar `docs/rpc-sync-lead-from-sale.sql` com a nova versão v4.
+### Implementação
 
-### O que NÃO muda
-- Frontend — a UI de "Produtos & Recontato" já permite o mesmo produto em múltiplos funis
-- Automações WhatsApp — continuam disparando pelo pipeline independente do `wz-receiver`
-- Funis com produto único — comportamento idêntico ao atual
+1. **Reorganizar constantes no `AppSidebar.tsx`** — mover itens entre arrays, renomear seções
+2. **Agrupar Metas como sub-menu colapsável** dentro de Leads (mesmo padrão dos funis de tráfego)
+3. **Mover Automações para junto do WhatsApp** e criar seção "WhatsApp" com label
+4. **Remover o `navLink` duplicado de "Gerenciar Funis"** da linha 313
+5. **Atualizar permissões** — WhatsApp + Automações sob `mod_whatsapp`; Geral ADS e Vendas sob `mod_trafego` (ou manter `mod_anuncios` internamente, só muda a seção visual)
 
-### Resultado
-Uma venda de "Guia de Tinturas" posiciona o lead simultaneamente em todos os funis que têm esse produto configurado, cada um com seu próprio ciclo de recontato e gestão de etapas independente.
+Nenhuma rota muda, nenhuma página muda — é só reorganização visual do sidebar.
 
