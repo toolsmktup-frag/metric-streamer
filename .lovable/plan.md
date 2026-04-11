@@ -1,57 +1,108 @@
 
 
-## Revisão do Plano v2 — Status de Implementação por Fase
+## Fix: Migration SQL com DROP POLICY antes de cada CREATE
 
-### FASE 1: Fundação do Tracking Server-Side ✅ COMPLETA
-- **Script JS leve** para landing pages — implementado (gera `visitor_id`, captura UTMs, `fbclid`, `fbc`, `fbp`, `gclid`, fingerprinting)
-- **Edge Function `track-event`** — implementada e deployada, recebe eventos via `sendBeacon`/`fetch`, extrai IP real dos headers
+O erro ocorre porque as policies ja foram criadas anteriormente. A solucao e adicionar `DROP POLICY IF EXISTS` antes de cada `CREATE POLICY`.
 
-### FASE 2: Banco de Dados de Jornada e Captura de E-mail ✅ COMPLETA
-- **Tabela `clicks`** — criada no Supabase (visitor_id, event_type, UTMs, fbclid, fbc, fbp, gclid, ip_address, user_agent, email)
-- **Edge Function `track-event`** — faz INSERT na tabela `clicks` usando `service_role`
-- **Captura de e-mail** — script JS escuta evento `blur` em campos de e-mail e envia `email_capture` para o `track-event`
+### SQL corrigido para rodar no Supabase SQL Editor
 
-### FASE 3: Integração Meta CAPI e Deduplicação ✅ COMPLETA
-- **Edge Function `meta-capi-sync`** — criada e funcionando
-- **Webhooks chamam CAPI** — Ticto, Eduzz e Guru webhooks fazem `await fetch()` para `meta-capi-sync` após salvar venda
-- **Enriquecimento via `clicks`** — a função busca o registro de clique pelo e-mail do comprador para resgatar IP, User-Agent, `fbp`, `fbc`
-- **Deduplicação** — usa `external_id` (transaction hash/order ID)
-- **Hash SHA-256** — aplicado em e-mail e telefone
+```sql
+-- Tabelas (IF NOT EXISTS ja protege)
+CREATE TABLE IF NOT EXISTS public.automation_rules (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  is_active BOOLEAN DEFAULT true,
+  conditions JSONB NOT NULL DEFAULT '[]',
+  action TEXT NOT NULL,
+  action_params JSONB DEFAULT '{}',
+  scope_type TEXT DEFAULT 'campaign',
+  scope_ids TEXT[] DEFAULT '{}',
+  funnel_id UUID REFERENCES public.funnels(id) ON DELETE SET NULL,
+  check_interval_minutes INT DEFAULT 15,
+  last_checked_at TIMESTAMPTZ,
+  last_triggered_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
 
-### FASE 4: Sincronização de Custos e Dashboard de ROI ✅ COMPLETA
-- **Edge Function `sync-meta`** — busca `spend` por campaign/adset/ad via Meta Ads API
-- **Tabela `meta_insights`** — armazena custos diários (spend, impressions, clicks, reach, actions)
-- **Dashboard de ROI** — cruza receita das vendas com custos do `meta_insights`, exibindo Custo, Receita, Lucro e ROI
+CREATE TABLE IF NOT EXISTS public.automation_rule_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  rule_id UUID NOT NULL REFERENCES public.automation_rules(id) ON DELETE CASCADE,
+  triggered_at TIMESTAMPTZ DEFAULT now(),
+  conditions_snapshot JSONB,
+  action_taken TEXT,
+  target_id TEXT,
+  meta_response JSONB,
+  status TEXT DEFAULT 'success'
+);
 
-### FASE 5: Motor de Regras Automáticas (Auto-Rules) ⚠️ PARCIALMENTE COMPLETA
+-- Indices
+CREATE INDEX IF NOT EXISTS idx_automation_rules_org ON public.automation_rules(organization_id);
+CREATE INDEX IF NOT EXISTS idx_automation_rules_active ON public.automation_rules(is_active) WHERE is_active = true;
+CREATE INDEX IF NOT EXISTS idx_automation_rule_logs_rule ON public.automation_rule_logs(rule_id);
+CREATE INDEX IF NOT EXISTS idx_automation_rule_logs_triggered ON public.automation_rule_logs(triggered_at DESC);
 
-**O que está pronto:**
-- Página `/auto-rules` com UI completa (lista, toggle ativo/inativo, criação/edição de regras)
-- Hook `useAutoRules.ts` com CRUD completo
-- Edge Function `auto-rules-engine` com lógica de avaliação de métricas
-- Rota no `App.tsx` e item na Sidebar
-- Configuração no `config.toml`
+-- RLS
+ALTER TABLE public.automation_rules ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.automation_rule_logs ENABLE ROW LEVEL SECURITY;
 
-**O que falta:**
-1. **Migration SQL não foi aplicada** — as tabelas `automation_rules` e `automation_rule_logs` não existem no banco. A migration nunca foi criada como arquivo em `supabase/migrations/`. O SQL foi fornecido para execução manual, mas precisa ser confirmado se foi rodado no Supabase Dashboard.
-2. **pg_cron não configurado** — a migration de cron para rodar a Edge Function a cada 15 minutos não foi criada
-3. **Integração real com Meta Ads API** — as ações `pause_campaign` e `reduce_budget` estão como placeholder (logam "pending"), não executam chamadas reais à API do Meta
+-- Drop policies existentes antes de recriar
+DROP POLICY IF EXISTS "Users can view own org rules" ON public.automation_rules;
+DROP POLICY IF EXISTS "Users can insert own org rules" ON public.automation_rules;
+DROP POLICY IF EXISTS "Users can update own org rules" ON public.automation_rules;
+DROP POLICY IF EXISTS "Users can delete own org rules" ON public.automation_rules;
+DROP POLICY IF EXISTS "Users can view own org rule logs" ON public.automation_rule_logs;
+DROP POLICY IF EXISTS "Service role can insert logs" ON public.automation_rule_logs;
+DROP POLICY IF EXISTS "Service role full access rules" ON public.automation_rules;
+DROP POLICY IF EXISTS "Service role full access rule logs" ON public.automation_rule_logs;
 
----
+-- Policies automation_rules
+CREATE POLICY "Users can view own org rules"
+  ON public.automation_rules FOR SELECT TO authenticated
+  USING (organization_id IN (SELECT organization_id FROM public.user_profiles WHERE id = auth.uid()));
 
-### Resumo
+CREATE POLICY "Users can insert own org rules"
+  ON public.automation_rules FOR INSERT TO authenticated
+  WITH CHECK (organization_id IN (SELECT organization_id FROM public.user_profiles WHERE id = auth.uid()));
 
-| Fase | Status |
-|------|--------|
-| 1 - Tracking Server-Side | ✅ Completa |
-| 2 - Banco de Jornada + E-mail | ✅ Completa |
-| 3 - Meta CAPI + Deduplicação | ✅ Completa |
-| 4 - Sync Custos + Dashboard ROI | ✅ Completa |
-| 5 - Auto-Rules Engine | ⚠️ 70% — falta migration no banco, pg_cron e ações reais na Meta API |
+CREATE POLICY "Users can update own org rules"
+  ON public.automation_rules FOR UPDATE TO authenticated
+  USING (organization_id IN (SELECT organization_id FROM public.user_profiles WHERE id = auth.uid()));
 
-### Próximos passos para fechar a Fase 5
+CREATE POLICY "Users can delete own org rules"
+  ON public.automation_rules FOR DELETE TO authenticated
+  USING (organization_id IN (SELECT organization_id FROM public.user_profiles WHERE id = auth.uid()));
 
-1. **Criar migration** para as tabelas `automation_rules` e `automation_rule_logs` com RLS policies (via ferramenta de migration do Lovable)
-2. **Criar migration pg_cron** para agendar execução da Edge Function a cada 15 minutos
-3. **Implementar ações reais na Meta API** dentro da Edge Function (pausar campanha, alterar orçamento) — requer o `access_token` do Meta por funil/organização
+-- Policies automation_rule_logs
+CREATE POLICY "Users can view own org rule logs"
+  ON public.automation_rule_logs FOR SELECT TO authenticated
+  USING (rule_id IN (SELECT id FROM public.automation_rules WHERE organization_id IN (SELECT organization_id FROM public.user_profiles WHERE id = auth.uid())));
+
+-- Service role
+CREATE POLICY "Service role full access rules"
+  ON public.automation_rules FOR ALL TO service_role
+  USING (true) WITH CHECK (true);
+
+CREATE POLICY "Service role full access rule logs"
+  ON public.automation_rule_logs FOR ALL TO service_role
+  USING (true) WITH CHECK (true);
+
+-- Trigger updated_at
+CREATE OR REPLACE FUNCTION update_automation_rules_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trigger_automation_rules_updated_at ON public.automation_rules;
+CREATE TRIGGER trigger_automation_rules_updated_at
+  BEFORE UPDATE ON public.automation_rules
+  FOR EACH ROW
+  EXECUTE FUNCTION update_automation_rules_updated_at();
+```
+
+Copie e cole esse SQL inteiro no SQL Editor do Supabase. O `DROP POLICY IF EXISTS` garante que nao vai dar erro mesmo que as policies ja existam.
 
