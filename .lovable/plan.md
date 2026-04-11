@@ -1,32 +1,39 @@
 
 
-# Fix: Drag-and-drop das etapas não persiste a ordem
+# Filtrar eventos já usados no dropdown de regras de transição
 
-## Problemas identificados
+## Problema
+O dropdown de eventos canônicos mostra todas as opções mesmo quando um evento já foi atribuído a outra regra. Isso permite criar regras duplicadas para o mesmo evento, causando conflitos e confusão.
 
-1. **useEffect sobrescreve o estado local** (linha 94-98): Sempre que o array `stages` muda de referência (mesmo sem mudança real), o `useEffect` reseta `localStages`, desfazendo qualquer reordenação feita via drag.
+## Solução
+Filtrar os `CANONICAL_EVENTS` no dropdown de cada regra para esconder eventos já selecionados em outras regras. O evento da regra atual continua visível (para que o usuário possa ver o que selecionou).
 
-2. **Stages não são ordenados por `sort_order`** ao carregar do banco — o Supabase pode retornar em qualquer ordem se não houver `.order('sort_order')` explícito.
+## Alteração
 
-## Correções
+**Arquivo**: `src/components/lead-funnels/FunnelConfigTab.tsx`
 
-### 1. Ordenar stages por `sort_order` no useEffect
-No `FunnelConfigTab.tsx`, o `useEffect` que sincroniza `stages` → `localStages` deve ordenar por `sort_order` antes de setar:
-```ts
-useEffect(() => {
-  if (stages.length > 0) {
-    const sorted = [...stages].sort((a, b) => a.sort_order - b.sort_order);
-    setLocalStages(sorted);
-  }
-}, [stages]);
+Na renderização do `<SelectContent>` das regras (linha ~266), substituir:
+
+```tsx
+{CANONICAL_EVENTS.map(e => (
+  <SelectItem key={e.value} value={e.value}>{e.label}</SelectItem>
+))}
 ```
 
-### 2. Garantir que a query de stages retorna ordenada
-No `useLeadFunnels.ts`, a query já faz `.select('*, lead_funnel_stages(*)')` mas não ordena os stages. Vamos adicionar ordenação no `useUpsertStages` (já retorna com `.order('sort_order')`), e ordenar no frontend como fallback.
+Por:
 
-### 3. Evitar reset desnecessário após drag
-Usar comparação de IDs para não resetar se a composição não mudou — apenas a ordem. Serializar os IDs+ordem como chave de comparação.
+```tsx
+{CANONICAL_EVENTS
+  .filter(e => {
+    // Mostrar se: é o evento desta regra OU não está usado em nenhuma outra regra
+    const usedByOther = localRules.some((r, i) => i !== idx && r.event_name === e.value);
+    return !usedByOther;
+  })
+  .map(e => (
+    <SelectItem key={e.value} value={e.value}>{e.label}</SelectItem>
+  ))
+}
+```
 
-## Arquivos modificados
-- `src/components/lead-funnels/FunnelConfigTab.tsx` — ordenar no useEffect + evitar reset pós-drag
+Isso garante que cada evento canônico só pode ser usado em uma regra por vez. A opção "Outro (personalizado)" continua sempre visível.
 
