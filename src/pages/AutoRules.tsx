@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Zap, Plus, Trash2, Activity, AlertTriangle, PauseCircle, TrendingDown } from 'lucide-react';
+import { Zap, Plus, Trash2, Activity, AlertTriangle, PauseCircle, TrendingDown, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
@@ -9,6 +9,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Checkbox } from '@/components/ui/checkbox';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from '@/components/ui/sonner';
 import {
   useAutoRules,
@@ -20,6 +22,7 @@ import {
   type AutomationRule,
 } from '@/hooks/useAutoRules';
 import { useFunnels } from '@/hooks/useFunnels';
+import { useMetaEntities } from '@/hooks/useMetaEntities';
 
 const METRICS = [
   { value: 'cpa', label: 'CPA (Custo por Aquisição)' },
@@ -43,17 +46,50 @@ const ACTIONS = [
   { value: 'alert', label: 'Enviar Alerta', icon: AlertTriangle },
 ];
 
+const SCOPE_LABELS: Record<string, string> = {
+  campaign: 'Campanhas',
+  adset: 'Conjuntos',
+  ad: 'Anúncios',
+};
+
 function NewRuleDialog({ onClose }: { onClose: () => void }) {
   const { data: funnels = [] } = useFunnels();
   const createRule = useCreateRule();
   const [name, setName] = useState('');
   const [action, setAction] = useState<string>('alert');
-  const [scopeType, setScopeType] = useState<string>('campaign');
+  const [scopeType, setScopeType] = useState<'campaign' | 'adset' | 'ad'>('campaign');
   const [funnelId, setFunnelId] = useState<string>('');
   const [budgetPercent, setBudgetPercent] = useState('20');
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [allSelected, setAllSelected] = useState(true);
   const [conditions, setConditions] = useState<RuleCondition[]>([
     { metric: 'cpa', operator: '>', value: 50 },
   ]);
+
+  const { data: entities = [], isLoading: entitiesLoading } = useMetaEntities(scopeType);
+
+  const handleScopeChange = (val: string) => {
+    setScopeType(val as 'campaign' | 'adset' | 'ad');
+    setSelectedIds([]);
+    setAllSelected(true);
+  };
+
+  const toggleEntity = (id: string) => {
+    setAllSelected(false);
+    setSelectedIds(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
+
+  const toggleAll = () => {
+    if (allSelected) {
+      setAllSelected(false);
+      setSelectedIds([]);
+    } else {
+      setAllSelected(true);
+      setSelectedIds([]);
+    }
+  };
 
   const addCondition = () => setConditions(prev => [...prev, { metric: 'cpa', operator: '>', value: 0 }]);
   const removeCondition = (i: number) => setConditions(prev => prev.filter((_, idx) => idx !== i));
@@ -64,6 +100,7 @@ function NewRuleDialog({ onClose }: { onClose: () => void }) {
   const handleSubmit = async () => {
     if (!name.trim()) { toast.error('Informe o nome da regra'); return; }
     if (conditions.length === 0) { toast.error('Adicione ao menos uma condição'); return; }
+    if (!allSelected && selectedIds.length === 0) { toast.error('Selecione ao menos uma entidade ou marque "Todas"'); return; }
 
     try {
       await createRule.mutateAsync({
@@ -73,7 +110,7 @@ function NewRuleDialog({ onClose }: { onClose: () => void }) {
         action: action as AutomationRule['action'],
         action_params: action === 'reduce_budget' ? { percent: Number(budgetPercent) } : {},
         scope_type: scopeType as AutomationRule['scope_type'],
-        scope_ids: [],
+        scope_ids: allSelected ? [] : selectedIds,
         funnel_id: funnelId || null,
         check_interval_minutes: 15,
       });
@@ -137,7 +174,7 @@ function NewRuleDialog({ onClose }: { onClose: () => void }) {
         </div>
         <div>
           <label className="text-sm font-medium text-muted-foreground">Escopo</label>
-          <Select value={scopeType} onValueChange={setScopeType}>
+          <Select value={scopeType} onValueChange={handleScopeChange}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="campaign">Campanha</SelectItem>
@@ -146,6 +183,67 @@ function NewRuleDialog({ onClose }: { onClose: () => void }) {
             </SelectContent>
           </Select>
         </div>
+      </div>
+
+      {/* Entity Selector */}
+      <div>
+        <label className="text-sm font-medium text-muted-foreground mb-2 block">
+          {SCOPE_LABELS[scopeType]} monitoradas
+        </label>
+        <div className="border rounded-md">
+          <div className="flex items-center gap-2 p-3 border-b bg-muted/30">
+            <Checkbox
+              checked={allSelected}
+              onCheckedChange={toggleAll}
+              id="select-all"
+            />
+            <label htmlFor="select-all" className="text-sm font-medium cursor-pointer">
+              Todas ({entities.length})
+            </label>
+          </div>
+          {entitiesLoading ? (
+            <div className="flex items-center justify-center p-4 text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              Carregando...
+            </div>
+          ) : entities.length === 0 ? (
+            <p className="p-4 text-sm text-muted-foreground text-center">
+              Nenhuma entidade sincronizada. Sincronize suas campanhas primeiro.
+            </p>
+          ) : (
+            <ScrollArea className="max-h-[180px]">
+              <div className="p-2 space-y-1">
+                {entities.map(entity => (
+                  <div
+                    key={entity.id}
+                    className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted/50 transition-colors"
+                  >
+                    <Checkbox
+                      checked={allSelected || selectedIds.includes(entity.id)}
+                      disabled={allSelected}
+                      onCheckedChange={() => toggleEntity(entity.id)}
+                      id={`entity-${entity.id}`}
+                    />
+                    <label htmlFor={`entity-${entity.id}`} className="text-sm flex-1 cursor-pointer truncate">
+                      {entity.name}
+                    </label>
+                    <Badge
+                      variant={entity.status === 'ACTIVE' ? 'default' : 'secondary'}
+                      className="text-[10px] shrink-0"
+                    >
+                      {entity.status}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+          )}
+        </div>
+        {!allSelected && selectedIds.length > 0 && (
+          <p className="text-xs text-muted-foreground mt-1">
+            {selectedIds.length} selecionada(s)
+          </p>
+        )}
       </div>
 
       {action === 'reduce_budget' && (
@@ -278,7 +376,14 @@ export default function AutoRules() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Badge variant="outline" className="text-xs capitalize">{rule.scope_type}</Badge>
+                          <div className="flex items-center gap-1.5">
+                            <Badge variant="outline" className="text-xs capitalize">{rule.scope_type}</Badge>
+                            <span className="text-xs text-muted-foreground">
+                              {rule.scope_ids && rule.scope_ids.length > 0
+                                ? `${rule.scope_ids.length} selecionada(s)`
+                                : 'Todas'}
+                            </span>
+                          </div>
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
                           {rule.last_triggered_at
