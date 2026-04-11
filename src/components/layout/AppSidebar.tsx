@@ -37,35 +37,40 @@ interface AppSidebarProps {
   onToggle: () => void;
 }
 
-const AD_ANALYSIS_ITEMS = [
+/* ── Itens absorvidos por Tráfego & ADS ── */
+const ADS_ITEMS = [
   { path: '/kpi-geral',  label: 'Geral ADS',  icon: Layers },
   { path: '/vendas',     label: 'Vendas',     icon: ShoppingCart },
 ];
 
-const INTELLIGENCE_ITEMS = [
-  { path: '/escada-valor', label: 'Inteligência de Cliente', icon: TrendingUp },
-  { path: '/crm-analytics', label: 'Análise de CRM', icon: BarChart3 },
-  { path: '/ecommerce',    label: 'Ecommerce',               icon: ShoppingBag },
-];
-
-const TOOL_ITEMS = [
-  { path: '/equipe',      label: 'Equipe',       icon: Users },
-  { path: '/ferramentas/automacoes', label: 'Automações', icon: Zap },
-  { path: '/agente-ia',   label: 'Agente IA',    icon: Bot },
-  { path: '/integracoes', label: 'Integrações',  icon: Link2 },
-  { path: '/importar',    label: 'Importar',     icon: Upload },
-];
-
+/* ── Leads & CRM (sem metas — metas viram sub-menu) ── */
 const LEAD_ITEMS = [
-  { path: '/leads/metas',          label: 'Minhas Metas',          icon: Trophy },
-  { path: '/leads/configurar-metas', label: 'Config. de Metas',   icon: Settings },
   { path: '/leads/dashboard',      label: 'Dashboard Leads',      icon: LayoutDashboard },
   { path: '/leads',                label: 'Todos os Leads',       icon: Users },
   { path: '/lead-campaigns',      label: 'Funis de Leads',       icon: Target },
   { path: '/leads/fontes',        label: 'Fontes / UTMs',        icon: Globe },
 ];
 
-const WHATSAPP_ITEM = { path: '/whatsapp', label: 'WhatsApp', icon: MessageCircle };
+const META_ITEMS = [
+  { path: '/leads/metas',            label: 'Minhas Metas',        icon: Trophy },
+  { path: '/leads/configurar-metas', label: 'Config. de Metas',   icon: Settings },
+];
+
+/* ── Inteligência ── */
+const INTELLIGENCE_ITEMS = [
+  { path: '/escada-valor',  label: 'Inteligência de Cliente', icon: TrendingUp },
+  { path: '/crm-analytics', label: 'Análise de CRM',          icon: BarChart3 },
+  { path: '/ecommerce',     label: 'Ecommerce',               icon: ShoppingBag },
+];
+
+/* ── Configurações (ex-Ferramentas) ── */
+const CONFIG_ITEMS = [
+  { path: '/equipe',        label: 'Equipe',       icon: Users },
+  { path: '/integracoes',   label: 'Integrações',  icon: Link2 },
+  { path: '/importar',      label: 'Importar',     icon: Upload },
+  { path: '/agente-ia',     label: 'Agente IA',    icon: Bot },
+  { path: '/funis/configurar', label: 'Gerenciar Funis', icon: Settings },
+];
 
 const AppSidebar = React.memo(function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
   const location = useLocation();
@@ -73,9 +78,9 @@ const AppSidebar = React.memo(function AppSidebar({ collapsed, onToggle }: AppSi
   const { data: funnels = [] } = useFunnels();
   const { setActiveFunnelId } = useFilterStore();
   const [expandedFunnel, setExpandedFunnel] = useState<string | null>(null);
+  const [metasOpen, setMetasOpen] = useState(false);
   const { data: perms } = useMyPermissions();
 
-  // Default: show everything (while loading or no permissions row)
   const can = (mod: string) => {
     if (!perms) return true;
     return (perms as any)[mod] === true;
@@ -83,6 +88,10 @@ const AppSidebar = React.memo(function AppSidebar({ collapsed, onToggle }: AppSi
 
   const isActive = (path: string) => location.pathname === path;
   const isFunnelActive = (id: string) => location.pathname.startsWith(`/funis/${id}`);
+
+  // Auto-expand metas sub-menu if on a metas route
+  const isMetasRoute = META_ITEMS.some(i => isActive(i.path));
+  const showMetas = metasOpen || isMetasRoute;
 
   function handleFunnelClick(id: string) {
     setActiveFunnelId(id);
@@ -159,7 +168,7 @@ const AppSidebar = React.memo(function AppSidebar({ collapsed, onToggle }: AppSi
 
       <nav className="flex-1 px-2 py-2 space-y-0.5 overflow-y-auto">
 
-        {/* Resumo Geral */}
+        {/* ── Resumo Geral ── */}
         {can('mod_resumo') && (
           <button
             onClick={handleResumoGeral}
@@ -185,10 +194,10 @@ const AppSidebar = React.memo(function AppSidebar({ collapsed, onToggle }: AppSi
           </button>
         )}
 
-        {/* Seção Funis / Tráfego */}
+        {/* ── TRÁFEGO & ADS ── */}
         {can('mod_trafego') && (
           <>
-            {sectionLabel('Tráfego')}
+            {sectionLabel('Tráfego & ADS')}
 
             {funnels.map(funnel => (
               <div key={funnel.id}>
@@ -266,18 +275,77 @@ const AppSidebar = React.memo(function AppSidebar({ collapsed, onToggle }: AppSi
                 <span className="whitespace-nowrap">Novo funil</span>
               </NavLink>
             )}
+
+            {/* Geral ADS + Vendas (absorvidos de Anúncios) */}
+            {can('mod_anuncios') && ADS_ITEMS.map(item => navLink(item.path, item.label, item.icon))}
           </>
         )}
 
-        {/* Seção Anúncios */}
-        {can('mod_anuncios') && (
+        {/* ── LEADS & CRM ── */}
+        {can('mod_leads') && (
           <>
-            {sectionLabel('Anúncios')}
-            {AD_ANALYSIS_ITEMS.map(item => navLink(item.path, item.label, item.icon))}
+            {sectionLabel('Leads & CRM')}
+            {LEAD_ITEMS.map(item => navLink(item.path, item.label, item.icon))}
+
+            {/* Sub-menu colapsável: Metas */}
+            {!collapsed && (
+              <>
+                <button
+                  onClick={() => setMetasOpen(prev => !prev)}
+                  className={`w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                    isMetasRoute
+                      ? 'bg-sidebar-active text-sidebar-theme'
+                      : 'text-sidebar-theme/80 hover:bg-sidebar-hover hover:text-sidebar-theme'
+                  }`}
+                >
+                  <Trophy className="h-5 w-5 shrink-0" />
+                  <span className="flex-1 text-left whitespace-nowrap">Metas</span>
+                  {showMetas
+                    ? <ChevronUp className="h-3.5 w-3.5 shrink-0" />
+                    : <ChevronDown className="h-3.5 w-3.5 shrink-0" />}
+                </button>
+
+                <AnimatePresence>
+                  {showMetas && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="pl-4 space-y-0.5 overflow-hidden"
+                    >
+                      {META_ITEMS.map(({ path, label, icon: Icon }) => (
+                        <NavLink
+                          key={path}
+                          to={path}
+                          className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
+                            isActive(path)
+                              ? 'bg-sidebar-active text-sidebar-theme font-medium'
+                              : 'text-sidebar-theme/70 hover:bg-sidebar-hover hover:text-sidebar-theme'
+                          }`}
+                        >
+                          <Icon className="h-4 w-4 shrink-0" />
+                          <span className="whitespace-nowrap">{label}</span>
+                        </NavLink>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </>
+            )}
+            {collapsed && META_ITEMS.map(item => navLink(item.path, item.label, item.icon))}
           </>
         )}
 
-        {/* Seção Inteligência */}
+        {/* ── WHATSAPP ── */}
+        {can('mod_whatsapp') && (
+          <>
+            {sectionLabel('WhatsApp')}
+            {navLink('/whatsapp', 'Chat', MessageCircle)}
+            {navLink('/ferramentas/automacoes', 'Automações', Zap)}
+          </>
+        )}
+
+        {/* ── INTELIGÊNCIA ── */}
         {can('mod_inteligencia') && (
           <>
             {sectionLabel('Inteligência')}
@@ -285,32 +353,13 @@ const AppSidebar = React.memo(function AppSidebar({ collapsed, onToggle }: AppSi
           </>
         )}
 
-        {/* Seção Leads */}
-        {can('mod_leads') && (
-          <>
-            {sectionLabel('Leads')}
-            {LEAD_ITEMS.map(item => navLink(item.path, item.label, item.icon))}
-          </>
-        )}
-
-        {/* WhatsApp (separado para controle granular) */}
-        {can('mod_whatsapp') && (
-          <>
-            {!can('mod_leads') && sectionLabel('Comunicação')}
-            {navLink(WHATSAPP_ITEM.path, WHATSAPP_ITEM.label, WHATSAPP_ITEM.icon)}
-          </>
-        )}
-
-        {/* Seção Ferramentas */}
+        {/* ── CONFIGURAÇÕES ── */}
         {can('mod_ferramentas') && (
           <>
-            {sectionLabel('Ferramentas')}
-            {TOOL_ITEMS.map(item => navLink(item.path, item.label, item.icon))}
+            {sectionLabel('Configurações')}
+            {CONFIG_ITEMS.map(item => navLink(item.path, item.label, item.icon))}
           </>
         )}
-
-        {/* Gerenciar funis - only if tráfego enabled */}
-        {can('mod_trafego') && navLink('/funis/configurar', 'Gerenciar Funis', Settings)}
       </nav>
     </motion.aside>
   );
