@@ -42,6 +42,7 @@ interface AppSidebarProps {
 const ADS_ITEMS = [
   { path: '/kpi-geral',  label: 'Geral ADS',  icon: Layers },
   { path: '/vendas',     label: 'Vendas',     icon: ShoppingCart },
+  { path: '/auto-rules', label: 'Auto-Rules', icon: Zap },
 ];
 
 /* ── Leads & CRM (sem metas — metas viram sub-menu) ── */
