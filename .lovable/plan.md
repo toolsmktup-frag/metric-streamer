@@ -1,57 +1,40 @@
 
-Diagnóstico: o erro da Guru não é do `checkout_url/page_url` em si; é um erro de sintaxe no arquivo. Conferi o `supabase/functions/guru-webhook/index.ts` atual e o bloco abaixo ficou aberto:
 
-```ts
-if (normalizedStatus === "authorized") {
-  try {
-    ...
-  } catch (capiErr) {
-    ...
-  }
+## Plano: Corrigir layout responsivo dos dashboards
 
-  // wz-receiver...
-  if (normalizedStatus === "authorized" && productName) {
-```
+### Problema
+Em viewports intermediários (~983px), os KPI cards com valores monetários longos (ex: "R$ 29.081,68") ficam truncados ou estouram o layout. Isso acontece porque:
 
-Falta fechar esse `if` do Meta CAPI antes do comentário `// wz-receiver...`. Por isso o bundler só “explode” no final do arquivo, em `});`.
+1. **FunilResumo.tsx** usa `lg:grid-cols-4` — a partir de 1024px tenta encaixar 4 cards, muito apertado para valores grandes
+2. **Resumo.tsx** usa `lg:grid-cols-3 xl:grid-cols-4` — melhor, mas ainda trunca em ~1024px com 3 colunas + sidebar
+3. **KPICard.tsx** usa `truncate` no valor, cortando o número em vez de ajustar o tamanho da fonte
+4. **Charts Row 2** (`md:grid-cols-3`) força 3 colunas a partir de 768px — muito cedo quando há sidebar
 
-Plano de correção:
-1. Ajustar apenas `supabase/functions/guru-webhook/index.ts`.
-2. Inserir uma chave `}` logo depois do `catch (capiErr)`.
-3. Regenerar o documento consolidado, porque o `.txt` que você abriu provavelmente contém essa versão quebrada.
-4. Fazer deploy somente da `guru-webhook` no Supabase. Não precisa rodar SQL de novo e não precisa redeploy da Ticto/Eduzz.
+### Correções
 
-Trecho exato que precisa ficar assim:
-```ts
-      } catch (capiErr) {
-        console.error("[guru-webhook] meta-capi-sync error (non-fatal):", capiErr);
-      }
-    }
+**1. KPICard.tsx — valor nunca deve truncar**
+- Trocar `truncate` por `break-all` ou melhor: reduzir o `text-2xl` no breakpoint problemático
+- Usar `text-base sm:text-lg lg:text-xl xl:text-2xl` para escala progressiva
+- Remover `truncate` do valor (números cortados perdem sentido)
 
-    // wz-receiver forward already done at the top (before status filtering)
+**2. FunilResumo.tsx — grid KPI mais conservador**
+- Mudar `grid-cols-1 sm:grid-cols-2 lg:grid-cols-4` para `grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4`
+- Charts Row 2: `md:grid-cols-3` → `grid-cols-1 lg:grid-cols-3`
 
-    // ── Stock deduction (apenas vendas aprovadas) ──
-    if (normalizedStatus === "authorized" && productName) {
-```
+**3. Resumo.tsx — mesmos ajustes**
+- Charts Row 2: `md:grid-cols-3` → `grid-cols-1 lg:grid-cols-3`
 
-Impacto esperado:
-- Corrige o erro de parse/bundle da função Guru.
-- Mantém toda a lógica nova de `checkout_url` e `page_url`.
-- Não exige nenhuma mudança adicional no banco.
+**4. Criativos.tsx e CrmAnalytics.tsx — mesma padronização**
+- Onde usar `lg:grid-cols-4`, mudar para `lg:grid-cols-3 xl:grid-cols-4`
 
-Detalhe técnico:
-```text
-Estrutura quebrada:
-if authorized {
-  try/catch meta-capi
-  if authorized && productName { ... }
-  return ...
-}
+**5. LeadsDashboard.tsx**
+- `md:grid-cols-4` → `sm:grid-cols-2 lg:grid-cols-4`
 
-Estrutura correta:
-if authorized {
-  try/catch meta-capi
-}
-if authorized && productName { ... }
-return ...
-```
+### Arquivos alterados
+- `src/components/dashboard/KPICard.tsx`
+- `src/pages/FunilResumo.tsx`
+- `src/pages/Resumo.tsx`
+- `src/pages/Criativos.tsx`
+- `src/pages/CrmAnalytics.tsx`
+- `src/pages/LeadsDashboard.tsx`
+
