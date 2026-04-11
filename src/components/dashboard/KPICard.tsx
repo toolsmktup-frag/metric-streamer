@@ -32,7 +32,7 @@ const KPICard = React.memo(function KPICard({ label, value, variation, icon: Ico
                 </Tooltip>
               )}
             </div>
-            <p className={`text-lg sm:text-2xl font-semibold font-mono-value tracking-tight truncate ${colorClass}`} title={value}>
+            <p className={`text-base sm:text-lg lg:text-xl xl:text-2xl font-semibold font-mono-value tracking-tight ${colorClass}`} title={value}>
               {value}
             </p>
           </div>
