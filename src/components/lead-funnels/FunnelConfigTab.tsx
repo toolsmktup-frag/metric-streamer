@@ -294,6 +294,41 @@ const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSave
         />
       )}
 
+      {/* Meta Conversions API (CAPI) */}
+      {onMetaPixelChange && (
+        <div>
+          <h3 className="text-lg font-semibold text-foreground mb-3">Meta Conversions API (CAPI)</h3>
+          <p className="text-sm text-muted-foreground mb-3">
+            Configure o Pixel ID e Access Token para enviar eventos de conversão server-side ao Meta.
+          </p>
+          <div className="space-y-3">
+            <div>
+              <label className="text-sm font-medium text-foreground mb-1 block">Meta Pixel ID</label>
+              <Input
+                value={localPixelId}
+                onChange={e => setLocalPixelId(e.target.value)}
+                placeholder="Ex: 123456789012345"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-foreground mb-1 block">Meta Access Token</label>
+              <Input
+                type="password"
+                value={localAccessToken}
+                onChange={e => setLocalAccessToken(e.target.value)}
+                placeholder="Token da Conversions API"
+              />
+            </div>
+            <Button
+              onClick={() => onMetaPixelChange(localPixelId || null, localAccessToken || null)}
+              disabled={savingMetaPixel}
+            >
+              Salvar Configuração Meta
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Redistribute Leads */}
       {funnelId && stages.length > 0 && (
         <div>
