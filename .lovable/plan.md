@@ -1,72 +1,49 @@
 
 
-## Fase 2: Persistir Eventos na Tabela `clicks`
+## Fase 2.5 (Revisão): Diagnosticar e Corrigir Tracking que Não Salva
 
-### Escopo (3 entregas)
+### Problema Identificado
 
-**Entrega 1: SQL para rodar no Supabase Dashboard**
+O tracker.js usa `navigator.sendBeacon()` como método primário de envio. O `sendBeacon`:
+- Envia como **preflight-free** (sem CORS OPTIONS)
+- Mas o Supabase Edge Functions pode rejeitar requests sem o header `apikey`
+- O `sendBeacon` **não permite headers customizados** — então `apikey` e `Authorization` nunca são enviados
+- Resultado: a request pode estar sendo **bloqueada pelo gateway do Supabase** antes de chegar na função
 
-Criar tabela `clicks` com todos os campos do payload atual:
+Além disso, a imagem mostra apenas 1 registro `tracking_test` (enviado pelo botão Testar da plataforma, que usa `fetch` com headers corretos) — os acessos reais da LP não chegaram.
 
-```sql
-CREATE TABLE public.clicks (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  visitor_id uuid NOT NULL,
-  event_type text NOT NULL DEFAULT 'pageview',
-  funnel_id text,
-  stage_id text,
-  page_url text,
-  page_title text,
-  referrer text,
-  utm_source text,
-  utm_medium text,
-  utm_campaign text,
-  utm_content text,
-  utm_term text,
-  fbclid text,
-  fbc text,
-  fbp text,
-  gclid text,
-  ip_address text,
-  user_agent text,
-  screen_resolution text,
-  timezone text,
-  email text,
-  created_at timestamptz NOT NULL DEFAULT now()
-);
+### Solução (2 arquivos)
 
-CREATE INDEX idx_clicks_visitor_id ON public.clicks(visitor_id);
-CREATE INDEX idx_clicks_email ON public.clicks(email) WHERE email IS NOT NULL;
-CREATE INDEX idx_clicks_created_at ON public.clicks(created_at);
-CREATE INDEX idx_clicks_funnel_id ON public.clicks(funnel_id) WHERE funnel_id IS NOT NULL;
+**1. Atualizar `public/tracking/tracker.js`**
 
-ALTER TABLE public.clicks ENABLE ROW LEVEL SECURITY;
+- Inverter a prioridade: usar `fetch()` como método primário (permite enviar `apikey` no header)
+- Manter `sendBeacon` apenas como fallback para `visibilitychange`/`beforeunload`
+- Adicionar o header `apikey` (anon key pública) em todas as requests
+- Adicionar log de erro em modo debug para facilitar diagnóstico
 
-CREATE POLICY "Service role full access" ON public.clicks
-  FOR ALL TO service_role USING (true) WITH CHECK (true);
+```
+Ordem de envio:
+1. fetch() com headers { Content-Type, apikey } + keepalive: true
+2. Se fetch falhar → fallback sendBeacon (sem headers, melhor que nada)
 ```
 
-**Entrega 2: Atualizar `supabase/functions/track-event/index.ts`**
-- Substituir o `console.log` por um `INSERT` na tabela `clicks` usando `createClient` com `service_role`
-- Manter log como fallback se o insert falhar
-- O `import` do Supabase client já existe no arquivo
+**2. Atualizar `supabase/functions/track-event/index.ts`**
 
-**Entrega 3: Captura de email no `public/tracking/tracker.js`**
-- Adicionar listener `blur` em `input[type=email]` e `input[name*=email]`
-- Ao detectar email válido, enviar evento `email_capture` com campo `email` no payload
-- Retrocompatível — não quebra nada se não houver campo de email na página
+- Aceitar `Content-Type: text/plain` além de `application/json` (para requests vindos de `sendBeacon`)
+- Adicionar log estruturado do payload recebido para debug
+- Manter tudo mais igual
 
 ### O que NÃO muda
-- Nenhuma página do dashboard é alterada
-- Nenhum webhook existente é tocado
-- Nenhuma tabela existente é modificada
-- `v_all_sales` permanece igual
+- Nenhuma tabela alterada
+- Webhooks e sync_lead_from_sale inalterados
+- A Fase 2.5 (bridge clicks → leads) fica para o próximo passo
 
-### Resultado
-- Cada pageview e email capturado fica salvo na tabela `clicks`
-- Jornada completa do visitante pode ser reconstruída por `visitor_id`
-- Base pronta para Fase 3 (Meta CAPI — cruzar vendas com cliques)
+### Deploy necessário
+- Re-deploy da Edge Function `track-event` no Supabase Dashboard
+- O `tracker.js` atualiza automaticamente no próximo deploy do Lovable (ou cache clear na LP)
 
-### Para o usuário
-Vou gerar o SQL completo para copiar/colar no Supabase Dashboard, atualizar a Edge Function (que também precisa de re-deploy manual), e atualizar o `tracker.js`.
+### Resultado esperado
+- Cada aba anônima acessando a LP gera 1 registro `pageview` na tabela `clicks`
+- UTMs, fbclid, gclid aparecem preenchidos quando presentes na URL
+- `fbp` sempre preenchido (gerado pelo tracker)
 
