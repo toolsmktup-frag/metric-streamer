@@ -157,10 +157,10 @@ function NewRuleDialog({ onClose }: { onClose: () => void }) {
 
       <div>
         <label className="text-sm font-medium text-muted-foreground">Funil (opcional)</label>
-        <Select value={funnelId} onValueChange={setFunnelId}>
+      <Select value={funnelId || '__all__'} onValueChange={v => setFunnelId(v === '__all__' ? '' : v)}>
           <SelectTrigger><SelectValue placeholder="Todos os funis" /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="">Todos os funis</SelectItem>
+            <SelectItem value="__all__">Todos os funis</SelectItem>
             {funnels.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
           </SelectContent>
         </Select>
