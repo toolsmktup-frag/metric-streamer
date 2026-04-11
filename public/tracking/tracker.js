@@ -1,15 +1,15 @@
 /**
- * Metric Streamer — Tracker v1.0
+ * Metric Streamer — Tracker v1.1
  * 
  * Script standalone para landing pages.
  * Cole no <head> da LP:
  * 
  *   <script src="https://SEU_DOMINIO/tracking/tracker.js"
  *           data-endpoint="https://emfbocpmphtftqcezaib.supabase.co/functions/v1/track-event"
+ *           data-funnel-id="OPTIONAL_FUNNEL_UUID"
+ *           data-stage-id="OPTIONAL_STAGE_UUID"
+ *           defer
  *   ></script>
- *
- * Ou configure manualmente:
- *   window.__MS_TRACKING = { endpoint: "https://..." };
  */
 (function () {
   "use strict";
@@ -68,7 +68,6 @@
       vid = uuidv4();
     }
 
-    // Always refresh cookie TTL
     setCookie(COOKIE_NAME, vid, 365);
     try { localStorage.setItem(LS_KEY, vid); } catch (e) {}
 
@@ -99,7 +98,6 @@
   function getFbp() {
     var existing = getCookie("_fbp");
     if (existing) return existing;
-    // Generate fbp if not present
     var fbp = "fb.1." + Date.now() + "." + Math.floor(Math.random() * 1e10);
     setCookie("_fbp", fbp, 365);
     return fbp;
@@ -110,8 +108,8 @@
   var STAGE_ID = (scriptTag && scriptTag.getAttribute("data-stage-id")) || undefined;
 
   // ── Build payload ──────────────────────────────────────
-  function buildPayload(eventName) {
-    return {
+  function buildPayload(eventName, extra) {
+    var base = {
       visitor_id: getOrCreateVisitorId(),
       event: eventName,
       funnel_id: FUNNEL_ID,
@@ -133,21 +131,25 @@
       user_agent: navigator.userAgent,
       timestamp: new Date().toISOString(),
     };
+    if (extra) {
+      for (var k in extra) {
+        if (extra.hasOwnProperty(k)) base[k] = extra[k];
+      }
+    }
+    return base;
   }
 
   // ── Send event ─────────────────────────────────────────
-  function sendEvent(eventName) {
-    var payload = buildPayload(eventName);
+  function sendEvent(eventName, extra) {
+    var payload = buildPayload(eventName, extra);
     var json = JSON.stringify(payload);
 
-    // Prefer sendBeacon (non-blocking, survives page unload)
     if (navigator.sendBeacon) {
       var blob = new Blob([json], { type: "application/json" });
       var sent = navigator.sendBeacon(ENDPOINT, blob);
       if (sent) return;
     }
 
-    // Fallback: fetch with keepalive
     try {
       fetch(ENDPOINT, {
         method: "POST",
@@ -158,8 +160,53 @@
     } catch (e) {}
   }
 
+  // ── Email validation ───────────────────────────────────
+  function isValidEmail(str) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(str);
+  }
+
+  // ── Email capture (auto-detect email inputs) ───────────
+  var capturedEmails = {};
+
+  function attachEmailListeners() {
+    var inputs = document.querySelectorAll(
+      'input[type="email"], input[name*="email"], input[name*="Email"], input[placeholder*="email"], input[placeholder*="Email"]'
+    );
+    for (var i = 0; i < inputs.length; i++) {
+      (function (input) {
+        if (input.__ms_email_bound) return;
+        input.__ms_email_bound = true;
+        input.addEventListener("blur", function () {
+          var val = (input.value || "").trim().toLowerCase();
+          if (val && isValidEmail(val) && !capturedEmails[val]) {
+            capturedEmails[val] = true;
+            sendEvent("email_capture", { email: val });
+          }
+        });
+      })(inputs[i]);
+    }
+  }
+
   // ── Auto-track pageview ────────────────────────────────
   sendEvent("pageview");
+
+  // ── Attach email listeners (now + observe DOM changes) ─
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", attachEmailListeners);
+  } else {
+    attachEmailListeners();
+  }
+
+  // Observe for dynamically added inputs
+  if (typeof MutationObserver !== "undefined") {
+    var observer = new MutationObserver(function () {
+      attachEmailListeners();
+    });
+    observer.observe(document.body || document.documentElement, {
+      childList: true,
+      subtree: true,
+    });
+  }
 
   // ── Public API ─────────────────────────────────────────
   window.__MS_TRACKING = window.__MS_TRACKING || {};
