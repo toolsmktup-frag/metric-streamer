@@ -1,56 +1,84 @@
 
 
-## Fase 3 (revisada): Meta CAPI com Pixel por Funil
+## Fase 5: Motor de Regras Automáticas (Auto-Rules)
 
-### Mudança de abordagem
-Em vez de um único `META_PIXEL_ID` como secret global, cada **lead funnel** terá seus próprios campos de configuração Meta (pixel_id + access_token). A Edge Function `meta-capi-sync` buscará essas credenciais do funil correspondente.
+Pagina global separada em `/auto-rules` com criacao/edicao de regras que monitoram metricas e executam acoes automaticas na API do Meta Ads.
 
-### Implementação
+---
 
-**1. Migration: adicionar colunas Meta ao `lead_funnels`**
+### O que sera construido
+
+**1. Migration: tabela `automation_rules`**
 ```sql
-ALTER TABLE lead_funnels
-  ADD COLUMN meta_pixel_id TEXT DEFAULT NULL,
-  ADD COLUMN meta_access_token TEXT DEFAULT NULL;
+CREATE TABLE automation_rules (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id UUID NOT NULL REFERENCES organizations(id),
+  name TEXT NOT NULL,
+  is_active BOOLEAN DEFAULT true,
+  -- Condicoes (array de condicoes AND)
+  conditions JSONB NOT NULL DEFAULT '[]',
+  -- Ex: [{"metric":"cpa","operator":">","value":50},{"metric":"roi","operator":"<","value":0}]
+  action TEXT NOT NULL, -- 'pause_campaign' | 'reduce_budget' | 'alert'
+  action_params JSONB DEFAULT '{}',
+  -- Escopo
+  scope_type TEXT DEFAULT 'campaign', -- 'campaign' | 'adset' | 'ad'
+  scope_ids TEXT[] DEFAULT '{}', -- IDs especificos ou vazio = todos
+  funnel_id UUID REFERENCES funnels(id),
+  -- Controle
+  check_interval_minutes INT DEFAULT 15,
+  last_checked_at TIMESTAMPTZ,
+  last_triggered_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
 ```
 
-**2. UI: campos Meta Pixel na aba Config do funil**
-- Adicionar dois inputs no `FunnelConfigTab.tsx`: "Meta Pixel ID" e "Meta Access Token"
-- Salvar via `updateFunnel` existente (já faz UPDATE na tabela `lead_funnels`)
-- Access token exibido como `type="password"` por segurança
+**2. Migration: tabela `automation_rule_logs`**
+```sql
+CREATE TABLE automation_rule_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  rule_id UUID NOT NULL REFERENCES automation_rules(id) ON DELETE CASCADE,
+  triggered_at TIMESTAMPTZ DEFAULT now(),
+  conditions_snapshot JSONB,
+  action_taken TEXT,
+  target_id TEXT, -- campaign/adset/ad ID
+  meta_response JSONB,
+  status TEXT DEFAULT 'success' -- 'success' | 'error'
+);
+```
 
-**3. Edge Function `meta-capi-sync/index.ts`**
-- Recebe: `email`, `phone`, `amount_cents`, `currency`, `order_id`, `product_name`, `event_name`, `funnel_id`
-- Busca `meta_pixel_id` e `meta_access_token` do `lead_funnels` pelo `funnel_id`
-- Se não tiver pixel configurado, loga e retorna (sem erro)
-- Busca na tabela `clicks` o registro mais recente com esse email para enriquecer com: `ip_address`, `user_agent`, `fbp`, `fbc`
-- Hash SHA-256 em email/phone
-- Envia para `graph.facebook.com/v21.0/{pixel_id}/events`
-- Loga resultado em `meta_capi_log`
+**3. Pagina `src/pages/AutoRules.tsx`**
+- Lista de regras com toggle ativo/inativo
+- Botao "Nova Regra" abre dialog/drawer
+- Formulario: nome, condicoes (metric + operator + value), acao, escopo
+- Metricas disponiveis: CPA, ROI, ROAS, Spend, Revenue
+- Acoes: Pausar Campanha, Reduzir Orcamento (%), Enviar Alerta
+- Tabela de logs recentes mostrando quando cada regra disparou
 
-**4. Migration: tabela `meta_capi_log`**
-- Colunas: `id`, `funnel_id`, `event_name`, `event_id`, `email_hash`, `order_id`, `pixel_id`, `status`, `meta_response`, `created_at`
+**4. Sidebar: novo item em "Trafego & ADS"**
+- Icone `Zap` ou `Shield`, label "Auto-Rules"
+- Path: `/auto-rules`
 
-**5. Modificar webhooks (ticto, eduzz, guru)**
-- Após `sync_lead_from_sale`, buscar os funnel_ids onde o lead foi posicionado
-- Para cada funil com `meta_pixel_id` configurado, chamar `meta-capi-sync`
-- Chamada await (não fire-and-forget, conforme regra do projeto)
+**5. Rota em `App.tsx`**
+- `<Route path="/auto-rules" element={<Protected><AutoRules /></Protected>} />`
+
+**6. Edge Function `auto-rules-engine/index.ts`**
+- Chamada via pg_cron a cada 15 min
+- Busca regras ativas, calcula metricas cruzando `meta_insights` + `v_all_sales`
+- Se condicoes atendidas: executa acao via Meta Ads API (pause/budget)
+- Registra log em `automation_rule_logs`
+
+---
 
 ### Arquivos
 
-| Arquivo | Ação |
+| Arquivo | Acao |
 |---------|------|
-| `supabase/migrations/xxx_lead_funnels_meta_pixel.sql` | Criar — ADD COLUMN meta_pixel_id, meta_access_token |
-| `supabase/migrations/xxx_meta_capi_log.sql` | Criar — tabela de auditoria |
-| `src/types/leadFunnels.ts` | Modificar — adicionar `meta_pixel_id`, `meta_access_token` ao tipo |
-| `src/components/lead-funnels/FunnelConfigTab.tsx` | Modificar — inputs Meta Pixel ID + Access Token |
-| `supabase/functions/meta-capi-sync/index.ts` | Criar — Edge Function principal |
-| `supabase/functions/ticto-webhook/index.ts` | Modificar — chamar meta-capi-sync |
-| `supabase/functions/eduzz-webhook/index.ts` | Modificar — chamar meta-capi-sync |
-| `supabase/functions/guru-webhook/index.ts` | Modificar — chamar meta-capi-sync |
-
-### Vantagens
-- Cada funil/produto pode ter pixel diferente
-- Sem secrets globais para gerenciar
-- Escala para N pixels sem reconfiguração de ambiente
+| `supabase/migrations/xxx_automation_rules.sql` | Criar tabelas |
+| `src/pages/AutoRules.tsx` | Criar pagina |
+| `src/hooks/useAutoRules.ts` | Criar hook CRUD |
+| `src/components/layout/AppSidebar.tsx` | Adicionar item |
+| `src/App.tsx` | Adicionar rota |
+| `supabase/functions/auto-rules-engine/index.ts` | Criar Edge Function |
+| `supabase/migrations/xxx_auto_rules_cron.sql` | pg_cron a cada 15min |
 
