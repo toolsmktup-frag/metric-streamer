@@ -1,11 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { LeadFunnelStage, StageTransitionRule, LeadStagePosition, Lead } from '@/types/leadFunnels';
 import { Funnel } from '@/hooks/useFunnels';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
-import { Plus, Trash2, GripVertical, ArrowRight, EyeOff, Shuffle } from 'lucide-react';
+import { Plus, Trash2, ArrowRight, Shuffle } from 'lucide-react';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
+import { restrictToVerticalAxis } from '@dnd-kit/core';
+import SortableStageItem from './SortableStageItem';
 import { toast } from 'sonner';
 import FunnelProductsConfig from './FunnelProductsConfig';
 import TrackingSnippetPopover from './TrackingSnippetPopover';
