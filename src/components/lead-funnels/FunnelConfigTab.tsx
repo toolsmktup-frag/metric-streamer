@@ -73,6 +73,23 @@ const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSave
   const [redistributeOpen, setRedistributeOpen] = useState(false);
   const [localPixelId, setLocalPixelId] = useState(metaPixelId || '');
   const [localAccessToken, setLocalAccessToken] = useState(metaAccessToken || '');
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor)
+  );
+
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    setLocalStages(prev => {
+      const oldIndex = prev.findIndex((_, i) => (prev[i].id || `temp-${i}`) === active.id);
+      const newIndex = prev.findIndex((_, i) => (prev[i].id || `temp-${i}`) === over.id);
+      if (oldIndex === -1 || newIndex === -1) return prev;
+      return arrayMove(prev, oldIndex, newIndex);
+    });
+  }, []);
+
   // Sync local state when props update (e.g. after save)
   useEffect(() => {
     if (stages.length > 0) {
