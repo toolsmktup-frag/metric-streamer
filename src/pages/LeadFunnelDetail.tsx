@@ -224,7 +224,7 @@ const LeadFunnelDetail: React.FC = () => {
             <div key={tab} className="h-9 w-24 rounded-md animate-pulse bg-muted" />
           ))}
         </div>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {[1, 2, 3, 4, 5, 6].map(i => (
             <div key={i} className="h-[200px] rounded-lg border border-border animate-pulse bg-muted/30" />
           ))}

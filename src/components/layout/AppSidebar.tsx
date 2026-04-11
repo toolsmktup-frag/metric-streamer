@@ -35,6 +35,7 @@ import { useMyPermissions } from '@/hooks/useUserPermissions';
 interface AppSidebarProps {
   collapsed: boolean;
   onToggle: () => void;
+  onNavigate?: () => void;
 }
 
 /* ── Itens absorvidos por Tráfego & ADS ── */
@@ -72,7 +73,7 @@ const CONFIG_ITEMS = [
   { path: '/funis/configurar', label: 'Gerenciar Funis', icon: Settings },
 ];
 
-const AppSidebar = React.memo(function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
+const AppSidebar = React.memo(function AppSidebar({ collapsed, onToggle, onNavigate }: AppSidebarProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const { data: funnels = [] } = useFunnels();
@@ -110,6 +111,7 @@ const AppSidebar = React.memo(function AppSidebar({ collapsed, onToggle }: AppSi
     <NavLink
       key={path}
       to={path}
+      onClick={onNavigate}
       className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
         isActive(path)
           ? 'bg-sidebar-active text-sidebar-theme'

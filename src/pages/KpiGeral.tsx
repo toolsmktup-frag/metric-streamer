@@ -268,7 +268,7 @@ export default function KpiGeral() {
             <FunnelStep label="Checkouts" value={formatNumber(totals.checkouts)} rate={`${checkoutSobrePv.toFixed(1)}%`} rateLabel="Checkout/PV" width={checkoutSobrePv} color="hsl(280, 60%, 55%)" />
             <FunnelStep label="Vendas (P1)" value={formatNumber(totals.vendas_principal)} rate={`${vendasSobreCheckout.toFixed(1)}%`} rateLabel="Conv. Checkout" width={vendasSobreCheckout} color="hsl(152, 60%, 42%)" />
           </div>
-          <div className="mt-4 pt-3 border-t border-border grid grid-cols-3 gap-3 text-xs text-center">
+          <div className="mt-4 pt-3 border-t border-border grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs text-center">
             <div>
               <span className="text-muted-foreground block">CPC</span>
               <span className="font-mono-value font-semibold text-foreground">{formatCurrency(cpc)}</span>

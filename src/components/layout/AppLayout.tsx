@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import AppSidebar from './AppSidebar';
 import DateRangePicker from '@/components/dashboard/DateRangePicker';
-import { RefreshCw, Clock } from 'lucide-react';
+import { RefreshCw, Clock, Menu } from 'lucide-react';
 import { useFilterStore } from '@/stores/filterStore';
 import { SkeletonCard } from '@/components/dashboard/SkeletonCard';
 import { useMetaSyncStatus } from '@/hooks/useMetaData';
@@ -9,6 +9,7 @@ import { Suspense } from 'react';
 import UserMenu from './UserMenu';
 import { useTheme } from '@/hooks/useTheme';
 import { useActivityTracker } from '@/hooks/useActivityTracker';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -52,10 +53,12 @@ function SyncInfo() {
 
 export default function AppLayout({ children }: AppLayoutProps) {
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const isMobile = useIsMobile();
   const { refresh } = useFilterStore();
   const [refreshing, setRefreshing] = useState(false);
-  useTheme(); // Initialize theme on app load
-  useActivityTracker(); // Track user activity for CRM analytics
+  useTheme();
+  useActivityTracker();
 
   const handleRefresh = () => {
     setRefreshing(true);
@@ -65,14 +68,38 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
   return (
     <div className="flex min-h-screen w-full bg-background">
-      <AppSidebar collapsed={collapsed} onToggle={() => setCollapsed(!collapsed)} />
+      {/* Mobile overlay */}
+      {isMobile && mobileOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+
+      {/* Sidebar: hidden on mobile unless open */}
+      <div className={`${isMobile ? 'fixed inset-y-0 left-0 z-50 transition-transform duration-200' : ''} ${isMobile && !mobileOpen ? '-translate-x-full' : 'translate-x-0'}`}>
+        <AppSidebar
+          collapsed={isMobile ? false : collapsed}
+          onToggle={() => isMobile ? setMobileOpen(false) : setCollapsed(!collapsed)}
+          onNavigate={isMobile ? () => setMobileOpen(false) : undefined}
+        />
+      </div>
+
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="sticky top-0 z-20 h-14 border-b border-border bg-card/80 backdrop-blur-sm flex items-center justify-between px-6">
-          <div className="flex items-center gap-3">
+        <header className="sticky top-0 z-20 h-14 border-b border-border bg-card/80 backdrop-blur-sm flex items-center justify-between px-3 md:px-6">
+          <div className="flex items-center gap-2 md:gap-3">
+            {isMobile && (
+              <button
+                onClick={() => setMobileOpen(true)}
+                className="h-8 w-8 flex items-center justify-center rounded-md hover:bg-muted transition-colors"
+              >
+                <Menu className="h-5 w-5 text-foreground" />
+              </button>
+            )}
             <DateRangePicker />
           </div>
-          <div className="flex items-center gap-3">
-            <SyncInfo />
+          <div className="flex items-center gap-2 md:gap-3">
+            {!isMobile && <SyncInfo />}
             <button
               onClick={handleRefresh}
               title="Atualizar dados em cache"
@@ -83,8 +110,8 @@ export default function AppLayout({ children }: AppLayoutProps) {
             <UserMenu />
           </div>
         </header>
-        <main className="flex-1 p-6">
-          <Suspense fallback={<div className="grid grid-cols-4 gap-4">{Array.from({length:8}).map((_,i)=><SkeletonCard key={i}/>)}</div>}>
+        <main className="flex-1 p-3 md:p-6">
+          <Suspense fallback={<div className="grid grid-cols-2 md:grid-cols-4 gap-4">{Array.from({length:8}).map((_,i)=><SkeletonCard key={i}/>)}</div>}>
             {children}
           </Suspense>
         </main>
