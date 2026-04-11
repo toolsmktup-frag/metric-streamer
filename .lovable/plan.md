@@ -1,45 +1,53 @@
 
 
-## Aplicar Tema Clean Slate (modo seguro)
+## Auditoria de Responsividade — Diagnóstico e Melhorias
 
-### Estratégia
-Converter manualmente os valores `oklch` do tema Clean Slate para **HSL** e aplicar no `src/index.css`, mantendo o formato existente que todo o projeto espera.
+### Situação Atual
 
-**NÃO rodar** `npx shadcn@latest add` — risco de migração para Tailwind v4.
+O projeto já usa algumas boas práticas em várias páginas (breakpoints `md:`, `lg:`, `xl:` nos grids de KPI e diagnósticos). Porém existem problemas significativos:
 
-### Conversão oklch → HSL (valores calculados)
+### Problemas Encontrados
 
-**Light mode:**
-| Token | oklch | HSL equivalente |
-|-------|-------|-----------------|
-| --background | oklch(0.9842...) | 230 25% 97% |
-| --foreground | oklch(0.2795...) | 248 28% 16% |
-| --primary | oklch(0.5854...) | 262 83% 58% |
-| --card | oklch(1.0) | 0 0% 100% |
-| --secondary | oklch(0.9276...) | 250 10% 90% |
-| --muted | oklch(0.9670...) | 250 5% 95% |
-| --accent | oklch(0.9299...) | 268 30% 88% |
-| --destructive | oklch(0.6368...) | 15 80% 50% |
-| --border | oklch(0.8717...) | 252 10% 83% |
+**1. Sidebar não tem modo mobile**
+- A sidebar customizada (`AppSidebar.tsx`) usa `width: 64px | 240px` fixo, sem esconder no mobile
+- Não usa `useIsMobile()` (só o sidebar do shadcn usa)
+- Em telas < 768px a sidebar ocupa espaço precioso e não tem hamburger menu
 
-**Dark mode:** mesma lógica, valores escuros convertidos.
+**2. Header não adapta para mobile**
+- `AppLayout.tsx`: header com `px-6` fixo, DateRangePicker + SyncInfo + Refresh + UserMenu todos lado a lado
+- Em telas pequenas os itens vão sobrepor ou quebrar
 
-### O que muda
-1. **`src/index.css`** — substituir valores HSL de `:root` e `.dark` pelos equivalentes do Clean Slate
-2. **`tailwind.config.ts`** — adicionar cores `chart-1` a `chart-5` no extend
-3. Preservar **todos** os tokens customizados: `--kpi-*`, `--roas-*`, `--table-*`, `--skeleton-*`, `--sidebar-bg/fg/hover/active`
+**3. Grids fixos sem breakpoint mobile**
+- `grid grid-cols-3` sem `md:` em funnel stats (FunilKpi, KpiGeral — linha de CPC/CPL/ROAS)
+- `grid grid-cols-4` no skeleton fallback do AppLayout (linha 87) — sem breakpoint
+- Algumas tabelas sem `overflow-x-auto`
 
-### O que NÃO muda
-- Formato das variáveis (`H S% L%` sem parênteses)
-- `darkMode: "class"` no tailwind config
-- `useTheme.ts`
-- Nenhum componente ou página
-- Nenhuma das 143 referências `hsl(var(--...))` nos arquivos
+**4. Main padding fixo**
+- `main` usa `p-6` fixo — no mobile deveria ser `p-3` ou `p-4`
 
-### Segurança
-- Backups já existem: `index.backup.css`, `tailwind.config.backup.ts`, `useTheme.backup.ts`
-- Se algo der errado, restaura em 10 segundos
+### Plano de Correções
 
-### Resultado visual
-O tema muda de **verde** (hsl 152) para **roxo/índigo** (hsl ~262), tanto em light quanto dark mode. Todos os KPIs, gráficos e tabelas continuam funcionando normalmente.
+**Arquivo 1: `src/components/layout/AppLayout.tsx`**
+- Adicionar `useIsMobile()` para controlar sidebar mobile
+- Header: esconder `SyncInfo` no mobile, reduzir padding (`px-3 md:px-6`)
+- Main: padding responsivo (`p-3 md:p-6`)
+- Skeleton fallback: `grid-cols-2 md:grid-cols-4`
+
+**Arquivo 2: `src/components/layout/AppSidebar.tsx`**
+- No mobile: sidebar vira drawer overlay (posição `fixed`, fundo escuro)
+- Botão hamburger no header para abrir/fechar
+- Auto-fechar ao clicar em link no mobile
+
+**Arquivo 3: Páginas com grids fixos**
+- `FunilKpi.tsx` e `KpiGeral.tsx`: `grid-cols-3` → `grid-cols-1 sm:grid-cols-3`
+- Tabelas de campanhas/anúncios: garantir `overflow-x-auto` nos wrappers
+
+**Arquivo 4: Componentes menores**
+- Botões com texto longo: adicionar `whitespace-nowrap` ou `truncate` onde faltar
+- DateRangePicker: verificar se reduz label no mobile
+
+### Impacto
+- ~4 arquivos editados
+- Zero mudança de lógica/dados
+- Sidebar mobile com drawer é a maior mudança visual
 
