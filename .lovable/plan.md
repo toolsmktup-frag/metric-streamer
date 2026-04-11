@@ -1,18 +1,39 @@
 
+# Fix: Regras de transição não persistem
 
-# Fix: Texto truncado nos selects de regras de transição
+## Diagnóstico
+Pelo snapshot atual, o funil está sendo carregado com `stage_transition_rules: []`, então o problema não parece ser só visual: as regras não estão voltando no fetch.
 
-## Problema
-Os selects "De (qualquer)" e "Para..." usam `w-40` (160px fixo), o que trunca nomes mais longos como "Compra Aprovada" para "Compra...".
+No código atual há 3 pontos frágeis:
+1. `src/components/lead-funnels/FunnelConfigTab.tsx` reseta `localRules` sempre que `rules` muda (`useEffect`), o que pode apagar edição local.
+2. O save aceita `from_stage_id` / `to_stage_id` temporários (`temp-*`) se a regra for criada antes de a etapa estar persistida.
+3. `src/hooks/useLeadFunnels.ts` apaga e reinsere regras, mas não reconcilia imediatamente o cache do `lead-funnel`; se houver falha na reinserção, a tela volta vazia.
 
-## Correção
+## Implementação
+1. Ajustar a sincronização de `localRules`
+- Trocar o reset cego por comparação estável (`id + event_name + from_stage_id + to_stage_id`).
+- Só atualizar `localRules` quando o payload vindo do servidor realmente mudar.
 
-**Arquivo**: `src/components/lead-funnels/FunnelConfigTab.tsx`
+2. Bloquear save com etapas temporárias
+- Validar `from_stage_id` e `to_stage_id` antes de salvar.
+- Se existir `temp-*`, impedir o save com mensagem clara: “Salve as etapas antes de salvar as regras”.
 
-Trocar `w-40` por `min-w-[140px] flex-1` nos três SelectTrigger das regras (linhas 262, 297, 312), para que eles expandam conforme o espaço disponível sem truncar o texto:
+3. Tornar o save robusto
+- Em `useUpsertTransitionRules`, checar erro no `delete`.
+- Após o `insert`, atualizar o cache de `['lead-funnel', funnelId]` com as regras retornadas e depois invalidar a query para revalidação.
 
-- Linha 297: `<SelectTrigger className="w-40">` → `<SelectTrigger className="min-w-[140px] flex-1">`
-- Linha 312: `<SelectTrigger className="w-40">` → `<SelectTrigger className="min-w-[140px] flex-1">`
+4. Melhorar feedback de erro
+- Propagar a mensagem real do Supabase no save de regras para diferenciar:
+  - etapa ainda não salva,
+  - constraint/FK inválida,
+  - permissão/RLS.
 
-O primeiro select (evento, linha 262) já usa `flex-1`, então está ok.
+## Arquivos
+- `src/components/lead-funnels/FunnelConfigTab.tsx`
+- `src/hooks/useLeadFunnels.ts`
 
+## Detalhes técnicos
+- Chave de comparação sugerida:
+  `rules.map(r => [r.id ?? 'new', r.event_name ?? '', r.from_stage_id ?? 'any', r.to_stage_id ?? ''].join(':')).join('|')`
+- O update de cache deve preservar o restante do objeto `lead-funnel` e trocar apenas `stage_transition_rules`.
+- A regra de negócio atual continua: o mesmo evento pode existir mais de uma vez quando muda a etapa de origem; o ajuste é só de persistência e estabilidade da tela.
