@@ -1,33 +1,47 @@
 
 
-## Gerar PDF com Respostas ao Diagnóstico de Tracking
+## Roteamento Multi-Funil por Produto
 
-Vou criar um PDF profissional respondendo todas as 9 perguntas do documento "tracking_research.pdf" com base na análise real do código do projeto.
+### Problema
+A RPC `sync_lead_from_sale` usa `LIMIT 1` no match de produto — se "Guia de Tinturas" está configurado em 2+ funis (ex: "Recontato 90d" e "Infoprodutos Geral"), apenas um recebe o lead.
 
-### Conteúdo do PDF
+### Solução
+Substituir o bloco de match único por um loop que posiciona o lead em **todos** os funis que fazem match com o produto.
 
-**Seção 1 - Arquitetura e Fluxo de Dados**
-1. Estrutura do banco (tabelas, colunas de tracking)
-2. Processamento de webhooks (Ticto, Guru, Eduzz)
-3. Captura de e-mail em tempo real (não existe)
+### Etapas
 
-**Seção 2 - Tracking e Identificação**
-4. Geração/persistência de visitor_id (não implementado)
-5. Captura de fbclid (recém-implementado via query_params)
-6. IP e User-Agent (não capturados)
+**1. Migration SQL — atualizar `sync_lead_from_sale` (v4)**
 
-**Seção 3 - Integração Meta Ads**
-7. Meta CAPI (não implementada)
-8. External ID para deduplicação (não existe)
+Reescrever o bloco 6 da função: trocar as duas queries com `LIMIT 1` + `IF` por um `FOR ... LOOP` que itera sobre todos os funis com match:
 
-**Seção 4 - Fluxo de Atribuição**
-9. Modelo de atribuição (last-click via webhook)
-10. Jornada completa do cliente (apenas último clique)
+```text
+FOR v_prod_funnel_id IN
+  SELECT DISTINCT lf.id
+  FROM lead_product_mappings lpm
+  JOIN lead_funnels lf ON lf.id = lpm.lead_funnel_id
+  WHERE ... LOWER match exato ...
+  UNION
+  SELECT DISTINCT lfp.lead_funnel_id
+  FROM lead_funnel_products lfp
+  JOIN lead_funnels lf ON lf.id = lfp.lead_funnel_id
+  WHERE ... ILIKE match fragmento ...
+LOOP
+  -- Log lead_event no funil
+  -- Posicionar no primeiro stage (ON CONFLICT DO NOTHING)
+END LOOP;
+```
 
-**Status atual resumido** em tabela com ✅/❌
+A constraint `UNIQUE (lead_id, funnel_id)` em `lead_stage_positions` já existe, então `ON CONFLICT DO NOTHING` protege contra duplicatas.
 
-### Implementação
-- Script Python com reportlab
-- Output em `/mnt/documents/diagnostico-tracking.pdf`
-- QA visual obrigatório
+**2. Atualizar documentação**
+
+Sincronizar `docs/rpc-sync-lead-from-sale.sql` com a nova versão v4.
+
+### O que NÃO muda
+- Frontend — a UI de "Produtos & Recontato" já permite o mesmo produto em múltiplos funis
+- Automações WhatsApp — continuam disparando pelo pipeline independente do `wz-receiver`
+- Funis com produto único — comportamento idêntico ao atual
+
+### Resultado
+Uma venda de "Guia de Tinturas" posiciona o lead simultaneamente em todos os funis que têm esse produto configurado, cada um com seu próprio ciclo de recontato e gestão de etapas independente.
 
