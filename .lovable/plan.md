@@ -1,40 +1,31 @@
 
 
-## Plano: Corrigir layout responsivo dos dashboards
+## Diagnóstico: Por que o Pix gerado não move o lead para "Pix / Boleto Gerado"
 
-### Problema
-Em viewports intermediários (~983px), os KPI cards com valores monetários longos (ex: "R$ 29.081,68") ficam truncados ou estouram o layout. Isso acontece porque:
+### Causa raiz
 
-1. **FunilResumo.tsx** usa `lg:grid-cols-4` — a partir de 1024px tenta encaixar 4 cards, muito apertado para valores grandes
-2. **Resumo.tsx** usa `lg:grid-cols-3 xl:grid-cols-4` — melhor, mas ainda trunca em ~1024px com 3 colunas + sidebar
-3. **KPICard.tsx** usa `truncate` no valor, cortando o número em vez de ajustar o tamanho da fonte
-4. **Charts Row 2** (`md:grid-cols-3`) força 3 colunas a partir de 768px — muito cedo quando há sidebar
+A RPC `sync_lead_from_sale` **v5** — que é a versão que aplica as `stage_transition_rules` (as regras de transição que você configurou na imagem) — **nunca foi executada no banco de dados**. O arquivo existe apenas em `docs/rpc-sync-lead-from-sale-v5.sql` mas não foi adicionado como migration.
 
-### Correções
+O banco está rodando a **v4**, que:
+- Posiciona o lead no **primeiro stage** do funil (ex: "Base de clientes")
+- **Ignora completamente** as regras de transição configuradas na interface
 
-**1. KPICard.tsx — valor nunca deve truncar**
-- Trocar `truncate` por `break-all` ou melhor: reduzir o `text-2xl` no breakpoint problemático
-- Usar `text-base sm:text-lg lg:text-xl xl:text-2xl` para escala progressiva
-- Remover `truncate` do valor (números cortados perdem sentido)
+Ou seja, as regras "PIX/Boleto Gerado → Pix / Boleto Gerado", "Carrinho Abandonado → Recuperar", "Compra Aprovada → Compra Aprovada" estão salvas na tabela `stage_transition_rules`, mas a RPC não as consulta.
 
-**2. FunilResumo.tsx — grid KPI mais conservador**
-- Mudar `grid-cols-1 sm:grid-cols-2 lg:grid-cols-4` para `grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4`
-- Charts Row 2: `md:grid-cols-3` → `grid-cols-1 lg:grid-cols-3`
+### Solução
 
-**3. Resumo.tsx — mesmos ajustes**
-- Charts Row 2: `md:grid-cols-3` → `grid-cols-1 lg:grid-cols-3`
+**1. Criar migration com a RPC v5**
+- Adicionar `supabase/migrations/20260411120000_sync_lead_from_sale_v5.sql` com o conteúdo de `docs/rpc-sync-lead-from-sale-v5.sql`
+- Isso faz o deploy automático da função corrigida
 
-**4. Criativos.tsx e CrmAnalytics.tsx — mesma padronização**
-- Onde usar `lg:grid-cols-4`, mudar para `lg:grid-cols-3 xl:grid-cols-4`
+**2. Resultado esperado**
+Após o deploy:
+- Pix gerado → lead vai para etapa "Pix / Boleto Gerado"
+- Compra aprovada → lead vai para etapa "Compra Aprovada"  
+- Carrinho abandonado, recusado, reembolso, chargeback → lead vai para "Recuperar"
+- Cancelado → lead vai para "Recuperar"
+- Tudo automático, conforme suas regras configuradas
 
-**5. LeadsDashboard.tsx**
-- `md:grid-cols-4` → `sm:grid-cols-2 lg:grid-cols-4`
-
-### Arquivos alterados
-- `src/components/dashboard/KPICard.tsx`
-- `src/pages/FunilResumo.tsx`
-- `src/pages/Resumo.tsx`
-- `src/pages/Criativos.tsx`
-- `src/pages/CrmAnalytics.tsx`
-- `src/pages/LeadsDashboard.tsx`
+### Arquivo alterado
+- `supabase/migrations/20260411120000_sync_lead_from_sale_v5.sql` (novo)
 
