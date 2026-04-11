@@ -1,34 +1,45 @@
 
 
-## Fase 1: Fundação do Tracking Server-Side
+## Snippet de Tracking por Etapa do Funil + Validador
 
-### Escopo (2 entregas isoladas, zero impacto no app atual)
+### Ideia
+Ao lado do campo "URL da página" de cada etapa, adicionar um botão que abre um popover/dialog com:
+1. **Snippet gerado automaticamente** — `<script>` tag com `data-endpoint`, `data-funnel-id` e `data-stage-id` preenchidos
+2. **Botão "Copiar"** com feedback visual
+3. **Botão "Testar"** que faz um POST de teste ao endpoint e mostra ✅ ou ❌
+4. O botão só aparece quando a etapa tem `page_url` preenchida
 
-**Entrega 1: Edge Function `track-event`**
-- Nova Edge Function em `supabase/functions/track-event/index.ts`
-- Recebe POST com payload JSON (visitor_id, UTMs, fbclid, fbc, fbp, gclid, user-agent, resolução, timezone)
-- Extrai IP real dos headers (`x-forwarded-for`, `x-real-ip`)
-- Por enquanto, retorna 200 OK com log (a tabela `clicks` vem na Fase 2)
-- Validação básica do payload
-- CORS configurado para aceitar requests das landing pages
+### Arquivos
 
-**Entrega 2: Script JS para Landing Pages**
-- Arquivo estático gerado em `public/tracking/tracker.js` (para download/cópia)
-- Gera `visitor_id` UUID e persiste em cookie first-party (1 ano) + localStorage backup
-- Captura UTMs: `utm_source`, `utm_medium`, `utm_campaign`, `utm_content`, `utm_term`
-- Captura click IDs: `fbclid`, `fbc`, `fbp`, `gclid`
-- Coleta fingerprint básico: userAgent, resolução de tela, timezone
-- Envia via `navigator.sendBeacon()` com fallback para `fetch()`
-- O script é standalone — não depende de React, Tailwind, nem do app
+**1. Novo: `src/components/lead-funnels/TrackingSnippetPopover.tsx`**
+- Recebe `funnelId`, `stageId`, `stageName`, `pageUrl`
+- Gera o snippet:
+```html
+<script src="https://metric-streamer.lovable.app/tracking/tracker.js"
+        data-endpoint="https://emfbocpmphtftqcezaib.supabase.co/functions/v1/track-event"
+        data-funnel-id="ID"
+        data-stage-id="ID"
+        defer></script>
+```
+- Botão copiar com `navigator.clipboard` + toast
+- Botão "Testar" que envia evento `tracking_test` via fetch e mostra resultado
+- Usa Popover do shadcn (já existe no projeto)
+
+**2. Editar: `src/components/lead-funnels/FunnelConfigTab.tsx`**
+- Ao lado do input `page_url`, adicionar o `<TrackingSnippetPopover>` (ícone `<Code>` do Lucide)
+- Aparece só quando `page_url` não está vazio
+
+**3. Editar: `public/tracking/tracker.js`**
+- Ler `data-funnel-id` e `data-stage-id` do script tag
+- Incluir `funnel_id` e `stage_id` no payload enviado ao endpoint
+- Campos opcionais — retrocompatível
+
+**4. Editar: `supabase/functions/track-event/index.ts`**
+- Aceitar `funnel_id` e `stage_id` opcionais no payload
+- Incluir no log
 
 ### O que NÃO muda
-- Nenhuma página do dashboard é alterada
-- Nenhuma tabela existente é modificada
-- Nenhum webhook existente é tocado
-- Nenhuma Edge Function existente é editada
-
-### Resultado da Fase 1
-- Script JS pronto para copiar/colar no `<head>` das LPs
-- Endpoint `track-event` rodando no Supabase, recebendo e logando eventos
-- Base pronta para a Fase 2 (criar tabela `clicks` e começar a persistir)
+- Nenhuma tabela criada/alterada
+- Nenhum outro componente tocado
+- tracker.js continua funcionando sem os novos atributos
 
