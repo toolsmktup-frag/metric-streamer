@@ -7,42 +7,15 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-interface TrackingPayload {
-  visitor_id: string;
-  event: string;
-  funnel_id?: string;
-  stage_id?: string;
-  page_url?: string;
-  page_title?: string;
-  referrer?: string;
-  utm_source?: string;
-  utm_medium?: string;
-  utm_campaign?: string;
-  utm_content?: string;
-  utm_term?: string;
-  fbclid?: string;
-  fbc?: string;
-  fbp?: string;
-  gclid?: string;
-  screen_resolution?: string;
-  timezone?: string;
-  user_agent?: string;
-  timestamp?: string;
-}
-
 function isValidUUID(str: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
 }
 
 function extractClientIP(req: Request): string {
   const forwarded = req.headers.get("x-forwarded-for");
-  if (forwarded) {
-    return forwarded.split(",")[0].trim();
-  }
+  if (forwarded) return forwarded.split(",")[0].trim();
   const realIp = req.headers.get("x-real-ip");
-  if (realIp) {
-    return realIp.trim();
-  }
+  if (realIp) return realIp.trim();
   return "unknown";
 }
 
@@ -66,7 +39,6 @@ Deno.serve(async (req) => {
   try {
     const body = await req.json();
 
-    // Validate required fields
     const visitorId = sanitizeString(body.visitor_id, 36);
     const event = sanitizeString(body.event, 100);
 
@@ -87,9 +59,9 @@ Deno.serve(async (req) => {
     const clientIP = extractClientIP(req);
     const serverUserAgent = req.headers.get("user-agent") || "unknown";
 
-    const payload: TrackingPayload & { client_ip: string; server_user_agent: string } = {
+    const record = {
       visitor_id: visitorId,
-      event,
+      event_type: event,
       funnel_id: sanitizeString(body.funnel_id, 36),
       stage_id: sanitizeString(body.stage_id, 36),
       page_url: sanitizeString(body.page_url, 2000),
@@ -104,16 +76,32 @@ Deno.serve(async (req) => {
       fbc: sanitizeString(body.fbc, 500),
       fbp: sanitizeString(body.fbp, 500),
       gclid: sanitizeString(body.gclid, 500),
+      ip_address: clientIP,
+      user_agent: sanitizeString(body.user_agent, 500) || serverUserAgent,
       screen_resolution: sanitizeString(body.screen_resolution, 20),
       timezone: sanitizeString(body.timezone, 100),
-      user_agent: sanitizeString(body.user_agent, 500) || serverUserAgent,
-      timestamp: sanitizeString(body.timestamp, 30),
-      client_ip: clientIP,
-      server_user_agent: serverUserAgent,
+      email: sanitizeString(body.email, 320),
     };
 
-    // Phase 1: Log only — Phase 2 will persist to `clicks` table
-    console.log("[track-event]", JSON.stringify(payload));
+    // Remove undefined fields
+    const cleanRecord = Object.fromEntries(
+      Object.entries(record).filter(([_, v]) => v !== undefined)
+    );
+
+    // Persist to clicks table
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(supabaseUrl, serviceRoleKey);
+
+    const { error: dbError } = await supabase
+      .from("clicks")
+      .insert(cleanRecord);
+
+    if (dbError) {
+      console.error("[track-event] DB insert error:", dbError.message);
+      // Fallback: log payload so data is not lost
+      console.log("[track-event] fallback-log:", JSON.stringify(cleanRecord));
+    }
 
     return new Response(
       JSON.stringify({ ok: true, visitor_id: visitorId }),
