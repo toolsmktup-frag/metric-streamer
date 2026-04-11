@@ -1,69 +1,56 @@
 
 
-## Fase 3: Integração Meta Conversions API (CAPI) e Deduplicação
+## Fase 3 (revisada): Meta CAPI com Pixel por Funil
 
-### Objetivo
-Criar uma Edge Function `meta-capi-sync` que envia eventos de **Purchase** enriquecidos para a Meta Conversions API (Graph API), utilizando dados da tabela `clicks` para maximizar o Event Match Quality (EMQ).
-
-### Como funciona
-
-```text
-Webhook (Ticto/Eduzz/Guru)
-  ↓ salva venda no DB
-  ↓ chama sync_lead_from_sale
-  ↓ chama meta-capi-sync  ← NOVO
-        ↓
-        Busca na tabela "clicks" o registro
-        mais recente com o email do comprador
-        ↓
-        Envia evento Purchase para
-        graph.facebook.com via Server Event API
-        com: email hash, phone hash, ip, user_agent,
-        fbp, fbc, external_id (order hash)
-```
+### Mudança de abordagem
+Em vez de um único `META_PIXEL_ID` como secret global, cada **lead funnel** terá seus próprios campos de configuração Meta (pixel_id + access_token). A Edge Function `meta-capi-sync` buscará essas credenciais do funil correspondente.
 
 ### Implementação
 
-**1. Nova Edge Function `supabase/functions/meta-capi-sync/index.ts`**
-- Recebe: `email`, `phone`, `amount_cents`, `currency`, `order_id`, `product_name`, `event_name` (default: "Purchase")
-- Busca na tabela `clicks` o registro mais recente com esse email para resgatar: `ip_address`, `user_agent`, `fbp`, `fbc`, `fbclid`
-- Aplica SHA-256 hash em `email` e `phone` (requisito Meta)
-- Monta payload no formato Meta Server Events API (Graph API v21.0)
-- Envia para `POST /v21.0/{pixel_id}/events` com `access_token`
-- Usa `order_id` como `event_id` para deduplicação com pixel client-side
-- Loga resultado em tabela `meta_capi_log` (sucesso/erro, fbevent_id)
+**1. Migration: adicionar colunas Meta ao `lead_funnels`**
+```sql
+ALTER TABLE lead_funnels
+  ADD COLUMN meta_pixel_id TEXT DEFAULT NULL,
+  ADD COLUMN meta_access_token TEXT DEFAULT NULL;
+```
 
-**2. Nova migration: tabela `meta_capi_log`**
-- Colunas: `id`, `event_name`, `event_id`, `email_hash`, `order_id`, `status`, `meta_response`, `created_at`
-- Permite auditoria e debug de envios
+**2. UI: campos Meta Pixel na aba Config do funil**
+- Adicionar dois inputs no `FunnelConfigTab.tsx`: "Meta Pixel ID" e "Meta Access Token"
+- Salvar via `updateFunnel` existente (já faz UPDATE na tabela `lead_funnels`)
+- Access token exibido como `type="password"` por segurança
 
-**3. Secrets necessários**
-- `META_PIXEL_ID` — ID do pixel do Meta
-- `META_ACCESS_TOKEN` — já existe no projeto (usada pelo sync-meta)
+**3. Edge Function `meta-capi-sync/index.ts`**
+- Recebe: `email`, `phone`, `amount_cents`, `currency`, `order_id`, `product_name`, `event_name`, `funnel_id`
+- Busca `meta_pixel_id` e `meta_access_token` do `lead_funnels` pelo `funnel_id`
+- Se não tiver pixel configurado, loga e retorna (sem erro)
+- Busca na tabela `clicks` o registro mais recente com esse email para enriquecer com: `ip_address`, `user_agent`, `fbp`, `fbc`
+- Hash SHA-256 em email/phone
+- Envia para `graph.facebook.com/v21.0/{pixel_id}/events`
+- Loga resultado em `meta_capi_log`
 
-**4. Modificar webhooks existentes para chamar `meta-capi-sync`**
-- `ticto-webhook`: após `sync_lead_from_sale`, se status === "authorized", chamar `meta-capi-sync`
-- `eduzz-webhook`: idem
-- `guru-webhook`: idem
-- Chamada fire-and-forget (non-fatal, com try/catch)
+**4. Migration: tabela `meta_capi_log`**
+- Colunas: `id`, `funnel_id`, `event_name`, `event_id`, `email_hash`, `order_id`, `pixel_id`, `status`, `meta_response`, `created_at`
 
-### Detalhes técnicos
+**5. Modificar webhooks (ticto, eduzz, guru)**
+- Após `sync_lead_from_sale`, buscar os funnel_ids onde o lead foi posicionado
+- Para cada funil com `meta_pixel_id` configurado, chamar `meta-capi-sync`
+- Chamada await (não fire-and-forget, conforme regra do projeto)
 
-| Item | Detalhe |
-|------|---------|
-| Hash | SHA-256 via `crypto.subtle.digest` (nativo Deno) |
-| Dedup | `event_id` = order_id/hash garante que Meta ignora duplicatas |
-| Match params | `em`, `ph`, `client_ip_address`, `client_user_agent`, `fbp`, `fbc`, `external_id` |
-| Fallback | Se não encontrar registro em `clicks`, envia mesmo assim com dados parciais (email+phone) |
-| Endpoint | `https://graph.facebook.com/v21.0/{PIXEL_ID}/events` |
-
-### Arquivos a criar/modificar
+### Arquivos
 
 | Arquivo | Ação |
 |---------|------|
-| `supabase/functions/meta-capi-sync/index.ts` | Criar — Edge Function principal |
+| `supabase/migrations/xxx_lead_funnels_meta_pixel.sql` | Criar — ADD COLUMN meta_pixel_id, meta_access_token |
 | `supabase/migrations/xxx_meta_capi_log.sql` | Criar — tabela de auditoria |
-| `supabase/functions/ticto-webhook/index.ts` | Modificar — adicionar chamada meta-capi-sync |
-| `supabase/functions/eduzz-webhook/index.ts` | Modificar — adicionar chamada meta-capi-sync |
-| `supabase/functions/guru-webhook/index.ts` | Modificar — adicionar chamada meta-capi-sync |
+| `src/types/leadFunnels.ts` | Modificar — adicionar `meta_pixel_id`, `meta_access_token` ao tipo |
+| `src/components/lead-funnels/FunnelConfigTab.tsx` | Modificar — inputs Meta Pixel ID + Access Token |
+| `supabase/functions/meta-capi-sync/index.ts` | Criar — Edge Function principal |
+| `supabase/functions/ticto-webhook/index.ts` | Modificar — chamar meta-capi-sync |
+| `supabase/functions/eduzz-webhook/index.ts` | Modificar — chamar meta-capi-sync |
+| `supabase/functions/guru-webhook/index.ts` | Modificar — chamar meta-capi-sync |
+
+### Vantagens
+- Cada funil/produto pode ter pixel diferente
+- Sem secrets globais para gerenciar
+- Escala para N pixels sem reconfiguração de ambiente
 
