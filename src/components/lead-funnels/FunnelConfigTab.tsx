@@ -263,9 +263,14 @@ const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSave
                     <SelectValue placeholder="Selecione o evento" />
                   </SelectTrigger>
                   <SelectContent>
-                    {CANONICAL_EVENTS.map(e => (
-                      <SelectItem key={e.value} value={e.value}>{e.label}</SelectItem>
-                    ))}
+                    {CANONICAL_EVENTS
+                      .filter(e => {
+                        const usedByOther = localRules.some((r, i) => i !== idx && r.event_name === e.value);
+                        return !usedByOther;
+                      })
+                      .map(e => (
+                        <SelectItem key={e.value} value={e.value}>{e.label}</SelectItem>
+                      ))}
                     <SelectItem value="__custom__">Outro (personalizado)</SelectItem>
                   </SelectContent>
                 </Select>
