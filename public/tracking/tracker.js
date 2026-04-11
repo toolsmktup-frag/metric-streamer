@@ -1,5 +1,5 @@
 /**
- * Metric Streamer — Tracker v1.1
+ * Metric Streamer — Tracker v1.2
  * 
  * Script standalone para landing pages.
  * Cole no <head> da LP:
@@ -25,6 +25,18 @@
   if (!ENDPOINT) {
     console.warn("[MS Tracker] Endpoint não configurado. Use data-endpoint ou window.__MS_TRACKING.endpoint");
     return;
+  }
+
+  // Anon key pública — necessária para o gateway do Supabase aceitar a request
+  var ANON_KEY =
+    config.anonKey ||
+    (scriptTag && scriptTag.getAttribute("data-anon-key")) ||
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVtZmJvY3BtcGh0ZnRxY2V6YWliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI5ODc4ODAsImV4cCI6MjA4ODU2Mzg4MH0.EpE1RwQhmk4C9YFdVjnJXp__cI8LPiic5dMqIMP1g8M";
+
+  var DEBUG = config.debug || false;
+
+  function log() {
+    if (DEBUG) console.log.apply(console, ["[MS Tracker]"].concat(Array.prototype.slice.call(arguments)));
   }
 
   // ── UUID v4 ─────────────────────────────────────────────
@@ -144,20 +156,41 @@
     var payload = buildPayload(eventName, extra);
     var json = JSON.stringify(payload);
 
-    if (navigator.sendBeacon) {
-      var blob = new Blob([json], { type: "application/json" });
-      var sent = navigator.sendBeacon(ENDPOINT, blob);
-      if (sent) return;
-    }
+    log("Sending", eventName, payload);
 
+    // Primary: fetch with apikey header (required by Supabase gateway)
     try {
       fetch(ENDPOINT, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": ANON_KEY,
+        },
         body: json,
         keepalive: true,
-      }).catch(function () {});
-    } catch (e) {}
+      })
+        .then(function (res) {
+          if (!res.ok) {
+            log("fetch failed with status", res.status);
+          } else {
+            log("Event sent OK:", eventName);
+          }
+        })
+        .catch(function (err) {
+          log("fetch error, trying sendBeacon fallback:", err);
+          // Fallback: sendBeacon (no custom headers, but better than nothing)
+          if (navigator.sendBeacon) {
+            var blob = new Blob([json], { type: "application/json" });
+            navigator.sendBeacon(ENDPOINT, blob);
+          }
+        });
+    } catch (e) {
+      log("fetch threw, trying sendBeacon:", e);
+      if (navigator.sendBeacon) {
+        var blob = new Blob([json], { type: "application/json" });
+        navigator.sendBeacon(ENDPOINT, blob);
+      }
+    }
   }
 
   // ── Email validation ───────────────────────────────────
