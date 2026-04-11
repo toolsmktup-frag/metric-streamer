@@ -265,8 +265,11 @@ const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSave
                   <SelectContent>
                     {CANONICAL_EVENTS
                       .filter(e => {
-                        const usedByOther = localRules.some((r, i) => i !== idx && r.event_name === e.value);
-                        return !usedByOther;
+                        // Esconder se outra regra já usa este evento com "Qualquer etapa" (catch-all)
+                        const hasCatchAll = localRules.some(
+                          (r, i) => i !== idx && r.event_name === e.value && !r.from_stage_id
+                        );
+                        return !hasCatchAll;
                       })
                       .map(e => (
                         <SelectItem key={e.value} value={e.value}>{e.label}</SelectItem>
@@ -277,7 +280,19 @@ const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSave
               )}
               <Select
                 value={rule.from_stage_id || 'any'}
-                onValueChange={v => updateRule(idx, 'from_stage_id', v === 'any' ? null : v)}
+                onValueChange={v => {
+                  const newFromStage = v === 'any' ? null : v;
+                  updateRule(idx, 'from_stage_id', newFromStage);
+                  // Se mudou para "Qualquer etapa", remover regras redundantes do mesmo evento
+                  if (newFromStage === null) {
+                    const eventName = localRules[idx].event_name;
+                    if (eventName) {
+                      setLocalRules(prev => prev.filter(
+                        (r, i) => i === idx || r.event_name !== eventName
+                      ));
+                    }
+                  }
+                }}
               >
                 <SelectTrigger className="w-40">
                   <SelectValue placeholder="De (qualquer)" />
