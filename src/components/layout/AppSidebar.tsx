@@ -252,6 +252,7 @@ const AppSidebar = React.memo(function AppSidebar({ collapsed, onToggle, onNavig
                         <NavLink
                           key={path}
                           to={path}
+                          onClick={onNavigate}
                           className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
                             isActive(path)
                               ? 'bg-sidebar-active text-sidebar-theme font-medium'
