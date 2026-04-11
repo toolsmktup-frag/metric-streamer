@@ -130,6 +130,40 @@ const WzNodeConfigPanel: React.FC<WzNodeConfigPanelProps> = ({
   );
 };
 
+/* ─── Helper: Multi-input with chips ─── */
+
+function WzMultiInput({ values, onChange, label, placeholder }: { values: string[]; onChange: (v: string[]) => void; label: string; placeholder: string }) {
+  const [input, setInput] = React.useState('');
+  const add = () => {
+    const v = input.trim();
+    if (v && !values.includes(v)) onChange([...values, v]);
+    setInput('');
+  };
+  return (
+    <div className="space-y-2">
+      <Label className="text-xs">{label}</Label>
+      {values.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {values.map(v => (
+            <Badge key={v} variant="secondary" className="text-[10px] gap-1 pr-1">
+              {v}
+              <button type="button" className="ml-0.5 hover:text-destructive" onClick={() => onChange(values.filter(i => i !== v))}>
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          ))}
+        </div>
+      )}
+      <div className="flex gap-1">
+        <Input value={input} onChange={e => setInput(e.target.value)} placeholder={placeholder} className="h-8 text-xs flex-1" onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), add())} />
+        <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={add} disabled={!input.trim()}>
+          <Plus className="h-3 w-3" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 /* ─── Sub-panels ─── */
 
 function TriggerConfig({ data, update }: { data: any; update: (k: string, v: any) => void }) {
