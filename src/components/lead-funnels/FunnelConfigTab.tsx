@@ -43,17 +43,23 @@ interface FunnelConfigTabProps {
   currentTrafficFunnelId?: string | null;
   onTrafficFunnelChange?: (id: string | null) => void;
   savingTrafficFunnel?: boolean;
+  // Meta CAPI
+  metaPixelId?: string | null;
+  metaAccessToken?: string | null;
+  onMetaPixelChange?: (pixelId: string | null, accessToken: string | null) => void;
+  savingMetaPixel?: boolean;
 }
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
 
-const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSaveStages, onSaveRules, saving, funnelId, leadFunnelProducts = [], catalogProducts = [], onSaveProducts, savingProducts, onBulkMoveOverdue, bulkMoving, distinctLeadProducts = [], existingMappings = [], onSaveMappings, savingMappings, loadingDistinctProducts, positions = [], trafficFunnels = [], currentTrafficFunnelId, onTrafficFunnelChange, savingTrafficFunnel }) => {
+const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSaveStages, onSaveRules, saving, funnelId, leadFunnelProducts = [], catalogProducts = [], onSaveProducts, savingProducts, onBulkMoveOverdue, bulkMoving, distinctLeadProducts = [], existingMappings = [], onSaveMappings, savingMappings, loadingDistinctProducts, positions = [], trafficFunnels = [], currentTrafficFunnelId, onTrafficFunnelChange, savingTrafficFunnel, metaPixelId, metaAccessToken, onMetaPixelChange, savingMetaPixel }) => {
   const [localStages, setLocalStages] = useState<Partial<LeadFunnelStage>[]>(
     stages.length ? stages : [{ name: 'Novo Lead', color: COLORS[0], sort_order: 0 }]
   );
   const [localRules, setLocalRules] = useState<Partial<StageTransitionRule>[]>(rules);
   const [redistributeOpen, setRedistributeOpen] = useState(false);
-
+  const [localPixelId, setLocalPixelId] = useState(metaPixelId || '');
+  const [localAccessToken, setLocalAccessToken] = useState(metaAccessToken || '');
   // Sync local state when props update (e.g. after save)
   useEffect(() => {
     if (stages.length > 0) {
@@ -286,6 +292,41 @@ const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSave
           saving={savingMappings}
           loading={loadingDistinctProducts}
         />
+      )}
+
+      {/* Meta Conversions API (CAPI) */}
+      {onMetaPixelChange && (
+        <div>
+          <h3 className="text-lg font-semibold text-foreground mb-3">Meta Conversions API (CAPI)</h3>
+          <p className="text-sm text-muted-foreground mb-3">
+            Configure o Pixel ID e Access Token para enviar eventos de conversão server-side ao Meta.
+          </p>
+          <div className="space-y-3">
+            <div>
+              <label className="text-sm font-medium text-foreground mb-1 block">Meta Pixel ID</label>
+              <Input
+                value={localPixelId}
+                onChange={e => setLocalPixelId(e.target.value)}
+                placeholder="Ex: 123456789012345"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-foreground mb-1 block">Meta Access Token</label>
+              <Input
+                type="password"
+                value={localAccessToken}
+                onChange={e => setLocalAccessToken(e.target.value)}
+                placeholder="Token da Conversions API"
+              />
+            </div>
+            <Button
+              onClick={() => onMetaPixelChange(localPixelId || null, localAccessToken || null)}
+              disabled={savingMetaPixel}
+            >
+              Salvar Configuração Meta
+            </Button>
+          </div>
+        </div>
       )}
 
       {/* Redistribute Leads */}

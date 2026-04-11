@@ -436,6 +436,21 @@ const LeadFunnelDetail: React.FC = () => {
               savingMappings={saveProductMappings.isPending}
               loadingDistinctProducts={loadingDistinctProducts}
               positions={positions}
+              metaPixelId={funnel.meta_pixel_id ?? null}
+              metaAccessToken={funnel.meta_access_token ?? null}
+              onMetaPixelChange={async (pixelId, accessToken) => {
+                try {
+                  await updateLeadFunnel.mutateAsync({
+                    id: funnel.id,
+                    meta_pixel_id: pixelId,
+                    meta_access_token: accessToken,
+                  });
+                  toast.success('Configuração Meta salva!');
+                } catch {
+                  toast.error('Erro ao salvar configuração Meta');
+                }
+              }}
+              savingMetaPixel={updateLeadFunnel.isPending}
             />
           </TabsContent>
         )}

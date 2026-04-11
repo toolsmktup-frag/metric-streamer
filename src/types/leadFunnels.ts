@@ -20,6 +20,8 @@ export interface LeadFunnel {
   is_active: boolean;
   sort_order: number;
   traffic_funnel_id: string | null;
+  meta_pixel_id: string | null;
+  meta_access_token: string | null;
   created_at: string;
   updated_at: string;
   lead_funnel_stages?: LeadFunnelStage[];

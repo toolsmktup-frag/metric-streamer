@@ -501,6 +501,42 @@ Deno.serve(async (req) => {
       } catch (leadErr) {
         console.error("[ticto-webhook] Lead sync error (non-fatal):", leadErr);
       }
+
+      // ── Meta CAPI: enviar evento de conversão server-side ──
+      if (record.status === "authorized") {
+        try {
+          // Find lead_funnels where this lead was routed (by product name match)
+          const { data: matchedFunnels } = await supabase
+            .from("lead_funnels")
+            .select("id")
+            .not("meta_pixel_id", "is", null)
+            .eq("is_active", true);
+
+          if (matchedFunnels && matchedFunnels.length > 0) {
+            const capiRes = await fetch(`${supabaseUrl}/functions/v1/meta-capi-sync`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${supabaseKey}`,
+              },
+              body: JSON.stringify({
+                email: record.customer_email,
+                phone: record.customer_phone,
+                amount_cents: record.paid_amount,
+                currency: "BRL",
+                order_id: record.order_id || record.order_hash,
+                product_name: record.product_name,
+                event_name: "Purchase",
+                funnel_ids: matchedFunnels.map((f: any) => f.id),
+              }),
+            });
+            const capiBody = await capiRes.text();
+            console.log(`[ticto-webhook] meta-capi-sync: ${capiRes.status} ${capiBody.slice(0, 300)}`);
+          }
+        } catch (capiErr) {
+          console.error("[ticto-webhook] meta-capi-sync error (non-fatal):", capiErr);
+        }
+      }
     }
 
     // ── Forward to wz-receiver (awaited to prevent premature termination) ──

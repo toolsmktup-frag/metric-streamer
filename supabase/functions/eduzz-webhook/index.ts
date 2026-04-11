@@ -302,6 +302,39 @@ Deno.serve(async (req) => {
       } catch (leadErr) {
         console.error("Lead sync error (non-fatal):", leadErr);
       }
+
+      // ── Meta CAPI: enviar evento de conversão server-side ──
+      try {
+        const { data: matchedFunnels } = await supabase
+          .from("lead_funnels")
+          .select("id")
+          .not("meta_pixel_id", "is", null)
+          .eq("is_active", true);
+
+        if (matchedFunnels && matchedFunnels.length > 0) {
+          const capiRes = await fetch(`${supabaseUrl}/functions/v1/meta-capi-sync`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${supabaseKey}`,
+            },
+            body: JSON.stringify({
+              email: clientEmail,
+              phone: clientPhone,
+              amount_cents: paidAmountCentavos,
+              currency: "BRL",
+              order_id: transactionHash,
+              product_name: productName,
+              event_name: "Purchase",
+              funnel_ids: matchedFunnels.map((f: any) => f.id),
+            }),
+          });
+          const capiBody = await capiRes.text();
+          console.log(`[eduzz-webhook] meta-capi-sync: ${capiRes.status} ${capiBody.slice(0, 300)}`);
+        }
+      } catch (capiErr) {
+        console.error("[eduzz-webhook] meta-capi-sync error (non-fatal):", capiErr);
+      }
     }
 
     // ── Forward para wz-receiver (automações WhatsApp) ──
