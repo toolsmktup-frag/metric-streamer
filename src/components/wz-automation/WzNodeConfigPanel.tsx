@@ -11,6 +11,7 @@ import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useWzInstances } from '@/hooks/useWzInstances';
 import { triggerLabels } from './nodes/WzTriggerNode';
+import WzProductSelector from './WzProductSelector';
 import type { Node } from '@xyflow/react';
 
 const variableChips = [
@@ -156,22 +157,17 @@ function TriggerConfig({ data, update }: { data: any; update: (k: string, v: any
           </SelectContent>
         </Select>
       </div>
-      <div className="space-y-2">
-        <Label>Filtrar por ID do produto (opcional)</Label>
-        <Input
-          value={data.productIdFilter || ''}
-          onChange={(e) => update('productIdFilter', e.target.value)}
-          placeholder="ID do produto (ex: 46342)"
-        />
-      </div>
-      <div className="space-y-2">
-        <Label>Filtrar por oferta (opcional)</Label>
-        <Input
-          value={data.offerFilter || ''}
-          onChange={(e) => update('offerFilter', e.target.value)}
-          placeholder="Nome da oferta"
-        />
-      </div>
+      <WzProductSelector
+        selectedIds={Array.isArray(data.productIdFilter) ? data.productIdFilter : (data.productIdFilter ? [data.productIdFilter] : [])}
+        onChange={(ids) => update('productIdFilter', ids)}
+        label="Filtrar por produto(s) (opcional)"
+      />
+      <WzMultiInput
+        values={Array.isArray(data.offerFilter) ? data.offerFilter : (data.offerFilter ? [data.offerFilter] : [])}
+        onChange={(vals) => update('offerFilter', vals)}
+        label="Filtrar por oferta(s) (opcional)"
+        placeholder="Nome da oferta"
+      />
     </>
   );
 }
