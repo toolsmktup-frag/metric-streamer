@@ -376,7 +376,14 @@ export default function AutoRules() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Badge variant="outline" className="text-xs capitalize">{rule.scope_type}</Badge>
+                          <div className="flex items-center gap-1.5">
+                            <Badge variant="outline" className="text-xs capitalize">{rule.scope_type}</Badge>
+                            <span className="text-xs text-muted-foreground">
+                              {rule.scope_ids && rule.scope_ids.length > 0
+                                ? `${rule.scope_ids.length} selecionada(s)`
+                                : 'Todas'}
+                            </span>
+                          </div>
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
                           {rule.last_triggered_at
