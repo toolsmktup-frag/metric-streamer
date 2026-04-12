@@ -1,14 +1,18 @@
 import React, { useState } from 'react';
 import { format, formatDistanceStrict } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { ChevronDown, ChevronRight, Filter, CheckCircle2, XCircle, Clock, AlertTriangle, Activity, Timer } from 'lucide-react';
+import { ChevronDown, ChevronRight, Filter, CheckCircle2, XCircle, Clock, AlertTriangle, Activity, Timer, RefreshCw } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
 import { useWzExecutions } from '@/hooks/useWzExecutions';
 import { useWzFlows } from '@/hooks/useWzFlows';
 import { useWzExecutionLogs } from '@/hooks/useWzExecutionLogs';
 import { useWzExecutionStats } from '@/hooks/useWzExecutionStats';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+import { useQueryClient } from '@tanstack/react-query';
 import type { WzExecutionLog } from '@/types/wz-automation';
 
 const statusConfig: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {

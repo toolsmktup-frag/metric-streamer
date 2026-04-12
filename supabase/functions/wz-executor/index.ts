@@ -128,7 +128,92 @@ Deno.serve(async (req) => {
   const supabase = createClient(supabaseUrl, serviceRoleKey);
 
   try {
-    const { execution_id, flow_id, current_node_id } = await req.json();
+    const body = await req.json();
+    const { execution_id, flow_id, current_node_id, replay_execution_id } = body;
+
+    // ─── REPLAY MODE ───
+    if (replay_execution_id) {
+      console.log(`[wz-executor] Replay requested for execution ${replay_execution_id}`);
+
+      const { data: original, error: origErr } = await supabase
+        .from("wz_executions")
+        .select("*")
+        .eq("id", replay_execution_id)
+        .single();
+
+      if (origErr || !original) {
+        return jsonResponse({ error: "Original execution not found" }, 404);
+      }
+
+      // Fetch the flow to find the first node after trigger
+      const { data: replayFlow, error: rfErr } = await supabase
+        .from("wz_flows")
+        .select("nodes, edges")
+        .eq("id", original.flow_id)
+        .single();
+
+      if (rfErr || !replayFlow) {
+        return jsonResponse({ error: "Flow not found for replay" }, 404);
+      }
+
+      const rNodes = (replayFlow.nodes || []) as Record<string, any>[];
+      const rEdges = (replayFlow.edges || []) as Record<string, any>[];
+
+      // Find trigger node, then find the first node connected after it
+      const triggerNode = rNodes.find((n: any) => n.type === "trigger");
+      if (!triggerNode) {
+        return jsonResponse({ error: "No trigger node in flow" }, 400);
+      }
+      const firstEdge = rEdges.find((e: any) => e.source === triggerNode.id);
+      if (!firstEdge) {
+        return jsonResponse({ error: "No edge from trigger node" }, 400);
+      }
+
+      // Create new execution cloned from original
+      const { data: newExec, error: newErr } = await supabase
+        .from("wz_executions")
+        .insert({
+          flow_id: original.flow_id,
+          contact_phone: original.contact_phone,
+          contact_name: original.contact_name,
+          contact_email: original.contact_email,
+          trigger_event: "replay",
+          trigger_payload: original.trigger_payload,
+          variables: original.variables || {},
+          status: "running",
+          current_node_id: firstEdge.target,
+        })
+        .select("id")
+        .single();
+
+      if (newErr || !newExec) {
+        return jsonResponse({ error: "Failed to create replay execution" }, 500);
+      }
+
+      console.log(`[wz-executor] Replay execution created: ${newExec.id} (original: ${replay_execution_id})`);
+
+      // Fire the executor for the new execution
+      const execUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/wz-executor`;
+      const execRes = await fetch(execUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+        },
+        body: JSON.stringify({
+          execution_id: newExec.id,
+          flow_id: original.flow_id,
+          current_node_id: firstEdge.target,
+        }),
+      });
+      const execResult = await execRes.text();
+
+      return jsonResponse({
+        message: "Replay started",
+        original_execution_id: replay_execution_id,
+        new_execution_id: newExec.id,
+      });
+    }
 
     if (!execution_id || !flow_id || !current_node_id) {
       return jsonResponse({ error: "Missing params" }, 400);
