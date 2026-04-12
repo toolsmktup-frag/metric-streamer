@@ -403,7 +403,6 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
                           stageClassification={stageClassificationMap.get(stage.id) || null}
                         />
                       ))}
-                      ))}
                       {hasMore && (
                         <button
                           onClick={() => showMore(stage.id)}
