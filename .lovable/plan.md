@@ -1,42 +1,37 @@
 
 
-## O que já existe vs. o que falta
+## Novos blocos para o canvas de automações
 
-Cada nó já tem um campo "Notas" no painel de configuração (com o ícone amarelo de post-it). Mas o que você quer é um **bloco visual de anotação livre** no canvas — um post-it que fica solto no fluxo para documentar o que cada parte faz.
+Atualmente o canvas tem: Gatilhos (9 tipos), Ações (WhatsApp, Timer, Condição If/Else, Parar Fluxo, Cancelar Anteriores) e Utilidades (Anotação). Vou adicionar mais blocos úteis:
 
-## Plano
+### Novos nós a criar
 
-### 1. Novo nó "Anotação" (sticky note)
+| Bloco | Tipo | Descrição | Handles |
+|---|---|---|---|
+| **Divisor A/B** | `ab_split` | Divide o fluxo em 2-3 caminhos com % configurável (ex: 50/50, 70/30). Para testar mensagens diferentes | 1 entrada, 2-3 saídas (Caminho A, B, C) |
+| **Delay Inteligente** | `smart_delay` | Aguarda até um horário específico (ex: "próximo dia útil às 9h") em vez de tempo fixo | 1 entrada, 1 saída |
+| **Webhook HTTP** | `webhook` | Dispara uma chamada HTTP para sistema externo (CRM, planilha, API) | 1 entrada, 1 saída |
+| **Tag / Marcar Lead** | `tag` | Adiciona tag ou atualiza campo do lead (ex: marcar como "recuperado") | 1 entrada, 1 saída |
+| **Goto / Pular para** | `goto` | Redireciona para outro ponto do fluxo (evita linhas cruzadas) | 1 entrada, referência a outro nó |
 
-- Criar `src/components/wz-automation/nodes/WzNoteNode.tsx` — um bloco estilo post-it amarelo/âmbar com texto editável diretamente no canvas (textarea inline)
-- Sem handles (não conecta a nada) — é puramente visual
-- Redimensionável arrastando o canto
-- Cor customizável (amarelo, azul, verde, rosa)
+### Arquivos a criar
+- `src/components/wz-automation/nodes/WzAbSplitNode.tsx` — nó visual com 2-3 saídas coloridas e labels de %
+- `src/components/wz-automation/nodes/WzSmartDelayNode.tsx` — ícone de relógio com config de horário/dia
+- `src/components/wz-automation/nodes/WzWebhookNode.tsx` — ícone de link/globe com URL configurável
+- `src/components/wz-automation/nodes/WzTagNode.tsx` — ícone de tag com nome da tag
+- `src/components/wz-automation/nodes/WzGotoNode.tsx` — ícone de seta circular com seletor de nó destino
 
-### 2. Adicionar na sidebar
+### Arquivos a editar
+- `WzFlowSidebar.tsx` — adicionar os 5 novos itens na seção Ações/Utilidades
+- `WzFlowCanvasEditor.tsx` — registrar os 5 novos `nodeTypes` e tratar o drop com dados default
+- `WzNodeConfigPanel.tsx` — adicionar painéis de configuração para cada novo tipo
+- `WzDragData` type — expandir com os novos nodeTypes
 
-- Em `WzFlowSidebar.tsx`, nova seção "Utilidades" com o item "Anotação / Nota"
+### Config de cada nó
 
-### 3. Registrar no canvas
-
-- Em `WzFlowCanvasEditor.tsx`, registrar `note` nos `nodeTypes` e tratar o drop
-
-### 4. Config panel
-
-- Em `WzNodeConfigPanel.tsx`, adicionar config simples para o nó note: cor do post-it e texto
-
----
-
-## Ideias adicionais para o canvas
-
-| Funcionalidade | Descrição |
-|---|---|
-| **Grupos visuais** | Agrupar nós dentro de uma caixa com título (ex: "Sequência de boas-vindas") — ReactFlow suporta nós do tipo `group` |
-| **Minimap** | Minimapa no canto para navegação rápida em fluxos grandes |
-| **Undo/Redo** | Ctrl+Z / Ctrl+Y para desfazer mudanças no canvas |
-| **Copiar/Colar nós** | Selecionar múltiplos nós e duplicar em bloco |
-| **Validação visual** | Destacar nós com erro (ex: WhatsApp sem instância, Trigger sem tipo) com borda vermelha |
-| **Contadores no header** | Mostrar no topo: total de nós, execuções recentes, taxa de sucesso |
-
-Quer que eu implemente apenas o bloco de anotação, ou também alguma dessas extras?
+- **A/B Split**: slider de porcentagem por caminho, número de caminhos (2 ou 3)
+- **Smart Delay**: seletor de dia da semana, horário, opção "próximo dia útil"
+- **Webhook**: URL, método (GET/POST), headers, body template com variáveis
+- **Tag**: nome da tag, ação (adicionar/remover)
+- **Goto**: dropdown com lista de nós do fluxo atual
 
