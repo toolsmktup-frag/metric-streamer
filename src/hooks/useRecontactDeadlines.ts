@@ -134,7 +134,7 @@ export function useRecontactDeadlines(
       }
 
       console.debug(
-        `[recontact] lead=${pos.lead_id}: products=${productNamesToCheck.length}, matched=${matchedProductNames.length}, totalDays=${totalRecontactDays}`,
+        `[recontact] lead=${pos.lead_id}: products=${productNamesToCheck.length}, matched=${matchedProductNames.length}, totalDays=${totalRecontactDays}, dateSource=${dateSource}, baseDate=${purchasedAtRaw}`,
         { productNamesToCheck, matchedProductNames }
       );
 
