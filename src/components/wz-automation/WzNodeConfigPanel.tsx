@@ -11,7 +11,7 @@ import { Trash2, Copy, Plus, X, MessageCircleOff, MessageSquare, Eye, EyeOff, Po
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useWzInstances } from '@/hooks/useWzInstances';
+import { useWhatsAppInstances, getInstanceDisplayName } from '@/hooks/useWhatsApp';
 import { useTeamMembers } from '@/hooks/useTeamMembers';
 import { triggerLabels } from './nodes/WzTriggerNode';
 import WzProductSelector from './WzProductSelector';
@@ -272,7 +272,7 @@ function getBlocks(msg: MessageVariation): MessageBlock[] {
 }
 
 function WhatsAppConfig({ data, update }: { data: any; update: (k: string, v: any) => void }) {
-  const { data: instances = [] } = useWzInstances();
+  const { instances = [] } = useWhatsAppInstances();
   const messages: MessageVariation[] = data.messages || [{ text: '', type: 'text' }];
   const [activeTab, setActiveTab] = useState('0');
   const textareaRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
@@ -352,14 +352,16 @@ function WhatsAppConfig({ data, update }: { data: any; update: (k: string, v: an
             const inst = instances.find(i => i.id === v);
             update('instanceSelection', {
               instanceId: v,
-              instanceName: inst?.name || '',
+              instanceName: inst ? getInstanceDisplayName(inst) : '',
             });
           }}
         >
           <SelectTrigger><SelectValue placeholder="Selecionar instância..." /></SelectTrigger>
           <SelectContent>
             {instances.map(inst => (
-              <SelectItem key={inst.id} value={inst.id}>{inst.name}</SelectItem>
+              <SelectItem key={inst.id} value={inst.id}>
+                {getInstanceDisplayName(inst)}{inst.phone_number ? ` (${inst.phone_number})` : ''}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>

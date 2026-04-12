@@ -536,7 +536,7 @@ async function processWhatsAppNode(
   if (!instanceId) { result.summary = "Sem instância"; return result; }
 
   const { data: instance } = await supabase
-    .from("wz_instances").select("api_url, api_key").eq("id", instanceId).single();
+    .from("whatsapp_instances").select("api_url, api_token").eq("id", instanceId).single();
   if (!instance) { result.summary = "Instância não encontrada"; return result; }
 
   const phone = execution.contact_phone;
@@ -580,7 +580,7 @@ async function processWhatsAppNode(
     try {
       const res = await fetch(endpoint, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json", token: instance.api_key },
+        headers: { "Content-Type": "application/json", Accept: "application/json", token: instance.api_token },
         body: JSON.stringify(body),
       });
       const resText = await res.text();
