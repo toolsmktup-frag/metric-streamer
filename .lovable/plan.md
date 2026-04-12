@@ -1,63 +1,32 @@
 
 
-## Plano: Classificação automática de valor por tipo de evento (positivo/negativo)
+## Problema
 
-### Ideia
+Os badges de valor "Pendente" e "Recuperar" não aparecem no Kanban porque:
 
-Cada `stage_transition_rule` já tem o `event_name` que levou o lead àquela etapa. Em vez de configurar manualmente "valor negativo" por etapa, o sistema **já sabe** qual evento colocou o lead ali. A lógica fica assim:
+1. **Sem regras de transição = sem classificação.** O `stageClassificationMap` é construído a partir de `transitionRules`. Se o funil não tem regras, nenhuma etapa recebe classificação e o badge não renderiza (check na linha 153: `stageClassification` precisa ser truthy).
 
-- **Eventos de receita confirmada**: `purchase` → valor **positivo** (verde)
-- **Eventos de receita pendente**: `pix_generated` → valor **pendente** (amarelo) — ainda não entrou, mas pode entrar
-- **Eventos de perda/recuperação**: `abandoned_cart`, `refused`, `refunded`, `chargeback`, `canceled` → valor **em risco** (vermelho) — dinheiro que não entrou ou saiu
+2. **Leads com LTV nunca mostram badge pendente.** A condição `!hasLTV` impede que leads com compras aprovadas mostrem valores pendentes — mas um lead pode ter compras antigas E um Pix pendente novo.
 
-Quando o lead paga o Pix, o webhook atualiza o evento para `purchase`, a regra de transição move para "Compra Aprovada", e o valor automaticamente vira positivo.
+## Correções
 
-### O que muda na prática
+### 1. Fallback de classificação por nome da etapa
+Quando não há `transitionRules`, inferir a classificação pelo nome da etapa (ex: "Pix / Boleto Gerado" → `pending`, "Carrinho Abandonado" → `negative`, "Compra Aprovada" → `positive`). Isso faz os badges funcionarem mesmo sem regras configuradas.
 
-**No card do lead:**
-- Badge verde `R$ 197,00` → compra aprovada (já existe via LTV)
-- Badge amarelo `R$ 197,00 Pendente` → Pix/Boleto gerado (aguardando pagamento)
-- Badge vermelho `R$ 197,00 Recuperar` → carrinho abandonado, recusado, etc.
+**Arquivo:** `src/components/lead-funnels/KanbanBoard.tsx`
+- No `stageClassificationMap`, após processar as rules, se uma etapa não tem classificação, tentar inferir pelo nome usando keywords (`pix`, `boleto`, `abandonad`, `recusad`, `reembolso`, `chargeback`, `cancelad` → negative/pending).
 
-**No header da coluna:**
-- Soma os valores e mostra com a cor correspondente ao tipo da etapa
-- Não precisa de toggle manual — o sistema classifica pelo `event_name` da regra que levou o lead àquela etapa
+### 2. Mostrar badge pendente/recuperar MESMO quando tem LTV
+Remover a condição `!hasLTV` do badge de valor. Se o lead tem LTV (verde) E também tem um valor pendente no metadata, mostrar ambos: o LTV e o badge pendente/recuperar abaixo.
 
-### Mudanças técnicas
+**Arquivo:** `src/components/lead-funnels/LeadCard.tsx`
+- Linha 153: remover `!hasLTV &&` da condição
+- O badge de metadata aparece independente do LTV
 
-**1. RPC `sync_lead_from_sale` — Salvar metadata no lead**
-- Atualmente o lead é criado com `metadata = '{}'` e o `amount` vai só para `lead_events`
-- Alterar para fazer merge: `metadata = leads.metadata || p_metadata` no UPDATE
-- Assim `lead.metadata.amount`, `status`, `product_name` ficam disponíveis para o card
-- Nova migration SQL
-
-**2. `StageTransitionRule` — Adicionar campo `value_classification`**
-- Novo campo enum: `positive` (receita), `pending` (aguardando), `negative` (perda/recuperação)
-- Default automático baseado no `event_name`:
-  - `purchase` → `positive`
-  - `pix_generated` → `pending`
-  - `abandoned_cart`, `refused`, `refunded`, `chargeback`, `canceled` → `negative`
-- O usuário pode sobrescrever na UI se quiser
-- Migration SQL para adicionar coluna
-
-**3. `LeadCard.tsx` — Badge de valor contextual**
-- Ler `lead.metadata.amount` (ou `amount_cents / 100`)
-- Cor do badge baseada na classificação da regra que governa aquela etapa
-- Verde = positivo, Amarelo = pendente, Vermelho = recuperar
-
-**4. `KanbanBoard.tsx` — Header da coluna com valor classificado**
-- `getStageRevenue` passa a considerar a classificação
-- Header mostra: `R$ 591,00 pendente` (amarelo) ou `R$ 394,00 recuperar` (vermelho)
-
-**5. `FunnelConfigTab.tsx` — Exibir classificação na UI de regras**
-- Mostrar um indicador visual (cor) ao lado de cada regra
-- Opcional: dropdown para sobrescrever a classificação automática
+### 3. Header da coluna — mostrar valor mesmo sem regras
+O `getStageRevenue` já funciona (soma `metadata.amount`). O header da coluna já mostra o total. A classificação de cor do header também precisa do mesmo fallback por nome de etapa.
 
 ### Arquivos alterados
-- `supabase/migrations/` — 2 migrations: (a) atualizar RPC v5 para merge metadata, (b) adicionar `value_classification` em `stage_transition_rules`
-- `src/types/leadFunnels.ts` — atualizar tipo `StageTransitionRule`
-- `src/components/lead-funnels/LeadCard.tsx` — badge contextual
-- `src/components/lead-funnels/KanbanBoard.tsx` — header com classificação
-- `src/components/lead-funnels/FunnelConfigTab.tsx` — indicador visual nas regras
-- `docs/rpc-sync-lead-from-sale-v5.sql` — atualizar doc
+- `src/components/lead-funnels/KanbanBoard.tsx` — fallback de classificação por nome de etapa
+- `src/components/lead-funnels/LeadCard.tsx` — remover condição `!hasLTV` do badge
 
