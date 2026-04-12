@@ -46,5 +46,20 @@ export interface WzScheduledStep {
   node_id: string;
   run_at: string;
   status: string;
+  retry_count: number;
+  created_at: string;
+}
+
+export interface WzExecutionLog {
+  id: string;
+  execution_id: string;
+  node_id: string;
+  node_type: string;
+  status: string;
+  input_data: any;
+  output_data: any;
+  error_message: string | null;
+  started_at: string;
+  finished_at: string | null;
   created_at: string;
 }
