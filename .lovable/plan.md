@@ -1,25 +1,27 @@
 
 
-## Recontato: Soma linear de dias por produto
+## Corrigir Auto-Layout e Cópia com Conexões
 
-**Lógica implementada**: Quando um lead tem múltiplas compras no mesmo funil, os `recontact_days` de cada produto são SOMADOS e contados a partir da primeira data de compra.
+### Problemas identificados
 
-**Exemplo**: Produto A (90d) + Produto B (180d) = 270 dias a partir da primeira compra.
+1. **Auto-layout bagunçando**: O dagre está configurado corretamente (`rankdir: 'LR'`), mas usa tamanho fixo `220x120` para todos os nós — incluindo nós de nota que são maiores. Além disso, o `nodesep: 60` e `ranksep: 200` podem causar sobreposição. O layout deveria respeitar os tamanhos reais dos nós e agrupar subfluxos independentes (cada trigger com seu caminho) verticalmente sem misturar.
 
-### Arquivos alterados
+2. **Cópia não mantém conexões**: Ao copiar múltiplos nós (Ctrl+C/V), as edges entre eles são ignoradas — só os nós são colados, sem as ligações.
 
-1. **`src/hooks/useBulkLeadPurchaseProducts.ts`** (NOVO)
-   - Busca todos os eventos de compra (`lead_events`) por lead no funil
-   - Retorna `Map<leadId, product_name[]>` com todos os produtos comprados
+### Plano
 
-2. **`src/hooks/useRecontactDeadlines.ts`**
-   - Aceita novo param `leadProductNamesMap`
-   - Para cada lead, matcha TODOS os produtos e SOMA os recontact_days
-   - Deadline = firstPurchaseDate + SUM(recontact_days)
+**1. Melhorar Auto-Layout (dagre)**
+- Usar tamanhos de nó variáveis por tipo (nota = 400x200, trigger = 240x140, action = 220x120, etc.)
+- Aumentar `nodesep` para evitar sobreposição vertical
+- Manter `rankdir: 'LR'` (esquerda para direita, como n8n)
+- O dagre já lida com múltiplos subgrafos desconectados — cada trigger e seu caminho ficará em uma "faixa" separada automaticamente
 
-3. **`src/pages/LeadFunnelDetail.tsx`**
-   - Conecta o novo hook `useBulkLeadPurchaseProducts`
+**2. Cópia com conexões (Ctrl+C/V)**
+- No Ctrl+C: salvar no clipboard tanto os nós selecionados quanto as edges cujo `source` E `target` estão ambos na seleção
+- No Ctrl+V: gerar novos IDs para cada nó, criar um mapa `oldId → newId`, e recriar as edges com os IDs atualizados
+- Resultado: ao colar um grupo de nós conectados, as ligações entre eles são preservadas
 
-4. **`supabase/functions/recontact-cron/index.ts`**
-   - Busca eventos de compra via `lead_events` (não mais `customer_purchases`)
-   - Soma recontact_days de todos os produtos matchados por lead
+### Arquivos editados
+
+- `src/components/wz-automation/WzFlowCanvasEditor.tsx` — ambas as correções no mesmo arquivo
+
