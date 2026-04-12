@@ -150,7 +150,7 @@ const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, onWhatsAppClick,
       )}
 
       {/* Pending / Recovery value badge (when no LTV) */}
-      {!hasLTV && !hideValues && stageClassification && stageClassification !== 'positive' && (() => {
+      {!hideValues && stageClassification && stageClassification !== 'positive' && (() => {
         const metaAmount = extractMetadataAmount(lead.metadata);
         if (metaAmount <= 0) return null;
         const colorCls = classificationColor(stageClassification);
