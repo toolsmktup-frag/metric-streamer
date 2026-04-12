@@ -12,6 +12,7 @@ import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useWhatsAppInstances, getInstanceDisplayName } from '@/hooks/useWhatsApp';
+import { useWzInstances } from '@/hooks/useWzInstances';
 import { useTeamMembers } from '@/hooks/useTeamMembers';
 import { triggerLabels } from './nodes/WzTriggerNode';
 import WzProductSelector from './WzProductSelector';
@@ -272,7 +273,8 @@ function getBlocks(msg: MessageVariation): MessageBlock[] {
 }
 
 function WhatsAppConfig({ data, update }: { data: any; update: (k: string, v: any) => void }) {
-  const { instances = [] } = useWhatsAppInstances();
+  const { instances: chatInstances = [] } = useWhatsAppInstances();
+  const { data: manualInstances = [] } = useWzInstances();
   const messages: MessageVariation[] = data.messages || [{ text: '', type: 'text' }];
   const [activeTab, setActiveTab] = useState('0');
   const textareaRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
@@ -349,20 +351,36 @@ function WhatsAppConfig({ data, update }: { data: any; update: (k: string, v: an
         <Select
           value={data.instanceId || ''}
           onValueChange={(v) => {
-            const inst = instances.find(i => i.id === v);
+            const chatInst = chatInstances.find(i => i.id === v);
+            const manualInst = manualInstances.find(i => i.id === v);
             update('instanceSelection', {
               instanceId: v,
-              instanceName: inst ? getInstanceDisplayName(inst) : '',
+              instanceName: chatInst ? getInstanceDisplayName(chatInst) : manualInst?.name || '',
             });
           }}
         >
           <SelectTrigger><SelectValue placeholder="Selecionar instância..." /></SelectTrigger>
           <SelectContent>
-            {instances.map(inst => (
-              <SelectItem key={inst.id} value={inst.id}>
-                {getInstanceDisplayName(inst)}{inst.phone_number ? ` (${inst.phone_number})` : ''}
-              </SelectItem>
-            ))}
+            {chatInstances.length > 0 && (
+              <>
+                <div className="px-2 py-1 text-[10px] font-semibold text-muted-foreground uppercase">Chat</div>
+                {chatInstances.map(inst => (
+                  <SelectItem key={inst.id} value={inst.id}>
+                    {getInstanceDisplayName(inst)}{inst.phone_number ? ` (${inst.phone_number})` : ''}
+                  </SelectItem>
+                ))}
+              </>
+            )}
+            {manualInstances.length > 0 && (
+              <>
+                <div className="px-2 py-1 text-[10px] font-semibold text-muted-foreground uppercase">Manual</div>
+                {manualInstances.map(inst => (
+                  <SelectItem key={inst.id} value={inst.id}>
+                    {inst.name}
+                  </SelectItem>
+                ))}
+              </>
+            )}
           </SelectContent>
         </Select>
         <p className="text-[11px] text-muted-foreground">Deixe em branco para usar a conexão dos blocos anteriores</p>
