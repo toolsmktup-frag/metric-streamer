@@ -443,7 +443,7 @@ const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSave
 
       {/* Automações Vinculadas */}
       {funnelId && (
-        <FunnelAutomationsConfig funnelId={funnelId} />
+        <FunnelAutomationsConfig funnelId={funnelId} funnelName={funnelName} />
       )}
 
       {/* Redistribute Leads */}

@@ -460,7 +460,7 @@ const LeadFunnelDetail: React.FC = () => {
 
         {isAdmin && (
           <TabsContent value="automations" className="mt-4">
-            <FunnelAutomationsTab funnelId={funnel.id} />
+            <FunnelAutomationsTab funnelId={funnel.id} funnelName={funnel.name} />
           </TabsContent>
         )}
 
