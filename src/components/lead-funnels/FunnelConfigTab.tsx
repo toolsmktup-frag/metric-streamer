@@ -28,6 +28,7 @@ interface FunnelConfigTabProps {
   onSaveRules: (rules: Partial<StageTransitionRule>[]) => void;
   saving?: boolean;
   funnelId?: string;
+  funnelName?: string;
   // Products & Recontact
   leadFunnelProducts?: LeadFunnelProduct[];
   catalogProducts?: FunnelProduct[];
