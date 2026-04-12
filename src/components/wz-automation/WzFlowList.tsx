@@ -90,7 +90,7 @@ export default function WzFlowList({ embedded = false }: { embedded?: boolean })
             <div key={i} className="h-40 rounded-xl border border-border bg-card animate-pulse" />
           ))}
         </div>
-      ) : flows.length === 0 ? (
+      ) : visibleFlows.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center mb-4">
             <Zap className="h-10 w-10 text-primary" />
@@ -106,7 +106,7 @@ export default function WzFlowList({ embedded = false }: { embedded?: boolean })
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {flows.map((flow) => (
+          {visibleFlows.map((flow) => (
             <FlowCard
               key={flow.id}
               flow={flow}
