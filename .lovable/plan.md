@@ -1,31 +1,38 @@
 
 
-## Permitir nome customizado no ID manual do seletor de produtos
+## Fix: Nome customizado no ID manual não salva
 
-### O que muda
+### Problema
 
-No campo "Digitar ID manual..." do `WzProductSelector`, permitir que o usuário informe também um nome amigável junto com o ID, para que o chip exiba algo legível em vez de só o número.
+Quando você adiciona um produto com ID + nome, o componente dispara **duas atualizações separadas** em sequência rápida:
+1. `update('productIdFilter', [novos ids])`  
+2. `update('productIdLabels', {novas labels})`
 
-### Como funciona para o usuário
+A segunda chamada usa o estado **antigo** do nó (antes da primeira atualização ser aplicada), então sobrescreve o `productIdFilter` que acabou de ser alterado — ou vice-versa. Resultado: uma das duas mudanças se perde.
 
-1. O campo de ID manual ganha um segundo input de nome (opcional)
-2. Ao digitar ex: ID `105335` e nome `Pote Grátis`, o chip exibe: **105335 — Pote Grátis**
-3. Se não preencher o nome, continua exibindo só o ID como hoje
+### Solução
 
-### Detalhes técnicos
-
-O componente hoje trabalha com `selectedIds: string[]`. Para guardar labels customizados sem quebrar a interface existente:
-
-- Adicionar uma prop opcional `customLabels?: Record<string, string>` e `onCustomLabelsChange?: (labels: Record<string, string>) => void`
-- No `WzNodeConfigPanel`, persistir os labels no `data` do nó (ex: `data.productIdLabels`)
-- Estado local `manualName` junto com `manualId`
-- No `getProductLabel`, fazer fallback: produto do catálogo → label customizado → só o ID
-- Layout do campo manual: dois inputs lado a lado (ID + Nome) + botão +
+Fazer o `addManual` disparar **uma única atualização** que inclua tanto o `productIdFilter` quanto o `productIdLabels` de uma vez.
 
 ### Arquivos alterados
 
 | Arquivo | Mudança |
 |---|---|
-| `WzProductSelector.tsx` | Novo input de nome, props `customLabels`/`onCustomLabelsChange`, lógica de label |
-| `WzNodeConfigPanel.tsx` | Passar `customLabels={data.productIdLabels}` e handler de update |
+| `WzProductSelector.tsx` | Adicionar prop `onAddManual?: (id: string, name?: string) => void` como alternativa; OU trocar para disparar um único callback com ambos os valores |
+| `WzNodeConfigPanel.tsx` | Passar um handler unificado que faz `onUpdate(nodeId, { ...data, productIdFilter: newIds, productIdLabels: newLabels })` de uma só vez |
+
+### Abordagem concreta
+
+1. **`WzProductSelector`**: Adicionar uma prop opcional `onManualAdd?: (id: string, name: string) => void`. Quando presente, o `addManual` chama só esse callback em vez de `onChange` + `onCustomLabelsChange` separados.
+
+2. **`WzNodeConfigPanel`**: Passar o `onManualAdd` que faz um único `onUpdate` com os dois campos atualizados simultaneamente:
+```typescript
+onManualAdd={(id, name) => {
+  const ids = [...(data.productIdFilter || []), id];
+  const labels = { ...(data.productIdLabels || {}), ...(name ? { [id]: name } : {}) };
+  onUpdate(node.id, { ...data, productIdFilter: ids, productIdLabels: labels });
+}}
+```
+
+Isso garante que ambos os campos são salvos atomicamente no estado do nó, sem race condition.
 
