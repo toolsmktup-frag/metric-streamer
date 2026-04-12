@@ -523,6 +523,7 @@ function TimerConfig({ data, update }: { data: any; update: (k: string, v: any) 
         <Select value={data.unit || 'minutes'} onValueChange={(v) => update('unit', v)}>
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
+            <SelectItem value="seconds">Segundos</SelectItem>
             <SelectItem value="minutes">Minutos</SelectItem>
             <SelectItem value="hours">Horas</SelectItem>
             <SelectItem value="days">Dias</SelectItem>
