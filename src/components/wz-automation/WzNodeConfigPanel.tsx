@@ -713,7 +713,7 @@ function AbSplitConfig({ data, update }: { data: any; update: (k: string, v: any
         sellerId: s.id,
         sellerName: s.name,
       }));
-      update('sellerToggle', { sellers: newSellers, paths: newPaths });
+      update('sellerToggleSelection', { sellers: newSellers, paths: newPaths });
     } else {
       update('sellers', newSellers);
     }
