@@ -1,45 +1,31 @@
 
 
-## Correção do Cálculo de Recontato (SOMA LINEAR) — Maria Helena -33d
+## Salvar endereço do cliente no Lead (via metadata)
 
-### Problema identificado
+### Situação atual
+- O webhook da Guru envia dados de endereço (CEP, rua, número, bairro, cidade, estado) no payload
+- O `wz-receiver` **não extrai** esses campos — eles são descartados
+- A tabela `leads` já tem um campo `metadata` JSONB que armazena `product_name`, `status`, `amount`
+- A RPC `sync_lead_from_sale` faz merge de metadata (`leads.metadata || p_metadata`)
 
-A Maria Helena tem 3 compras mas o recontato mostra **-33d** porque existem **2 bugs** na lógica:
+### Plano
 
-**Bug 1 — Data errada (prioridade invertida)**
-O código em `useRecontactDeadlines.ts` (linha 97) usa `metadata.purchased_at` como primeira opção de data. Mas o metadata sempre contém a data da **última** transação (por causa do merge JSONB na RPC v5). Para a SOMA LINEAR, precisamos da data da **primeira** compra (`purchaseMap.firstPurchaseDate`). A prioridade está invertida.
+**1. Extrair endereço no `wz-receiver`** (`supabase/functions/wz-receiver/index.ts`)
+- Ler do payload os campos `address`, `street`, `zipcode`/`cep`, `number`, `neighborhood`/`bairro`, `city`/`cidade`, `state`/`estado` (com fallbacks para ambos Ticto e Guru)
+- Incluir no objeto `variables` que vai para o executor e no `p_metadata` que vai para `sync_lead_from_sale`
 
-**Bug 2 — Lista de produtos incompleta**
-O `useBulkLeadPurchaseProducts` busca nomes de produtos apenas na tabela `lead_events`. Compras históricas (como a da Eduzz de 2023) que foram importadas antes do CRM podem não ter eventos registrados. O resultado é que o `leadProductNamesMap` retorna apenas 1-2 produtos em vez dos 3, e a soma dos `recontact_days` fica errada.
+**2. Passar endereço no `p_metadata` da RPC** (já acontece automaticamente se incluirmos no metadata do receiver)
+- Campos salvos no `leads.metadata`: `address_street`, `address_number`, `address_neighborhood`, `address_city`, `address_state`, `address_zipcode`, `address_complement`
 
-### Plano de correção
-
-**1. Inverter prioridade de data em `useRecontactDeadlines.ts`**
-- Usar `purchaseMap.firstPurchaseDate` como **primeira** opção (data real da primeira compra)
-- Fallback para `metadata.purchased_at` apenas quando purchaseMap não tem dados
-- Isso garante que a SOMA LINEAR conte a partir da primeira compra
-
-**2. Enriquecer `useBulkLeadPurchaseProducts.ts` com dados de `customer_purchases`**
-- Além de buscar em `lead_events`, também buscar nomes de produtos distintos na tabela `customer_purchases` (via email/phone do lead)
-- Unir as duas listas (dedup) para ter a visão completa de todos os produtos comprados
-- Isso garante que compras históricas (Eduzz 2023) sejam contabilizadas na soma
-
-**3. Adicionar log de debug no card para validação**
-- Exibir no `title` do badge de recontato: data base usada, produtos matched, soma total
-- Facilita validação visual sem precisar abrir console
+**3. Exibir na UI do Lead** (`src/components/lead-funnels/LeadDetailPanel.tsx` ou similar)
+- Adicionar uma seção/aba "Endereço" no painel de detalhes do lead
+- Mostra os campos formatados a partir do `metadata`
+- Se não houver dados de endereço, a seção fica oculta
 
 ### Arquivos editados
+- `supabase/functions/wz-receiver/index.ts` — extrair campos de endereço do payload
+- Componente de detalhes do lead — nova seção "Endereço"
 
-| Arquivo | Mudança |
-|---|---|
-| `src/hooks/useRecontactDeadlines.ts` | Inverter prioridade: purchaseMap.firstPurchaseDate > metadata.purchased_at |
-| `src/hooks/useBulkLeadPurchaseProducts.ts` | Adicionar query em customer_purchases para completar lista de produtos |
-
-### Resultado esperado
-
-Maria Helena (3 compras, ~1020d desde primeira compra):
-- Produtos matched: todos os 3 com recontact_days configurados
-- Data base: 26/06/2023 (primeira compra real)
-- Soma: recontact_days de todos os produtos matched
-- Countdown: calculado corretamente a partir da primeira compra + soma total
+### Resultado
+O endereço chega no webhook → é extraído → salvo no `metadata` do lead → visível no CRM. Sem alteração de schema, sem nova tabela.
 
