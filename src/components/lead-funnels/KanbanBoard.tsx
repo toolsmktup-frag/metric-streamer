@@ -314,10 +314,16 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
             {formatCurrency(confirmedRevenue)}
           </span>
         )}
+        {isAdmin && pendingRevenue > 0 && (
+          <span className="inline-flex items-center gap-1 text-xs font-semibold text-yellow-600 dark:text-yellow-400 bg-yellow-500/10 px-2 py-0.5 rounded">
+            <Hourglass className="h-3 w-3" />
+            {formatCurrency(pendingRevenue)}
+          </span>
+        )}
         {isAdmin && lostRevenue > 0 && (
           <span className="inline-flex items-center gap-1 text-xs font-semibold text-destructive bg-destructive/10 px-2 py-0.5 rounded">
-            <TrendingDown className="h-3 w-3" />
-            -{formatCurrency(lostRevenue)}
+            <AlertTriangle className="h-3 w-3" />
+            {formatCurrency(lostRevenue)}
           </span>
         )}
       </div>
