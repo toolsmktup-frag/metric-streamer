@@ -221,6 +221,7 @@ export default function WzExecutionHistory() {
               <th className="text-left px-4 py-3 font-medium text-muted-foreground">Status</th>
               <th className="text-left px-4 py-3 font-medium text-muted-foreground">Início</th>
               <th className="text-left px-4 py-3 font-medium text-muted-foreground">Duração</th>
+              <th className="w-12" />
             </tr>
           </thead>
           <tbody>
