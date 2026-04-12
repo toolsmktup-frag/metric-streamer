@@ -14,6 +14,7 @@ import FunnelProductsConfig from './FunnelProductsConfig';
 import TrackingSnippetPopover from './TrackingSnippetPopover';
 import RedistributeLeadsDialog from './RedistributeLeadsDialog';
 import ProductMappingConfig from './ProductMappingConfig';
+import { getDefaultClassification, classificationLabel } from '@/lib/valueClassification';
 
 import type { LeadFunnelProduct } from '@/hooks/useLeadFunnelProducts';
 import type { LeadProductMapping } from '@/hooks/useLeadProductMappings';
