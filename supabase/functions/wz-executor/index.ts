@@ -1,4 +1,4 @@
-// v1.0.1 - redeploy for matheuscolombo.uazapi.com migration
+// v1.1.0 - added ab_split, smart_delay, webhook, tag, goto, note handlers
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
