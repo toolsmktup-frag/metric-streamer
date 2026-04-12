@@ -148,6 +148,26 @@ export default function WzExecutionHistory() {
     status: statusFilter !== 'all' ? statusFilter : undefined,
   });
 
+  const handleReplay = async (execId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setReplayingId(execId);
+    try {
+      const { data, error } = await supabase.functions.invoke('wz-executor', {
+        body: { replay_execution_id: execId },
+      });
+      if (error) throw error;
+      toast.success('Replay iniciado!', {
+        description: `Nova execução: ${data?.new_execution_id?.slice(0, 8)}...`,
+      });
+      queryClient.invalidateQueries({ queryKey: ['wz-executions'] });
+      queryClient.invalidateQueries({ queryKey: ['wz-execution-stats'] });
+    } catch (err) {
+      toast.error('Erro ao reprocessar', { description: String(err) });
+    } finally {
+      setReplayingId(null);
+    }
+  };
+
   return (
     <div className="p-6 space-y-6 max-w-6xl mx-auto">
       <div>
