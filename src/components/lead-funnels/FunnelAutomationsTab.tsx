@@ -77,14 +77,6 @@ function AutomationCard({ automation, funnelId, onToggle, onToggleVisibility }: 
         </Button>
       </div>
 
-      {/* Trigger events */}
-      {automation.trigger_events.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {automation.trigger_events.map((evt: string) => (
-            <Badge key={evt} variant="outline" className="text-xs">{evt}</Badge>
-          ))}
-        </div>
-      )}
 
       {/* Recent executions */}
       {recentExecs.length > 0 && (

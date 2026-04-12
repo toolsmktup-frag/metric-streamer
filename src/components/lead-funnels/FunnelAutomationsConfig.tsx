@@ -3,21 +3,11 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Trash2, ExternalLink, Zap, Eye } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useWzFlows } from '@/hooks/useWzFlows';
 import { useLeadFunnelAutomations, useLinkFunnelAutomation, useUpdateFunnelAutomation, useUnlinkFunnelAutomation } from '@/hooks/useLeadFunnelAutomations';
 import type { LeadFunnelAutomation } from '@/types/wz-automation';
 
-const TRIGGER_OPTIONS = [
-  { value: 'purchase', label: 'Compra Aprovada' },
-  { value: 'pix_generated', label: 'PIX Gerado' },
-  { value: 'boleto_generated', label: 'Boleto Gerado' },
-  { value: 'abandoned_cart', label: 'Carrinho Abandonado' },
-  { value: 'refused', label: 'Pagamento Recusado' },
-  { value: 'refunded', label: 'Reembolso' },
-  { value: 'chargeback', label: 'Chargeback' },
-];
 
 interface FunnelAutomationsConfigProps {
   funnelId: string;
@@ -48,12 +38,6 @@ const FunnelAutomationsConfig: React.FC<FunnelAutomationsConfigProps> = ({ funne
     updateMutation.mutate({ id: auto.id, funnel_id: funnelId, show_in_automations: show });
   };
 
-  const handleToggleEvent = (auto: LeadFunnelAutomation, event: string) => {
-    const events = auto.trigger_events.includes(event)
-      ? auto.trigger_events.filter(e => e !== event)
-      : [...auto.trigger_events, event];
-    updateMutation.mutate({ id: auto.id, funnel_id: funnelId, trigger_events: events });
-  };
 
   return (
     <div>
@@ -133,22 +117,6 @@ const FunnelAutomationsConfig: React.FC<FunnelAutomationsConfigProps> = ({ funne
                 </Button>
               </div>
 
-              {/* Trigger events */}
-              <div className="flex flex-wrap gap-1.5">
-                {TRIGGER_OPTIONS.map(evt => {
-                  const active = auto.trigger_events.includes(evt.value);
-                  return (
-                    <Badge
-                      key={evt.value}
-                      variant={active ? 'default' : 'outline'}
-                      className="cursor-pointer text-xs"
-                      onClick={() => handleToggleEvent(auto, evt.value)}
-                    >
-                      {evt.label}
-                    </Badge>
-                  );
-                })}
-              </div>
             </div>
           ))}
         </div>
