@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { LeadFunnelStage, StageTransitionRule, LeadStagePosition, Lead } from '@/types/leadFunnels';
+import { LeadFunnelStage, StageTransitionRule, LeadStagePosition, Lead, ValueClassification } from '@/types/leadFunnels';
 import { Funnel } from '@/hooks/useFunnels';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Trash2, ArrowRight, Shuffle } from 'lucide-react';
+import { Plus, Trash2, ArrowRight, Shuffle, Circle } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 
@@ -14,6 +14,7 @@ import FunnelProductsConfig from './FunnelProductsConfig';
 import TrackingSnippetPopover from './TrackingSnippetPopover';
 import RedistributeLeadsDialog from './RedistributeLeadsDialog';
 import ProductMappingConfig from './ProductMappingConfig';
+import { getDefaultClassification, classificationLabel } from '@/lib/valueClassification';
 
 import type { LeadFunnelProduct } from '@/hooks/useLeadFunnelProducts';
 import type { LeadProductMapping } from '@/hooks/useLeadProductMappings';
@@ -245,6 +246,18 @@ const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSave
             const isCustom = customEventMode[idx] || (!isCanonical && !!rule.event_name);
             return (
             <div key={idx} className="flex items-center gap-2 bg-muted/50 rounded-lg p-2">
+              {/* Classification dot */}
+              {(() => {
+                const cls = (rule.value_classification || (rule.event_name ? getDefaultClassification(rule.event_name) : null)) as ValueClassification | null;
+                if (!cls) return null;
+                const dotColor = cls === 'positive' ? 'bg-emerald-500' : cls === 'pending' ? 'bg-yellow-500' : 'bg-destructive';
+                return (
+                  <span
+                    className={`h-2.5 w-2.5 rounded-full shrink-0 ${dotColor}`}
+                    title={classificationLabel(cls)}
+                  />
+                );
+              })()}
               {isCustom ? (
                 <div className="flex-1 flex gap-1">
                   <Input
@@ -269,6 +282,9 @@ const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSave
                       updateRule(idx, 'event_name', '');
                     } else {
                       updateRule(idx, 'event_name', v);
+                      // Auto-set classification when event changes
+                      const autoCls = getDefaultClassification(v);
+                      updateRule(idx, 'value_classification', autoCls);
                     }
                   }}
                 >
@@ -278,7 +294,6 @@ const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSave
                   <SelectContent>
                     {CANONICAL_EVENTS
                       .filter(e => {
-                        // Esconder se outra regra já usa este evento com "Qualquer etapa" (catch-all)
                         const hasCatchAll = localRules.some(
                           (r, i) => i !== idx && r.event_name === e.value && !r.from_stage_id
                         );
@@ -296,7 +311,6 @@ const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSave
                 onValueChange={v => {
                   const newFromStage = v === 'any' ? null : v;
                   updateRule(idx, 'from_stage_id', newFromStage);
-                  // Se mudou para "Qualquer etapa", remover regras redundantes do mesmo evento
                   if (newFromStage === null) {
                     const eventName = localRules[idx].event_name;
                     if (eventName) {
@@ -329,6 +343,20 @@ const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSave
                   {stageOptions.map(s => (
                     <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
                   ))}
+                </SelectContent>
+              </Select>
+              {/* Classification override */}
+              <Select
+                value={rule.value_classification || (rule.event_name ? getDefaultClassification(rule.event_name) : '')}
+                onValueChange={v => updateRule(idx, 'value_classification', v as ValueClassification)}
+              >
+                <SelectTrigger className="min-w-[100px] w-[100px]">
+                  <SelectValue placeholder="Tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="positive">Receita</SelectItem>
+                  <SelectItem value="pending">Pendente</SelectItem>
+                  <SelectItem value="negative">Recuperar</SelectItem>
                 </SelectContent>
               </Select>
               <Button variant="ghost" size="icon" onClick={() => removeRule(idx)} className="shrink-0">

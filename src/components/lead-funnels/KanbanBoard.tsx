@@ -1,9 +1,10 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { LeadFunnelStage, Lead, LeadStagePosition } from '@/types/leadFunnels';
+import { LeadFunnelStage, Lead, LeadStagePosition, StageTransitionRule, ValueClassification } from '@/types/leadFunnels';
 import LeadCard from './LeadCard';
-import { Search, ArrowUpDown, DollarSign, TrendingDown, ChevronDown, RefreshCw } from 'lucide-react';
+import { Search, ArrowUpDown, DollarSign, TrendingDown, ChevronDown, RefreshCw, Hourglass, AlertTriangle } from 'lucide-react';
 import { formatCurrency } from '@/lib/formatters';
 import { isRevenueStage } from '@/lib/revenueStage';
+import { extractMetadataAmount, classificationColor, classificationLabel, getDefaultClassification } from '@/lib/valueClassification';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
@@ -37,6 +38,7 @@ interface KanbanBoardProps {
   onBulkMoveOverdue?: () => void;
   bulkMoving?: boolean;
   hasAutoMoveProducts?: boolean;
+  transitionRules?: StageTransitionRule[];
 }
 
 type SortMode = 'recent' | 'value' | 'orders' | 'ltv' | 'recontact';
@@ -66,7 +68,7 @@ const DroppableColumn: React.FC<{ id: string; isOver: boolean; children: React.R
   );
 };
 
-const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClick, onWhatsAppClick, funnelId, recontactMap, userRole, currentUserId, onBulkMoveOverdue, bulkMoving, hasAutoMoveProducts }) => {
+const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClick, onWhatsAppClick, funnelId, recontactMap, userRole, currentUserId, onBulkMoveOverdue, bulkMoving, hasAutoMoveProducts, transitionRules = [] }) => {
   const queryClient = useQueryClient();
   const isSeller = userRole === 'vendedor' || userRole === 'vendedora' || userRole === 'suporte';
   const isAdmin = userRole === 'admin' || userRole === 'gestor';
@@ -178,24 +180,42 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
   }, [filteredPositions, sortMode, purchaseMap, recontactMap]);
 
   const getStageRevenue = (leads: (LeadStagePosition & { lead: Lead })[]) => {
-    return leads.reduce((sum, p) => sum + (Number(p.lead.metadata?.amount) || 0), 0);
+    return leads.reduce((sum, p) => sum + extractMetadataAmount(p.lead.metadata), 0);
   };
 
-  const { confirmedRevenue, lostRevenue } = useMemo(() => {
+  // Build a map: stageId -> classification from transition rules
+  const stageClassificationMap = useMemo(() => {
+    const map = new Map<string, ValueClassification>();
+    for (const rule of transitionRules) {
+      if (rule.to_stage_id) {
+        const cls = rule.value_classification || getDefaultClassification(rule.event_name);
+        // If multiple rules point to the same stage, prioritize: negative > pending > positive
+        const existing = map.get(rule.to_stage_id);
+        if (!existing || (cls === 'negative') || (cls === 'pending' && existing === 'positive')) {
+          map.set(rule.to_stage_id, cls);
+        }
+      }
+    }
+    return map;
+  }, [transitionRules]);
+
+  const { confirmedRevenue, lostRevenue, pendingRevenue } = useMemo(() => {
     let confirmed = 0;
     let lost = 0;
-    const stageMap = new Map(stages.map(s => [s.id, s]));
+    let pending = 0;
     for (const p of visiblePositions) {
-      const amount = Number(p.lead.metadata?.amount) || 0;
-      const stage = stageMap.get(p.stage_id);
-      if (stage && isRevenueStage(stage.name)) {
+      const amount = extractMetadataAmount(p.lead.metadata);
+      const cls = stageClassificationMap.get(p.stage_id);
+      if (cls === 'positive' || (!cls && isRevenueStage(stages.find(s => s.id === p.stage_id)?.name || ''))) {
         confirmed += amount;
+      } else if (cls === 'pending') {
+        pending += amount;
       } else {
         lost += amount;
       }
     }
-    return { confirmedRevenue: confirmed, lostRevenue: lost };
-  }, [visiblePositions, stages]);
+    return { confirmedRevenue: confirmed, lostRevenue: lost, pendingRevenue: pending };
+  }, [visiblePositions, stages, stageClassificationMap]);
 
   const activePosition = activeId ? visiblePositions.find(p => p.id === activeId) : null;
 
@@ -294,10 +314,16 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
             {formatCurrency(confirmedRevenue)}
           </span>
         )}
+        {isAdmin && pendingRevenue > 0 && (
+          <span className="inline-flex items-center gap-1 text-xs font-semibold text-yellow-600 dark:text-yellow-400 bg-yellow-500/10 px-2 py-0.5 rounded">
+            <Hourglass className="h-3 w-3" />
+            {formatCurrency(pendingRevenue)}
+          </span>
+        )}
         {isAdmin && lostRevenue > 0 && (
           <span className="inline-flex items-center gap-1 text-xs font-semibold text-destructive bg-destructive/10 px-2 py-0.5 rounded">
-            <TrendingDown className="h-3 w-3" />
-            -{formatCurrency(lostRevenue)}
+            <AlertTriangle className="h-3 w-3" />
+            {formatCurrency(lostRevenue)}
           </span>
         )}
       </div>
@@ -337,12 +363,22 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
                   </div>
                   {!shouldHideValues && (() => {
                     const rev = getStageRevenue(stageLeads);
-                    return rev > 0 ? (
-                      <p className={`text-xs font-medium mt-1 ${isRevenueStage(stage.name) ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}`}>
-                        {isRevenueStage(stage.name) ? '' : '- '}{formatCurrency(rev)}
-                        {!isRevenueStage(stage.name) && <span className="text-[10px] ml-1 opacity-70">perdido</span>}
+                    if (rev <= 0) return null;
+                    const cls = stageClassificationMap.get(stage.id);
+                    const isPositive = cls === 'positive' || (!cls && isRevenueStage(stage.name));
+                    const isPending = cls === 'pending';
+                    const colorCls = isPositive
+                      ? 'text-emerald-600 dark:text-emerald-400'
+                      : isPending
+                      ? 'text-yellow-600 dark:text-yellow-400'
+                      : 'text-destructive';
+                    const label = isPositive ? '' : isPending ? 'pendente' : 'recuperar';
+                    return (
+                      <p className={`text-xs font-medium mt-1 ${colorCls}`}>
+                        {formatCurrency(rev)}
+                        {label && <span className="text-[10px] ml-1 opacity-70">{label}</span>}
                       </p>
-                    ) : null;
+                    );
                   })()}
                 </div>
 
@@ -364,6 +400,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
                           onClick={() => onLeadClick?.(pos.lead_id)}
                           onWhatsAppClick={onWhatsAppClick}
                           hideValues={shouldHideValues}
+                          stageClassification={stageClassificationMap.get(stage.id) || null}
                         />
                       ))}
                       {hasMore && (

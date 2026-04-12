@@ -190,6 +190,7 @@ export function useUpsertTransitionRules() {
           event_name: r.event_name,
           from_stage_id: r.from_stage_id || null,
           to_stage_id: r.to_stage_id,
+          value_classification: r.value_classification || null,
           funnel_id: funnelId,
         })))
         .select();

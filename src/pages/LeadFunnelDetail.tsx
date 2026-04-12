@@ -344,6 +344,7 @@ const LeadFunnelDetail: React.FC = () => {
               onBulkMoveOverdue={handleBulkMoveOverdue}
               bulkMoving={bulkMoving}
               hasAutoMoveProducts={leadFunnelProducts.some(p => p.auto_move_stage_id && p.recontact_days)}
+              transitionRules={rules}
             />
           </TabsContent>
         )}

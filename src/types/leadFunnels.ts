@@ -45,12 +45,15 @@ export interface LeadFunnelStage {
   created_at: string;
 }
 
+export type ValueClassification = 'positive' | 'pending' | 'negative';
+
 export interface StageTransitionRule {
   id: string;
   funnel_id: string;
   event_name: string;
   from_stage_id: string | null;
   to_stage_id: string;
+  value_classification: ValueClassification | null;
   created_at: string;
 }
 

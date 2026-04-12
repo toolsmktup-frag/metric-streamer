@@ -1,12 +1,13 @@
 import React from 'react';
-import { Lead, LeadStagePosition } from '@/types/leadFunnels';
-import { Mail, Phone, Clock, DollarSign, GripVertical, MessageCircle, ShoppingBag, CalendarClock, Timer, EyeOff } from 'lucide-react';
+import { Lead, LeadStagePosition, ValueClassification } from '@/types/leadFunnels';
+import { Mail, Phone, Clock, DollarSign, GripVertical, MessageCircle, ShoppingBag, CalendarClock, Timer, EyeOff, AlertTriangle, Hourglass } from 'lucide-react';
 import { PurchaseSummary } from '@/hooks/useBulkLeadPurchases';
 import { useDraggable } from '@dnd-kit/core';
 import { formatLocalDateTime } from '@/lib/localDate';
 import { differenceInDays } from 'date-fns';
 import type { RecontactInfo } from '@/hooks/useRecontactDeadlines';
 import LeadAssignSelect from './LeadAssignSelect';
+import { extractMetadataAmount, classificationColor, classificationLabel } from '@/lib/valueClassification';
 
 interface LeadCardProps {
   position: LeadStagePosition & { lead: Lead };
@@ -17,6 +18,7 @@ interface LeadCardProps {
   purchaseSummary?: PurchaseSummary;
   recontactInfo?: RecontactInfo;
   hideValues?: boolean;
+  stageClassification?: ValueClassification | null;
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -34,7 +36,7 @@ function friendlyStatus(status: string): string {
   return STATUS_LABELS[status.toLowerCase().trim()] || status;
 }
 
-const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, onWhatsAppClick, isDragging, isRevenue = true, purchaseSummary, recontactInfo, hideValues }) => {
+const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, onWhatsAppClick, isDragging, isRevenue = true, purchaseSummary, recontactInfo, hideValues, stageClassification }) => {
   const lead = position.lead;
   // Fallback: try metadata for phone if lead.phone is empty
   const leadPhone = lead.phone || (lead.metadata?.phone as string) || (lead.metadata?.cel as string) || (lead.metadata?.telefone as string) || null;
@@ -147,7 +149,24 @@ const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, onWhatsAppClick,
         </div>
       )}
 
-      {/* Recontact countdown badge */}
+      {/* Pending / Recovery value badge (when no LTV) */}
+      {!hasLTV && !hideValues && stageClassification && stageClassification !== 'positive' && (() => {
+        const metaAmount = extractMetadataAmount(lead.metadata);
+        if (metaAmount <= 0) return null;
+        const colorCls = classificationColor(stageClassification);
+        const label = classificationLabel(stageClassification);
+        const Icon = stageClassification === 'pending' ? Hourglass : AlertTriangle;
+        return (
+          <div className="mt-1.5 ml-[42px]">
+            <span className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-md ${colorCls}`}>
+              <Icon className="h-3.5 w-3.5" />
+              {metaAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+              <span className="text-[10px] font-medium ml-0.5">{label}</span>
+            </span>
+          </div>
+        );
+      })()}
+
       {recontactInfo && (
         <div className="mt-1.5 ml-[42px]">
           <span
