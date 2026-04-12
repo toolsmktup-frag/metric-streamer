@@ -1,78 +1,74 @@
 
 
-## Auditoria Completa - Automações WhatsApp
+## Tudo que precisa no Supabase — Automações WhatsApp
 
-### Resumo: o que funciona e o que falta
-
----
-
-### FRONTEND (UI do Canvas) - Tudo OK
-
-| Componente | Drag & Drop | Config Panel | Visual do Nó | Status |
-|---|---|---|---|---|
-| **Trigger** (9 tipos) | OK | OK (tipo, plataforma, produto, oferta) | OK | OK |
-| **WhatsApp** | OK | OK (instância, variações, blocos, skip if replied) | OK | OK |
-| **Timer** | OK | OK (delay + unidade) | OK | OK |
-| **Condição If/Else** | OK | OK (variável, operador, valor) | OK (SIM/NAO handles) | OK |
-| **Parar Fluxo** | OK | N/A | OK | OK |
-| **Cancelar Anteriores** | OK | N/A | OK | OK |
-| **Anotação** | OK | OK (texto + cor) | OK | OK |
-| **Divisor A/B** | OK | OK (paths + slider %) | OK (handles múltiplos) | OK |
-| **Smart Delay** | OK | OK (horário, dia, dias úteis) | OK | OK |
-| **Webhook HTTP** | OK | OK (método, URL, headers, body) | OK | OK |
-| **Tag** | OK | OK (ação + nome) | OK | OK |
-| **Goto** | OK | OK (ID + label destino) | OK | OK |
-
-Sidebar, drag-and-drop, save/load no Supabase (`wz_flows` JSONB) -- tudo funcional.
+Vou gerar um documento completo com tudo pronto pra copiar/colar no Supabase.
 
 ---
 
-### BACKEND (Edge Functions) - Problemas encontrados
+### 1. Tabelas SQL (SQL Editor)
 
-O `wz-executor` processa os nós em runtime. Atualmente ele suporta **apenas 4 tipos**:
+As 4 tabelas já existem no projeto (`docs/wz-automation-tables.sql`). Se ainda não foram criadas no Supabase, rodar no SQL Editor:
 
-| Tipo | Suportado no executor? | Problema |
-|---|---|---|
-| `whatsapp` | SIM | OK |
-| `timer` | SIM | OK |
-| `condition` | SIM | OK |
-| `stop` | SIM (incl. cancel_previous) | OK |
-| **`ab_split`** | **NAO** | Cai no fallback e pula para o próximo edge genérico, ignorando a lógica de % |
-| **`smart_delay`** | **NAO** | Tratado como nó genérico, avança imediatamente sem esperar horário/dia |
-| **`webhook`** | **NAO** | Avança sem disparar HTTP |
-| **`tag`** | **NAO** | Avança sem marcar/remover tag |
-| **`goto`** | **NAO** | Avança pelo edge normal, ignora targetNodeId |
-| `note` | N/A | Correto -- anotação não deve ser processada |
-| `trigger` | N/A | Processado pelo `wz-receiver`, não pelo executor |
+- `wz_instances` — instâncias WhatsApp (API URL + key)
+- `wz_flows` — fluxos com nodes/edges em JSONB
+- `wz_executions` — execuções em andamento/finalizadas
+- `wz_scheduled_steps` — passos agendados (timers, smart delays)
 
-**Impacto**: Os 5 novos nós aparecem no canvas e salvam no banco, mas quando o fluxo roda de verdade via `wz-executor`, eles são ignorados silenciosamente.
+Todas com RLS habilitado e policies configuradas.
+
+### 2. pg_cron (SQL Editor)
+
+O scheduler precisa de um cron job que roda a cada minuto:
+
+```sql
+SELECT cron.schedule(
+  'wz-scheduler-every-minute',
+  '* * * * *',
+  $$
+  SELECT net.http_post(
+    url := '<SUPABASE_URL>/functions/v1/wz-scheduler',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer <SERVICE_ROLE_KEY>'
+    ),
+    body := '{}'::jsonb
+  );
+  $$
+);
+```
+
+### 3. Edge Functions (3 funções para deploy)
+
+Copiar/colar cada uma no Dashboard do Supabase (Functions > Deploy):
+
+| Função | Arquivo local | Linhas | JWT |
+|---|---|---|---|
+| **wz-receiver** | `supabase/functions/wz-receiver/index.ts` | 542 linhas | `verify_jwt = false` |
+| **wz-executor** | `supabase/functions/wz-executor/index.ts` | 552 linhas | `verify_jwt = false` |
+| **wz-scheduler** | `supabase/functions/wz-scheduler/index.ts` | 163 linhas | `verify_jwt = false` |
+
+### 4. Secrets necessárias no Supabase
+
+As Edge Functions usam estas variáveis (já existem por padrão no Supabase):
+- `SUPABASE_URL` — automático
+- `SUPABASE_ANON_KEY` — automático
+- `SUPABASE_SERVICE_ROLE_KEY` — automático
+
+Nenhuma secret adicional é necessária.
 
 ---
 
-### Correções necessárias no `wz-executor`
+### Plano de entrega
 
-Adicionar handlers para cada novo tipo no bloco `PROCESS NODE` (linhas 123-165):
+Vou gerar **um único arquivo** `/mnt/documents/supabase-automacoes-completo.md` com tudo organizado em seções copiáveis:
 
-1. **`ab_split`**: Ler `paths` com %, sortear random 0-100, selecionar o `path_X` handle correspondente, buscar edge com `sourceHandle === "path_X"` e avançar
+1. **SQL das tabelas** — copiar e rodar no SQL Editor
+2. **SQL do pg_cron** — copiar e rodar no SQL Editor
+3. **wz-receiver** — código completo da função
+4. **wz-executor** — código completo da função
+5. **wz-scheduler** — código completo da função
+6. **Checklist de deploy** — passo a passo
 
-2. **`smart_delay`**: Calcular `run_at` baseado em `targetTime`, `targetDay`, `businessDaysOnly`. Criar `wz_scheduled_steps` (igual ao timer) e parar execução
-
-3. **`webhook`**: Fazer `fetch()` para `data.url` com `data.method`, parsear `data.headers` (JSON string), substituir variáveis no `data.body`, executar a chamada, e avançar
-
-4. **`tag`**: Atualizar metadata do lead (via `supabase.from('leads').update(...)` ou RPC) para adicionar/remover tag, e avançar
-
-5. **`goto`**: Ler `targetNodeId` do data, e chamar `advanceToNext()` diretamente para esse nó (bypass da busca por edge)
-
-6. **`note`**: Adicionar skip explícito (avançar sem processar) para que não quebre se alguém conectar um edge acidentalmente
-
-### Supabase - Nenhuma migration necessária
-
-As tabelas `wz_flows`, `wz_executions`, `wz_scheduled_steps` já existem e suportam os novos tipos via JSONB. Nenhuma coluna nova é necessária.
-
-### Plano de implementação
-
-1. **Atualizar `supabase/functions/wz-executor/index.ts`** com os 6 handlers acima
-2. **Deploy manual** no Dashboard do Supabase (copiar/colar o código atualizado)
-
-O código do frontend está 100% funcional. A única lacuna é o backend que não processa os novos tipos de nó.
+Tudo pronto pra copiar/colar direto no Dashboard do Supabase.
 
