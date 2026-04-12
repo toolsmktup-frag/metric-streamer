@@ -508,6 +508,14 @@ Deno.serve(async (req) => {
           boleto_code: event.boleto_code,
           boleto_url: event.boleto_url,
           external_event_id: event.external_event_id,
+          address_street: event.address.street,
+          address_number: event.address.number,
+          address_complement: event.address.complement,
+          address_neighborhood: event.address.neighborhood,
+          address_city: event.address.city,
+          address_state: event.address.state,
+          address_zipcode: event.address.zipcode,
+          address_country: event.address.country,
           _dedup_key: eventDedupKey,
         };
 
