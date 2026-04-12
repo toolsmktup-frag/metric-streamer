@@ -1,12 +1,13 @@
 import React from 'react';
-import { Lead, LeadStagePosition } from '@/types/leadFunnels';
-import { Mail, Phone, Clock, DollarSign, GripVertical, MessageCircle, ShoppingBag, CalendarClock, Timer, EyeOff } from 'lucide-react';
+import { Lead, LeadStagePosition, ValueClassification } from '@/types/leadFunnels';
+import { Mail, Phone, Clock, DollarSign, GripVertical, MessageCircle, ShoppingBag, CalendarClock, Timer, EyeOff, AlertTriangle, Hourglass } from 'lucide-react';
 import { PurchaseSummary } from '@/hooks/useBulkLeadPurchases';
 import { useDraggable } from '@dnd-kit/core';
 import { formatLocalDateTime } from '@/lib/localDate';
 import { differenceInDays } from 'date-fns';
 import type { RecontactInfo } from '@/hooks/useRecontactDeadlines';
 import LeadAssignSelect from './LeadAssignSelect';
+import { extractMetadataAmount, classificationColor, classificationLabel } from '@/lib/valueClassification';
 
 interface LeadCardProps {
   position: LeadStagePosition & { lead: Lead };
@@ -17,6 +18,7 @@ interface LeadCardProps {
   purchaseSummary?: PurchaseSummary;
   recontactInfo?: RecontactInfo;
   hideValues?: boolean;
+  stageClassification?: ValueClassification | null;
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -34,7 +36,7 @@ function friendlyStatus(status: string): string {
   return STATUS_LABELS[status.toLowerCase().trim()] || status;
 }
 
-const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, onWhatsAppClick, isDragging, isRevenue = true, purchaseSummary, recontactInfo, hideValues }) => {
+const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, onWhatsAppClick, isDragging, isRevenue = true, purchaseSummary, recontactInfo, hideValues, stageClassification }) => {
   const lead = position.lead;
   // Fallback: try metadata for phone if lead.phone is empty
   const leadPhone = lead.phone || (lead.metadata?.phone as string) || (lead.metadata?.cel as string) || (lead.metadata?.telefone as string) || null;
