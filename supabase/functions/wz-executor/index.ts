@@ -580,7 +580,7 @@ async function processWhatsAppNode(
     try {
       const res = await fetch(endpoint, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json", token: instance.api_key },
+        headers: { "Content-Type": "application/json", Accept: "application/json", token: instance.api_token },
         body: JSON.stringify(body),
       });
       const resText = await res.text();
