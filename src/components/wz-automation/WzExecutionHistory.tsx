@@ -226,9 +226,9 @@ export default function WzExecutionHistory() {
           </thead>
           <tbody>
             {isLoading ? (
-              <tr><td colSpan={8} className="text-center py-12 text-muted-foreground">Carregando...</td></tr>
+              <tr><td colSpan={9} className="text-center py-12 text-muted-foreground">Carregando...</td></tr>
             ) : executions.length === 0 ? (
-              <tr><td colSpan={8} className="text-center py-12 text-muted-foreground">Nenhuma execução encontrada</td></tr>
+              <tr><td colSpan={9} className="text-center py-12 text-muted-foreground">Nenhuma execução encontrada</td></tr>
             ) : (
               executions.map(exec => {
                 const isOpen = expandedId === exec.id;
@@ -236,6 +236,7 @@ export default function WzExecutionHistory() {
                 const duration = exec.finished_at
                   ? formatDistanceStrict(new Date(exec.finished_at), new Date(exec.started_at), { locale: ptBR })
                   : '—';
+                const isReplay = exec.trigger_event === 'replay';
 
                 return (
                   <React.Fragment key={exec.id}>
@@ -249,7 +250,12 @@ export default function WzExecutionHistory() {
                       <td className="px-4 py-3 font-medium text-foreground">{exec.flow_name}</td>
                       <td className="px-4 py-3 text-foreground">{exec.contact_name || '—'}</td>
                       <td className="px-4 py-3 text-foreground font-mono text-xs">{exec.contact_phone || '—'}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{exec.trigger_event || '—'}</td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        <span className="flex items-center gap-1.5">
+                          {isReplay && <Badge variant="outline" className="text-[10px] px-1.5 py-0">Replay</Badge>}
+                          {exec.trigger_event && exec.trigger_event !== 'replay' ? exec.trigger_event : (!isReplay ? '—' : '')}
+                        </span>
+                      </td>
                       <td className="px-4 py-3">
                         <Badge variant={cfg.variant}>{cfg.label}</Badge>
                       </td>
@@ -257,10 +263,22 @@ export default function WzExecutionHistory() {
                         {format(new Date(exec.started_at), "dd/MM HH:mm", { locale: ptBR })}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground text-xs">{duration}</td>
+                      <td className="px-2 py-3">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          title="Reprocessar"
+                          disabled={replayingId === exec.id}
+                          onClick={(e) => handleReplay(exec.id, e)}
+                        >
+                          <RefreshCw className={`h-3.5 w-3.5 ${replayingId === exec.id ? 'animate-spin' : ''}`} />
+                        </Button>
+                      </td>
                     </tr>
                     {isOpen && (
                       <tr className="bg-muted/20">
-                        <td colSpan={8} className="px-6 py-4">
+                        <td colSpan={9} className="px-6 py-4">
                           <NodeTimeline executionId={exec.id} />
                         </td>
                       </tr>
