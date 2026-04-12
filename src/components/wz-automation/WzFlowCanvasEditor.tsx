@@ -368,7 +368,18 @@ export default function WzFlowCanvasEditor() {
           <ReactFlow
             nodes={nodes.map((n) => ({
               ...n,
-              data: { ...n.data, stats: nodeStatsMap?.[n.id] },
+              data: {
+                ...n.data,
+                stats: nodeStatsMap?.[n.id],
+                _onToggleDisable: () => {
+                  setNodes((nds) =>
+                    nds.map((nd) =>
+                      nd.id === n.id ? { ...nd, data: { ...nd.data, disabled: !nd.data.disabled } } : nd
+                    )
+                  );
+                },
+                _onDuplicate: () => handleNodeDuplicate(n.id),
+              },
             }))}
             edges={edges}
             onNodesChange={onNodesChange}
