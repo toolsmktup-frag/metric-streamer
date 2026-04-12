@@ -68,7 +68,7 @@ const DroppableColumn: React.FC<{ id: string; isOver: boolean; children: React.R
   );
 };
 
-const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClick, onWhatsAppClick, funnelId, recontactMap, userRole, currentUserId, onBulkMoveOverdue, bulkMoving, hasAutoMoveProducts }) => {
+const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClick, onWhatsAppClick, funnelId, recontactMap, userRole, currentUserId, onBulkMoveOverdue, bulkMoving, hasAutoMoveProducts, transitionRules = [] }) => {
   const queryClient = useQueryClient();
   const isSeller = userRole === 'vendedor' || userRole === 'vendedora' || userRole === 'suporte';
   const isAdmin = userRole === 'admin' || userRole === 'gestor';
