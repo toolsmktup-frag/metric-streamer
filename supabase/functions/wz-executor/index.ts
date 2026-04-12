@@ -48,6 +48,42 @@ function randomDelay(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1) + min) * 1000;
 }
 
+// ─── Smart Delay calculator ───
+function calculateSmartDelayRunAt(nodeData: Record<string, any>): string {
+  const targetTime = nodeData.targetTime || "09:00";
+  const targetDay = nodeData.targetDay || "any";
+  const businessDaysOnly = nodeData.businessDaysOnly || false;
+
+  const [hours, minutes] = targetTime.split(":").map(Number);
+  const now = new Date();
+  let target = new Date(now);
+  target.setHours(hours, minutes, 0, 0);
+
+  // If target time already passed today, move to tomorrow
+  if (target <= now) {
+    target.setDate(target.getDate() + 1);
+  }
+
+  // Adjust for specific day
+  const dayMap: Record<string, number> = {
+    monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6, sunday: 0,
+  };
+
+  if (targetDay === "next_business" || businessDaysOnly) {
+    // Skip weekends (0=Sun, 6=Sat)
+    while (target.getDay() === 0 || target.getDay() === 6) {
+      target.setDate(target.getDate() + 1);
+    }
+  } else if (dayMap[targetDay] !== undefined) {
+    const targetDow = dayMap[targetDay];
+    while (target.getDay() !== targetDow) {
+      target.setDate(target.getDate() + 1);
+    }
+  }
+
+  return target.toISOString();
+}
+
 // ─── Main handler ───
 
 Deno.serve(async (req) => {
