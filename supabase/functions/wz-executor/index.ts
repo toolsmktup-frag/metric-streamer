@@ -1,4 +1,4 @@
-// v1.1.0 - added ab_split, smart_delay, webhook, tag, goto, note handlers
+// v2.0.0 - added per-node logging to wz_execution_logs
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -39,13 +39,45 @@ function formatCurrency(value: unknown): string {
   return `R$${n.toFixed(2).replace(".", ",")}`;
 }
 
-// ─── Sleep helper ───
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function randomDelay(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1) + min) * 1000;
+}
+
+// ─── Node Logger ───
+
+async function logNodeStart(supabase: any, executionId: string, nodeId: string, nodeType: string, inputData: any): Promise<string> {
+  try {
+    const { data } = await supabase.from("wz_execution_logs").insert({
+      execution_id: executionId,
+      node_id: nodeId,
+      node_type: nodeType,
+      status: "running",
+      input_data: inputData,
+      started_at: new Date().toISOString(),
+    }).select("id").single();
+    return data?.id || "";
+  } catch (err) {
+    console.error("[wz-executor] Log start error:", err);
+    return "";
+  }
+}
+
+async function logNodeEnd(supabase: any, logId: string, status: string, outputData?: any, errorMessage?: string) {
+  if (!logId) return;
+  try {
+    await supabase.from("wz_execution_logs").update({
+      status,
+      output_data: outputData || null,
+      error_message: errorMessage || null,
+      finished_at: new Date().toISOString(),
+    }).eq("id", logId);
+  } catch (err) {
+    console.error("[wz-executor] Log end error:", err);
+  }
 }
 
 // ─── Smart Delay calculator ───
@@ -59,18 +91,15 @@ function calculateSmartDelayRunAt(nodeData: Record<string, any>): string {
   let target = new Date(now);
   target.setHours(hours, minutes, 0, 0);
 
-  // If target time already passed today, move to tomorrow
   if (target <= now) {
     target.setDate(target.getDate() + 1);
   }
 
-  // Adjust for specific day
   const dayMap: Record<string, number> = {
     monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6, sunday: 0,
   };
 
   if (targetDay === "next_business" || businessDaysOnly) {
-    // Skip weekends (0=Sun, 6=Sat)
     while (target.getDay() === 0 || target.getDay() === 6) {
       target.setDate(target.getDate() + 1);
     }
@@ -93,7 +122,7 @@ Deno.serve(async (req) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!supabaseUrl || !serviceRoleKey) {
-    console.error("[wz-executor] Missing env vars", { hasUrl: !!supabaseUrl, hasKey: !!serviceRoleKey });
+    console.error("[wz-executor] Missing env vars");
     return jsonResponse({ error: "Server configuration error" }, 500);
   }
   const supabase = createClient(supabaseUrl, serviceRoleKey);
@@ -113,7 +142,6 @@ Deno.serve(async (req) => {
       .single();
 
     if (execErr || !execution) {
-      console.error("Execution not found:", execErr);
       return jsonResponse({ error: "Execution not found" }, 404);
     }
 
@@ -137,7 +165,6 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Node not found" }, 404);
     }
 
-    // Merge contact info into variables for substitution
     const vars = {
       ...(execution.variables || {}),
       _contact_name: execution.contact_name,
@@ -150,158 +177,155 @@ Deno.serve(async (req) => {
 
     console.log(`[wz-executor] Exec=${execution_id} Node=${current_node_id} Type=${nodeType}`);
 
-    // Update current_node_id
     await supabase
       .from("wz_executions")
       .update({ current_node_id })
       .eq("id", execution_id);
 
+    // ─── Log start ───
+    const logId = await logNodeStart(supabase, execution_id, current_node_id, nodeType, {
+      node_data: nodeData,
+      variables: vars,
+    });
+
     // ─── PROCESS NODE ───
+    try {
+      if (nodeType === "whatsapp") {
+        const result = await processWhatsAppNode(supabase, execution, nodeData, vars);
+        await logNodeEnd(supabase, logId, "success", result);
 
-    if (nodeType === "whatsapp") {
-      await processWhatsAppNode(supabase, execution, nodeData, vars);
-    } else if (nodeType === "timer") {
-      await processTimerNode(supabase, execution_id, current_node_id, nodeData);
-      return jsonResponse({ message: "Scheduled", node: current_node_id });
-    } else if (nodeType === "condition") {
-      const result = evaluateCondition(nodeData, vars);
-      const handleId = result ? "yes" : "no";
-      const nextEdge = edges.find((e) => e.source === current_node_id && e.sourceHandle === handleId);
-      if (nextEdge) {
-        return await advanceToNext(supabase, execution_id, flow_id, nextEdge.target);
-      } else {
+      } else if (nodeType === "timer") {
+        const runAt = await processTimerNode(supabase, execution_id, current_node_id, nodeData);
+        await logNodeEnd(supabase, logId, "success", { summary: `Agendado → ${runAt}`, run_at: runAt });
+        return jsonResponse({ message: "Scheduled", node: current_node_id });
+
+      } else if (nodeType === "condition") {
+        const result = evaluateCondition(nodeData, vars);
+        const handleId = result ? "yes" : "no";
+        await logNodeEnd(supabase, logId, "success", { summary: handleId, result, variable: nodeData.variable, operator: nodeData.operator });
+        const nextEdge = edges.find((e) => e.source === current_node_id && e.sourceHandle === handleId);
+        if (nextEdge) {
+          return await advanceToNext(supabase, execution_id, flow_id, nextEdge.target);
+        } else {
+          await markFinished(supabase, execution_id, "completed");
+          return jsonResponse({ message: "Condition end", result: handleId });
+        }
+
+      } else if (nodeType === "stop") {
+        if (nodeData.stopType === "cancel_previous") {
+          if (execution.contact_phone) {
+            await supabase
+              .from("wz_executions")
+              .update({ status: "cancelled", finished_at: new Date().toISOString() })
+              .eq("flow_id", flow_id)
+              .eq("contact_phone", execution.contact_phone)
+              .eq("status", "running")
+              .neq("id", execution_id);
+          }
+        }
+        await logNodeEnd(supabase, logId, "success", { summary: nodeData.stopType || "stop" });
         await markFinished(supabase, execution_id, "completed");
-        return jsonResponse({ message: "Condition end", result: handleId });
-      }
-    } else if (nodeType === "stop") {
-      if (nodeData.stopType === "cancel_previous") {
-        if (execution.contact_phone) {
-          await supabase
-            .from("wz_executions")
-            .update({ status: "cancelled", finished_at: new Date().toISOString() })
-            .eq("flow_id", flow_id)
-            .eq("contact_phone", execution.contact_phone)
-            .eq("status", "running")
-            .neq("id", execution_id);
+        return jsonResponse({ message: "Flow stopped" });
+
+      } else if (nodeType === "ab_split") {
+        const paths = nodeData.paths || [
+          { label: "A", percent: 50 },
+          { label: "B", percent: 50 },
+        ];
+        const rand = Math.random() * 100;
+        let cumulative = 0;
+        let selectedIndex = 0;
+        for (let i = 0; i < paths.length; i++) {
+          cumulative += paths[i].percent;
+          if (rand <= cumulative) { selectedIndex = i; break; }
         }
-      }
-      await markFinished(supabase, execution_id, "completed");
-      return jsonResponse({ message: "Flow stopped" });
-
-    // ─── NEW: A/B Split ───
-    } else if (nodeType === "ab_split") {
-      const paths = nodeData.paths || [
-        { label: "A", percent: 50 },
-        { label: "B", percent: 50 },
-      ];
-      const rand = Math.random() * 100;
-      let cumulative = 0;
-      let selectedIndex = 0;
-      for (let i = 0; i < paths.length; i++) {
-        cumulative += paths[i].percent;
-        if (rand <= cumulative) {
-          selectedIndex = i;
-          break;
+        const sourceHandle = `path_${selectedIndex}`;
+        const selectedLabel = paths[selectedIndex].label;
+        await logNodeEnd(supabase, logId, "success", { summary: `Path ${selectedLabel}`, rand: rand.toFixed(1), path: sourceHandle });
+        const nextEdge = edges.find((e) => e.source === current_node_id && e.sourceHandle === sourceHandle);
+        if (nextEdge) {
+          return await advanceToNext(supabase, execution_id, flow_id, nextEdge.target);
+        } else {
+          await markFinished(supabase, execution_id, "completed");
+          return jsonResponse({ message: "A/B split end" });
         }
-      }
-      const sourceHandle = `path_${selectedIndex}`;
-      console.log(`[wz-executor] A/B Split: rand=${rand.toFixed(1)} → ${paths[selectedIndex].label} (${sourceHandle})`);
-      const nextEdge = edges.find((e) => e.source === current_node_id && e.sourceHandle === sourceHandle);
-      if (nextEdge) {
-        return await advanceToNext(supabase, execution_id, flow_id, nextEdge.target);
-      } else {
-        await markFinished(supabase, execution_id, "completed");
-        return jsonResponse({ message: "A/B split end — no edge for path" });
-      }
 
-    // ─── NEW: Smart Delay ───
-    } else if (nodeType === "smart_delay") {
-      const runAt = calculateSmartDelayRunAt(nodeData);
-      await supabase.from("wz_scheduled_steps").insert({
-        execution_id: execution_id,
-        node_id: current_node_id,
-        run_at: runAt,
-        status: "pending",
-      });
-      await supabase
-        .from("wz_executions")
-        .update({ status: "waiting", current_node_id })
-        .eq("id", execution_id);
-      console.log(`[wz-executor] Smart delay scheduled → ${runAt}`);
-      return jsonResponse({ message: "Smart delay scheduled", run_at: runAt });
+      } else if (nodeType === "smart_delay") {
+        const runAt = calculateSmartDelayRunAt(nodeData);
+        await supabase.from("wz_scheduled_steps").insert({
+          execution_id, node_id: current_node_id, run_at: runAt, status: "pending",
+        });
+        await supabase.from("wz_executions").update({ status: "waiting", current_node_id }).eq("id", execution_id);
+        await logNodeEnd(supabase, logId, "success", { summary: `Smart delay → ${runAt}`, run_at: runAt });
+        return jsonResponse({ message: "Smart delay scheduled", run_at: runAt });
 
-    // ─── NEW: Webhook HTTP ───
-    } else if (nodeType === "webhook") {
-      const method = (nodeData.method || "POST").toUpperCase();
-      const url = substituteVariables(nodeData.url || "", vars);
-      let headers: Record<string, string> = { "Content-Type": "application/json" };
-      try {
-        if (nodeData.headers) {
-          const parsed = JSON.parse(nodeData.headers);
-          headers = { ...headers, ...parsed };
-        }
-      } catch (_) { /* invalid JSON headers, use defaults */ }
-      const bodyStr = nodeData.body ? substituteVariables(nodeData.body, vars) : undefined;
-
-      if (url) {
+      } else if (nodeType === "webhook") {
+        const method = (nodeData.method || "POST").toUpperCase();
+        const url = substituteVariables(nodeData.url || "", vars);
+        let headers: Record<string, string> = { "Content-Type": "application/json" };
         try {
+          if (nodeData.headers) headers = { ...headers, ...JSON.parse(nodeData.headers) };
+        } catch (_) {}
+        const bodyStr = nodeData.body ? substituteVariables(nodeData.body, vars) : undefined;
+
+        if (url) {
           const fetchOpts: RequestInit = { method, headers };
           if (method !== "GET" && bodyStr) fetchOpts.body = bodyStr;
           const res = await fetch(url, fetchOpts);
-          const result = await res.text();
-          console.log(`[wz-executor] Webhook ${method} ${url} → ${res.status}`);
-        } catch (err) {
-          console.error(`[wz-executor] Webhook error:`, err);
+          const resText = await res.text();
+          await logNodeEnd(supabase, logId, res.ok ? "success" : "failed", {
+            summary: `${method} ${res.status}`,
+            status_code: res.status,
+            response: resText.slice(0, 500),
+          }, res.ok ? undefined : `HTTP ${res.status}`);
+        } else {
+          await logNodeEnd(supabase, logId, "skipped", { summary: "No URL" });
         }
-      } else {
-        console.warn("[wz-executor] Webhook node has no URL configured");
-      }
 
-    // ─── NEW: Tag ───
-    } else if (nodeType === "tag") {
-      const tagName = nodeData.tagName;
-      const tagAction = nodeData.tagAction || "add";
-      if (tagName && execution.contact_phone) {
-        try {
+      } else if (nodeType === "tag") {
+        const tagName = nodeData.tagName;
+        const tagAction = nodeData.tagAction || "add";
+        if (tagName && execution.contact_phone) {
           const { data: leads } = await supabase
-            .from("leads")
-            .select("id, metadata")
-            .eq("phone", execution.contact_phone)
-            .limit(1);
+            .from("leads").select("id, metadata").eq("phone", execution.contact_phone).limit(1);
           if (leads && leads.length > 0) {
             const lead = leads[0];
             const metadata = lead.metadata || {};
             const tags: string[] = metadata.tags || [];
-            if (tagAction === "add" && !tags.includes(tagName)) {
-              tags.push(tagName);
-            } else if (tagAction === "remove") {
+            if (tagAction === "add" && !tags.includes(tagName)) tags.push(tagName);
+            else if (tagAction === "remove") {
               const idx = tags.indexOf(tagName);
               if (idx >= 0) tags.splice(idx, 1);
             }
             metadata.tags = tags;
             await supabase.from("leads").update({ metadata }).eq("id", lead.id);
-            console.log(`[wz-executor] Tag ${tagAction}: "${tagName}" on lead ${lead.id}`);
+            await logNodeEnd(supabase, logId, "success", { summary: `${tagAction} "${tagName}"`, lead_id: lead.id });
+          } else {
+            await logNodeEnd(supabase, logId, "skipped", { summary: "Lead não encontrado" });
           }
-        } catch (err) {
-          console.error("[wz-executor] Tag error:", err);
+        } else {
+          await logNodeEnd(supabase, logId, "skipped", { summary: "Sem tag ou telefone" });
         }
-      }
 
-    // ─── NEW: Goto ───
-    } else if (nodeType === "goto") {
-      const targetNodeId = nodeData.targetNodeId;
-      if (targetNodeId) {
-        console.log(`[wz-executor] Goto → ${targetNodeId}`);
-        return await advanceToNext(supabase, execution_id, flow_id, targetNodeId);
+      } else if (nodeType === "goto") {
+        const targetNodeId = nodeData.targetNodeId;
+        if (targetNodeId) {
+          await logNodeEnd(supabase, logId, "success", { summary: `→ ${targetNodeId}` });
+          return await advanceToNext(supabase, execution_id, flow_id, targetNodeId);
+        } else {
+          await logNodeEnd(supabase, logId, "skipped", { summary: "Sem destino" });
+          await markFinished(supabase, execution_id, "completed");
+          return jsonResponse({ message: "Goto end — no target" });
+        }
+
+      } else if (nodeType === "note" || nodeType === "trigger") {
+        await logNodeEnd(supabase, logId, "skipped", { summary: "Nó não-executável" });
       } else {
-        console.warn("[wz-executor] Goto node has no targetNodeId");
-        await markFinished(supabase, execution_id, "completed");
-        return jsonResponse({ message: "Goto end — no target" });
+        await logNodeEnd(supabase, logId, "skipped", { summary: `Tipo desconhecido: ${nodeType}` });
       }
-
-    // ─── Note / trigger — skip (non-executable) ───
-    } else if (nodeType === "note" || nodeType === "trigger") {
-      console.log(`[wz-executor] Skipping non-executable node: ${nodeType}`);
+    } catch (nodeErr) {
+      await logNodeEnd(supabase, logId, "failed", null, String(nodeErr));
+      console.error(`[wz-executor] Node error:`, nodeErr);
     }
 
     // ─── Advance to next node ───
@@ -325,133 +349,81 @@ async function processWhatsAppNode(
   execution: Record<string, any>,
   nodeData: Record<string, any>,
   vars: Record<string, any>
-) {
-  const messages: Array<{
-    text: string; type: string; imageUrl?: string; caption?: string;
-    skipIfReplied?: boolean;
-    blocks?: Array<{ text: string; type: string; imageUrl?: string; caption?: string; skipIfReplied?: boolean }>;
-  }> = nodeData.messages || [];
+): Promise<Record<string, any>> {
+  const messages: any[] = nodeData.messages || [];
+  const result: Record<string, any> = { blocks_sent: 0, blocks_skipped: 0, errors: [] };
 
   if (messages.length === 0) {
-    console.warn("WhatsApp node has no messages");
-    return;
+    result.summary = "Sem mensagens";
+    return result;
   }
 
-  // Pick random variation
   const msg = messages[Math.floor(Math.random() * messages.length)];
-
-  // Get instance
   const instanceId = nodeData.instanceId;
-  if (!instanceId) {
-    console.error("No instance configured for WhatsApp node");
-    return;
-  }
+  if (!instanceId) { result.summary = "Sem instância"; return result; }
 
   const { data: instance } = await supabase
-    .from("wz_instances")
-    .select("api_url, api_key")
-    .eq("id", instanceId)
-    .single();
-
-  if (!instance) {
-    console.error("Instance not found:", instanceId);
-    return;
-  }
+    .from("wz_instances").select("api_url, api_key").eq("id", instanceId).single();
+  if (!instance) { result.summary = "Instância não encontrada"; return result; }
 
   const phone = execution.contact_phone;
-  if (!phone) {
-    console.warn("No phone for execution:", execution.id);
-    return;
-  }
+  if (!phone) { result.summary = "Sem telefone"; return result; }
 
   const cleanPhone = String(phone).replace(/\D/g, "");
   const apiUrl = instance.api_url.replace(/\/+$/, "");
 
-  // Resolve blocks
   const blocks = (msg.blocks && msg.blocks.length > 0)
     ? msg.blocks
     : [{ text: msg.text || "", type: msg.type || "text", imageUrl: msg.imageUrl, caption: msg.caption, skipIfReplied: msg.skipIfReplied }];
 
-  // Helper: check if contact replied since execution started
   let hasReplied: boolean | null = null;
   async function checkIfReplied(): Promise<boolean> {
     if (hasReplied !== null) return hasReplied;
     try {
       const { data: replies } = await supabase
-        .from("whatsapp_messages")
-        .select("id")
-        .eq("phone", cleanPhone)
-        .eq("direction", "incoming")
-        .gte("created_at", execution.started_at)
-        .limit(1);
+        .from("whatsapp_messages").select("id").eq("phone", cleanPhone)
+        .eq("direction", "incoming").gte("created_at", execution.started_at).limit(1);
       hasReplied = !!(replies && replies.length > 0);
-    } catch (err) {
-      console.warn("[wz-executor] Error checking replies:", err);
-      hasReplied = false;
-    }
+    } catch { hasReplied = false; }
     return hasReplied;
   }
 
-  // Send each block sequentially
   for (let bi = 0; bi < blocks.length; bi++) {
     const block = blocks[bi];
-
-    // Check skipIfReplied condition
     if (block.skipIfReplied) {
       const replied = await checkIfReplied();
-      if (replied) {
-        console.log(`[wz-executor] Skipping block ${bi} — contact replied`);
-        continue;
-      }
+      if (replied) { result.blocks_skipped++; continue; }
     }
 
     const text = substituteVariables(block.text, vars);
-
-    // Humanization delay between blocks (skip before first block)
-    if (bi > 0) {
-      const delayMin = nodeData.delayMin ?? 1;
-      const delayMax = nodeData.delayMax ?? 5;
-      await sleep(randomDelay(delayMin, delayMax));
-    }
+    if (bi > 0) await sleep(randomDelay(nodeData.delayMin ?? 1, nodeData.delayMax ?? 5));
 
     const isMedia = block.type === "image";
     const endpoint = isMedia ? `${apiUrl}/send/media` : `${apiUrl}/send/text`;
-
     const body: Record<string, any> = isMedia
-      ? {
-          number: cleanPhone,
-          type: "image",
-          file: block.imageUrl || "",
-          text: substituteVariables(block.caption || "", vars),
-          readchat: true, readmessages: true, async: false,
-        }
-      : {
-          number: cleanPhone,
-          text,
-          readchat: true, readmessages: true, async: false,
-        };
+      ? { number: cleanPhone, type: "image", file: block.imageUrl || "", text: substituteVariables(block.caption || "", vars), readchat: true, readmessages: true, async: false }
+      : { number: cleanPhone, text, readchat: true, readmessages: true, async: false };
 
     try {
       const res = await fetch(endpoint, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-          token: instance.api_key,
-        },
+        headers: { "Content-Type": "application/json", Accept: "application/json", token: instance.api_key },
         body: JSON.stringify(body),
       });
-
-      const result = await res.text();
-      console.log(`[wz-executor] WhatsApp block ${bi} sent to ${cleanPhone}: status=${res.status}`);
-
-      if (!res.ok) {
-        console.error(`[wz-executor] UAZAPI error: ${res.status} ${result.slice(0, 500)}`);
+      const resText = await res.text();
+      if (res.ok) {
+        result.blocks_sent++;
+      } else {
+        result.errors.push(`Block ${bi}: HTTP ${res.status}`);
       }
     } catch (err) {
-      console.error(`[wz-executor] WhatsApp send error block ${bi}:`, err);
+      result.errors.push(`Block ${bi}: ${String(err)}`);
     }
   }
+
+  result.summary = `${result.blocks_sent} enviados, ${result.blocks_skipped} pulados`;
+  result.phone = cleanPhone;
+  return result;
 }
 
 async function processTimerNode(
@@ -459,56 +431,44 @@ async function processTimerNode(
   executionId: string,
   nodeId: string,
   nodeData: Record<string, any>
-) {
+): Promise<string> {
   const delay = Number(nodeData.delay || 1);
   const unit = nodeData.unit || "minutes";
 
-  let ms = delay * 60 * 1000; // default minutes
+  let ms = delay * 60 * 1000;
   if (unit === "hours") ms = delay * 60 * 60 * 1000;
   else if (unit === "days") ms = delay * 24 * 60 * 60 * 1000;
 
   const runAt = new Date(Date.now() + ms).toISOString();
 
-  // Create scheduled step
   await supabase.from("wz_scheduled_steps").insert({
-    execution_id: executionId,
-    node_id: nodeId,
-    run_at: runAt,
-    status: "pending",
+    execution_id: executionId, node_id: nodeId, run_at: runAt, status: "pending",
   });
 
-  // Update execution to waiting
-  await supabase
-    .from("wz_executions")
+  await supabase.from("wz_executions")
     .update({ status: "waiting", current_node_id: nodeId })
     .eq("id", executionId);
 
   console.log(`[wz-executor] Timer scheduled: ${delay} ${unit} → ${runAt}`);
+  return runAt;
 }
 
 function evaluateCondition(nodeData: Record<string, any>, vars: Record<string, any>): boolean {
   const variable = nodeData.variable;
   const operator = nodeData.operator;
   const compareValue = nodeData.compareValue;
-
   if (!variable || !operator || compareValue === undefined) return false;
 
   const actual = String(vars[variable] || "").toLowerCase();
   const expected = String(compareValue).toLowerCase();
 
   switch (operator) {
-    case "equals":
-      return actual === expected;
-    case "contains":
-      return actual.includes(expected);
-    case "greater_than":
-      return Number(actual) > Number(expected);
-    case "less_than":
-      return Number(actual) < Number(expected);
-    case "not_equals":
-      return actual !== expected;
-    default:
-      return false;
+    case "equals": return actual === expected;
+    case "contains": return actual.includes(expected);
+    case "greater_than": return Number(actual) > Number(expected);
+    case "less_than": return Number(actual) < Number(expected);
+    case "not_equals": return actual !== expected;
+    default: return false;
   }
 }
 
@@ -527,7 +487,6 @@ async function advanceToNext(
   flowId: string,
   nextNodeId: string
 ): Promise<Response> {
-  // Call self recursively for next node
   const execUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/wz-executor`;
   try {
     const res = await fetch(execUrl, {
