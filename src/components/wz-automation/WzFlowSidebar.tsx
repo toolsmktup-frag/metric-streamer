@@ -2,12 +2,12 @@ import React from 'react';
 import {
   Zap, MessageCircle, Clock, GitBranch, XCircle, Ban,
   ShoppingCart, CreditCard, FileText, Timer, AlertTriangle,
-  RotateCcw, X, ShoppingBag, Sparkles,
+  RotateCcw, X, ShoppingBag, Sparkles, StickyNote, Wrench,
 } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 export interface WzDragData {
-  nodeType: 'trigger' | 'whatsapp' | 'timer' | 'condition' | 'stop';
+  nodeType: 'trigger' | 'whatsapp' | 'timer' | 'condition' | 'stop' | 'note';
   triggerType?: string;
   stopType?: string;
   label: string;
@@ -96,6 +96,19 @@ const WzFlowSidebar: React.FC = () => {
                   <span className="text-foreground">{a.label}</span>
                 </DraggableItem>
               ))}
+            </div>
+          </div>
+          {/* Utilidades */}
+          <div>
+            <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
+              <Wrench className="h-3.5 w-3.5" />
+              Utilidades
+            </h4>
+            <div className="space-y-1.5">
+              <DraggableItem data={{ nodeType: 'note', label: 'Anotação' }}>
+                <span className="text-amber-500"><StickyNote className="h-4 w-4" /></span>
+                <span className="text-foreground">Anotação / Nota</span>
+              </DraggableItem>
             </div>
           </div>
         </div>

@@ -26,6 +26,7 @@ import WzWhatsAppNode from './nodes/WzWhatsAppNode';
 import WzTimerNode from './nodes/WzTimerNode';
 import WzConditionNode from './nodes/WzConditionNode';
 import WzStopNode from './nodes/WzStopNode';
+import WzNoteNode from './nodes/WzNoteNode';
 import { useWzFlow, useCreateWzFlow, useUpdateWzFlow } from '@/hooks/useWzFlows';
 
 const nodeTypes: NodeTypes = {
@@ -34,6 +35,7 @@ const nodeTypes: NodeTypes = {
   timer: WzTimerNode,
   condition: WzConditionNode,
   stop: WzStopNode,
+  note: WzNoteNode,
 };
 
 const defaultEdgeOptions = {
@@ -137,6 +139,9 @@ export default function WzFlowCanvasEditor() {
       nodeData.compareValue = '';
     } else if (dragData.nodeType === 'stop') {
       nodeData.stopType = dragData.stopType || 'stop';
+    } else if (dragData.nodeType === 'note') {
+      nodeData.text = '';
+      nodeData.noteColor = 'yellow';
     }
 
     const newNode: Node = {
