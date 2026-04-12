@@ -248,6 +248,34 @@ const LeadTimeline: React.FC<LeadTimelineProps> = ({ lead, open, onClose }) => {
               </div>
             )}
 
+            {(() => {
+              const meta = lead.metadata as any;
+              const hasAddress = meta?.address_street || meta?.address_city || meta?.address_zipcode;
+              if (!hasAddress) return null;
+              
+              const addressLine = [meta.address_street, meta.address_number].filter(Boolean).join(', ');
+              const complementLine = meta.address_complement;
+              const neighborhoodLine = meta.address_neighborhood;
+              const cityStateLine = [meta.address_city, meta.address_state].filter(Boolean).join(' - ');
+              const zipLine = meta.address_zipcode;
+
+              return (
+                <div className="p-5 border-b border-border">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Home className="h-4 w-4 text-foreground" />
+                    <span className="text-sm font-semibold text-foreground">Endereço</span>
+                  </div>
+                  <div className="bg-muted/50 rounded-lg p-3 space-y-1">
+                    {addressLine && <p className="text-xs text-foreground">{addressLine}</p>}
+                    {complementLine && <p className="text-xs text-muted-foreground">{complementLine}</p>}
+                    {neighborhoodLine && <p className="text-xs text-muted-foreground">{neighborhoodLine}</p>}
+                    {cityStateLine && <p className="text-xs text-foreground">{cityStateLine}</p>}
+                    {zipLine && <p className="text-xs text-muted-foreground">CEP: {zipLine}</p>}
+                  </div>
+                </div>
+              );
+            })()}
+
             <div className="p-5">
               <div className="flex items-center gap-2 mb-3">
                 <Activity className="h-4 w-4 text-foreground" />
