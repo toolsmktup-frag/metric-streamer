@@ -1,4 +1,4 @@
-// v1.0.1 - redeploy for matheuscolombo.uazapi.com migration
+// v1.1.0 - added ab_split, smart_delay, webhook, tag, goto, note handlers
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -46,6 +46,42 @@ function sleep(ms: number): Promise<void> {
 
 function randomDelay(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1) + min) * 1000;
+}
+
+// ─── Smart Delay calculator ───
+function calculateSmartDelayRunAt(nodeData: Record<string, any>): string {
+  const targetTime = nodeData.targetTime || "09:00";
+  const targetDay = nodeData.targetDay || "any";
+  const businessDaysOnly = nodeData.businessDaysOnly || false;
+
+  const [hours, minutes] = targetTime.split(":").map(Number);
+  const now = new Date();
+  let target = new Date(now);
+  target.setHours(hours, minutes, 0, 0);
+
+  // If target time already passed today, move to tomorrow
+  if (target <= now) {
+    target.setDate(target.getDate() + 1);
+  }
+
+  // Adjust for specific day
+  const dayMap: Record<string, number> = {
+    monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6, sunday: 0,
+  };
+
+  if (targetDay === "next_business" || businessDaysOnly) {
+    // Skip weekends (0=Sun, 6=Sat)
+    while (target.getDay() === 0 || target.getDay() === 6) {
+      target.setDate(target.getDate() + 1);
+    }
+  } else if (dayMap[targetDay] !== undefined) {
+    const targetDow = dayMap[targetDay];
+    while (target.getDay() !== targetDow) {
+      target.setDate(target.getDate() + 1);
+    }
+  }
+
+  return target.toISOString();
 }
 
 // ─── Main handler ───
@@ -126,7 +162,6 @@ Deno.serve(async (req) => {
       await processWhatsAppNode(supabase, execution, nodeData, vars);
     } else if (nodeType === "timer") {
       await processTimerNode(supabase, execution_id, current_node_id, nodeData);
-      // Timer creates a scheduled step and stops execution here
       return jsonResponse({ message: "Scheduled", node: current_node_id });
     } else if (nodeType === "condition") {
       const result = evaluateCondition(nodeData, vars);
@@ -140,7 +175,6 @@ Deno.serve(async (req) => {
       }
     } else if (nodeType === "stop") {
       if (nodeData.stopType === "cancel_previous") {
-        // Cancel all running executions for same flow + same phone (except current)
         if (execution.contact_phone) {
           await supabase
             .from("wz_executions")
@@ -153,6 +187,121 @@ Deno.serve(async (req) => {
       }
       await markFinished(supabase, execution_id, "completed");
       return jsonResponse({ message: "Flow stopped" });
+
+    // ─── NEW: A/B Split ───
+    } else if (nodeType === "ab_split") {
+      const paths = nodeData.paths || [
+        { label: "A", percent: 50 },
+        { label: "B", percent: 50 },
+      ];
+      const rand = Math.random() * 100;
+      let cumulative = 0;
+      let selectedIndex = 0;
+      for (let i = 0; i < paths.length; i++) {
+        cumulative += paths[i].percent;
+        if (rand <= cumulative) {
+          selectedIndex = i;
+          break;
+        }
+      }
+      const sourceHandle = `path_${selectedIndex}`;
+      console.log(`[wz-executor] A/B Split: rand=${rand.toFixed(1)} → ${paths[selectedIndex].label} (${sourceHandle})`);
+      const nextEdge = edges.find((e) => e.source === current_node_id && e.sourceHandle === sourceHandle);
+      if (nextEdge) {
+        return await advanceToNext(supabase, execution_id, flow_id, nextEdge.target);
+      } else {
+        await markFinished(supabase, execution_id, "completed");
+        return jsonResponse({ message: "A/B split end — no edge for path" });
+      }
+
+    // ─── NEW: Smart Delay ───
+    } else if (nodeType === "smart_delay") {
+      const runAt = calculateSmartDelayRunAt(nodeData);
+      await supabase.from("wz_scheduled_steps").insert({
+        execution_id: execution_id,
+        node_id: current_node_id,
+        run_at: runAt,
+        status: "pending",
+      });
+      await supabase
+        .from("wz_executions")
+        .update({ status: "waiting", current_node_id })
+        .eq("id", execution_id);
+      console.log(`[wz-executor] Smart delay scheduled → ${runAt}`);
+      return jsonResponse({ message: "Smart delay scheduled", run_at: runAt });
+
+    // ─── NEW: Webhook HTTP ───
+    } else if (nodeType === "webhook") {
+      const method = (nodeData.method || "POST").toUpperCase();
+      const url = substituteVariables(nodeData.url || "", vars);
+      let headers: Record<string, string> = { "Content-Type": "application/json" };
+      try {
+        if (nodeData.headers) {
+          const parsed = JSON.parse(nodeData.headers);
+          headers = { ...headers, ...parsed };
+        }
+      } catch (_) { /* invalid JSON headers, use defaults */ }
+      const bodyStr = nodeData.body ? substituteVariables(nodeData.body, vars) : undefined;
+
+      if (url) {
+        try {
+          const fetchOpts: RequestInit = { method, headers };
+          if (method !== "GET" && bodyStr) fetchOpts.body = bodyStr;
+          const res = await fetch(url, fetchOpts);
+          const result = await res.text();
+          console.log(`[wz-executor] Webhook ${method} ${url} → ${res.status}`);
+        } catch (err) {
+          console.error(`[wz-executor] Webhook error:`, err);
+        }
+      } else {
+        console.warn("[wz-executor] Webhook node has no URL configured");
+      }
+
+    // ─── NEW: Tag ───
+    } else if (nodeType === "tag") {
+      const tagName = nodeData.tagName;
+      const tagAction = nodeData.tagAction || "add";
+      if (tagName && execution.contact_phone) {
+        try {
+          const { data: leads } = await supabase
+            .from("leads")
+            .select("id, metadata")
+            .eq("phone", execution.contact_phone)
+            .limit(1);
+          if (leads && leads.length > 0) {
+            const lead = leads[0];
+            const metadata = lead.metadata || {};
+            const tags: string[] = metadata.tags || [];
+            if (tagAction === "add" && !tags.includes(tagName)) {
+              tags.push(tagName);
+            } else if (tagAction === "remove") {
+              const idx = tags.indexOf(tagName);
+              if (idx >= 0) tags.splice(idx, 1);
+            }
+            metadata.tags = tags;
+            await supabase.from("leads").update({ metadata }).eq("id", lead.id);
+            console.log(`[wz-executor] Tag ${tagAction}: "${tagName}" on lead ${lead.id}`);
+          }
+        } catch (err) {
+          console.error("[wz-executor] Tag error:", err);
+        }
+      }
+
+    // ─── NEW: Goto ───
+    } else if (nodeType === "goto") {
+      const targetNodeId = nodeData.targetNodeId;
+      if (targetNodeId) {
+        console.log(`[wz-executor] Goto → ${targetNodeId}`);
+        return await advanceToNext(supabase, execution_id, flow_id, targetNodeId);
+      } else {
+        console.warn("[wz-executor] Goto node has no targetNodeId");
+        await markFinished(supabase, execution_id, "completed");
+        return jsonResponse({ message: "Goto end — no target" });
+      }
+
+    // ─── Note / trigger — skip (non-executable) ───
+    } else if (nodeType === "note" || nodeType === "trigger") {
+      console.log(`[wz-executor] Skipping non-executable node: ${nodeType}`);
     }
 
     // ─── Advance to next node ───
