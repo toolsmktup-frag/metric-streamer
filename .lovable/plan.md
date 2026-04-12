@@ -1,74 +1,35 @@
 
 
-## Tudo que precisa no Supabase — Automações WhatsApp
+## Problema
 
-Vou gerar um documento completo com tudo pronto pra copiar/colar no Supabase.
+O SQL tenta criar policies que já existem no banco. Precisa adicionar `DROP POLICY IF EXISTS` antes de cada `CREATE POLICY`.
 
----
+## Correção
 
-### 1. Tabelas SQL (SQL Editor)
+Atualizar o documento `/mnt/documents/supabase-automacoes-completo.md` na seção de tabelas SQL, adicionando `DROP POLICY IF EXISTS` antes de cada policy. Também adicionar `CREATE TABLE IF NOT EXISTS` (que já tem) e `IF NOT EXISTS` nos índices.
 
-As 4 tabelas já existem no projeto (`docs/wz-automation-tables.sql`). Se ainda não foram criadas no Supabase, rodar no SQL Editor:
-
-- `wz_instances` — instâncias WhatsApp (API URL + key)
-- `wz_flows` — fluxos com nodes/edges em JSONB
-- `wz_executions` — execuções em andamento/finalizadas
-- `wz_scheduled_steps` — passos agendados (timers, smart delays)
-
-Todas com RLS habilitado e policies configuradas.
-
-### 2. pg_cron (SQL Editor)
-
-O scheduler precisa de um cron job que roda a cada minuto:
+O SQL corrigido ficará assim para cada tabela:
 
 ```sql
-SELECT cron.schedule(
-  'wz-scheduler-every-minute',
-  '* * * * *',
-  $$
-  SELECT net.http_post(
-    url := '<SUPABASE_URL>/functions/v1/wz-scheduler',
-    headers := jsonb_build_object(
-      'Content-Type', 'application/json',
-      'Authorization', 'Bearer <SERVICE_ROLE_KEY>'
-    ),
-    body := '{}'::jsonb
-  );
-  $$
-);
+-- wz_instances
+DROP POLICY IF EXISTS "Authenticated read wz_instances" ON public.wz_instances;
+DROP POLICY IF EXISTS "Authenticated write wz_instances" ON public.wz_instances;
+CREATE POLICY ...
+
+-- wz_flows
+DROP POLICY IF EXISTS "Authenticated full wz_flows" ON public.wz_flows;
+CREATE POLICY ...
+
+-- wz_executions
+DROP POLICY IF EXISTS "Authenticated read wz_executions" ON public.wz_executions;
+DROP POLICY IF EXISTS "Service write wz_executions" ON public.wz_executions;
+CREATE POLICY ...
+
+-- wz_scheduled_steps
+DROP POLICY IF EXISTS "Service full wz_scheduled_steps" ON public.wz_scheduled_steps;
+DROP POLICY IF EXISTS "Authenticated read wz_scheduled_steps" ON public.wz_scheduled_steps;
+CREATE POLICY ...
 ```
 
-### 3. Edge Functions (3 funções para deploy)
-
-Copiar/colar cada uma no Dashboard do Supabase (Functions > Deploy):
-
-| Função | Arquivo local | Linhas | JWT |
-|---|---|---|---|
-| **wz-receiver** | `supabase/functions/wz-receiver/index.ts` | 542 linhas | `verify_jwt = false` |
-| **wz-executor** | `supabase/functions/wz-executor/index.ts` | 552 linhas | `verify_jwt = false` |
-| **wz-scheduler** | `supabase/functions/wz-scheduler/index.ts` | 163 linhas | `verify_jwt = false` |
-
-### 4. Secrets necessárias no Supabase
-
-As Edge Functions usam estas variáveis (já existem por padrão no Supabase):
-- `SUPABASE_URL` — automático
-- `SUPABASE_ANON_KEY` — automático
-- `SUPABASE_SERVICE_ROLE_KEY` — automático
-
-Nenhuma secret adicional é necessária.
-
----
-
-### Plano de entrega
-
-Vou gerar **um único arquivo** `/mnt/documents/supabase-automacoes-completo.md` com tudo organizado em seções copiáveis:
-
-1. **SQL das tabelas** — copiar e rodar no SQL Editor
-2. **SQL do pg_cron** — copiar e rodar no SQL Editor
-3. **wz-receiver** — código completo da função
-4. **wz-executor** — código completo da função
-5. **wz-scheduler** — código completo da função
-6. **Checklist de deploy** — passo a passo
-
-Tudo pronto pra copiar/colar direto no Dashboard do Supabase.
+Vou regenerar o documento completo com o SQL seguro para re-execução (idempotente).
 
