@@ -1,43 +1,35 @@
 
 
-## Unificar instâncias: Automações usam as mesmas do Chat
+## Restaurar instâncias manuais (wz_instances) + manter as do Chat
 
-### Problema atual
-Existem **duas tabelas separadas** de instâncias:
-- `whatsapp_instances` — usada pelo Chat (tem phone, profile pic, QR code, UAZAPI completa)
-- `wz_instances` — usada pelas Automações (cadastro manual de URL + token)
-
-Isso causa duplicação e desconexão: a instância "Automação 1" na aba de automações não é a mesma "Dani • Equipe Matheus" do chat.
+### O que aconteceu
+A mudança anterior removeu a UI das `wz_instances` (onde estava a "Automação 1" com token `55f87766...`) e substituiu tudo pelas instâncias do Chat. A instância manual ainda existe no banco, mas ficou invisível na interface.
 
 ### Solução
-Eliminar o uso de `wz_instances` e fazer tudo apontar para `whatsapp_instances`. As automações passam a usar as mesmas instâncias conectadas no chat.
+Manter **as duas fontes** na aba Instâncias das Automações:
+- **Seção 1**: Instâncias do Chat (`whatsapp_instances`) — gerenciadas pelo InstanceHub
+- **Seção 2**: Instâncias Manuais (`wz_instances`) — com formulário de editar/adicionar (Nome, URL, Token) como antes
+
+O executor já consulta `whatsapp_instances`. Vou adicionar um fallback: se o `instanceId` do nó não for encontrado em `whatsapp_instances`, busca em `wz_instances` (usando `api_url` + `api_key`).
 
 ### Alterações
 
-**1. Aba "Instâncias" nas Automações** (`WzInstanceManager.tsx`)
-- Substituir o conteúdo por uma listagem das `whatsapp_instances` (usando `useWhatsAppInstances`)
-- Mostrar nome, telefone, status de conexão, foto de perfil — igual ao InstanceHub
-- Botão "Gerenciar" abre o InstanceHub existente para conectar/desconectar
-- Remove formulário manual de URL/token (não faz mais sentido)
+**1. `WzInstanceManager.tsx`** — Restaurar a listagem mista
+- Seção "Instâncias do Chat" com as `whatsapp_instances` + botão "Gerenciar" abrindo InstanceHub
+- Seção "Instâncias Manuais" com as `wz_instances` + botões editar/adicionar/excluir (restaurar formulário Nome/URL/Token)
+- Ambas aparecem na mesma tela
 
-**2. Seletor de instância no editor de fluxo** (`WzNodeConfigPanel.tsx`)
-- Trocar `useWzInstances` por `useWhatsAppInstances`
-- O dropdown mostra as instâncias do chat com nome amigável + telefone
-- Salva o `whatsapp_instances.id` no nó
+**2. `WzNodeConfigPanel.tsx`** — Seletor unificado
+- O dropdown de instância no editor de fluxo mostra **ambas as fontes**: instâncias do Chat (com label "Chat") e instâncias manuais (com label "Manual")
+- Salva o ID correspondente à tabela de origem
 
-**3. Executor** (`supabase/functions/wz-executor/index.ts`)
-- Mudar query de `wz_instances` para `whatsapp_instances`
-- Mapear campos: `api_url` + `api_token` (em vez de `api_key`)
-
-**4. Hook `useWzInstances`** 
-- Pode ser mantido como wrapper ou removido — os componentes passam a usar `useWhatsAppInstances` diretamente
+**3. `wz-executor/index.ts`** — Fallback para wz_instances
+- Primeiro busca em `whatsapp_instances`
+- Se não encontrar, busca em `wz_instances` (mapeando `api_key` → token)
+- Garante que a "Automação 1" continue funcionando
 
 ### Arquivos editados
-1. `src/components/wz-automation/WzInstanceManager.tsx` — reescrever para listar `whatsapp_instances`
-2. `src/components/wz-automation/WzNodeConfigPanel.tsx` — trocar fonte de instâncias
-3. `supabase/functions/wz-executor/index.ts` — query em `whatsapp_instances`
-4. `src/components/wz-automation/nodes/WzWhatsAppNode.tsx` — ajustar display name
-
-### Resultado
-A aba "Instâncias" nas automações mostra as mesmas instâncias do chat. O seletor no editor de fluxo lista as instâncias conectadas. O executor envia mensagens pela mesma conexão do chat. Tudo sincronizado.
+1. `src/components/wz-automation/WzInstanceManager.tsx`
+2. `src/components/wz-automation/WzNodeConfigPanel.tsx`
+3. `supabase/functions/wz-executor/index.ts`
 
