@@ -369,6 +369,7 @@ export default function WzFlowCanvasEditor() {
           <ReactFlow
             nodes={nodes.map((n) => ({
               ...n,
+              zIndex: n.type === 'note' ? -1 : 0,
               data: {
                 ...n.data,
                 stats: nodeStatsMap?.[n.id],
