@@ -85,10 +85,9 @@ export default function WzFlowCanvasEditor() {
   const { data: nodeStatsMap } = useWzFlowNodeStats(flowId);
   const [clipboard, setClipboard] = useState<Node | null>(null);
 
-  // Keyboard shortcuts: Ctrl+C / Ctrl+V
+  // Keyboard shortcuts: Ctrl+C / Ctrl+V / D
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      // Don't intercept when typing in inputs
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
 
@@ -109,6 +108,19 @@ export default function WzFlowCanvasEditor() {
             data: { ...clipboard.data },
           };
           setNodes((nds) => [...nds, newNode]);
+          e.preventDefault();
+        }
+      }
+      // D key = toggle disable
+      if (e.key === 'd' || e.key === 'D') {
+        if (e.ctrlKey || e.metaKey || e.altKey) return;
+        const sel = nodes.find((n) => n.selected);
+        if (sel && sel.type !== 'note') {
+          setNodes((nds) =>
+            nds.map((n) =>
+              n.id === sel.id ? { ...n, data: { ...n.data, disabled: !n.data.disabled } } : n
+            )
+          );
           e.preventDefault();
         }
       }
