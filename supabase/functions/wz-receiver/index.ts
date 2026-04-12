@@ -170,6 +170,7 @@ function normalizeTicto(body: Record<string, any>): NormalizedEvent {
     boleto_code: boletoCode,
     boleto_url: boletoUrl,
     external_event_id: externalEventId,
+    address: extractAddress(body, customer, invoice),
     raw_payload: body,
   };
 }
@@ -235,6 +236,7 @@ function normalizeGuru(body: Record<string, any>): NormalizedEvent {
     boleto_code: boletoCode,
     boleto_url: boletoUrl,
     external_event_id: externalEventId,
+    address: extractAddress(body, contact),
     raw_payload: body,
   };
 }
@@ -257,6 +259,7 @@ function normalizeGeneric(body: Record<string, any>): NormalizedEvent {
     boleto_code: body.digitable_line || body.boleto_code || null,
     boleto_url: body.boleto_url || null,
     external_event_id: String(body.id || body.transaction_id || body.order_id || "").trim() || null,
+    address: extractAddress(body),
     raw_payload: body,
   };
 }
