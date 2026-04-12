@@ -69,7 +69,6 @@ export default function WzFlowCanvasEditor() {
   const { data: existingFlow, isLoading: loadingFlow } = useWzFlow(isNew ? undefined : id);
   const createFlow = useCreateWzFlow();
   const updateFlow = useUpdateWzFlow();
-  const { data: nodeStatsMap } = useWzFlowNodeStats(flowId);
 
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -80,6 +79,8 @@ export default function WzFlowCanvasEditor() {
   const [saving, setSaving] = useState(false);
   const [flowId, setFlowId] = useState<string | null>(isNew ? null : id!);
   const [reactFlowInstance, setReactFlowInstance] = useState<any>(null);
+
+  const { data: nodeStatsMap } = useWzFlowNodeStats(flowId);
 
   // Load existing flow
   useEffect(() => {
