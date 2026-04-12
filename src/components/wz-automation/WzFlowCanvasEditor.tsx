@@ -83,7 +83,7 @@ export default function WzFlowCanvasEditor() {
   const [reactFlowInstance, setReactFlowInstance] = useState<any>(null);
 
   const { data: nodeStatsMap } = useWzFlowNodeStats(flowId);
-  const [clipboard, setClipboard] = useState<Node[]>([]);
+  const [clipboard, setClipboard] = useState<{ nodes: Node[]; edges: Edge[] }>({ nodes: [], edges: [] });
 
   // Keyboard shortcuts: Ctrl+C / Ctrl+V / D
   useEffect(() => {
