@@ -183,21 +183,34 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
     return leads.reduce((sum, p) => sum + extractMetadataAmount(p.lead.metadata), 0);
   };
 
-  // Build a map: stageId -> classification from transition rules
+  // Build a map: stageId -> classification from transition rules (with name-based fallback)
   const stageClassificationMap = useMemo(() => {
     const map = new Map<string, ValueClassification>();
     for (const rule of transitionRules) {
       if (rule.to_stage_id) {
         const cls = rule.value_classification || getDefaultClassification(rule.event_name);
-        // If multiple rules point to the same stage, prioritize: negative > pending > positive
         const existing = map.get(rule.to_stage_id);
         if (!existing || (cls === 'negative') || (cls === 'pending' && existing === 'positive')) {
           map.set(rule.to_stage_id, cls);
         }
       }
     }
+
+    // Fallback: infer classification from stage name when no rules configured
+    for (const stage of stages) {
+      if (map.has(stage.id)) continue;
+      const name = stage.name.toLowerCase();
+      if (/pix|boleto|aguardando/i.test(name)) {
+        map.set(stage.id, 'pending');
+      } else if (/abandonad|recusad|reembolso|chargeback|cancelad|rejeitad/i.test(name)) {
+        map.set(stage.id, 'negative');
+      } else if (isRevenueStage(stage.name)) {
+        map.set(stage.id, 'positive');
+      }
+    }
+
     return map;
-  }, [transitionRules]);
+  }, [transitionRules, stages]);
 
   const { confirmedRevenue, lostRevenue, pendingRevenue } = useMemo(() => {
     let confirmed = 0;
