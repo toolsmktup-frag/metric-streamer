@@ -228,21 +228,109 @@ Deno.serve(async (req) => {
         return jsonResponse({ message: "Flow stopped" });
 
       } else if (nodeType === "ab_split") {
+        const splitMode = nodeData.splitMode || "percentage";
         const paths = nodeData.paths || [
           { label: "A", percent: 50 },
           { label: "B", percent: 50 },
         ];
-        const rand = Math.random() * 100;
-        let cumulative = 0;
+        const sellers: { id: string; name: string }[] = nodeData.sellers || [];
+        const assignAction = nodeData.assignAction || "assign_and_branch";
+        const isSeller = splitMode === "round_robin" || splitMode === "random";
+
         let selectedIndex = 0;
-        for (let i = 0; i < paths.length; i++) {
-          cumulative += paths[i].percent;
-          if (rand <= cumulative) { selectedIndex = i; break; }
+        let selectedLabel = "";
+        let selectedSellerId: string | null = null;
+        let selectedSellerName = "";
+        let logExtra: Record<string, any> = {};
+
+        if (splitMode === "percentage") {
+          const rand = Math.random() * 100;
+          let cumulative = 0;
+          for (let i = 0; i < paths.length; i++) {
+            cumulative += paths[i].percent;
+            if (rand <= cumulative) { selectedIndex = i; break; }
+          }
+          selectedLabel = paths[selectedIndex].label;
+          logExtra = { rand: rand.toFixed(1) };
+
+        } else if (splitMode === "fixed_count") {
+          // Count how many executions already passed through this node
+          const { count } = await supabase
+            .from("wz_execution_logs")
+            .select("id", { count: "exact", head: true })
+            .eq("node_id", current_node_id)
+            .eq("node_type", "ab_split")
+            .eq("status", "success");
+          const totalPassed = count || 0;
+          let cumCount = 0;
+          for (let i = 0; i < paths.length; i++) {
+            cumCount += paths[i].count || 0;
+            if (totalPassed < cumCount) { selectedIndex = i; break; }
+          }
+          selectedLabel = paths[selectedIndex].label;
+          logExtra = { total_passed: totalPassed };
+
+        } else if (isSeller && sellers.length > 0) {
+          if (splitMode === "round_robin") {
+            // Count previous executions for this node to distribute sequentially
+            const { count } = await supabase
+              .from("wz_execution_logs")
+              .select("id", { count: "exact", head: true })
+              .eq("node_id", current_node_id)
+              .eq("node_type", "ab_split")
+              .eq("status", "success");
+            selectedIndex = (count || 0) % sellers.length;
+          } else {
+            // random
+            selectedIndex = Math.floor(Math.random() * sellers.length);
+          }
+          selectedSellerId = sellers[selectedIndex].id;
+          selectedSellerName = sellers[selectedIndex].name;
+          selectedLabel = selectedSellerName;
+          logExtra = { seller_id: selectedSellerId, seller_name: selectedSellerName, mode: splitMode };
+
+          // ─── Assign seller in CRM ───
+          if (selectedSellerId && execution.contact_phone) {
+            const cleanPhone = String(execution.contact_phone).replace(/\D/g, "");
+            const { data: matchedLeads } = await supabase
+              .from("leads")
+              .select("id")
+              .eq("phone", cleanPhone)
+              .limit(1);
+            if (matchedLeads && matchedLeads.length > 0) {
+              await supabase
+                .from("leads")
+                .update({ assigned_to: selectedSellerId, updated_at: new Date().toISOString() })
+                .eq("id", matchedLeads[0].id);
+              logExtra.lead_id = matchedLeads[0].id;
+              logExtra.assigned = true;
+            } else {
+              logExtra.assigned = false;
+              logExtra.reason = "Lead não encontrado pelo telefone";
+            }
+          }
+        } else if (isSeller && sellers.length === 0) {
+          await logNodeEnd(supabase, logId, "skipped", { summary: "Nenhum vendedor configurado" });
+          // Fall through to default next edge
+          const nextEdge = edges.find((e: any) => e.source === current_node_id);
+          if (nextEdge) {
+            return await advanceToNext(supabase, execution_id, flow_id, nextEdge.target);
+          } else {
+            await markFinished(supabase, execution_id, "completed");
+            return jsonResponse({ message: "A/B split end — no sellers" });
+          }
         }
-        const sourceHandle = `path_${selectedIndex}`;
-        const selectedLabel = paths[selectedIndex].label;
-        await logNodeEnd(supabase, logId, "success", { summary: `Path ${selectedLabel}`, rand: rand.toFixed(1), path: sourceHandle });
-        const nextEdge = edges.find((e) => e.source === current_node_id && e.sourceHandle === sourceHandle);
+
+        // Determine output handle
+        let sourceHandle: string;
+        if (isSeller && assignAction === "assign_only") {
+          sourceHandle = "path_0"; // single output
+        } else {
+          sourceHandle = `path_${selectedIndex}`;
+        }
+
+        await logNodeEnd(supabase, logId, "success", { summary: `Path ${selectedLabel}`, path: sourceHandle, mode: splitMode, ...logExtra });
+        const nextEdge = edges.find((e: any) => e.source === current_node_id && e.sourceHandle === sourceHandle);
         if (nextEdge) {
           return await advanceToNext(supabase, execution_id, flow_id, nextEdge.target);
         } else {
