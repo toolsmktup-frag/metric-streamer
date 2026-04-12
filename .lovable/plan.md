@@ -1,38 +1,47 @@
 
 
-## Fix: Nome customizado no ID manual não salva
+## Redesign do Painel de Configuração de Nós (WzNodeConfigPanel)
 
-### Problema
+### Problemas atuais
 
-Quando você adiciona um produto com ID + nome, o componente dispara **duas atualizações separadas** em sequência rápida:
-1. `update('productIdFilter', [novos ids])`  
-2. `update('productIdLabels', {novas labels})`
+1. **Textarea com `resize-none`** — impossível expandir o campo de texto
+2. **Sheet muito estreito** (340-380px) — tudo fica apertado, especialmente com chips de variáveis + textarea + toggles
+3. **Layout comprimido** — muitos elementos empilhados em espaço mínimo
 
-A segunda chamada usa o estado **antigo** do nó (antes da primeira atualização ser aplicada), então sobrescreve o `productIdFilter` que acabou de ser alterado — ou vice-versa. Resultado: uma das duas mudanças se perde.
+### Referência (imagem 483)
 
-### Solução
+A ferramenta de referência usa um painel lateral largo (~420-450px) com:
+- Seletor de conexão (instância) com ícone e engrenagem
+- Área de texto generosa e expansível
+- Delay e blocos bem espaçados
+- Seções colapsáveis para organizar
 
-Fazer o `addManual` disparar **uma única atualização** que inclua tanto o `productIdFilter` quanto o `productIdLabels` de uma vez.
+### Plano de mudanças
+
+#### 1. Largura e textarea expansível
+- Aumentar Sheet de `w-[340px] sm:w-[380px]` para `w-[400px] sm:w-[440px]`
+- Remover `resize-none` do textarea de mensagem e trocar para `resize-y min-h-[100px]`
+- Manter `resize-none` apenas no campo de Notas (que é secundário)
+
+#### 2. Melhorar espaçamento e legibilidade
+- Aumentar padding interno dos blocos de mensagem
+- Chips de variáveis em 2 linhas com scroll horizontal ou wrap mais limpo
+- Separar visualmente as seções (instância, mensagem, delay) com `border-b` ou headers
+
+#### 3. Seção de instância mais visual
+- Mostrar ícone do WhatsApp no seletor de instância (como na referência)
+- Texto helper "Deixe em branco para usar a conexão dos blocos anteriores" (se aplicável)
+
+#### 4. Auto-resize do textarea
+- Implementar auto-grow: o textarea cresce conforme o usuário digita, sem precisar arrastar manualmente
 
 ### Arquivos alterados
 
 | Arquivo | Mudança |
 |---|---|
-| `WzProductSelector.tsx` | Adicionar prop `onAddManual?: (id: string, name?: string) => void` como alternativa; OU trocar para disparar um único callback com ambos os valores |
-| `WzNodeConfigPanel.tsx` | Passar um handler unificado que faz `onUpdate(nodeId, { ...data, productIdFilter: newIds, productIdLabels: newLabels })` de uma só vez |
+| `WzNodeConfigPanel.tsx` | Largura do Sheet, textarea resize-y + auto-grow, espaçamento entre seções, ícone na instância |
 
-### Abordagem concreta
+### Escopo
 
-1. **`WzProductSelector`**: Adicionar uma prop opcional `onManualAdd?: (id: string, name: string) => void`. Quando presente, o `addManual` chama só esse callback em vez de `onChange` + `onCustomLabelsChange` separados.
-
-2. **`WzNodeConfigPanel`**: Passar o `onManualAdd` que faz um único `onUpdate` com os dois campos atualizados simultaneamente:
-```typescript
-onManualAdd={(id, name) => {
-  const ids = [...(data.productIdFilter || []), id];
-  const labels = { ...(data.productIdLabels || {}), ...(name ? { [id]: name } : {}) };
-  onUpdate(node.id, { ...data, productIdFilter: ids, productIdLabels: labels });
-}}
-```
-
-Isso garante que ambos os campos são salvos atomicamente no estado do nó, sem race condition.
+Foco em usabilidade — não muda funcionalidade, apenas ergonomia do painel.
 
