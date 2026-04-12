@@ -2,6 +2,7 @@ import React from 'react';
 import { Handle, Position } from '@xyflow/react';
 import { MessageCircle, StickyNote } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import type { WzNodeStats } from '@/hooks/useWzFlowNodeStats';
 
 interface WzWhatsAppNodeData {
   label: string;
@@ -11,6 +12,7 @@ interface WzWhatsAppNodeData {
   delayMin?: number;
   delayMax?: number;
   notes?: string;
+  stats?: WzNodeStats;
   [key: string]: unknown;
 }
 
@@ -20,6 +22,7 @@ function WzWhatsAppNode({ data, selected }: { data: WzWhatsAppNodeData; selected
   const preview = firstMsg
     ? (firstMsg.length > 40 ? firstMsg.slice(0, 40) + '…' : firstMsg)
     : null;
+  const stats = data.stats;
 
   return (
     <div
@@ -69,6 +72,26 @@ function WzWhatsAppNode({ data, selected }: { data: WzWhatsAppNodeData; selected
           </span>
         )}
       </div>
+
+      {/* Metrics bar */}
+      {stats && stats.total > 0 && (
+        <div className="bg-muted/50 px-4 py-1.5 border-t border-border flex items-center gap-3">
+          <div className="flex items-center gap-1">
+            <span className="font-mono text-[10px] text-muted-foreground font-semibold">{stats.total}</span>
+            <span className="text-[9px] text-muted-foreground">Enviado</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="font-mono text-[10px] text-emerald-600 font-semibold">{stats.success}</span>
+            <span className="text-[9px] text-emerald-600">Sucesso</span>
+          </div>
+          {stats.failed > 0 && (
+            <div className="flex items-center gap-1">
+              <span className="font-mono text-[10px] text-destructive font-semibold">{stats.failed}</span>
+              <span className="text-[9px] text-destructive">Falha</span>
+            </div>
+          )}
+        </div>
+      )}
 
       <Handle
         type="source"
