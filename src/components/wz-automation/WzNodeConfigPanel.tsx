@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Trash2, Copy, Plus, X, MessageCircleOff, MessageSquare } from 'lucide-react';
+import { Trash2, Copy, Plus, X, MessageCircleOff, MessageSquare, Eye, EyeOff, Power } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -84,6 +84,20 @@ const WzNodeConfigPanel: React.FC<WzNodeConfigPanelProps> = ({
         </SheetHeader>
 
         <div className="mt-6 space-y-4">
+          {/* Disable toggle */}
+          {nodeType !== 'note' && (
+            <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/30">
+              <div className="flex items-center gap-2">
+                <Power className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium">{data.disabled ? 'Desabilitado' : 'Ativo'}</span>
+              </div>
+              <Switch
+                checked={!data.disabled}
+                onCheckedChange={(v) => update('disabled', !v)}
+              />
+            </div>
+          )}
+
           {/* Nome */}
           <div className="space-y-2">
             <Label>Nome</Label>
