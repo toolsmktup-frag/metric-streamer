@@ -216,6 +216,8 @@ function TriggerConfig({ data, update }: { data: any; update: (k: string, v: any
         selectedIds={Array.isArray(data.productIdFilter) ? data.productIdFilter : (data.productIdFilter ? [data.productIdFilter] : [])}
         onChange={(ids) => update('productIdFilter', ids)}
         label="Filtrar por produto(s) (opcional)"
+        customLabels={data.productIdLabels || {}}
+        onCustomLabelsChange={(labels) => update('productIdLabels', labels)}
       />
       <WzMultiInput
         values={Array.isArray(data.offerFilter) ? data.offerFilter : (data.offerFilter ? [data.offerFilter] : [])}

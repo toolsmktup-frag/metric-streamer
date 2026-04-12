@@ -20,13 +20,16 @@ interface WzProductSelectorProps {
   selectedIds: string[];
   onChange: (ids: string[]) => void;
   label?: string;
+  customLabels?: Record<string, string>;
+  onCustomLabelsChange?: (labels: Record<string, string>) => void;
 }
 
-export default function WzProductSelector({ selectedIds, onChange, label = 'Filtrar por produto(s)' }: WzProductSelectorProps) {
+export default function WzProductSelector({ selectedIds, onChange, label = 'Filtrar por produto(s)', customLabels = {}, onCustomLabelsChange }: WzProductSelectorProps) {
   const { data: products = [], isLoading } = useAllFunnelProducts();
   const [search, setSearch] = useState('');
   const [open, setOpen] = useState(false);
   const [manualId, setManualId] = useState('');
+  const [manualName, setManualName] = useState('');
 
   // Group products by funnel
   const grouped = useMemo(() => {
@@ -59,6 +62,7 @@ export default function WzProductSelector({ selectedIds, onChange, label = 'Filt
   const getProductLabel = (id: string) => {
     const p = products.find(pr => pr.product_id === id);
     if (p) return `${p.product_id} — ${p.display_name || p.product_name_contains}`;
+    if (customLabels[id]) return `${id} — ${customLabels[id]}`;
     return id;
   };
 
@@ -73,10 +77,15 @@ export default function WzProductSelector({ selectedIds, onChange, label = 'Filt
 
   const addManual = () => {
     const id = manualId.trim();
+    const name = manualName.trim();
     if (id && !selectedIds.includes(id)) {
       onChange([...selectedIds, id]);
+      if (name && onCustomLabelsChange) {
+        onCustomLabelsChange({ ...customLabels, [id]: name });
+      }
     }
     setManualId('');
+    setManualName('');
   };
 
   return (
@@ -158,17 +167,26 @@ export default function WzProductSelector({ selectedIds, onChange, label = 'Filt
           </div>
 
           {/* Manual ID entry */}
-          <div className="border-t border-border p-2 flex gap-1">
-            <Input
-              value={manualId}
-              onChange={(e) => setManualId(e.target.value)}
-              placeholder="Digitar ID manual..."
-              className="h-7 text-xs flex-1"
-              onKeyDown={(e) => e.key === 'Enter' && addManual()}
-            />
-            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={addManual} disabled={!manualId.trim()}>
-              <Plus className="h-3 w-3" />
-            </Button>
+          <div className="border-t border-border p-2 space-y-1">
+            <div className="flex gap-1">
+              <Input
+                value={manualId}
+                onChange={(e) => setManualId(e.target.value)}
+                placeholder="ID do produto..."
+                className="h-7 text-xs w-[100px]"
+                onKeyDown={(e) => e.key === 'Enter' && addManual()}
+              />
+              <Input
+                value={manualName}
+                onChange={(e) => setManualName(e.target.value)}
+                placeholder="Nome (opcional)..."
+                className="h-7 text-xs flex-1"
+                onKeyDown={(e) => e.key === 'Enter' && addManual()}
+              />
+              <Button variant="ghost" size="sm" className="h-7 w-7 p-0 flex-shrink-0" onClick={addManual} disabled={!manualId.trim()}>
+                <Plus className="h-3 w-3" />
+              </Button>
+            </div>
           </div>
         </PopoverContent>
       </Popover>
