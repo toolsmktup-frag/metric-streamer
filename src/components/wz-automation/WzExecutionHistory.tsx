@@ -1,14 +1,18 @@
 import React, { useState } from 'react';
 import { format, formatDistanceStrict } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { ChevronDown, ChevronRight, Filter, CheckCircle2, XCircle, Clock, AlertTriangle, Activity, Timer } from 'lucide-react';
+import { ChevronDown, ChevronRight, Filter, CheckCircle2, XCircle, Clock, AlertTriangle, Activity, Timer, RefreshCw } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
 import { useWzExecutions } from '@/hooks/useWzExecutions';
 import { useWzFlows } from '@/hooks/useWzFlows';
 import { useWzExecutionLogs } from '@/hooks/useWzExecutionLogs';
 import { useWzExecutionStats } from '@/hooks/useWzExecutionStats';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+import { useQueryClient } from '@tanstack/react-query';
 import type { WzExecutionLog } from '@/types/wz-automation';
 
 const statusConfig: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
@@ -135,12 +139,34 @@ export default function WzExecutionHistory() {
   const [flowFilter, setFlowFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [replayingId, setReplayingId] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
   const { data: flows = [] } = useWzFlows();
   const { data: executions = [], isLoading } = useWzExecutions({
     flowId: flowFilter !== 'all' ? flowFilter : undefined,
     status: statusFilter !== 'all' ? statusFilter : undefined,
   });
+
+  const handleReplay = async (execId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setReplayingId(execId);
+    try {
+      const { data, error } = await supabase.functions.invoke('wz-executor', {
+        body: { replay_execution_id: execId },
+      });
+      if (error) throw error;
+      toast.success('Replay iniciado!', {
+        description: `Nova execução: ${data?.new_execution_id?.slice(0, 8)}...`,
+      });
+      queryClient.invalidateQueries({ queryKey: ['wz-executions'] });
+      queryClient.invalidateQueries({ queryKey: ['wz-execution-stats'] });
+    } catch (err) {
+      toast.error('Erro ao reprocessar', { description: String(err) });
+    } finally {
+      setReplayingId(null);
+    }
+  };
 
   return (
     <div className="p-6 space-y-6 max-w-6xl mx-auto">
@@ -195,13 +221,14 @@ export default function WzExecutionHistory() {
               <th className="text-left px-4 py-3 font-medium text-muted-foreground">Status</th>
               <th className="text-left px-4 py-3 font-medium text-muted-foreground">Início</th>
               <th className="text-left px-4 py-3 font-medium text-muted-foreground">Duração</th>
+              <th className="w-12" />
             </tr>
           </thead>
           <tbody>
             {isLoading ? (
-              <tr><td colSpan={8} className="text-center py-12 text-muted-foreground">Carregando...</td></tr>
+              <tr><td colSpan={9} className="text-center py-12 text-muted-foreground">Carregando...</td></tr>
             ) : executions.length === 0 ? (
-              <tr><td colSpan={8} className="text-center py-12 text-muted-foreground">Nenhuma execução encontrada</td></tr>
+              <tr><td colSpan={9} className="text-center py-12 text-muted-foreground">Nenhuma execução encontrada</td></tr>
             ) : (
               executions.map(exec => {
                 const isOpen = expandedId === exec.id;
@@ -209,6 +236,7 @@ export default function WzExecutionHistory() {
                 const duration = exec.finished_at
                   ? formatDistanceStrict(new Date(exec.finished_at), new Date(exec.started_at), { locale: ptBR })
                   : '—';
+                const isReplay = exec.trigger_event === 'replay';
 
                 return (
                   <React.Fragment key={exec.id}>
@@ -222,7 +250,12 @@ export default function WzExecutionHistory() {
                       <td className="px-4 py-3 font-medium text-foreground">{exec.flow_name}</td>
                       <td className="px-4 py-3 text-foreground">{exec.contact_name || '—'}</td>
                       <td className="px-4 py-3 text-foreground font-mono text-xs">{exec.contact_phone || '—'}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{exec.trigger_event || '—'}</td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        <span className="flex items-center gap-1.5">
+                          {isReplay && <Badge variant="outline" className="text-[10px] px-1.5 py-0">Replay</Badge>}
+                          {exec.trigger_event && exec.trigger_event !== 'replay' ? exec.trigger_event : (!isReplay ? '—' : '')}
+                        </span>
+                      </td>
                       <td className="px-4 py-3">
                         <Badge variant={cfg.variant}>{cfg.label}</Badge>
                       </td>
@@ -230,10 +263,22 @@ export default function WzExecutionHistory() {
                         {format(new Date(exec.started_at), "dd/MM HH:mm", { locale: ptBR })}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground text-xs">{duration}</td>
+                      <td className="px-2 py-3">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          title="Reprocessar"
+                          disabled={replayingId === exec.id}
+                          onClick={(e) => handleReplay(exec.id, e)}
+                        >
+                          <RefreshCw className={`h-3.5 w-3.5 ${replayingId === exec.id ? 'animate-spin' : ''}`} />
+                        </Button>
+                      </td>
                     </tr>
                     {isOpen && (
                       <tr className="bg-muted/20">
-                        <td colSpan={8} className="px-6 py-4">
+                        <td colSpan={9} className="px-6 py-4">
                           <NodeTimeline executionId={exec.id} />
                         </td>
                       </tr>
