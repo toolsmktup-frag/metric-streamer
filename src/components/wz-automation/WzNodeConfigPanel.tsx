@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Trash2, Copy, Plus, X, MessageCircleOff } from 'lucide-react';
+import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useWzInstances } from '@/hooks/useWzInstances';
@@ -77,7 +78,7 @@ const WzNodeConfigPanel: React.FC<WzNodeConfigPanelProps> = ({
       <SheetContent className="w-[340px] sm:w-[380px] overflow-y-auto">
         <SheetHeader>
           <SheetTitle className="text-foreground">
-            Configurar {nodeType === 'trigger' ? 'Gatilho' : nodeType === 'whatsapp' ? 'WhatsApp' : nodeType === 'timer' ? 'Timer' : nodeType === 'condition' ? 'Condição' : nodeType === 'note' ? 'Anotação' : 'Nó'}
+            Configurar {nodeType === 'trigger' ? 'Gatilho' : nodeType === 'whatsapp' ? 'WhatsApp' : nodeType === 'timer' ? 'Timer' : nodeType === 'condition' ? 'Condição' : nodeType === 'note' ? 'Anotação' : nodeType === 'ab_split' ? 'Divisor A/B' : nodeType === 'smart_delay' ? 'Delay Inteligente' : nodeType === 'webhook' ? 'Webhook' : nodeType === 'tag' ? 'Tag' : nodeType === 'goto' ? 'Goto' : 'Nó'}
           </SheetTitle>
         </SheetHeader>
 
@@ -106,6 +107,21 @@ const WzNodeConfigPanel: React.FC<WzNodeConfigPanelProps> = ({
 
           {/* NOTE CONFIG */}
           {nodeType === 'note' && <NoteConfig data={data} update={update} />}
+
+          {/* AB SPLIT CONFIG */}
+          {nodeType === 'ab_split' && <AbSplitConfig data={data} update={update} />}
+
+          {/* SMART DELAY CONFIG */}
+          {nodeType === 'smart_delay' && <SmartDelayConfig data={data} update={update} />}
+
+          {/* WEBHOOK CONFIG */}
+          {nodeType === 'webhook' && <WebhookConfig data={data} update={update} />}
+
+          {/* TAG CONFIG */}
+          {nodeType === 'tag' && <TagConfig data={data} update={update} />}
+
+          {/* GOTO CONFIG */}
+          {nodeType === 'goto' && <GotoConfig data={data} update={update} node={node} />}
 
           {/* Notas */}
           <div className="space-y-2">
@@ -583,6 +599,194 @@ function NoteConfig({ data, update }: { data: any; update: (k: string, v: any) =
           ))}
         </div>
       </div>
+    </>
+  );
+}
+
+function AbSplitConfig({ data, update }: { data: any; update: (k: string, v: any) => void }) {
+  const paths = data.paths || [{ label: 'A', percent: 50 }, { label: 'B', percent: 50 }];
+  const pathCount = paths.length;
+
+  const updatePercent = (index: number, percent: number) => {
+    const updated = [...paths];
+    updated[index] = { ...updated[index], percent };
+    // Auto-adjust last path
+    const total = updated.reduce((s: number, p: any, i: number) => i === updated.length - 1 ? s : s + p.percent, 0);
+    updated[updated.length - 1] = { ...updated[updated.length - 1], percent: Math.max(0, 100 - total) };
+    update('paths', updated);
+  };
+
+  const setPathCount = (count: number) => {
+    const labels = ['A', 'B', 'C'];
+    const pct = Math.floor(100 / count);
+    const newPaths = Array.from({ length: count }, (_, i) => ({
+      label: labels[i],
+      percent: i === count - 1 ? 100 - pct * (count - 1) : pct,
+    }));
+    update('paths', newPaths);
+  };
+
+  return (
+    <>
+      <div className="space-y-2">
+        <Label>Número de caminhos</Label>
+        <Select value={String(pathCount)} onValueChange={(v) => setPathCount(Number(v))}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="2">2 caminhos</SelectItem>
+            <SelectItem value="3">3 caminhos</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      {paths.map((p: any, i: number) => (
+        <div key={i} className="space-y-1">
+          <Label className="text-xs">Caminho {p.label}: {p.percent}%</Label>
+          {i < paths.length - 1 && (
+            <Slider
+              value={[p.percent]}
+              onValueChange={([v]) => updatePercent(i, v)}
+              min={5}
+              max={95}
+              step={5}
+            />
+          )}
+        </div>
+      ))}
+    </>
+  );
+}
+
+function SmartDelayConfig({ data, update }: { data: any; update: (k: string, v: any) => void }) {
+  return (
+    <>
+      <div className="space-y-2">
+        <Label>Horário alvo</Label>
+        <Input
+          type="time"
+          value={data.targetTime || '09:00'}
+          onChange={(e) => update('targetTime', e.target.value)}
+        />
+      </div>
+      <div className="space-y-2">
+        <Label>Dia alvo</Label>
+        <Select value={data.targetDay || 'any'} onValueChange={(v) => update('targetDay', v)}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="any">Qualquer dia</SelectItem>
+            <SelectItem value="next_business">Próximo dia útil</SelectItem>
+            <SelectItem value="monday">Segunda</SelectItem>
+            <SelectItem value="tuesday">Terça</SelectItem>
+            <SelectItem value="wednesday">Quarta</SelectItem>
+            <SelectItem value="thursday">Quinta</SelectItem>
+            <SelectItem value="friday">Sexta</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="flex items-center justify-between">
+        <Label className="text-xs">Apenas dias úteis</Label>
+        <Switch
+          checked={data.businessDaysOnly || false}
+          onCheckedChange={(v) => update('businessDaysOnly', v)}
+          className="scale-90"
+        />
+      </div>
+    </>
+  );
+}
+
+function WebhookConfig({ data, update }: { data: any; update: (k: string, v: any) => void }) {
+  return (
+    <>
+      <div className="space-y-2">
+        <Label>Método</Label>
+        <Select value={data.method || 'POST'} onValueChange={(v) => update('method', v)}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="GET">GET</SelectItem>
+            <SelectItem value="POST">POST</SelectItem>
+            <SelectItem value="PUT">PUT</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-2">
+        <Label>URL</Label>
+        <Input
+          value={data.url || ''}
+          onChange={(e) => update('url', e.target.value)}
+          placeholder="https://api.exemplo.com/webhook"
+        />
+      </div>
+      <div className="space-y-2">
+        <Label>Headers (JSON)</Label>
+        <Textarea
+          value={data.headers || ''}
+          onChange={(e) => update('headers', e.target.value)}
+          placeholder='{"Authorization": "Bearer ..."}'
+          rows={2}
+          className="resize-none text-xs font-mono"
+        />
+      </div>
+      <div className="space-y-2">
+        <Label>Body template</Label>
+        <Textarea
+          value={data.body || ''}
+          onChange={(e) => update('body', e.target.value)}
+          placeholder='{"phone": "{{telefone}}", "name": "{{nome}}"}'
+          rows={3}
+          className="resize-none text-xs font-mono"
+        />
+      </div>
+    </>
+  );
+}
+
+function TagConfig({ data, update }: { data: any; update: (k: string, v: any) => void }) {
+  return (
+    <>
+      <div className="space-y-2">
+        <Label>Ação</Label>
+        <Select value={data.tagAction || 'add'} onValueChange={(v) => update('tagAction', v)}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="add">Adicionar tag</SelectItem>
+            <SelectItem value="remove">Remover tag</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-2">
+        <Label>Nome da tag</Label>
+        <Input
+          value={data.tagName || ''}
+          onChange={(e) => update('tagName', e.target.value)}
+          placeholder="Ex: recuperado, vip, interessado"
+        />
+      </div>
+    </>
+  );
+}
+
+function GotoConfig({ data, update, node }: { data: any; update: (k: string, v: any) => void; node: Node }) {
+  return (
+    <>
+      <div className="space-y-2">
+        <Label>ID do nó destino</Label>
+        <Input
+          value={data.targetNodeId || ''}
+          onChange={(e) => update('targetNodeId', e.target.value)}
+          placeholder="ID do nó para pular"
+        />
+      </div>
+      <div className="space-y-2">
+        <Label>Label do destino (referência)</Label>
+        <Input
+          value={data.targetNodeLabel || ''}
+          onChange={(e) => update('targetNodeLabel', e.target.value)}
+          placeholder="Ex: Enviar WhatsApp 2"
+        />
+      </div>
+      <p className="text-[11px] text-muted-foreground">
+        Copie o ID do nó destino clicando nele. O Goto redireciona o fluxo sem criar conexão visual.
+      </p>
     </>
   );
 }

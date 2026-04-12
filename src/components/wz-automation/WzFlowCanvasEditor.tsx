@@ -27,6 +27,11 @@ import WzTimerNode from './nodes/WzTimerNode';
 import WzConditionNode from './nodes/WzConditionNode';
 import WzStopNode from './nodes/WzStopNode';
 import WzNoteNode from './nodes/WzNoteNode';
+import WzAbSplitNode from './nodes/WzAbSplitNode';
+import WzSmartDelayNode from './nodes/WzSmartDelayNode';
+import WzWebhookNode from './nodes/WzWebhookNode';
+import WzTagNode from './nodes/WzTagNode';
+import WzGotoNode from './nodes/WzGotoNode';
 import { useWzFlow, useCreateWzFlow, useUpdateWzFlow } from '@/hooks/useWzFlows';
 
 const nodeTypes: NodeTypes = {
@@ -36,6 +41,11 @@ const nodeTypes: NodeTypes = {
   condition: WzConditionNode,
   stop: WzStopNode,
   note: WzNoteNode,
+  ab_split: WzAbSplitNode,
+  smart_delay: WzSmartDelayNode,
+  webhook: WzWebhookNode,
+  tag: WzTagNode,
+  goto: WzGotoNode,
 };
 
 const defaultEdgeOptions = {
@@ -142,6 +152,26 @@ export default function WzFlowCanvasEditor() {
     } else if (dragData.nodeType === 'note') {
       nodeData.text = '';
       nodeData.noteColor = 'yellow';
+    } else if (dragData.nodeType === 'ab_split') {
+      nodeData.paths = [
+        { label: 'A', percent: 50 },
+        { label: 'B', percent: 50 },
+      ];
+    } else if (dragData.nodeType === 'smart_delay') {
+      nodeData.targetTime = '09:00';
+      nodeData.targetDay = 'any';
+      nodeData.businessDaysOnly = false;
+    } else if (dragData.nodeType === 'webhook') {
+      nodeData.url = '';
+      nodeData.method = 'POST';
+      nodeData.headers = '';
+      nodeData.body = '';
+    } else if (dragData.nodeType === 'tag') {
+      nodeData.tagName = '';
+      nodeData.tagAction = 'add';
+    } else if (dragData.nodeType === 'goto') {
+      nodeData.targetNodeId = '';
+      nodeData.targetNodeLabel = '';
     }
 
     const newNode: Node = {

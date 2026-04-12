@@ -3,11 +3,12 @@ import {
   Zap, MessageCircle, Clock, GitBranch, XCircle, Ban,
   ShoppingCart, CreditCard, FileText, Timer, AlertTriangle,
   RotateCcw, X, ShoppingBag, Sparkles, StickyNote, Wrench,
+  Split, CalendarClock, Globe, Tag, CornerDownRight,
 } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 export interface WzDragData {
-  nodeType: 'trigger' | 'whatsapp' | 'timer' | 'condition' | 'stop' | 'note';
+  nodeType: 'trigger' | 'whatsapp' | 'timer' | 'condition' | 'stop' | 'note' | 'ab_split' | 'smart_delay' | 'webhook' | 'tag' | 'goto';
   triggerType?: string;
   stopType?: string;
   label: string;
@@ -29,6 +30,11 @@ const actions: { nodeType: WzDragData['nodeType']; label: string; icon: React.Re
   { nodeType: 'whatsapp', label: 'Enviar WhatsApp', icon: <MessageCircle className="h-4 w-4" />, color: '#25d366' },
   { nodeType: 'timer', label: 'Aguardar / Timer', icon: <Clock className="h-4 w-4" />, color: '#3b82f6' },
   { nodeType: 'condition', label: 'Condição If/Else', icon: <GitBranch className="h-4 w-4" />, color: '#f59e0b' },
+  { nodeType: 'ab_split', label: 'Divisor A/B', icon: <Split className="h-4 w-4" />, color: '#8b5cf6' },
+  { nodeType: 'smart_delay', label: 'Delay Inteligente', icon: <CalendarClock className="h-4 w-4" />, color: '#14b8a6' },
+  { nodeType: 'webhook', label: 'Webhook HTTP', icon: <Globe className="h-4 w-4" />, color: '#6366f1' },
+  { nodeType: 'tag', label: 'Marcar Lead / Tag', icon: <Tag className="h-4 w-4" />, color: '#10b981' },
+  { nodeType: 'goto', label: 'Pular para (Goto)', icon: <CornerDownRight className="h-4 w-4" />, color: '#06b6d4' },
   { nodeType: 'stop', label: 'Parar Fluxo', icon: <XCircle className="h-4 w-4" />, color: '#6b7280' },
   { nodeType: 'stop', label: 'Cancelar anteriores', icon: <Ban className="h-4 w-4" />, color: '#ef4444', stopType: 'cancel_previous' },
 ];
