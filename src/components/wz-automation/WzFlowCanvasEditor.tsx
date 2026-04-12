@@ -83,7 +83,7 @@ export default function WzFlowCanvasEditor() {
   const [reactFlowInstance, setReactFlowInstance] = useState<any>(null);
 
   const { data: nodeStatsMap } = useWzFlowNodeStats(flowId);
-  const [clipboard, setClipboard] = useState<Node | null>(null);
+  const [clipboard, setClipboard] = useState<Node[]>([]);
 
   // Keyboard shortcuts: Ctrl+C / Ctrl+V / D
   useEffect(() => {
@@ -92,33 +92,34 @@ export default function WzFlowCanvasEditor() {
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
 
       if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
-        const sel = nodes.find((n) => n.selected);
-        if (sel) {
-          setClipboard(sel);
+        const selected = nodes.filter((n) => n.selected);
+        if (selected.length > 0) {
+          setClipboard(selected);
           e.preventDefault();
         }
       }
       if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
-        if (clipboard) {
-          const newNode: Node = {
-            ...clipboard,
+        if (clipboard.length > 0) {
+          const newNodes = clipboard.map((node) => ({
+            ...node,
             id: getNodeId(),
-            position: { x: clipboard.position.x + 60, y: clipboard.position.y + 60 },
+            position: { x: node.position.x + 60, y: node.position.y + 60 },
             selected: false,
-            data: { ...clipboard.data },
-          };
-          setNodes((nds) => [...nds, newNode]);
+            data: { ...node.data },
+          }));
+          setNodes((nds) => [...nds, ...newNodes]);
           e.preventDefault();
         }
       }
       // D key = toggle disable
       if (e.key === 'd' || e.key === 'D') {
         if (e.ctrlKey || e.metaKey || e.altKey) return;
-        const sel = nodes.find((n) => n.selected);
-        if (sel && sel.type !== 'note') {
+        const selected = nodes.filter((n) => n.selected && n.type !== 'note');
+        if (selected.length > 0) {
+          const ids = new Set(selected.map((n) => n.id));
           setNodes((nds) =>
             nds.map((n) =>
-              n.id === sel.id ? { ...n, data: { ...n.data, disabled: !n.data.disabled } } : n
+              ids.has(n.id) ? { ...n, data: { ...n.data, disabled: !n.data.disabled } } : n
             )
           );
           e.preventDefault();
@@ -368,6 +369,7 @@ export default function WzFlowCanvasEditor() {
           <ReactFlow
             nodes={nodes.map((n) => ({
               ...n,
+              zIndex: n.type === 'note' ? -1 : 0,
               data: {
                 ...n.data,
                 stats: nodeStatsMap?.[n.id],
