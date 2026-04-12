@@ -356,6 +356,14 @@ Deno.serve(async (req) => {
             product_name: productName,
             status: normalizedStatus,
             amount: record.gross_amount,
+            address_street: customer.street || customer.address_street || null,
+            address_number: customer.number || customer.address_number || null,
+            address_complement: customer.complement || customer.address_complement || null,
+            address_neighborhood: customer.neighborhood || customer.bairro || null,
+            address_city: customer.city || customer.cidade || null,
+            address_state: customer.state || customer.estado || customer.uf || null,
+            address_zipcode: customer.zipcode || customer.zip_code || customer.cep || null,
+            address_country: customer.country || null,
           },
         });
       } catch (leadErr) {
