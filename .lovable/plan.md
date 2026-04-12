@@ -1,16 +1,25 @@
 
 
-## Corrigir filtro de vendedores no Divisor
+## Recontato: Soma linear de dias por produto
 
-**Problema**: Na última alteração, removi o filtro de role e agora qualquer membro ativo aparece na lista (admin, gestor, etc.). O correto é mostrar apenas vendedores.
+**Lógica implementada**: Quando um lead tem múltiplas compras no mesmo funil, os `recontact_days` de cada produto são SOMADOS e contados a partir da primeira data de compra.
 
-**O que o clique não funcionava**: O bug real era que duas chamadas `update()` sequenciais se sobrescreviam (sellers e paths). Isso já foi corrigido com o `sellerToggleSelection`. O filtro de role não era o problema.
+**Exemplo**: Produto A (90d) + Produto B (180d) = 270 dias a partir da primeira compra.
 
-### Plano
+### Arquivos alterados
 
-1. **Restaurar filtro de role** em `WzNodeConfigPanel.tsx` (linha 670):
-   - De: `teamMembers.filter((m) => m.status === 'active')`
-   - Para: `teamMembers.filter((m) => ['vendedor', 'vendedora', 'suporte'].includes(m.role) && m.status === 'active')`
+1. **`src/hooks/useBulkLeadPurchaseProducts.ts`** (NOVO)
+   - Busca todos os eventos de compra (`lead_events`) por lead no funil
+   - Retorna `Map<leadId, product_name[]>` com todos os produtos comprados
 
-Apenas essa linha muda. O fix do clique (sellerToggleSelection) permanece intacto.
+2. **`src/hooks/useRecontactDeadlines.ts`**
+   - Aceita novo param `leadProductNamesMap`
+   - Para cada lead, matcha TODOS os produtos e SOMA os recontact_days
+   - Deadline = firstPurchaseDate + SUM(recontact_days)
 
+3. **`src/pages/LeadFunnelDetail.tsx`**
+   - Conecta o novo hook `useBulkLeadPurchaseProducts`
+
+4. **`supabase/functions/recontact-cron/index.ts`**
+   - Busca eventos de compra via `lead_events` (não mais `customer_purchases`)
+   - Soma recontact_days de todos os produtos matchados por lead
