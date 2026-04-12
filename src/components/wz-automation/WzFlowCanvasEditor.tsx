@@ -122,7 +122,7 @@ export default function WzFlowCanvasEditor() {
     if (nodes.length === 0) return;
     const g = new dagre.graphlib.Graph();
     g.setDefaultEdgeLabel(() => ({}));
-    g.setGraph({ rankdir: 'TB', nodesep: 80, ranksep: 120 });
+    g.setGraph({ rankdir: 'LR', nodesep: 60, ranksep: 200 });
 
     nodes.forEach((node) => {
       g.setNode(node.id, { width: 220, height: 120 });
