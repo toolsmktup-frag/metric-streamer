@@ -604,57 +604,240 @@ function NoteConfig({ data, update }: { data: any; update: (k: string, v: any) =
 }
 
 function AbSplitConfig({ data, update }: { data: any; update: (k: string, v: any) => void }) {
+  const mode = data.splitMode || 'percentage';
   const paths = data.paths || [{ label: 'A', percent: 50 }, { label: 'B', percent: 50 }];
   const pathCount = paths.length;
+  const sellers: { id: string; name: string }[] = data.sellers || [];
+  const assignAction = data.assignAction || 'assign_and_branch';
+  const isSeller = mode === 'round_robin' || mode === 'random';
+
+  const { data: teamMembers = [] } = useTeamMembers();
+  const assignableMembers = teamMembers.filter((m: any) =>
+    ['vendedor', 'vendedora', 'suporte'].includes(m.role) && m.status === 'active'
+  );
 
   const updatePercent = (index: number, percent: number) => {
     const updated = [...paths];
     updated[index] = { ...updated[index], percent };
-    // Auto-adjust last path
     const total = updated.reduce((s: number, p: any, i: number) => i === updated.length - 1 ? s : s + p.percent, 0);
     updated[updated.length - 1] = { ...updated[updated.length - 1], percent: Math.max(0, 100 - total) };
     update('paths', updated);
   };
 
   const setPathCount = (count: number) => {
-    const labels = ['A', 'B', 'C'];
-    const pct = Math.floor(100 / count);
-    const newPaths = Array.from({ length: count }, (_, i) => ({
-      label: labels[i],
-      percent: i === count - 1 ? 100 - pct * (count - 1) : pct,
-    }));
-    update('paths', newPaths);
+    const labels = ['A', 'B', 'C', 'D'];
+    if (mode === 'fixed_count') {
+      const newPaths = Array.from({ length: count }, (_, i) => ({
+        label: labels[i],
+        count: paths[i]?.count || 100,
+      }));
+      update('paths', newPaths);
+    } else {
+      const pct = Math.floor(100 / count);
+      const newPaths = Array.from({ length: count }, (_, i) => ({
+        label: labels[i],
+        percent: i === count - 1 ? 100 - pct * (count - 1) : pct,
+      }));
+      update('paths', newPaths);
+    }
+  };
+
+  const toggleSeller = (member: any) => {
+    const exists = sellers.find((s: any) => s.id === member.id);
+    if (exists) {
+      const newSellers = sellers.filter((s: any) => s.id !== member.id);
+      update('sellers', newSellers);
+      // If assign_and_branch, update paths to match sellers
+      if (assignAction === 'assign_and_branch') {
+        update('paths', newSellers.map((s: any, i: number) => ({
+          label: s.name.split(' ')[0],
+          percent: Math.floor(100 / Math.max(newSellers.length, 1)),
+          sellerId: s.id,
+          sellerName: s.name,
+        })));
+      }
+    } else {
+      const newSellers = [...sellers, { id: member.id, name: member.full_name || 'Sem nome' }];
+      update('sellers', newSellers);
+      if (assignAction === 'assign_and_branch') {
+        update('paths', newSellers.map((s: any, i: number) => ({
+          label: s.name.split(' ')[0],
+          percent: Math.floor(100 / newSellers.length),
+          sellerId: s.id,
+          sellerName: s.name,
+        })));
+      }
+    }
+  };
+
+  const setMode = (newMode: string) => {
+    update('splitMode', newMode);
+    if (newMode === 'round_robin' || newMode === 'random') {
+      // Keep sellers, reset paths based on assignAction
+      if (assignAction === 'assign_and_branch' && sellers.length > 0) {
+        update('paths', sellers.map((s: any) => ({
+          label: s.name.split(' ')[0],
+          sellerId: s.id,
+          sellerName: s.name,
+        })));
+      }
+    } else if (newMode === 'fixed_count') {
+      update('paths', [{ label: 'A', count: 100 }, { label: 'B', count: 100 }]);
+    } else {
+      update('paths', [{ label: 'A', percent: 50 }, { label: 'B', percent: 50 }]);
+    }
   };
 
   return (
     <>
+      {/* Mode selector */}
       <div className="space-y-2">
-        <Label>Número de caminhos</Label>
-        <Select value={String(pathCount)} onValueChange={(v) => setPathCount(Number(v))}>
+        <Label>Modo de divisão</Label>
+        <Select value={mode} onValueChange={setMode}>
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="2">2 caminhos</SelectItem>
-            <SelectItem value="3">3 caminhos</SelectItem>
+            <SelectItem value="percentage">📊 Porcentagem (A/B)</SelectItem>
+            <SelectItem value="round_robin">🔄 Round-Robin Vendedores</SelectItem>
+            <SelectItem value="random">🎲 Aleatório Vendedores</SelectItem>
+            <SelectItem value="fixed_count">🔢 Quantidade fixa</SelectItem>
           </SelectContent>
         </Select>
       </div>
-      {paths.map((p: any, i: number) => (
-        <div key={i} className="space-y-1">
-          <Label className="text-xs">Caminho {p.label}: {p.percent}%</Label>
-          {i < paths.length - 1 && (
-            <Slider
-              value={[p.percent]}
-              onValueChange={([v]) => updatePercent(i, v)}
-              min={5}
-              max={95}
-              step={5}
-            />
-          )}
-        </div>
-      ))}
+
+      {/* Percentage mode */}
+      {mode === 'percentage' && (
+        <>
+          <div className="space-y-2">
+            <Label>Número de caminhos</Label>
+            <Select value={String(pathCount)} onValueChange={(v) => setPathCount(Number(v))}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="2">2 caminhos</SelectItem>
+                <SelectItem value="3">3 caminhos</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {paths.map((p: any, i: number) => (
+            <div key={i} className="space-y-1">
+              <Label className="text-xs">Caminho {p.label}: {p.percent}%</Label>
+              {i < paths.length - 1 && (
+                <Slider
+                  value={[p.percent]}
+                  onValueChange={([v]) => updatePercent(i, v)}
+                  min={5}
+                  max={95}
+                  step={5}
+                />
+              )}
+            </div>
+          ))}
+        </>
+      )}
+
+      {/* Fixed count mode */}
+      {mode === 'fixed_count' && (
+        <>
+          <div className="space-y-2">
+            <Label>Número de caminhos</Label>
+            <Select value={String(pathCount)} onValueChange={(v) => setPathCount(Number(v))}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="2">2 caminhos</SelectItem>
+                <SelectItem value="3">3 caminhos</SelectItem>
+                <SelectItem value="4">4 caminhos</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {paths.map((p: any, i: number) => (
+            <div key={i} className="space-y-2">
+              <Label className="text-xs">Caminho {p.label}: quantidade de leads</Label>
+              <Input
+                type="number"
+                min={1}
+                value={p.count || 100}
+                onChange={(e) => {
+                  const updated = [...paths];
+                  updated[i] = { ...updated[i], count: parseInt(e.target.value) || 1 };
+                  update('paths', updated);
+                }}
+                className="h-8"
+              />
+            </div>
+          ))}
+        </>
+      )}
+
+      {/* Seller modes */}
+      {isSeller && (
+        <>
+          {/* Action toggle */}
+          <div className="space-y-2">
+            <Label>Ação no lead</Label>
+            <Select value={assignAction} onValueChange={(v) => {
+              update('assignAction', v);
+              if (v === 'assign_only') {
+                // Single output path
+                update('paths', [{ label: '→' }]);
+              } else if (sellers.length > 0) {
+                update('paths', sellers.map((s: any) => ({
+                  label: s.name.split(' ')[0],
+                  sellerId: s.id,
+                  sellerName: s.name,
+                })));
+              }
+            }}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="assign_and_branch">Atribuir + ramificar (1 saída por vendedor)</SelectItem>
+                <SelectItem value="assign_only">Só atribuir (saída única)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Seller list */}
+          <div className="space-y-2">
+            <Label>Vendedores ({sellers.length} selecionados)</Label>
+            <div className="max-h-[200px] overflow-y-auto rounded-lg border border-border divide-y divide-border">
+              {assignableMembers.length === 0 && (
+                <p className="text-xs text-muted-foreground p-3 text-center">Nenhum vendedor cadastrado</p>
+              )}
+              {assignableMembers.map((m: any) => {
+                const isSelected = sellers.some((s: any) => s.id === m.id);
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => toggleSeller(m)}
+                    className={cn(
+                      'w-full flex items-center gap-2 px-3 py-2 text-left text-sm transition-colors',
+                      isSelected ? 'bg-primary/10 text-primary' : 'hover:bg-muted/50 text-foreground'
+                    )}
+                  >
+                    <div className={cn(
+                      'h-4 w-4 rounded border-2 flex items-center justify-center text-[10px] font-bold',
+                      isSelected ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground'
+                    )}>
+                      {isSelected && '✓'}
+                    </div>
+                    <span className="truncate">{m.full_name || 'Sem nome'}</span>
+                    <span className="text-[10px] text-muted-foreground ml-auto">{ROLE_LABELS_MAP[m.role] || m.role}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </>
+      )}
     </>
   );
 }
+
+const ROLE_LABELS_MAP: Record<string, string> = {
+  admin: 'Admin',
+  gestor: 'Gestor',
+  vendedor: 'Vendedor',
+  suporte: 'Suporte',
+};
 
 function SmartDelayConfig({ data, update }: { data: any; update: (k: string, v: any) => void }) {
   return (

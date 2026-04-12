@@ -153,10 +153,13 @@ export default function WzFlowCanvasEditor() {
       nodeData.text = '';
       nodeData.noteColor = 'yellow';
     } else if (dragData.nodeType === 'ab_split') {
+      nodeData.splitMode = 'percentage';
       nodeData.paths = [
         { label: 'A', percent: 50 },
         { label: 'B', percent: 50 },
       ];
+      nodeData.sellers = [];
+      nodeData.assignAction = 'assign_and_branch';
     } else if (dragData.nodeType === 'smart_delay') {
       nodeData.targetTime = '09:00';
       nodeData.targetDay = 'any';
