@@ -1,55 +1,33 @@
 
 
-## Auditoria da Automação — Resultado
+## Replay de Execução (estilo n8n)
 
-### 1. ✅ Variação de mensagens — FUNCIONANDO
-O executor (linha 361) escolhe aleatoriamente entre as variações:
-```typescript
-const msg = messages[Math.floor(Math.random() * messages.length)];
-```
-Se você tem 3 variações, cada execução sorteia uma. OK.
+### O que já existe
+- `wz_executions.trigger_payload` → payload bruto do webhook já salvo
+- `wz_executions.variables` → variáveis calculadas já salvas
+- `wz_execution_logs` → timeline completa por nó com input/output
+- UI de execuções com timeline expansível
 
-### 2. ✅ Delay entre blocos de mensagem — FUNCIONANDO
-O executor (linha 399) aplica delay randômico entre blocos (pula o primeiro):
-```typescript
-if (bi > 0) await sleep(randomDelay(nodeData.delayMin ?? 1, nodeData.delayMax ?? 5));
-```
-Com `delayMin: 30` e `delayMax: 59` (como na sua config), ele espera entre 30-59 segundos entre cada bloco. OK.
+### O que falta
 
-### 3. ✅ Variáveis de boleto/PIX — FUNCIONANDO
-O executor substitui `{{codigo_pix}}`, `{{codigo_boleto}}` e `{{link_boleto}}` (linhas 30-32). Se o webhook não trouxer esses campos, eles ficam em branco (string vazia), sem erro. OK.
+**1. Botão "Reprocessar" na UI** (`WzExecutionHistory.tsx`)
+- Adicionar botão `RefreshCw` em cada execução na lista
+- Ao clicar, chama `supabase.functions.invoke('wz-executor', { body: { replay_execution_id } })`
+- Mostra toast de confirmação/erro
 
-### 4. ❌ Distribuição de vendedor (Round-Robin) — NÃO IMPLEMENTADA NO EXECUTOR
+**2. Lógica de replay no `wz-executor`** (`supabase/functions/wz-executor/index.ts`)
+- Aceitar campo `replay_execution_id` no body
+- Se presente: buscar a execução original, criar uma NOVA execução com os mesmos dados (`flow_id`, `contact_phone`, `trigger_payload`, `variables`), marcar `trigger_event: 'replay'`
+- Executar o fluxo normalmente a partir do primeiro nó (após o trigger)
+- A execução original não é tocada — o replay gera um registro independente
 
-**Este é o problema crítico.** O nó Divisor está configurado com `splitMode: round_robin` e vendedoras Daniela e Gabriela, mas o executor (linhas 230-251) **ignora completamente** o `splitMode`, `sellers` e `assignAction`. Ele só faz split por porcentagem:
+**3. Indicador visual de replay**
+- Badge "Replay" na execução reprocessada (quando `trigger_event === 'replay'`)
 
-```typescript
-} else if (nodeType === "ab_split") {
-  const paths = nodeData.paths || [...];
-  const rand = Math.random() * 100;
-  // ... só usa percent, ignora sellers
-}
-```
+### Arquivos editados
+- `supabase/functions/wz-executor/index.ts` — aceitar `replay_execution_id`
+- `src/components/wz-automation/WzExecutionHistory.tsx` — botão reprocessar + badge replay
 
-**O que falta no executor:**
-- Round-Robin: usar um contador persistente para distribuir sequencialmente entre vendedores
-- Atribuição no CRM: fazer `UPDATE leads SET assigned_to = sellerId WHERE phone = contact_phone`
-- Modo `assign_only` vs `assign_and_branch`: respeitar a config de saída única vs múltiplas
-
-### Plano de correção
-
-**Arquivo: `supabase/functions/wz-executor/index.ts`**
-
-Reescrever o bloco `ab_split` (linhas 230-251) para:
-
-1. **Detectar o `splitMode`** — se é `percentage` (comportamento atual), `round_robin`, `random` ou `fixed_count`
-2. **Round-Robin**: buscar o último índice usado para este nó (`wz_execution_logs` com `node_id` do divisor, contar quantas execuções passaram) e usar `count % sellers.length` para selecionar o próximo vendedor
-3. **Random**: `Math.floor(Math.random() * sellers.length)` para selecionar vendedor aleatoriamente
-4. **Atribuir vendedor no CRM**: buscar o lead por `phone` na tabela `leads` e fazer `UPDATE leads SET assigned_to = sellerId`
-5. **Respeitar `assignAction`**:
-   - `assign_and_branch`: seguir pela edge `path_N` correspondente ao vendedor selecionado
-   - `assign_only`: seguir pela edge padrão `path_0` (saída única)
-6. **Logar** no `wz_execution_logs` qual vendedor foi selecionado
-
-Após a correção, vou fornecer o código completo da Edge Function para você copiar e colar no Supabase Dashboard.
+### Resultado
+Você clica em "Reprocessar" em qualquer execução passada → o sistema cria uma nova execução com o mesmo payload → roda o fluxo inteiro de novo → você vê o resultado na timeline, sem precisar gerar um novo checkout.
 
