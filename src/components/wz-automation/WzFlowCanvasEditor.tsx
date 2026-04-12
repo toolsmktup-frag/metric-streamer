@@ -146,15 +146,27 @@ export default function WzFlowCanvasEditor() {
     return () => window.removeEventListener('keydown', handler);
   }, [nodes, edges, clipboard, setNodes, setEdges]);
 
+  // Node dimensions by type for dagre layout
+  const getNodeDimensions = useCallback((type?: string) => {
+    switch (type) {
+      case 'note': return { width: 400, height: 200 };
+      case 'trigger': return { width: 240, height: 140 };
+      case 'condition': return { width: 240, height: 160 };
+      case 'ab_split': return { width: 240, height: 160 };
+      default: return { width: 220, height: 120 };
+    }
+  }, []);
+
   // Auto-layout with dagre
   const handleAutoLayout = useCallback(() => {
     if (nodes.length === 0) return;
     const g = new dagre.graphlib.Graph();
     g.setDefaultEdgeLabel(() => ({}));
-    g.setGraph({ rankdir: 'LR', nodesep: 60, ranksep: 200 });
+    g.setGraph({ rankdir: 'LR', nodesep: 100, ranksep: 250 });
 
     nodes.forEach((node) => {
-      g.setNode(node.id, { width: 220, height: 120 });
+      const dim = getNodeDimensions(node.type);
+      g.setNode(node.id, { width: dim.width, height: dim.height });
     });
     edges.forEach((edge) => {
       g.setEdge(edge.source, edge.target);
@@ -165,11 +177,12 @@ export default function WzFlowCanvasEditor() {
     setNodes((nds) =>
       nds.map((node) => {
         const pos = g.node(node.id);
-        return { ...node, position: { x: pos.x - 110, y: pos.y - 60 } };
+        const dim = getNodeDimensions(node.type);
+        return { ...node, position: { x: pos.x - dim.width / 2, y: pos.y - dim.height / 2 } };
       })
     );
     setTimeout(() => reactFlowInstance?.fitView({ padding: 0.2 }), 50);
-  }, [nodes, edges, setNodes, reactFlowInstance]);
+  }, [nodes, edges, setNodes, reactFlowInstance, getNodeDimensions]);
 
   // Load existing flow
   useEffect(() => {
