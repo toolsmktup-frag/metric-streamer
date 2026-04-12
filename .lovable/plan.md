@@ -1,34 +1,43 @@
 
 
-## Corrigir 2 inconsistências na tela de Automações
+## Unificar instâncias: Automações usam as mesmas do Chat
 
-### Problema 1: Plural errado — "21 açãoões"
-**Arquivo**: `src/components/wz-automation/WzFlowList.tsx` linha 369
+### Problema atual
+Existem **duas tabelas separadas** de instâncias:
+- `whatsapp_instances` — usada pelo Chat (tem phone, profile pic, QR code, UAZAPI completa)
+- `wz_instances` — usada pelas Automações (cadastro manual de URL + token)
 
-O código atual faz:
-```
-ação{count !== 1 ? 'ões' : ''}
-```
-Isso produz "ação" (singular OK) mas "açãoões" (plural errado). O correto é:
-```
-aç{count !== 1 ? 'ões' : 'ão'}
-```
+Isso causa duplicação e desconexão: a instância "Automação 1" na aba de automações não é a mesma "Dani • Equipe Matheus" do chat.
 
-### Problema 2: Toggle Ativo/Inativo dessincronizado
+### Solução
+Eliminar o uso de `wz_instances` e fazer tudo apontar para `whatsapp_instances`. As automações passam a usar as mesmas instâncias conectadas no chat.
 
-São dois toggles **independentes** controlando coisas diferentes:
-- **Tela de Automações** (`WzFlowList`): toggle do `wz_flows.is_active` — controla se o **fluxo** está ativo
-- **Tela do Funil** (`FunnelAutomationsTab`): toggle do `lead_funnel_automations.is_active` — controla se o **vínculo** está ativo
+### Alterações
 
-**Solução**: O toggle do funil deve controlar o `wz_flows.is_active` diretamente (o campo que realmente importa para a execução). Quando o usuário ativar/desativar no funil, ele atualiza o flow, não apenas o link. Isso sincroniza ambas as telas.
+**1. Aba "Instâncias" nas Automações** (`WzInstanceManager.tsx`)
+- Substituir o conteúdo por uma listagem das `whatsapp_instances` (usando `useWhatsAppInstances`)
+- Mostrar nome, telefone, status de conexão, foto de perfil — igual ao InstanceHub
+- Botão "Gerenciar" abre o InstanceHub existente para conectar/desconectar
+- Remove formulário manual de URL/token (não faz mais sentido)
 
-**Alterações**:
-- `FunnelAutomationsTab.tsx`: o `onToggle` passa a fazer update em `wz_flows.is_active` (via supabase direto) + invalidar query `wz-flows`
-- `FunnelAutomationsConfig.tsx`: mesma mudança no toggle
-- `WzFlowList.tsx`: corrigir o plural de "ações"
+**2. Seletor de instância no editor de fluxo** (`WzNodeConfigPanel.tsx`)
+- Trocar `useWzInstances` por `useWhatsAppInstances`
+- O dropdown mostra as instâncias do chat com nome amigável + telefone
+- Salva o `whatsapp_instances.id` no nó
+
+**3. Executor** (`supabase/functions/wz-executor/index.ts`)
+- Mudar query de `wz_instances` para `whatsapp_instances`
+- Mapear campos: `api_url` + `api_token` (em vez de `api_key`)
+
+**4. Hook `useWzInstances`** 
+- Pode ser mantido como wrapper ou removido — os componentes passam a usar `useWhatsAppInstances` diretamente
 
 ### Arquivos editados
-1. `src/components/wz-automation/WzFlowList.tsx` — fix plural
-2. `src/components/lead-funnels/FunnelAutomationsTab.tsx` — toggle sincroniza `wz_flows.is_active`
-3. `src/components/lead-funnels/FunnelAutomationsConfig.tsx` — toggle sincroniza `wz_flows.is_active`
+1. `src/components/wz-automation/WzInstanceManager.tsx` — reescrever para listar `whatsapp_instances`
+2. `src/components/wz-automation/WzNodeConfigPanel.tsx` — trocar fonte de instâncias
+3. `supabase/functions/wz-executor/index.ts` — query em `whatsapp_instances`
+4. `src/components/wz-automation/nodes/WzWhatsAppNode.tsx` — ajustar display name
+
+### Resultado
+A aba "Instâncias" nas automações mostra as mesmas instâncias do chat. O seletor no editor de fluxo lista as instâncias conectadas. O executor envia mensagens pela mesma conexão do chat. Tudo sincronizado.
 
