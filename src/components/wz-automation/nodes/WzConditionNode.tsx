@@ -3,6 +3,7 @@ import { Handle, Position } from '@xyflow/react';
 import { GitBranch, StickyNote } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { WzNodeStats } from '@/hooks/useWzFlowNodeStats';
+import WzNodeToolbar from './WzNodeToolbar';
 
 interface WzConditionNodeData {
   label: string;
@@ -43,6 +44,8 @@ function WzConditionNode({ data, selected }: { data: WzConditionNodeData; select
         position={Position.Top}
         className="!bg-orange-500 !border-2 !border-white !w-3.5 !h-3.5"
       />
+
+      <WzNodeToolbar visible={!!selected} disabled={isDisabled} onToggleDisable={data._onToggleDisable} onDuplicate={data._onDuplicate} />
 
       {hasNotes && (
         <div className="absolute -top-2 -right-2 z-10 bg-amber-400 rounded-full p-1 shadow-sm" title={data.notes}>

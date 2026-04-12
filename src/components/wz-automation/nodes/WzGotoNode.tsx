@@ -2,6 +2,7 @@ import React from 'react';
 import { Handle, Position } from '@xyflow/react';
 import { CornerDownRight, StickyNote } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import WzNodeToolbar from './WzNodeToolbar';
 
 interface WzGotoNodeData {
   label: string;
@@ -29,6 +30,8 @@ function WzGotoNode({ data, selected }: { data: WzGotoNodeData; selected?: boole
         position={Position.Top}
         className="!bg-cyan-500 !border-2 !border-white !w-3.5 !h-3.5"
       />
+
+      <WzNodeToolbar visible={!!selected} disabled={isDisabled} onToggleDisable={data._onToggleDisable} onDuplicate={data._onDuplicate} />
 
       {hasNotes && (
         <div className="absolute -top-2 -right-2 z-10 bg-amber-400 rounded-full p-1 shadow-sm" title={data.notes}>

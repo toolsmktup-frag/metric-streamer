@@ -2,6 +2,7 @@ import React from 'react';
 import { Handle, Position } from '@xyflow/react';
 import { Split, StickyNote, Users, Shuffle, Hash, Percent } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import WzNodeToolbar from './WzNodeToolbar';
 
 export type SplitMode = 'percentage' | 'round_robin' | 'random' | 'fixed_count';
 
@@ -75,6 +76,8 @@ function WzAbSplitNode({ data, selected }: { data: WzAbSplitNodeData; selected?:
         position={Position.Top}
         className="!bg-violet-500 !border-2 !border-white !w-3.5 !h-3.5"
       />
+
+      <WzNodeToolbar visible={!!selected} disabled={isDisabled} onToggleDisable={data._onToggleDisable} onDuplicate={data._onDuplicate} />
 
       {hasNotes && (
         <div className="absolute -top-2 -right-2 z-10 bg-amber-400 rounded-full p-1 shadow-sm" title={data.notes}>

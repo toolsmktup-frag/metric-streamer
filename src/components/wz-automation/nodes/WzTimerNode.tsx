@@ -3,6 +3,7 @@ import { Handle, Position } from '@xyflow/react';
 import { Clock, StickyNote } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { WzNodeStats } from '@/hooks/useWzFlowNodeStats';
+import WzNodeToolbar from './WzNodeToolbar';
 
 interface WzTimerNodeData {
   label: string;
@@ -40,6 +41,8 @@ function WzTimerNode({ data, selected }: { data: WzTimerNodeData; selected?: boo
         position={Position.Top}
         className="!bg-blue-500 !border-2 !border-white !w-3.5 !h-3.5"
       />
+
+      <WzNodeToolbar visible={!!selected} disabled={isDisabled} onToggleDisable={data._onToggleDisable} onDuplicate={data._onDuplicate} />
 
       {hasNotes && (
         <div className="absolute -top-2 -right-2 z-10 bg-amber-400 rounded-full p-1 shadow-sm" title={data.notes}>

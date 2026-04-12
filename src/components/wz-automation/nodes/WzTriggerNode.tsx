@@ -2,6 +2,7 @@ import React from 'react';
 import { Handle, Position } from '@xyflow/react';
 import { Zap, StickyNote } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import WzNodeToolbar from './WzNodeToolbar';
 
 const triggerLabels: Record<string, string> = {
   purchase_approved: 'Compra aprovada',
@@ -28,6 +29,7 @@ interface WzTriggerNodeData {
 
 function WzTriggerNode({ data, selected }: { data: WzTriggerNodeData; selected?: boolean }) {
   const hasNotes = !!data.notes?.trim();
+  const isDisabled = !!data.disabled;
   const eventLabel = data.triggerType ? (triggerLabels[data.triggerType] || data.triggerType) : 'Configurar...';
   const productIds = Array.isArray(data.productIdFilter) ? data.productIdFilter : (data.productIdFilter ? [data.productIdFilter] : []);
 
@@ -35,9 +37,12 @@ function WzTriggerNode({ data, selected }: { data: WzTriggerNodeData; selected?:
     <div
       className={cn(
         'rounded-xl shadow-md min-w-[200px] overflow-hidden transition-shadow relative',
-        selected && 'shadow-lg ring-2 ring-pink-400/40'
+        selected && 'shadow-lg ring-2 ring-pink-400/40',
+        isDisabled && 'opacity-40 grayscale'
       )}
     >
+      <WzNodeToolbar visible={!!selected} disabled={isDisabled} onToggleDisable={data._onToggleDisable} onDuplicate={data._onDuplicate} />
+
       {hasNotes && (
         <div className="absolute -top-2 -right-2 z-10 bg-amber-400 rounded-full p-1 shadow-sm" title={data.notes}>
           <StickyNote className="h-3 w-3 text-amber-900" />
