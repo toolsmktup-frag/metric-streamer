@@ -66,19 +66,31 @@ Deno.serve(async (req) => {
       }
       if (!positions || positions.length === 0) continue;
 
-      // Also fetch customer_purchases for date fallback
       const leadIds = positions.map((p: any) => p.lead_id);
-      const { data: purchases } = await supabase
-        .from("customer_purchases")
-        .select("lead_id, purchased_at")
-        .in("lead_id", leadIds)
-        .order("purchased_at", { ascending: true });
 
-      // Build first purchase date map
-      const firstPurchaseMap = new Map<string, string>();
-      for (const cp of purchases || []) {
-        if (!firstPurchaseMap.has(cp.lead_id)) {
-          firstPurchaseMap.set(cp.lead_id, cp.purchased_at);
+      // Fetch ALL purchase events from lead_events to get product names per lead
+      const purchaseEventNames = ["purchase", "Purchase", "pago", "authorized"];
+      const { data: purchaseEvents } = await supabase
+        .from("lead_events")
+        .select("lead_id, metadata, created_at")
+        .in("lead_id", leadIds)
+        .in("event_name", purchaseEventNames)
+        .order("created_at", { ascending: true });
+
+      // Build per-lead: first purchase date + all product names
+      const leadPurchaseInfo = new Map<string, { firstDate: string; productNames: string[] }>();
+      for (const evt of purchaseEvents || []) {
+        const productName = (evt.metadata as any)?.product_name as string || "";
+        const existing = leadPurchaseInfo.get(evt.lead_id);
+        if (!existing) {
+          leadPurchaseInfo.set(evt.lead_id, {
+            firstDate: evt.created_at,
+            productNames: productName ? [productName] : [],
+          });
+        } else {
+          if (productName && !existing.productNames.includes(productName)) {
+            existing.productNames.push(productName);
+          }
         }
       }
 
@@ -93,16 +105,30 @@ Deno.serve(async (req) => {
         mappingLookup.set(m.raw_product_name, m.lead_funnel_product_id);
       }
 
+      // Helper: match product name to funnel product
+      const matchProduct = (pName: string) => {
+        const mappedId = mappingLookup.get(pName);
+        if (mappedId) {
+          const found = funnelProducts.find(fp => fp.id === mappedId);
+          if (found) return found;
+        }
+        return funnelProducts.find(fp =>
+          pName.toLowerCase().includes(fp.product_name_contains.toLowerCase())
+        );
+      };
+
       for (const pos of positions) {
         const lead = (pos as any).leads;
         if (!lead) continue;
         const metadata = lead.metadata || {};
-        const productName = (metadata.product_name as string) || "";
 
-        // Resolve purchase date
+        // Get purchase info from events
+        const info = leadPurchaseInfo.get(pos.lead_id);
+
+        // Resolve first purchase date: metadata > events
         let purchasedAt = (metadata.purchased_at as string) || "";
-        if (!purchasedAt) {
-          purchasedAt = firstPurchaseMap.get(pos.lead_id) || "";
+        if (!purchasedAt && info) {
+          purchasedAt = info.firstDate;
         }
         if (!purchasedAt) continue;
 
@@ -119,37 +145,44 @@ Deno.serve(async (req) => {
         }
         if (!purchaseDate || isNaN(purchaseDate.getTime())) continue;
 
-        // Match product: explicit mapping first, then substring
-        let matchedProduct: (typeof funnelProducts)[number] | undefined;
+        // Get all product names for this lead
+        const allProductNames = info?.productNames || [];
+        const metaProductName = (metadata.product_name as string) || "";
+        const productNamesToCheck = allProductNames.length > 0
+          ? allProductNames
+          : metaProductName ? [metaProductName] : [];
 
-        if (productName) {
-          const mappedId = mappingLookup.get(productName);
-          if (mappedId) {
-            matchedProduct = funnelProducts.find(fp => fp.id === mappedId);
-          }
-          if (!matchedProduct) {
-            matchedProduct = funnelProducts.find(fp =>
-              productName.toLowerCase().includes(fp.product_name_contains.toLowerCase())
-            );
+        // Match ALL products and SUM recontact_days
+        let totalRecontactDays = 0;
+        let lastMatchedProduct: (typeof funnelProducts)[number] | undefined;
+
+        if (productNamesToCheck.length > 0) {
+          for (const pName of productNamesToCheck) {
+            const matched = matchProduct(pName);
+            if (matched) {
+              totalRecontactDays += matched.recontact_days!;
+              lastMatchedProduct = matched;
+            }
           }
         } else if (funnelProducts.length === 1) {
           // Fallback: single product config
-          matchedProduct = funnelProducts[0];
+          lastMatchedProduct = funnelProducts[0];
+          totalRecontactDays = lastMatchedProduct.recontact_days!;
         }
 
-        if (!matchedProduct) continue;
+        if (!lastMatchedProduct || totalRecontactDays === 0) continue;
 
-        // Check if overdue
-        const deadlineMs = purchaseDate.getTime() + matchedProduct.recontact_days! * 86400000;
+        // Check if overdue using SUMMED days
+        const deadlineMs = purchaseDate.getTime() + totalRecontactDays * 86400000;
         if (now.getTime() < deadlineMs) continue;
 
         // Already in target stage?
-        if (pos.stage_id === matchedProduct.auto_move_stage_id) continue;
+        if (pos.stage_id === lastMatchedProduct.auto_move_stage_id) continue;
 
         // Move lead
         const { error: moveErr } = await supabase
           .from("lead_stage_positions")
-          .update({ stage_id: matchedProduct.auto_move_stage_id })
+          .update({ stage_id: lastMatchedProduct.auto_move_stage_id })
           .eq("id", pos.id);
 
         if (moveErr) {
@@ -164,10 +197,11 @@ Deno.serve(async (req) => {
           event_name: "auto_recontact_move",
           metadata: {
             from_stage_id: pos.stage_id,
-            to_stage_id: matchedProduct.auto_move_stage_id,
-            product_id: matchedProduct.id,
-            product_name: matchedProduct.display_name || matchedProduct.product_name_contains,
-            recontact_days: matchedProduct.recontact_days,
+            to_stage_id: lastMatchedProduct.auto_move_stage_id,
+            product_id: lastMatchedProduct.id,
+            product_name: lastMatchedProduct.display_name || lastMatchedProduct.product_name_contains,
+            total_recontact_days: totalRecontactDays,
+            products_matched: productNamesToCheck.length,
             triggered_by: "cron",
           },
         });
