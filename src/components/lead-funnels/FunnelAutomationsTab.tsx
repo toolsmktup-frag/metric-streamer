@@ -72,7 +72,7 @@ function AutomationCard({ automation, funnelId, onToggle, onToggleVisibility }: 
           {automation.show_in_automations ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
           {automation.show_in_automations ? 'Visível em Automações' : 'Só neste funil'}
         </Badge>
-        <Button variant="outline" size="sm" className="gap-1" onClick={() => window.open(`/wz-automations/${automation.wz_flow_id}`, '_blank')}>
+        <Button variant="outline" size="sm" className="gap-1" onClick={() => window.open(`/ferramentas/automacoes/${automation.wz_flow_id}`, '_blank')}>
           <ExternalLink className="h-3.5 w-3.5" /> Editar
         </Button>
       </div>
