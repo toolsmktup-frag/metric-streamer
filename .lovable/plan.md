@@ -1,42 +1,25 @@
 
 
-## Análise: Recontato não atualiza após nova compra
+## Recontato: Soma linear de dias por produto
 
-### Problema identificado
+**Lógica implementada**: Quando um lead tem múltiplas compras no mesmo funil, os `recontact_days` de cada produto são SOMADOS e contados a partir da primeira data de compra.
 
-O sistema inteiro de recontato usa a **primeira data de compra** (`firstPurchaseDate`) para calcular o countdown. Isso significa que quando a Maria Helena comprou novamente (ex: "3 potes SuperVITA" em 02/04/26), o prazo de recontato **não resetou** — ele continua contando desde a compra mais antiga (26/06/2023).
+**Exemplo**: Produto A (90d) + Produto B (180d) = 270 dias a partir da primeira compra.
 
-Isso afeta 3 pontos:
+### Arquivos alterados
 
-1. **Frontend** (`useRecontactDeadlines.ts`): usa `firstPurchaseDate` do purchaseMap
-2. **Frontend** (`useBulkLeadPurchases.ts`): a RPC `get_bulk_purchase_summaries` só retorna `first_purchase_date`
-3. **Cron** (`recontact-cron/index.ts`): busca compras ordenadas ASC e pega a primeira
+1. **`src/hooks/useBulkLeadPurchaseProducts.ts`** (NOVO)
+   - Busca todos os eventos de compra (`lead_events`) por lead no funil
+   - Retorna `Map<leadId, product_name[]>` com todos os produtos comprados
 
-### Sobre a pergunta "somar os dias?"
+2. **`src/hooks/useRecontactDeadlines.ts`**
+   - Aceita novo param `leadProductNamesMap`
+   - Para cada lead, matcha TODOS os produtos e SOMA os recontact_days
+   - Deadline = firstPurchaseDate + SUM(recontact_days)
 
-Não faz sentido somar os dias de recontato de múltiplos produtos. O correto é: **cada nova compra reseta o countdown**. Se o cliente comprou um produto de 90 dias, o prazo começa a contar da data da compra mais recente. Se ele compra de novo antes de vencer, o prazo recomeça.
+3. **`src/pages/LeadFunnelDetail.tsx`**
+   - Conecta o novo hook `useBulkLeadPurchaseProducts`
 
-### Plano de correção
-
-**1. Alterar a RPC `get_bulk_purchase_summaries`** (migration SQL)
-- Adicionar campo `last_purchase_date` (MAX ao invés de MIN) no retorno
-
-**2. Atualizar `useBulkLeadPurchases.ts`**
-- Adicionar `lastPurchaseDate` ao `PurchaseSummary`
-- Mapear o novo campo da RPC
-
-**3. Atualizar `useRecontactDeadlines.ts`**
-- Trocar `firstPurchaseDate` por `lastPurchaseDate` como fonte de data para o cálculo de recontato
-- Também priorizar `metadata.purchased_at` (que já vem da última transação via sync_lead_from_sale)
-
-**4. Atualizar `recontact-cron/index.ts`**
-- Mudar a query de `order("purchased_at", ascending: true)` para `ascending: false`
-- Renomear para `lastPurchaseMap` — pegar a compra mais recente de cada lead
-
-**5. Card do Kanban** (`LeadCard.tsx`)
-- O badge "Xd" que mostra dias desde a primeira compra permanece (é o LTV lifetime), mas o recontato usa a data mais recente
-
-### Resumo técnico
-
-A mudança central é: **recontato = data da ÚLTIMA compra + recontact_days**, não da primeira. Isso garante que cada recompra reinicia o ciclo de recontato automaticamente.
-
+4. **`supabase/functions/recontact-cron/index.ts`**
+   - Busca eventos de compra via `lead_events` (não mais `customer_purchases`)
+   - Soma recontact_days de todos os produtos matchados por lead

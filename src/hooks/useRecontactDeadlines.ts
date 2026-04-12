@@ -22,10 +22,14 @@ export interface RecontactInfo {
 }
 
 /**
- * For each lead, match their product (from metadata) against configured products
+ * For each lead, match their purchased products against configured products
  * with recontact_days, then calculate countdown.
  *
- * Priority:
+ * SOMA LINEAR: When a lead has multiple purchases in the same funnel,
+ * the recontact_days are SUMMED and counted from the FIRST purchase date.
+ * Ex: Product A (90d) + Product B (180d) = 270 days from first purchase.
+ *
+ * Priority for product matching:
  * 1. Explicit mapping (lead_product_mappings table)
  * 2. Substring match (product_name_contains) as fallback
  *
@@ -38,6 +42,7 @@ export function useRecontactDeadlines(
   products: RecontactProduct[] | undefined,
   mappings?: LeadProductMapping[],
   purchaseMap?: Map<string, PurchaseSummary>,
+  leadProductNamesMap?: Map<string, string[]>,
 ): Map<string, RecontactInfo> {
   return useMemo(() => {
     const map = new Map<string, RecontactInfo>();
@@ -62,29 +67,58 @@ export function useRecontactDeadlines(
 
     const today = new Date();
 
+    // Helper: match a product name against configured products
+    const matchProduct = (productName: string): RecontactProduct | undefined => {
+      // 1. Explicit mapping first
+      const mappedId = mappingLookup.get(productName);
+      if (mappedId) {
+        const found = productById.get(mappedId);
+        if (found) return found;
+      }
+      // 2. Substring match
+      return productsWithRecontact.find(fp =>
+        productName.toLowerCase().includes(fp.product_name_contains.toLowerCase()),
+      );
+    };
+
     for (const pos of positions) {
       const lead = pos.lead;
-      const productName = (lead.metadata?.product_name as string) || '';
 
-      // FIX #11: Se não tem product_name no metadata, tentar match via purchaseMap
-      // (leads criados via webhook-lead não têm metadata.product_name)
-      if (!productName) {
-        // Ainda assim, tentar calcular recontato se tiver purchaseMap com data
-        // usando o primeiro produto com recontact_days como fallback
-        if (purchaseMap) {
+      // Get ALL product names this lead has purchased
+      const allProductNames = leadProductNamesMap?.get(pos.lead_id) || [];
+      const metadataProductName = (lead.metadata?.product_name as string) || '';
+      
+      // If we have bulk product names, use those; otherwise fallback to metadata
+      const productNamesToCheck = allProductNames.length > 0
+        ? allProductNames
+        : metadataProductName ? [metadataProductName] : [];
+
+      // Resolve first purchase date
+      let purchasedAtRaw = (lead.metadata?.purchased_at as string) || '';
+      if (!purchasedAtRaw && purchaseMap) {
+        const summary = purchaseMap.get(pos.lead_id);
+        if (summary?.firstPurchaseDate) {
+          purchasedAtRaw = summary.firstPurchaseDate;
+        }
+      }
+
+      // If no products and no purchase date, try single-product fallback
+      if (productNamesToCheck.length === 0) {
+        if (purchaseMap && productsWithRecontact.length === 1) {
           const summary = purchaseMap.get(pos.lead_id);
-          if (summary?.firstPurchaseDate && productsWithRecontact.length === 1) {
+          if (summary?.firstPurchaseDate) {
             const fallbackProduct = productsWithRecontact[0];
             const purchaseDate = parseLocalDateTime(summary.firstPurchaseDate);
             if (purchaseDate) {
-              const deadlineDate = addDays(purchaseDate, fallbackProduct.recontact_days!);
+              const totalDays = fallbackProduct.recontact_days! * (summary.totalOrders || 1);
+              const deadlineDate = addDays(purchaseDate, totalDays);
               const daysRemaining = differenceInDays(deadlineDate, today);
               map.set(pos.lead_id, {
                 daysRemaining,
                 isOverdue: daysRemaining < 0,
                 deadlineDate,
                 productName: fallbackProduct.display_name || fallbackProduct.product_name_contains,
-                recontactDays: fallbackProduct.recontact_days!,
+                recontactDays: totalDays,
                 matchedProductId: fallbackProduct.id,
               });
             }
@@ -93,50 +127,45 @@ export function useRecontactDeadlines(
         continue;
       }
 
-      // Resolve purchase date: metadata first, then purchaseMap fallback
-      let purchasedAtRaw = (lead.metadata?.purchased_at as string) || '';
-      if (!purchasedAtRaw && purchaseMap) {
-        const summary = purchaseMap.get(pos.lead_id);
-        if (summary?.firstPurchaseDate) {
-          purchasedAtRaw = summary.firstPurchaseDate; // ISO format from DB
-        }
-      }
-
       if (!purchasedAtRaw) continue;
 
-      // 1. Try explicit mapping first
-      let matchedProduct: RecontactProduct | undefined;
-      const mappedProductId = mappingLookup.get(productName);
-      if (mappedProductId) {
-        matchedProduct = productById.get(mappedProductId);
-      }
-
-      // 2. Fallback to substring match
-      if (!matchedProduct) {
-        matchedProduct = productsWithRecontact.find(fp =>
-          productName.toLowerCase().includes(fp.product_name_contains.toLowerCase()),
-        );
-      }
-
-      if (!matchedProduct) continue;
-
-      // Use parseLocalDateTime to correctly handle BR date format (dd/MM/yyyy)
       const purchaseDate = parseLocalDateTime(purchasedAtRaw);
       if (!purchaseDate) continue;
 
-      const deadlineDate = addDays(purchaseDate, matchedProduct.recontact_days!);
+      // Match ALL products and SUM recontact_days
+      let totalRecontactDays = 0;
+      let lastMatchedProduct: RecontactProduct | undefined;
+      const matchedProductNames: string[] = [];
+
+      for (const pName of productNamesToCheck) {
+        const matched = matchProduct(pName);
+        if (matched) {
+          totalRecontactDays += matched.recontact_days!;
+          lastMatchedProduct = matched;
+          matchedProductNames.push(matched.display_name || matched.product_name_contains);
+        }
+      }
+
+      if (!lastMatchedProduct || totalRecontactDays === 0) continue;
+
+      const deadlineDate = addDays(purchaseDate, totalRecontactDays);
       const daysRemaining = differenceInDays(deadlineDate, today);
+
+      // Display name: if multiple products, show combined
+      const displayName = matchedProductNames.length > 1
+        ? matchedProductNames.join(' + ')
+        : matchedProductNames[0];
 
       map.set(pos.lead_id, {
         daysRemaining,
         isOverdue: daysRemaining < 0,
         deadlineDate,
-        productName: matchedProduct.display_name || matchedProduct.product_name_contains,
-        recontactDays: matchedProduct.recontact_days!,
-        matchedProductId: matchedProduct.id,
+        productName: displayName,
+        recontactDays: totalRecontactDays,
+        matchedProductId: lastMatchedProduct.id,
       });
     }
 
     return map;
-  }, [positions, products, mappings, purchaseMap]);
+  }, [positions, products, mappings, purchaseMap, leadProductNamesMap]);
 }
