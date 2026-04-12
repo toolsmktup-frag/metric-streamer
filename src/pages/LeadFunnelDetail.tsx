@@ -33,6 +33,7 @@ import FunnelConfigTab from '@/components/lead-funnels/FunnelConfigTab';
 import WebhookConfig from '@/components/lead-funnels/WebhookConfig';
 import FunnelFlowEditor from '@/components/lead-funnels/FunnelFlowEditor';
 import FunnelMetricsTab from '@/components/lead-funnels/FunnelMetricsTab';
+import FunnelAutomationsTab from '@/components/lead-funnels/FunnelAutomationsTab';
 import LeadTimeline from '@/components/lead-funnels/LeadTimeline';
 import ImportLeadsDialog from '@/components/lead-funnels/ImportLeadsDialog';
 import { Lead } from '@/types/leadFunnels';
@@ -454,6 +455,12 @@ const LeadFunnelDetail: React.FC = () => {
               }}
               savingMetaPixel={updateLeadFunnel.isPending}
             />
+          </TabsContent>
+        )}
+
+        {isAdmin && (
+          <TabsContent value="automations" className="mt-4">
+            <FunnelAutomationsTab funnelId={funnel.id} />
           </TabsContent>
         )}
 
