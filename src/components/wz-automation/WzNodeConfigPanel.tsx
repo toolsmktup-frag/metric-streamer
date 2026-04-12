@@ -76,7 +76,7 @@ const WzNodeConfigPanel: React.FC<WzNodeConfigPanelProps> = ({
       <SheetContent className="w-[340px] sm:w-[380px] overflow-y-auto">
         <SheetHeader>
           <SheetTitle className="text-foreground">
-            Configurar {nodeType === 'trigger' ? 'Gatilho' : nodeType === 'whatsapp' ? 'WhatsApp' : nodeType === 'timer' ? 'Timer' : nodeType === 'condition' ? 'Condição' : 'Nó'}
+            Configurar {nodeType === 'trigger' ? 'Gatilho' : nodeType === 'whatsapp' ? 'WhatsApp' : nodeType === 'timer' ? 'Timer' : nodeType === 'condition' ? 'Condição' : nodeType === 'note' ? 'Anotação' : 'Nó'}
           </SheetTitle>
         </SheetHeader>
 
@@ -102,6 +102,9 @@ const WzNodeConfigPanel: React.FC<WzNodeConfigPanelProps> = ({
 
           {/* CONDITION CONFIG */}
           {nodeType === 'condition' && <ConditionConfig data={data} update={update} />}
+
+          {/* NOTE CONFIG */}
+          {nodeType === 'note' && <NoteConfig data={data} update={update} />}
 
           {/* Notas */}
           <div className="space-y-2">
@@ -536,6 +539,48 @@ function ConditionConfig({ data, update }: { data: any; update: (k: string, v: a
           onChange={(e) => update('compareValue', e.target.value)}
           placeholder="Ex: 100 ou 'Ticto'"
         />
+      </div>
+    </>
+  );
+}
+
+const noteColorOptions = [
+  { value: 'yellow', label: 'Amarelo', cls: 'bg-amber-300' },
+  { value: 'blue', label: 'Azul', cls: 'bg-blue-300' },
+  { value: 'green', label: 'Verde', cls: 'bg-emerald-300' },
+  { value: 'pink', label: 'Rosa', cls: 'bg-pink-300' },
+];
+
+function NoteConfig({ data, update }: { data: any; update: (k: string, v: any) => void }) {
+  return (
+    <>
+      <div className="space-y-2">
+        <Label>Texto da anotação</Label>
+        <Textarea
+          value={data.text || ''}
+          onChange={(e) => update('text', e.target.value)}
+          placeholder="Escreva sua anotação aqui..."
+          rows={4}
+          className="resize-none text-sm"
+        />
+      </div>
+      <div className="space-y-2">
+        <Label>Cor</Label>
+        <div className="flex gap-2">
+          {noteColorOptions.map(c => (
+            <button
+              key={c.value}
+              type="button"
+              onClick={() => update('noteColor', c.value)}
+              className={cn(
+                'h-8 w-8 rounded-full border-2 transition-all',
+                c.cls,
+                data.noteColor === c.value ? 'border-foreground scale-110' : 'border-transparent'
+              )}
+              title={c.label}
+            />
+          ))}
+        </div>
       </div>
     </>
   );
