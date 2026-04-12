@@ -1,9 +1,10 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { LeadFunnelStage, Lead, LeadStagePosition } from '@/types/leadFunnels';
+import { LeadFunnelStage, Lead, LeadStagePosition, StageTransitionRule, ValueClassification } from '@/types/leadFunnels';
 import LeadCard from './LeadCard';
-import { Search, ArrowUpDown, DollarSign, TrendingDown, ChevronDown, RefreshCw } from 'lucide-react';
+import { Search, ArrowUpDown, DollarSign, TrendingDown, ChevronDown, RefreshCw, Hourglass, AlertTriangle } from 'lucide-react';
 import { formatCurrency } from '@/lib/formatters';
 import { isRevenueStage } from '@/lib/revenueStage';
+import { extractMetadataAmount, classificationColor, classificationLabel, getDefaultClassification } from '@/lib/valueClassification';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
@@ -37,6 +38,7 @@ interface KanbanBoardProps {
   onBulkMoveOverdue?: () => void;
   bulkMoving?: boolean;
   hasAutoMoveProducts?: boolean;
+  transitionRules?: StageTransitionRule[];
 }
 
 type SortMode = 'recent' | 'value' | 'orders' | 'ltv' | 'recontact';
