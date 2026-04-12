@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Trash2, Copy, Plus, X, MessageCircleOff } from 'lucide-react';
+import { Trash2, Copy, Plus, X, MessageCircleOff, MessageSquare } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -76,7 +76,7 @@ const WzNodeConfigPanel: React.FC<WzNodeConfigPanelProps> = ({
 
   return (
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
-      <SheetContent className="w-[340px] sm:w-[380px] overflow-y-auto">
+      <SheetContent className="w-[400px] sm:w-[440px] overflow-y-auto">
         <SheetHeader>
           <SheetTitle className="text-foreground">
             Configurar {nodeType === 'trigger' ? 'Gatilho' : nodeType === 'whatsapp' ? 'WhatsApp' : nodeType === 'timer' ? 'Timer' : nodeType === 'condition' ? 'Condição' : nodeType === 'note' ? 'Anotação' : nodeType === 'ab_split' ? 'Divisor A/B' : nodeType === 'smart_delay' ? 'Delay Inteligente' : nodeType === 'webhook' ? 'Webhook' : nodeType === 'tag' ? 'Tag' : nodeType === 'goto' ? 'Goto' : 'Nó'}
@@ -327,8 +327,11 @@ function WhatsAppConfig({ data, update }: { data: any; update: (k: string, v: an
 
   return (
     <>
-      <div className="space-y-2">
-        <Label>Instância UAZAPI</Label>
+      <div className="space-y-2 pb-4 border-b border-border">
+        <Label className="flex items-center gap-2">
+          <MessageSquare className="h-4 w-4 text-green-500" />
+          Instância UAZAPI
+        </Label>
         <Select
           value={data.instanceId || ''}
           onValueChange={(v) => {
@@ -346,6 +349,7 @@ function WhatsAppConfig({ data, update }: { data: any; update: (k: string, v: an
             ))}
           </SelectContent>
         </Select>
+        <p className="text-[11px] text-muted-foreground">Deixe em branco para usar a conexão dos blocos anteriores</p>
       </div>
 
       {/* Message variations */}
@@ -395,7 +399,7 @@ function WhatsAppConfig({ data, update }: { data: any; update: (k: string, v: an
                     </div>
 
                     {/* Variable chips */}
-                    <div className="flex flex-wrap gap-1">
+                    <div className="flex flex-wrap gap-1.5">
                       {variableChips.map(v => (
                         <Badge
                           key={v.key}
@@ -411,10 +415,16 @@ function WhatsAppConfig({ data, update }: { data: any; update: (k: string, v: an
                     <Textarea
                       ref={(el) => { textareaRefs.current[`${i}-${bi}`] = el; }}
                       value={block.text}
-                      onChange={(e) => updateBlock(i, bi, 'text', e.target.value)}
+                      onChange={(e) => {
+                        updateBlock(i, bi, 'text', e.target.value);
+                        // Auto-grow
+                        const ta = e.target;
+                        ta.style.height = 'auto';
+                        ta.style.height = Math.max(100, ta.scrollHeight) + 'px';
+                      }}
                       placeholder="Digite a mensagem..."
-                      rows={3}
-                      className="resize-none text-sm"
+                      rows={4}
+                      className="resize-y min-h-[100px] text-sm"
                     />
                     <div className="text-right text-[10px] text-muted-foreground">
                       {block.text.length}/1024
@@ -479,7 +489,7 @@ function WhatsAppConfig({ data, update }: { data: any; update: (k: string, v: an
       </div>
 
       {/* Delay humanization */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-3 pt-4 border-t border-border">
         <div className="space-y-1">
           <Label className="text-xs">Delay mín (seg)</Label>
           <Input
