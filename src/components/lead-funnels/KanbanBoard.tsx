@@ -363,12 +363,22 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
                   </div>
                   {!shouldHideValues && (() => {
                     const rev = getStageRevenue(stageLeads);
-                    return rev > 0 ? (
-                      <p className={`text-xs font-medium mt-1 ${isRevenueStage(stage.name) ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}`}>
-                        {isRevenueStage(stage.name) ? '' : '- '}{formatCurrency(rev)}
-                        {!isRevenueStage(stage.name) && <span className="text-[10px] ml-1 opacity-70">perdido</span>}
+                    if (rev <= 0) return null;
+                    const cls = stageClassificationMap.get(stage.id);
+                    const isPositive = cls === 'positive' || (!cls && isRevenueStage(stage.name));
+                    const isPending = cls === 'pending';
+                    const colorCls = isPositive
+                      ? 'text-emerald-600 dark:text-emerald-400'
+                      : isPending
+                      ? 'text-yellow-600 dark:text-yellow-400'
+                      : 'text-destructive';
+                    const label = isPositive ? '' : isPending ? 'pendente' : 'recuperar';
+                    return (
+                      <p className={`text-xs font-medium mt-1 ${colorCls}`}>
+                        {formatCurrency(rev)}
+                        {label && <span className="text-[10px] ml-1 opacity-70">{label}</span>}
                       </p>
-                    ) : null;
+                    );
                   })()}
                 </div>
 
@@ -390,7 +400,9 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
                           onClick={() => onLeadClick?.(pos.lead_id)}
                           onWhatsAppClick={onWhatsAppClick}
                           hideValues={shouldHideValues}
+                          stageClassification={stageClassificationMap.get(stage.id) || null}
                         />
+                      ))}
                       ))}
                       {hasMore && (
                         <button
