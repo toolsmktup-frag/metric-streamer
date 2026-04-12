@@ -180,24 +180,42 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
   }, [filteredPositions, sortMode, purchaseMap, recontactMap]);
 
   const getStageRevenue = (leads: (LeadStagePosition & { lead: Lead })[]) => {
-    return leads.reduce((sum, p) => sum + (Number(p.lead.metadata?.amount) || 0), 0);
+    return leads.reduce((sum, p) => sum + extractMetadataAmount(p.lead.metadata), 0);
   };
 
-  const { confirmedRevenue, lostRevenue } = useMemo(() => {
+  // Build a map: stageId -> classification from transition rules
+  const stageClassificationMap = useMemo(() => {
+    const map = new Map<string, ValueClassification>();
+    for (const rule of transitionRules) {
+      if (rule.to_stage_id) {
+        const cls = rule.value_classification || getDefaultClassification(rule.event_name);
+        // If multiple rules point to the same stage, prioritize: negative > pending > positive
+        const existing = map.get(rule.to_stage_id);
+        if (!existing || (cls === 'negative') || (cls === 'pending' && existing === 'positive')) {
+          map.set(rule.to_stage_id, cls);
+        }
+      }
+    }
+    return map;
+  }, [transitionRules]);
+
+  const { confirmedRevenue, lostRevenue, pendingRevenue } = useMemo(() => {
     let confirmed = 0;
     let lost = 0;
-    const stageMap = new Map(stages.map(s => [s.id, s]));
+    let pending = 0;
     for (const p of visiblePositions) {
-      const amount = Number(p.lead.metadata?.amount) || 0;
-      const stage = stageMap.get(p.stage_id);
-      if (stage && isRevenueStage(stage.name)) {
+      const amount = extractMetadataAmount(p.lead.metadata);
+      const cls = stageClassificationMap.get(p.stage_id);
+      if (cls === 'positive' || (!cls && isRevenueStage(stages.find(s => s.id === p.stage_id)?.name || ''))) {
         confirmed += amount;
+      } else if (cls === 'pending') {
+        pending += amount;
       } else {
         lost += amount;
       }
     }
-    return { confirmedRevenue: confirmed, lostRevenue: lost };
-  }, [visiblePositions, stages]);
+    return { confirmedRevenue: confirmed, lostRevenue: lost, pendingRevenue: pending };
+  }, [visiblePositions, stages, stageClassificationMap]);
 
   const activePosition = activeId ? visiblePositions.find(p => p.id === activeId) : null;
 
