@@ -2,24 +2,29 @@ import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Trash2, ExternalLink, Zap, Eye } from 'lucide-react';
+import { Plus, Trash2, ExternalLink, Zap, Eye, Loader2 } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useWzFlows } from '@/hooks/useWzFlows';
 import { useLeadFunnelAutomations, useLinkFunnelAutomation, useUpdateFunnelAutomation, useUnlinkFunnelAutomation } from '@/hooks/useLeadFunnelAutomations';
+import { supabase } from '@/integrations/supabase/client';
+import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import type { LeadFunnelAutomation } from '@/types/wz-automation';
-
 
 interface FunnelAutomationsConfigProps {
   funnelId: string;
+  funnelName?: string;
 }
 
-const FunnelAutomationsConfig: React.FC<FunnelAutomationsConfigProps> = ({ funnelId }) => {
+const FunnelAutomationsConfig: React.FC<FunnelAutomationsConfigProps> = ({ funnelId, funnelName }) => {
   const { data: automations = [], isLoading } = useLeadFunnelAutomations(funnelId);
   const { data: allFlows = [] } = useWzFlows();
   const linkMutation = useLinkFunnelAutomation();
   const updateMutation = useUpdateFunnelAutomation();
   const unlinkMutation = useUnlinkFunnelAutomation();
   const [selectedFlowId, setSelectedFlowId] = useState('');
+  const [creating, setCreating] = useState(false);
+  const qc = useQueryClient();
 
   const linkedFlowIds = automations.map(a => a.wz_flow_id);
   const availableFlows = allFlows.filter(f => !linkedFlowIds.includes(f.id));
@@ -30,6 +35,31 @@ const FunnelAutomationsConfig: React.FC<FunnelAutomationsConfigProps> = ({ funne
     setSelectedFlowId('');
   };
 
+  const handleCreate = async () => {
+    setCreating(true);
+    try {
+      const flowName = `Automação - ${funnelName || 'Funil'}`;
+      const { data, error } = await (supabase as any)
+        .from('wz_flows')
+        .insert({ name: flowName, platform: 'whatsapp', is_active: false, nodes: [], edges: [] })
+        .select()
+        .single();
+      if (error) throw error;
+      // Link to funnel
+      await (supabase as any)
+        .from('lead_funnel_automations')
+        .insert({ funnel_id: funnelId, wz_flow_id: data.id, trigger_events: [], show_in_automations: false });
+      qc.invalidateQueries({ queryKey: ['wz-flows'] });
+      qc.invalidateQueries({ queryKey: ['lead-funnel-automations', funnelId] });
+      toast.success('Automação criada e vinculada!');
+      window.open(`/ferramentas/automacoes/${data.id}`, '_blank');
+    } catch (e) {
+      toast.error('Erro ao criar automação');
+    } finally {
+      setCreating(false);
+    }
+  };
+
   const handleToggle = (auto: LeadFunnelAutomation, is_active: boolean) => {
     updateMutation.mutate({ id: auto.id, funnel_id: funnelId, is_active });
   };
@@ -37,7 +67,6 @@ const FunnelAutomationsConfig: React.FC<FunnelAutomationsConfigProps> = ({ funne
   const handleToggleShowInAutomations = (auto: LeadFunnelAutomation, show: boolean) => {
     updateMutation.mutate({ id: auto.id, funnel_id: funnelId, show_in_automations: show });
   };
-
 
   return (
     <div>
@@ -66,6 +95,10 @@ const FunnelAutomationsConfig: React.FC<FunnelAutomationsConfigProps> = ({ funne
         </Select>
         <Button onClick={handleLink} disabled={!selectedFlowId || linkMutation.isPending} size="sm" className="gap-1">
           <Plus className="h-4 w-4" /> Vincular
+        </Button>
+        <Button onClick={handleCreate} disabled={creating} size="sm" variant="outline" className="gap-1">
+          {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+          Criar Automação
         </Button>
       </div>
 
@@ -116,7 +149,6 @@ const FunnelAutomationsConfig: React.FC<FunnelAutomationsConfigProps> = ({ funne
                   <Trash2 className="h-3.5 w-3.5 text-destructive" />
                 </Button>
               </div>
-
             </div>
           ))}
         </div>
