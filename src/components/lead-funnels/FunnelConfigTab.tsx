@@ -28,6 +28,7 @@ interface FunnelConfigTabProps {
   onSaveRules: (rules: Partial<StageTransitionRule>[]) => void;
   saving?: boolean;
   funnelId?: string;
+  funnelName?: string;
   // Products & Recontact
   leadFunnelProducts?: LeadFunnelProduct[];
   catalogProducts?: FunnelProduct[];
@@ -67,7 +68,7 @@ const CANONICAL_EVENTS = [
   { value: 'canceled', label: 'Cancelado' },
 ];
 
-const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSaveStages, onSaveRules, saving, funnelId, leadFunnelProducts = [], catalogProducts = [], onSaveProducts, savingProducts, onBulkMoveOverdue, bulkMoving, distinctLeadProducts = [], existingMappings = [], onSaveMappings, savingMappings, loadingDistinctProducts, positions = [], trafficFunnels = [], currentTrafficFunnelId, onTrafficFunnelChange, savingTrafficFunnel, metaPixelId, metaAccessToken, onMetaPixelChange, savingMetaPixel }) => {
+const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSaveStages, onSaveRules, saving, funnelId, funnelName, leadFunnelProducts = [], catalogProducts = [], onSaveProducts, savingProducts, onBulkMoveOverdue, bulkMoving, distinctLeadProducts = [], existingMappings = [], onSaveMappings, savingMappings, loadingDistinctProducts, positions = [], trafficFunnels = [], currentTrafficFunnelId, onTrafficFunnelChange, savingTrafficFunnel, metaPixelId, metaAccessToken, onMetaPixelChange, savingMetaPixel }) => {
   const [localStages, setLocalStages] = useState<Partial<LeadFunnelStage>[]>(
     stages.length ? stages : [{ name: 'Novo Lead', color: COLORS[0], sort_order: 0 }]
   );
@@ -443,7 +444,7 @@ const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSave
 
       {/* Automações Vinculadas */}
       {funnelId && (
-        <FunnelAutomationsConfig funnelId={funnelId} />
+        <FunnelAutomationsConfig funnelId={funnelId} funnelName={funnelName} />
       )}
 
       {/* Redistribute Leads */}
