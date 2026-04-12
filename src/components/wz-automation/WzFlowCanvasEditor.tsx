@@ -94,20 +94,36 @@ export default function WzFlowCanvasEditor() {
       if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
         const selected = nodes.filter((n) => n.selected);
         if (selected.length > 0) {
-          setClipboard(selected);
+          const selectedIds = new Set(selected.map((n) => n.id));
+          const selectedEdges = edges.filter(
+            (ed) => selectedIds.has(ed.source) && selectedIds.has(ed.target)
+          );
+          setClipboard({ nodes: selected, edges: selectedEdges });
           e.preventDefault();
         }
       }
       if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
-        if (clipboard.length > 0) {
-          const newNodes = clipboard.map((node) => ({
-            ...node,
-            id: getNodeId(),
-            position: { x: node.position.x + 60, y: node.position.y + 60 },
-            selected: false,
-            data: { ...node.data },
+        if (clipboard.nodes.length > 0) {
+          const idMap = new Map<string, string>();
+          const newNodes = clipboard.nodes.map((node) => {
+            const newId = getNodeId();
+            idMap.set(node.id, newId);
+            return {
+              ...node,
+              id: newId,
+              position: { x: node.position.x + 60, y: node.position.y + 60 },
+              selected: false,
+              data: { ...node.data },
+            };
+          });
+          const newEdges: Edge[] = clipboard.edges.map((ed) => ({
+            ...ed,
+            id: `e_${idMap.get(ed.source)}_${idMap.get(ed.target)}`,
+            source: idMap.get(ed.source)!,
+            target: idMap.get(ed.target)!,
           }));
           setNodes((nds) => [...nds, ...newNodes]);
+          setEdges((eds) => [...eds, ...newEdges]);
           e.preventDefault();
         }
       }
@@ -128,7 +144,7 @@ export default function WzFlowCanvasEditor() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [nodes, clipboard, setNodes]);
+  }, [nodes, edges, clipboard, setNodes, setEdges]);
 
   // Auto-layout with dagre
   const handleAutoLayout = useCallback(() => {
