@@ -69,7 +69,7 @@ Deno.serve(async (req) => {
       const leadIds = positions.map((p: any) => p.lead_id);
 
       // Fetch ALL purchase events from lead_events to get product names per lead
-      const purchaseEventNames = ["purchase", "Purchase", "pago", "authorized"];
+      const purchaseEventNames = ["purchase", "Purchase", "pago", "authorized", "autorizado"];
       const { data: purchaseEvents } = await supabase
         .from("lead_events")
         .select("lead_id, metadata, created_at")

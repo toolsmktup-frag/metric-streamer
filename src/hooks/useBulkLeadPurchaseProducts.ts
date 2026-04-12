@@ -35,7 +35,7 @@ export function useBulkLeadPurchaseProducts(
 
       // Fetch purchase events from lead_events in batches
       const BATCH = 500;
-      const purchaseEventNames = ['purchase', 'Purchase', 'pago', 'authorized'];
+      const purchaseEventNames = ['purchase', 'Purchase', 'pago', 'authorized', 'autorizado'];
 
       for (let i = 0; i < leadIds.length; i += BATCH) {
         const batch = leadIds.slice(i, i + BATCH);
