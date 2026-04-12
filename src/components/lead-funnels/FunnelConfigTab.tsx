@@ -11,6 +11,7 @@ import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-ki
 import SortableStageItem from './SortableStageItem';
 import { toast } from 'sonner';
 import FunnelProductsConfig from './FunnelProductsConfig';
+import FunnelAutomationsConfig from './FunnelAutomationsConfig';
 import TrackingSnippetPopover from './TrackingSnippetPopover';
 import RedistributeLeadsDialog from './RedistributeLeadsDialog';
 import ProductMappingConfig from './ProductMappingConfig';
@@ -438,6 +439,11 @@ const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSave
             </Button>
           </div>
         </div>
+      )}
+
+      {/* Automações Vinculadas */}
+      {funnelId && (
+        <FunnelAutomationsConfig funnelId={funnelId} />
       )}
 
       {/* Redistribute Leads */}
