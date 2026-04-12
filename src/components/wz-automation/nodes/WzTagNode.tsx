@@ -13,6 +13,7 @@ interface WzTagNodeData {
 
 function WzTagNode({ data, selected }: { data: WzTagNodeData; selected?: boolean }) {
   const hasNotes = !!data.notes?.trim();
+  const isDisabled = !!data.disabled;
   const isRemove = data.tagAction === 'remove';
   const tagText = data.tagName
     ? `${isRemove ? '- ' : '+ '}${data.tagName}`
@@ -22,7 +23,8 @@ function WzTagNode({ data, selected }: { data: WzTagNodeData; selected?: boolean
     <div
       className={cn(
         'rounded-xl shadow-md min-w-[170px] overflow-hidden transition-shadow relative',
-        selected && 'shadow-lg ring-2 ring-emerald-400/40'
+        selected && 'shadow-lg ring-2 ring-emerald-400/40',
+        isDisabled && 'opacity-40 grayscale'
       )}
     >
       <Handle

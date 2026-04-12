@@ -18,6 +18,7 @@ interface WzWhatsAppNodeData {
 
 function WzWhatsAppNode({ data, selected }: { data: WzWhatsAppNodeData; selected?: boolean }) {
   const hasNotes = !!data.notes?.trim();
+  const isDisabled = !!data.disabled;
   const firstMsg = data.messages?.[0]?.text;
   const preview = firstMsg
     ? (firstMsg.length > 40 ? firstMsg.slice(0, 40) + '…' : firstMsg)
@@ -28,7 +29,8 @@ function WzWhatsAppNode({ data, selected }: { data: WzWhatsAppNodeData; selected
     <div
       className={cn(
         'rounded-xl shadow-md min-w-[200px] overflow-hidden transition-shadow relative',
-        selected && 'shadow-lg ring-2 ring-emerald-400/40'
+        selected && 'shadow-lg ring-2 ring-emerald-400/40',
+        isDisabled && 'opacity-40 grayscale'
       )}
     >
       <Handle

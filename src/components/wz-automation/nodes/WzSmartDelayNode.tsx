@@ -26,6 +26,7 @@ const dayLabels: Record<string, string> = {
 
 function WzSmartDelayNode({ data, selected }: { data: WzSmartDelayNodeData; selected?: boolean }) {
   const hasNotes = !!data.notes?.trim();
+  const isDisabled = !!data.disabled;
   const timeText = data.targetTime || '09:00';
   const dayText = dayLabels[data.targetDay || 'any'] || data.targetDay;
   const summary = data.targetDay ? `${dayText} às ${timeText}` : `Às ${timeText}`;
@@ -35,7 +36,8 @@ function WzSmartDelayNode({ data, selected }: { data: WzSmartDelayNodeData; sele
     <div
       className={cn(
         'rounded-xl shadow-md min-w-[190px] overflow-hidden transition-shadow relative',
-        selected && 'shadow-lg ring-2 ring-teal-400/40'
+        selected && 'shadow-lg ring-2 ring-teal-400/40',
+        isDisabled && 'opacity-40 grayscale'
       )}
     >
       <Handle
