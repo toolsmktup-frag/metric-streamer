@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { LeadFunnelStage, StageTransitionRule, LeadStagePosition, Lead } from '@/types/leadFunnels';
+import { LeadFunnelStage, StageTransitionRule, LeadStagePosition, Lead, ValueClassification } from '@/types/leadFunnels';
 import { Funnel } from '@/hooks/useFunnels';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Trash2, ArrowRight, Shuffle } from 'lucide-react';
+import { Plus, Trash2, ArrowRight, Shuffle, Circle } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 
