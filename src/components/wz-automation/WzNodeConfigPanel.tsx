@@ -222,7 +222,7 @@ function TriggerConfig({ data, update }: { data: any; update: (k: string, v: any
           const currentIds = Array.isArray(data.productIdFilter) ? data.productIdFilter : (data.productIdFilter ? [data.productIdFilter] : []);
           const newIds = [...currentIds, id];
           const newLabels = { ...(data.productIdLabels || {}), ...(name ? { [id]: name } : {}) };
-          onUpdate(node.id, { ...data, productIdFilter: newIds, productIdLabels: newLabels });
+          update('manualAddSelection', { productIdFilter: newIds, productIdLabels: newLabels });
         }}
       />
       <WzMultiInput
