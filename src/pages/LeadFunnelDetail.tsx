@@ -4,6 +4,7 @@ import { useLeadFunnel, useUpdateLeadFunnel, useUpsertStages, useUpsertTransitio
 import { useLeadCampaign } from '@/hooks/useLeadCampaigns';
 import { useLeadsByFunnel, useFunnelLeadCounts } from '@/hooks/useLeads';
 import { useBulkLeadPurchases } from '@/hooks/useBulkLeadPurchases';
+import { useBulkLeadPurchaseProducts } from '@/hooks/useBulkLeadPurchaseProducts';
 import { useFunnels } from '@/hooks/useFunnels';
 import { useLeadFunnelProducts, useUpsertLeadFunnelProducts } from '@/hooks/useLeadFunnelProducts';
 import { useLeadProductMappings, useDistinctLeadProducts, useSaveLeadProductMappings } from '@/hooks/useLeadProductMappings';
