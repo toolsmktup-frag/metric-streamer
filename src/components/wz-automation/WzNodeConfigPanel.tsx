@@ -11,7 +11,7 @@ import { Trash2, Copy, Plus, X, MessageCircleOff, MessageSquare, Eye, EyeOff, Po
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useWzInstances } from '@/hooks/useWzInstances';
+import { useWhatsAppInstances, getInstanceDisplayName } from '@/hooks/useWhatsApp';
 import { useTeamMembers } from '@/hooks/useTeamMembers';
 import { triggerLabels } from './nodes/WzTriggerNode';
 import WzProductSelector from './WzProductSelector';

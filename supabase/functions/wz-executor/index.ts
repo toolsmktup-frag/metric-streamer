@@ -536,7 +536,7 @@ async function processWhatsAppNode(
   if (!instanceId) { result.summary = "Sem instância"; return result; }
 
   const { data: instance } = await supabase
-    .from("wz_instances").select("api_url, api_key").eq("id", instanceId).single();
+    .from("whatsapp_instances").select("api_url, api_token").eq("id", instanceId).single();
   if (!instance) { result.summary = "Instância não encontrada"; return result; }
 
   const phone = execution.contact_phone;
