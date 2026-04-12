@@ -7,7 +7,7 @@ import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { Lead } from '@/types/leadFunnels';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Mail, Phone, ShoppingCart, DollarSign, MapPin, Activity, UserPlus, CreditCard, CheckCircle2, XCircle, Clock, RotateCcw, AlertTriangle, Eye, FileText, LucideIcon, User } from 'lucide-react';
+import { Mail, Phone, ShoppingCart, DollarSign, MapPin, Activity, UserPlus, CreditCard, CheckCircle2, XCircle, Clock, RotateCcw, AlertTriangle, Eye, FileText, LucideIcon, User, Home } from 'lucide-react';
 import { formatCurrency } from '@/lib/formatters';
 import { parseLocalDateTime } from '@/lib/localDate';
 import LeadAssignSelect from './LeadAssignSelect';
