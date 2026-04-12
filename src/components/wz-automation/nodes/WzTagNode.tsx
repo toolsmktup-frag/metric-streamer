@@ -2,6 +2,7 @@ import React from 'react';
 import { Handle, Position } from '@xyflow/react';
 import { Tag, StickyNote } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import WzNodeToolbar from './WzNodeToolbar';
 
 interface WzTagNodeData {
   label: string;
@@ -32,6 +33,8 @@ function WzTagNode({ data, selected }: { data: WzTagNodeData; selected?: boolean
         position={Position.Top}
         className="!bg-emerald-500 !border-2 !border-white !w-3.5 !h-3.5"
       />
+
+      <WzNodeToolbar visible={!!selected} disabled={isDisabled} onToggleDisable={data._onToggleDisable} onDuplicate={data._onDuplicate} />
 
       {hasNotes && (
         <div className="absolute -top-2 -right-2 z-10 bg-amber-400 rounded-full p-1 shadow-sm" title={data.notes}>

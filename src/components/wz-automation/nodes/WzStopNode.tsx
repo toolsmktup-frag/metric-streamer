@@ -2,6 +2,7 @@ import React from 'react';
 import { Handle, Position } from '@xyflow/react';
 import { XCircle, Ban } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import WzNodeToolbar from './WzNodeToolbar';
 
 interface WzStopNodeData {
   label: string;
@@ -21,6 +22,8 @@ function WzStopNode({ data, selected }: { data: WzStopNodeData; selected?: boole
         isDisabled && 'opacity-40 grayscale'
       )}
     >
+      <WzNodeToolbar visible={!!selected} disabled={isDisabled} onToggleDisable={data._onToggleDisable} onDuplicate={data._onDuplicate} />
+
       <Handle
         type="target"
         position={Position.Top}
