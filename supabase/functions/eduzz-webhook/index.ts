@@ -315,6 +315,14 @@ Deno.serve(async (req) => {
             status: normalizedStatus,
             amount_reais: amountReais,
             invoice_id: invoiceId,
+            address_street: payload.client?.street || payload.client?.address_street || null,
+            address_number: payload.client?.number || payload.client?.address_number || null,
+            address_complement: payload.client?.complement || payload.client?.address_complement || null,
+            address_neighborhood: payload.client?.neighborhood || payload.client?.bairro || null,
+            address_city: payload.client?.city || payload.client?.cidade || null,
+            address_state: payload.client?.state || payload.client?.estado || null,
+            address_zipcode: payload.client?.zipcode || payload.client?.zip_code || payload.client?.cep || null,
+            address_country: payload.client?.country || null,
           },
         });
       } catch (leadErr) {

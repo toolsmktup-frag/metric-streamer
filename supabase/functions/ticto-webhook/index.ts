@@ -502,6 +502,14 @@ Deno.serve(async (req) => {
             status: record.status,
             amount_cents: record.paid_amount,
             order_hash: record.order_hash,
+            address_street: customer.street || customer.address_street || customer.logradouro || null,
+            address_number: customer.number || customer.address_number || customer.numero || null,
+            address_complement: customer.complement || customer.address_complement || customer.complemento || null,
+            address_neighborhood: customer.neighborhood || customer.bairro || customer.district || null,
+            address_city: customer.city || customer.cidade || null,
+            address_state: customer.state || customer.estado || customer.uf || null,
+            address_zipcode: customer.zipcode || customer.zip_code || customer.cep || null,
+            address_country: customer.country || null,
           },
         });
       } catch (leadErr) {

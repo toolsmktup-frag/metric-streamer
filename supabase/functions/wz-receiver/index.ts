@@ -16,6 +16,17 @@ function jsonResponse(body: unknown, status = 200) {
 
 // ─── Normalização de payload por plataforma ───
 
+interface NormalizedAddress {
+  street: string | null;
+  number: string | null;
+  complement: string | null;
+  neighborhood: string | null;
+  city: string | null;
+  state: string | null;
+  zipcode: string | null;
+  country: string | null;
+}
+
 interface NormalizedEvent {
   contact_phone: string | null;
   contact_name: string | null;
@@ -33,7 +44,35 @@ interface NormalizedEvent {
   boleto_code: string | null;
   boleto_url: string | null;
   external_event_id: string | null;
+  address: NormalizedAddress;
   raw_payload: Record<string, unknown>;
+}
+
+function extractAddress(body: Record<string, any>, ...sources: Record<string, any>[]): NormalizedAddress {
+  // Try each source object in order (customer, contact, body root, body.address)
+  const addrObj = body.address || {};
+  const all = [...sources, body, addrObj];
+
+  const pick = (keys: string[]): string | null => {
+    for (const src of all) {
+      if (!src) continue;
+      for (const k of keys) {
+        if (src[k]) return String(src[k]).trim();
+      }
+    }
+    return null;
+  };
+
+  return {
+    street: pick(['street', 'address_street', 'rua', 'logradouro', 'street_name']),
+    number: pick(['number', 'address_number', 'numero', 'street_number']),
+    complement: pick(['complement', 'address_complement', 'complemento', 'address_comp']),
+    neighborhood: pick(['neighborhood', 'address_neighborhood', 'bairro', 'district']),
+    city: pick(['city', 'address_city', 'cidade']),
+    state: pick(['state', 'address_state', 'estado', 'uf']),
+    zipcode: pick(['zipcode', 'zip_code', 'address_zipcode', 'cep', 'postal_code', 'zip']),
+    country: pick(['country', 'pais', 'address_country']),
+  };
 }
 
 function normalizeTicto(body: Record<string, any>): NormalizedEvent {
@@ -131,6 +170,7 @@ function normalizeTicto(body: Record<string, any>): NormalizedEvent {
     boleto_code: boletoCode,
     boleto_url: boletoUrl,
     external_event_id: externalEventId,
+    address: extractAddress(body, customer, invoice),
     raw_payload: body,
   };
 }
@@ -196,6 +236,7 @@ function normalizeGuru(body: Record<string, any>): NormalizedEvent {
     boleto_code: boletoCode,
     boleto_url: boletoUrl,
     external_event_id: externalEventId,
+    address: extractAddress(body, contact),
     raw_payload: body,
   };
 }
@@ -218,6 +259,7 @@ function normalizeGeneric(body: Record<string, any>): NormalizedEvent {
     boleto_code: body.digitable_line || body.boleto_code || null,
     boleto_url: body.boleto_url || null,
     external_event_id: String(body.id || body.transaction_id || body.order_id || "").trim() || null,
+    address: extractAddress(body),
     raw_payload: body,
   };
 }
@@ -466,6 +508,14 @@ Deno.serve(async (req) => {
           boleto_code: event.boleto_code,
           boleto_url: event.boleto_url,
           external_event_id: event.external_event_id,
+          address_street: event.address.street,
+          address_number: event.address.number,
+          address_complement: event.address.complement,
+          address_neighborhood: event.address.neighborhood,
+          address_city: event.address.city,
+          address_state: event.address.state,
+          address_zipcode: event.address.zipcode,
+          address_country: event.address.country,
           _dedup_key: eventDedupKey,
         };
 
