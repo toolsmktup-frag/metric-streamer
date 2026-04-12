@@ -93,13 +93,19 @@ export function useRecontactDeadlines(
         ? allProductNames
         : metadataProductName ? [metadataProductName] : [];
 
-      // Resolve first purchase date
-      let purchasedAtRaw = (lead.metadata?.purchased_at as string) || '';
-      if (!purchasedAtRaw && purchaseMap) {
+      // Resolve first purchase date — PRIORITY: purchaseMap (real first purchase) > metadata (last transaction)
+      let purchasedAtRaw = '';
+      let dateSource = '';
+      if (purchaseMap) {
         const summary = purchaseMap.get(pos.lead_id);
         if (summary?.firstPurchaseDate) {
           purchasedAtRaw = summary.firstPurchaseDate;
+          dateSource = 'purchaseMap';
         }
+      }
+      if (!purchasedAtRaw) {
+        purchasedAtRaw = (lead.metadata?.purchased_at as string) || '';
+        if (purchasedAtRaw) dateSource = 'metadata';
       }
 
       // No products found → skip (no fallback multiplier)
