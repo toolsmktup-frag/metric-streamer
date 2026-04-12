@@ -1,51 +1,62 @@
 
 
-## Organizar Automações por Funil
+## Corrigir conexões bugando ao duplicar/copiar/recarregar
 
-### O que muda
+### Problemas no código atual
 
-A tela de Automações (`WzFlowList`) ganha um sistema de agrupamento e filtro por funil, mostrando as automações organizadas em seções colapsáveis.
+1. **Edges perdem estilo ao carregar do banco** (linha 193): `setEdges(existingFlow.edges)` injeta edges brutas sem `type: 'smoothstep'`, `animated: true` nem `style`. O `defaultEdgeOptions` só se aplica a edges criadas via `onConnect`.
 
-### Como vai funcionar
+2. **Colisão de IDs ao colar edges** (linha 121): O ID `e_${source}_${target}` não inclui `sourceHandle`. Um nó Divisor com múltiplos handles (`path_0`, `path_1`) gera IDs que colidem — uma edge sobrescreve a outra.
 
-1. **Buscar dados de vínculo funil ↔ fluxo**: Expandir a query de `lead_funnel_automations` para trazer também `funnel_id` e o nome do funil (join com `lead_funnels`).
+3. **Duplicação não clona data profundamente** (linha 313-318): `{ ...original }` faz spread raso — arrays como `paths`, `sellers`, `messages` ficam compartilhados por referência entre o nó original e o duplicado.
 
-2. **Agrupar fluxos por funil**: Os fluxos vinculados a funis aparecem agrupados sob o nome do funil (seções colapsáveis com accordion/disclosure). Fluxos sem vínculo com nenhum funil aparecem numa seção "Sem funil" ou "Avulsos".
+4. **Paste também não clona data profundamente** (linha 116): `{ ...node.data }` é spread raso, mesmo problema.
 
-3. **Filtro por funil**: Um dropdown/select no topo permite filtrar por funil específico ou ver "Todos". Quando filtrado, só mostra a seção daquele funil.
+### Correções (todas em `WzFlowCanvasEditor.tsx`)
 
-4. **Toggle de visualização**: Opção de alternar entre a view agrupada (por funil) e a view flat atual (lista/grid simples).
-
-### Layout visual
-
-```text
-[Filtrar por funil: Todos ▼]  [Grid | Lista]  [+ Novo Fluxo]
-
-▼ Articulabem (2 automações)
-  ┌──────────────┐  ┌──────────────┐
-  │ Fluxo A      │  │ Fluxo B      │
-  └──────────────┘  └──────────────┘
-
-▼ SuperVITA (1 automação)
-  ┌──────────────┐
-  │ Fluxo C      │
-  └──────────────┘
-
-▼ Avulsos (1 automação)
-  ┌──────────────┐
-  │ Fluxo D      │
-  └──────────────┘
+**1. Carregar edges com estilo** — linha 193
+```typescript
+if (existingFlow.edges?.length) {
+  setEdges(existingFlow.edges.map((e: any) => ({
+    ...defaultEdgeOptions,
+    ...e,
+  })) as Edge[]);
+}
 ```
 
-### Arquivos editados
+**2. Incluir sourceHandle no ID das edges coladas** — linha 121
+```typescript
+id: `e_${idMap.get(ed.source)}_${idMap.get(ed.target)}_${ed.sourceHandle || 'default'}`,
+```
 
-- **`src/components/wz-automation/WzFlowList.tsx`** — Expandir query de `lead_funnel_automations` para incluir `funnel_id, lead_funnels(id, name, color)`. Adicionar lógica de agrupamento, filtro por funil, e seções colapsáveis com Collapsible ou simples disclosure. Manter o FlowCard existente.
+**3. Deep-clone data na duplicação** — linha 313-318
+```typescript
+const newNode: Node = {
+  ...original,
+  id: getNodeId(),
+  position: { x: original.position.x + 40, y: original.position.y + 40 },
+  selected: false,
+  data: JSON.parse(JSON.stringify(original.data)),
+};
+```
 
-### Detalhes técnicos
+**4. Deep-clone data no paste** — linha 116
+```typescript
+data: JSON.parse(JSON.stringify(node.data)),
+```
 
-- A query existente de `lead-funnel-automations-visibility` será expandida para trazer `wz_flow_id, show_in_automations, funnel_id, lead_funnels(id, name, color)`
-- Agrupamento via `Map<string, WzFlow[]>` onde a key é o funnel_id (ou "standalone")
-- Um fluxo pode aparecer em múltiplos funis se estiver vinculado a mais de um — isso é correto
-- Fluxos standalone (sem vínculo) ficam na seção "Avulsos"
-- Seções colapsáveis usando estado local (`Set<string>` de seções expandidas, todas abertas por padrão)
+**5. Aplicar estilo nas edges coladas** — linhas 119-124
+```typescript
+const newEdges: Edge[] = clipboard.edges.map((ed) => ({
+  ...defaultEdgeOptions,
+  ...ed,
+  id: `e_${idMap.get(ed.source)}_${idMap.get(ed.target)}_${ed.sourceHandle || 'default'}`,
+  source: idMap.get(ed.source)!,
+  target: idMap.get(ed.target)!,
+}));
+```
+
+### Arquivo editado
+
+- `src/components/wz-automation/WzFlowCanvasEditor.tsx`
 
