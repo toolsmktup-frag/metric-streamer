@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Trash2, Copy, Plus, X, MessageCircleOff } from 'lucide-react';
+import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useWzInstances } from '@/hooks/useWzInstances';
@@ -77,7 +78,7 @@ const WzNodeConfigPanel: React.FC<WzNodeConfigPanelProps> = ({
       <SheetContent className="w-[340px] sm:w-[380px] overflow-y-auto">
         <SheetHeader>
           <SheetTitle className="text-foreground">
-            Configurar {nodeType === 'trigger' ? 'Gatilho' : nodeType === 'whatsapp' ? 'WhatsApp' : nodeType === 'timer' ? 'Timer' : nodeType === 'condition' ? 'Condição' : nodeType === 'note' ? 'Anotação' : 'Nó'}
+            Configurar {nodeType === 'trigger' ? 'Gatilho' : nodeType === 'whatsapp' ? 'WhatsApp' : nodeType === 'timer' ? 'Timer' : nodeType === 'condition' ? 'Condição' : nodeType === 'note' ? 'Anotação' : nodeType === 'ab_split' ? 'Divisor A/B' : nodeType === 'smart_delay' ? 'Delay Inteligente' : nodeType === 'webhook' ? 'Webhook' : nodeType === 'tag' ? 'Tag' : nodeType === 'goto' ? 'Goto' : 'Nó'}
           </SheetTitle>
         </SheetHeader>
 
@@ -106,6 +107,21 @@ const WzNodeConfigPanel: React.FC<WzNodeConfigPanelProps> = ({
 
           {/* NOTE CONFIG */}
           {nodeType === 'note' && <NoteConfig data={data} update={update} />}
+
+          {/* AB SPLIT CONFIG */}
+          {nodeType === 'ab_split' && <AbSplitConfig data={data} update={update} />}
+
+          {/* SMART DELAY CONFIG */}
+          {nodeType === 'smart_delay' && <SmartDelayConfig data={data} update={update} />}
+
+          {/* WEBHOOK CONFIG */}
+          {nodeType === 'webhook' && <WebhookConfig data={data} update={update} />}
+
+          {/* TAG CONFIG */}
+          {nodeType === 'tag' && <TagConfig data={data} update={update} />}
+
+          {/* GOTO CONFIG */}
+          {nodeType === 'goto' && <GotoConfig data={data} update={update} node={node} />}
 
           {/* Notas */}
           <div className="space-y-2">
