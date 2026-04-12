@@ -24,6 +24,7 @@ const operatorLabels: Record<string, string> = {
 
 function WzConditionNode({ data, selected }: { data: WzConditionNodeData; selected?: boolean }) {
   const hasNotes = !!data.notes?.trim();
+  const isDisabled = !!data.disabled;
   const ruleText = data.variable && data.operator && data.compareValue
     ? `${data.variable} ${operatorLabels[data.operator] || data.operator} ${data.compareValue}`
     : 'Configurar regra...';
@@ -33,7 +34,8 @@ function WzConditionNode({ data, selected }: { data: WzConditionNodeData; select
     <div
       className={cn(
         'rounded-xl shadow-md min-w-[200px] overflow-hidden transition-shadow relative',
-        selected && 'shadow-lg ring-2 ring-orange-400/40'
+        selected && 'shadow-lg ring-2 ring-orange-400/40',
+        isDisabled && 'opacity-40 grayscale'
       )}
     >
       <Handle

@@ -46,6 +46,7 @@ const MODE_COLORS: Record<SplitMode, string> = {
 
 function WzAbSplitNode({ data, selected }: { data: WzAbSplitNodeData; selected?: boolean }) {
   const hasNotes = !!data.notes?.trim();
+  const isDisabled = !!data.disabled;
   const mode: SplitMode = data.splitMode || 'percentage';
   const isSeller = mode === 'round_robin' || mode === 'random';
   const assignOnly = data.assignAction === 'assign_only';
@@ -65,7 +66,8 @@ function WzAbSplitNode({ data, selected }: { data: WzAbSplitNodeData; selected?:
     <div
       className={cn(
         'rounded-xl shadow-md min-w-[200px] max-w-[260px] overflow-hidden transition-shadow relative',
-        selected && 'shadow-lg ring-2 ring-violet-400/40'
+        selected && 'shadow-lg ring-2 ring-violet-400/40',
+        isDisabled && 'opacity-40 grayscale'
       )}
     >
       <Handle

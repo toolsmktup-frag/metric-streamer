@@ -21,6 +21,7 @@ const unitLabels: Record<string, string> = {
 
 function WzTimerNode({ data, selected }: { data: WzTimerNodeData; selected?: boolean }) {
   const hasNotes = !!data.notes?.trim();
+  const isDisabled = !!data.disabled;
   const delayText = data.delay
     ? `${data.delay} ${unitLabels[data.unit || 'minutes'] || data.unit}`
     : 'Configurar...';
@@ -30,7 +31,8 @@ function WzTimerNode({ data, selected }: { data: WzTimerNodeData; selected?: boo
     <div
       className={cn(
         'rounded-xl shadow-md min-w-[180px] overflow-hidden transition-shadow relative',
-        selected && 'shadow-lg ring-2 ring-blue-400/40'
+        selected && 'shadow-lg ring-2 ring-blue-400/40',
+        isDisabled && 'opacity-40 grayscale'
       )}
     >
       <Handle

@@ -8,13 +8,15 @@ import {
   Controls,
   Background,
   BackgroundVariant,
+  SelectionMode,
   type Connection,
   type Edge,
   type Node,
   type NodeTypes,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { ArrowLeft, Save, Loader2 } from 'lucide-react';
+import dagre from '@dagrejs/dagre';
+import { ArrowLeft, Save, Loader2, LayoutGrid } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
@@ -81,6 +83,64 @@ export default function WzFlowCanvasEditor() {
   const [reactFlowInstance, setReactFlowInstance] = useState<any>(null);
 
   const { data: nodeStatsMap } = useWzFlowNodeStats(flowId);
+  const [clipboard, setClipboard] = useState<Node | null>(null);
+
+  // Keyboard shortcuts: Ctrl+C / Ctrl+V
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      // Don't intercept when typing in inputs
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+      if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
+        const sel = nodes.find((n) => n.selected);
+        if (sel) {
+          setClipboard(sel);
+          e.preventDefault();
+        }
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
+        if (clipboard) {
+          const newNode: Node = {
+            ...clipboard,
+            id: getNodeId(),
+            position: { x: clipboard.position.x + 60, y: clipboard.position.y + 60 },
+            selected: false,
+            data: { ...clipboard.data },
+          };
+          setNodes((nds) => [...nds, newNode]);
+          e.preventDefault();
+        }
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [nodes, clipboard, setNodes]);
+
+  // Auto-layout with dagre
+  const handleAutoLayout = useCallback(() => {
+    if (nodes.length === 0) return;
+    const g = new dagre.graphlib.Graph();
+    g.setDefaultEdgeLabel(() => ({}));
+    g.setGraph({ rankdir: 'TB', nodesep: 80, ranksep: 120 });
+
+    nodes.forEach((node) => {
+      g.setNode(node.id, { width: 220, height: 120 });
+    });
+    edges.forEach((edge) => {
+      g.setEdge(edge.source, edge.target);
+    });
+
+    dagre.layout(g);
+
+    setNodes((nds) =>
+      nds.map((node) => {
+        const pos = g.node(node.id);
+        return { ...node, position: { x: pos.x - 110, y: pos.y - 60 } };
+      })
+    );
+    setTimeout(() => reactFlowInstance?.fitView({ padding: 0.2 }), 50);
+  }, [nodes, edges, setNodes, reactFlowInstance]);
 
   // Load existing flow
   useEffect(() => {
@@ -275,6 +335,10 @@ export default function WzFlowCanvasEditor() {
             <Switch checked={isActive} onCheckedChange={setIsActive} className="scale-90" />
             <span className="text-xs text-muted-foreground">{isActive ? 'Ativo' : 'Inativo'}</span>
           </div>
+          <Button variant="outline" size="sm" onClick={handleAutoLayout} className="gap-2">
+            <LayoutGrid className="h-4 w-4" />
+            Organizar
+          </Button>
           <Button size="sm" onClick={handleSave} disabled={saving} className="gap-2">
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             Salvar
@@ -308,6 +372,9 @@ export default function WzFlowCanvasEditor() {
             defaultEdgeOptions={defaultEdgeOptions}
             fitView
             deleteKeyCode={['Backspace', 'Delete']}
+            selectionOnDrag
+            selectionMode={SelectionMode.Partial}
+            multiSelectionKeyCode="Control"
             className="bg-muted/30"
           >
             <Background variant={BackgroundVariant.Dots} gap={20} size={1} />

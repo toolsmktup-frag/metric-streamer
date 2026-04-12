@@ -13,6 +13,7 @@ interface WzWebhookNodeData {
 
 function WzWebhookNode({ data, selected }: { data: WzWebhookNodeData; selected?: boolean }) {
   const hasNotes = !!data.notes?.trim();
+  const isDisabled = !!data.disabled;
   const method = data.method || 'POST';
   const urlPreview = data.url ? (data.url.length > 30 ? data.url.slice(0, 30) + '...' : data.url) : 'Configurar URL...';
 
@@ -20,7 +21,8 @@ function WzWebhookNode({ data, selected }: { data: WzWebhookNodeData; selected?:
     <div
       className={cn(
         'rounded-xl shadow-md min-w-[200px] overflow-hidden transition-shadow relative',
-        selected && 'shadow-lg ring-2 ring-indigo-400/40'
+        selected && 'shadow-lg ring-2 ring-indigo-400/40',
+        isDisabled && 'opacity-40 grayscale'
       )}
     >
       <Handle

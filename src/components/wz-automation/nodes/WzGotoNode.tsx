@@ -13,13 +13,15 @@ interface WzGotoNodeData {
 
 function WzGotoNode({ data, selected }: { data: WzGotoNodeData; selected?: boolean }) {
   const hasNotes = !!data.notes?.trim();
+  const isDisabled = !!data.disabled;
   const targetText = data.targetNodeLabel || (data.targetNodeId ? `→ ${data.targetNodeId}` : 'Selecionar destino...');
 
   return (
     <div
       className={cn(
         'rounded-xl shadow-md min-w-[180px] overflow-hidden transition-shadow relative',
-        selected && 'shadow-lg ring-2 ring-cyan-400/40'
+        selected && 'shadow-lg ring-2 ring-cyan-400/40',
+        isDisabled && 'opacity-40 grayscale'
       )}
     >
       <Handle

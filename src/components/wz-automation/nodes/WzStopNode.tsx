@@ -11,12 +11,14 @@ interface WzStopNodeData {
 
 function WzStopNode({ data, selected }: { data: WzStopNodeData; selected?: boolean }) {
   const isCancel = data.stopType === 'cancel_previous';
+  const isDisabled = !!data.disabled;
 
   return (
     <div
       className={cn(
         'rounded-xl shadow-md min-w-[160px] overflow-hidden transition-shadow relative',
-        selected && 'shadow-lg ring-2 ring-gray-400/40'
+        selected && 'shadow-lg ring-2 ring-gray-400/40',
+        isDisabled && 'opacity-40 grayscale'
       )}
     >
       <Handle

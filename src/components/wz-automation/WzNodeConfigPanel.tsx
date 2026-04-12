@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Trash2, Copy, Plus, X, MessageCircleOff, MessageSquare } from 'lucide-react';
+import { Trash2, Copy, Plus, X, MessageCircleOff, MessageSquare, Eye, EyeOff, Power } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -84,6 +84,20 @@ const WzNodeConfigPanel: React.FC<WzNodeConfigPanelProps> = ({
         </SheetHeader>
 
         <div className="mt-6 space-y-4">
+          {/* Disable toggle */}
+          {nodeType !== 'note' && (
+            <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/30">
+              <div className="flex items-center gap-2">
+                <Power className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium">{data.disabled ? 'Desabilitado' : 'Ativo'}</span>
+              </div>
+              <Switch
+                checked={!data.disabled}
+                onCheckedChange={(v) => update('disabled', !v)}
+              />
+            </div>
+          )}
+
           {/* Nome */}
           <div className="space-y-2">
             <Label>Nome</Label>
@@ -429,6 +443,27 @@ function WhatsAppConfig({ data, update }: { data: any; update: (k: string, v: an
                     <div className="text-right text-[10px] text-muted-foreground">
                       {block.text.length}/1024
                     </div>
+
+                    {/* Variable preview */}
+                    {block.text && /\{\{.*?\}\}/.test(block.text) && (
+                      <div className="rounded-md border border-border bg-muted/30 px-3 py-2 mt-1">
+                        <div className="flex items-center gap-1 mb-1">
+                          <Eye className="h-3 w-3 text-muted-foreground" />
+                          <span className="text-[10px] text-muted-foreground font-medium">Preview</span>
+                        </div>
+                        <p className="text-xs text-foreground leading-relaxed whitespace-pre-wrap">
+                          {block.text.split(/(\{\{.*?\}\})/).map((part, idx) =>
+                            /^\{\{.*?\}\}$/.test(part) ? (
+                              <span key={idx} className="bg-primary/20 text-primary font-semibold rounded px-1 py-0.5 text-[11px]">
+                                {part}
+                              </span>
+                            ) : (
+                              <span key={idx}>{part}</span>
+                            )
+                          )}
+                        </p>
+                      </div>
+                    )}
 
                     {block.type === 'image' && (
                       <>
