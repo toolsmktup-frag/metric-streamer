@@ -25,26 +25,59 @@ export function useLeadProductMappings(funnelId: string | null) {
   });
 }
 
-/** Fetch distinct product_name values from lead metadata for a given funnel */
+/** Fetch distinct product_name values from lead_events (purchase events) for a given funnel */
 export function useDistinctLeadProducts(funnelId: string | null) {
   return useQuery({
     queryKey: ['distinct-lead-products', funnelId],
     queryFn: async () => {
       if (!funnelId) return [];
-      // Get all leads in this funnel via lead_stage_positions -> leads
-      const { data, error } = await (supabase as any)
+
+      // 1. Get all lead_ids in this funnel
+      const { data: positions, error: posErr } = await (supabase as any)
+        .from('lead_stage_positions')
+        .select('lead_id')
+        .eq('funnel_id', funnelId);
+      if (posErr) throw posErr;
+
+      const leadIds = (positions || []).map((p: any) => p.lead_id);
+      if (leadIds.length === 0) return [];
+
+      // 2. Fetch all purchase events for these leads
+      const purchaseEventNames = ['purchase', 'Purchase', 'pago', 'authorized', 'autorizado'];
+      const names = new Set<string>();
+      const BATCH = 500;
+
+      for (let i = 0; i < leadIds.length; i += BATCH) {
+        const batch = leadIds.slice(i, i + BATCH);
+        const { data: events, error: evtErr } = await (supabase as any)
+          .from('lead_events')
+          .select('metadata')
+          .in('lead_id', batch)
+          .in('event_name', purchaseEventNames);
+        if (evtErr) {
+          console.error('[useDistinctLeadProducts] error:', evtErr.message);
+          continue;
+        }
+        for (const evt of events || []) {
+          const productName = evt.metadata?.product_name;
+          if (productName && typeof productName === 'string' && productName.trim()) {
+            names.add(productName.trim());
+          }
+        }
+      }
+
+      // 3. Also include metadata.product_name from leads as fallback
+      const { data: leadsData } = await (supabase as any)
         .from('lead_stage_positions')
         .select('lead:leads(metadata)')
         .eq('funnel_id', funnelId);
-      if (error) throw error;
-
-      const names = new Set<string>();
-      for (const row of data || []) {
+      for (const row of leadsData || []) {
         const productName = row.lead?.metadata?.product_name;
         if (productName && typeof productName === 'string' && productName.trim()) {
           names.add(productName.trim());
         }
       }
+
       return Array.from(names).sort();
     },
     enabled: !!funnelId,

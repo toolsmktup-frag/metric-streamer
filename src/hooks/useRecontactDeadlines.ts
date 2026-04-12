@@ -102,28 +102,9 @@ export function useRecontactDeadlines(
         }
       }
 
-      // If no products and no purchase date, try single-product fallback
+      // No products found → skip (no fallback multiplier)
       if (productNamesToCheck.length === 0) {
-        if (purchaseMap && productsWithRecontact.length === 1) {
-          const summary = purchaseMap.get(pos.lead_id);
-          if (summary?.firstPurchaseDate) {
-            const fallbackProduct = productsWithRecontact[0];
-            const purchaseDate = parseLocalDateTime(summary.firstPurchaseDate);
-            if (purchaseDate) {
-              const totalDays = fallbackProduct.recontact_days! * (summary.totalOrders || 1);
-              const deadlineDate = addDays(purchaseDate, totalDays);
-              const daysRemaining = differenceInDays(deadlineDate, today);
-              map.set(pos.lead_id, {
-                daysRemaining,
-                isOverdue: daysRemaining < 0,
-                deadlineDate,
-                productName: fallbackProduct.display_name || fallbackProduct.product_name_contains,
-                recontactDays: totalDays,
-                matchedProductId: fallbackProduct.id,
-              });
-            }
-          }
-        }
+        console.debug(`[recontact] lead=${pos.lead_id}: no products found, skipping`);
         continue;
       }
 
@@ -145,6 +126,11 @@ export function useRecontactDeadlines(
           matchedProductNames.push(matched.display_name || matched.product_name_contains);
         }
       }
+
+      console.debug(
+        `[recontact] lead=${pos.lead_id}: products=${productNamesToCheck.length}, matched=${matchedProductNames.length}, totalDays=${totalRecontactDays}`,
+        { productNamesToCheck, matchedProductNames }
+      );
 
       if (!lastMatchedProduct || totalRecontactDays === 0) continue;
 
