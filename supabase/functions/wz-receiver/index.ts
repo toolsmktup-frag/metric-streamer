@@ -397,7 +397,48 @@ Deno.serve(async (req) => {
 
     console.log(`[wz-receiver] Platform=${event.platform} Status=${event.status} EventID=${event.external_event_id} Phone=${event.contact_phone} ProductID=${event.product_id} ProductName=${event.product_name}`);
 
-    // Fetch all active flows
+    // ─── Sync lead to CRM funnels (ensures lead appears in Kanban even if only wz-receiver is called) ───
+    if (event.contact_phone || event.contact_email) {
+      // Map wz-receiver normalized status to lead event names
+      const leadEventMap: Record<string, string> = {
+        purchase_approved: "purchase",
+        pix_generated: "pix_generated",
+        boleto_generated: "boleto_generated",
+        payment_refused: "refused",
+        refund: "refunded",
+        cancellation: "canceled",
+        cart_abandoned: "abandoned_cart",
+        pix_expired: "pix_expired",
+      };
+      const leadEventName = leadEventMap[event.status] || event.status;
+
+      try {
+        await supabase.rpc("sync_lead_from_sale", {
+          p_phone: event.contact_phone,
+          p_email: event.contact_email,
+          p_name: event.contact_name,
+          p_event_name: leadEventName,
+          p_product_name: event.product_name || null,
+          p_metadata: {
+            platform: event.platform,
+            product_name: event.product_name,
+            status: event.status,
+            amount: event.gross_amount || event.paid_amount || null,
+            address_street: event.address.street,
+            address_number: event.address.number,
+            address_complement: event.address.complement,
+            address_neighborhood: event.address.neighborhood,
+            address_city: event.address.city,
+            address_state: event.address.state,
+            address_zipcode: event.address.zipcode,
+          },
+        });
+        console.log(`[wz-receiver] Lead synced to CRM: event=${leadEventName} phone=${event.contact_phone}`);
+      } catch (syncErr) {
+        console.error("[wz-receiver] Lead sync error (non-fatal):", syncErr);
+      }
+    }
+
     const { data: flows, error: flowsErr } = await supabase
       .from("wz_flows")
       .select("id, nodes, edges")
