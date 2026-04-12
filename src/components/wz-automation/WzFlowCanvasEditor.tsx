@@ -113,12 +113,13 @@ export default function WzFlowCanvasEditor() {
               id: newId,
               position: { x: node.position.x + 60, y: node.position.y + 60 },
               selected: false,
-              data: { ...node.data },
+              data: JSON.parse(JSON.stringify(node.data)),
             };
           });
           const newEdges: Edge[] = clipboard.edges.map((ed) => ({
+            ...defaultEdgeOptions,
             ...ed,
-            id: `e_${idMap.get(ed.source)}_${idMap.get(ed.target)}`,
+            id: `e_${idMap.get(ed.source)}_${idMap.get(ed.target)}_${ed.sourceHandle || 'default'}`,
             source: idMap.get(ed.source)!,
             target: idMap.get(ed.target)!,
           }));
@@ -190,7 +191,7 @@ export default function WzFlowCanvasEditor() {
       setFlowName(existingFlow.name);
       setIsActive(existingFlow.is_active);
       if (existingFlow.nodes?.length) setNodes(existingFlow.nodes as Node[]);
-      if (existingFlow.edges?.length) setEdges(existingFlow.edges as Edge[]);
+      if (existingFlow.edges?.length) setEdges(existingFlow.edges.map((e: any) => ({ ...defaultEdgeOptions, ...e })) as Edge[]);
     }
   }, [existingFlow, setNodes, setEdges]);
 
@@ -315,6 +316,7 @@ export default function WzFlowCanvasEditor() {
       id: getNodeId(),
       position: { x: original.position.x + 40, y: original.position.y + 40 },
       selected: false,
+      data: JSON.parse(JSON.stringify(original.data)),
     };
     setNodes((nds) => [...nds, newNode]);
   }, [nodes, setNodes]);
