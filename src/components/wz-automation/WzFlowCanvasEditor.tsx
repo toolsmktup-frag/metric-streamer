@@ -83,7 +83,7 @@ export default function WzFlowCanvasEditor() {
   const [reactFlowInstance, setReactFlowInstance] = useState<any>(null);
 
   const { data: nodeStatsMap } = useWzFlowNodeStats(flowId);
-  const [clipboard, setClipboard] = useState<Node[]>([]);
+  const [clipboard, setClipboard] = useState<{ nodes: Node[]; edges: Edge[] }>({ nodes: [], edges: [] });
 
   // Keyboard shortcuts: Ctrl+C / Ctrl+V / D
   useEffect(() => {
@@ -94,20 +94,36 @@ export default function WzFlowCanvasEditor() {
       if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
         const selected = nodes.filter((n) => n.selected);
         if (selected.length > 0) {
-          setClipboard(selected);
+          const selectedIds = new Set(selected.map((n) => n.id));
+          const selectedEdges = edges.filter(
+            (ed) => selectedIds.has(ed.source) && selectedIds.has(ed.target)
+          );
+          setClipboard({ nodes: selected, edges: selectedEdges });
           e.preventDefault();
         }
       }
       if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
-        if (clipboard.length > 0) {
-          const newNodes = clipboard.map((node) => ({
-            ...node,
-            id: getNodeId(),
-            position: { x: node.position.x + 60, y: node.position.y + 60 },
-            selected: false,
-            data: { ...node.data },
+        if (clipboard.nodes.length > 0) {
+          const idMap = new Map<string, string>();
+          const newNodes = clipboard.nodes.map((node) => {
+            const newId = getNodeId();
+            idMap.set(node.id, newId);
+            return {
+              ...node,
+              id: newId,
+              position: { x: node.position.x + 60, y: node.position.y + 60 },
+              selected: false,
+              data: { ...node.data },
+            };
+          });
+          const newEdges: Edge[] = clipboard.edges.map((ed) => ({
+            ...ed,
+            id: `e_${idMap.get(ed.source)}_${idMap.get(ed.target)}`,
+            source: idMap.get(ed.source)!,
+            target: idMap.get(ed.target)!,
           }));
           setNodes((nds) => [...nds, ...newNodes]);
+          setEdges((eds) => [...eds, ...newEdges]);
           e.preventDefault();
         }
       }
@@ -128,17 +144,29 @@ export default function WzFlowCanvasEditor() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [nodes, clipboard, setNodes]);
+  }, [nodes, edges, clipboard, setNodes, setEdges]);
+
+  // Node dimensions by type for dagre layout
+  const getNodeDimensions = useCallback((type?: string) => {
+    switch (type) {
+      case 'note': return { width: 400, height: 200 };
+      case 'trigger': return { width: 240, height: 140 };
+      case 'condition': return { width: 240, height: 160 };
+      case 'ab_split': return { width: 240, height: 160 };
+      default: return { width: 220, height: 120 };
+    }
+  }, []);
 
   // Auto-layout with dagre
   const handleAutoLayout = useCallback(() => {
     if (nodes.length === 0) return;
     const g = new dagre.graphlib.Graph();
     g.setDefaultEdgeLabel(() => ({}));
-    g.setGraph({ rankdir: 'LR', nodesep: 60, ranksep: 200 });
+    g.setGraph({ rankdir: 'LR', nodesep: 100, ranksep: 250 });
 
     nodes.forEach((node) => {
-      g.setNode(node.id, { width: 220, height: 120 });
+      const dim = getNodeDimensions(node.type);
+      g.setNode(node.id, { width: dim.width, height: dim.height });
     });
     edges.forEach((edge) => {
       g.setEdge(edge.source, edge.target);
@@ -149,11 +177,12 @@ export default function WzFlowCanvasEditor() {
     setNodes((nds) =>
       nds.map((node) => {
         const pos = g.node(node.id);
-        return { ...node, position: { x: pos.x - 110, y: pos.y - 60 } };
+        const dim = getNodeDimensions(node.type);
+        return { ...node, position: { x: pos.x - dim.width / 2, y: pos.y - dim.height / 2 } };
       })
     );
     setTimeout(() => reactFlowInstance?.fitView({ padding: 0.2 }), 50);
-  }, [nodes, edges, setNodes, reactFlowInstance]);
+  }, [nodes, edges, setNodes, reactFlowInstance, getNodeDimensions]);
 
   // Load existing flow
   useEffect(() => {
