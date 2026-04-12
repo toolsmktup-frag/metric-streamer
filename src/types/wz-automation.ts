@@ -50,6 +50,18 @@ export interface WzScheduledStep {
   created_at: string;
 }
 
+export interface LeadFunnelAutomation {
+  id: string;
+  funnel_id: string;
+  wz_flow_id: string;
+  trigger_events: string[];
+  is_active: boolean;
+  show_in_automations: boolean;
+  created_at: string;
+  // joined
+  wz_flow?: WzFlow;
+}
+
 export interface WzExecutionLog {
   id: string;
   execution_id: string;
