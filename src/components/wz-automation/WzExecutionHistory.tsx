@@ -139,6 +139,8 @@ export default function WzExecutionHistory() {
   const [flowFilter, setFlowFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [replayingId, setReplayingId] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
   const { data: flows = [] } = useWzFlows();
   const { data: executions = [], isLoading } = useWzExecutions({
