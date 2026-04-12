@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Zap, MoreVertical, Pencil, Trash2, Play, Pause, Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -7,6 +7,8 @@ import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useWzFlows, useDeleteWzFlow, useToggleWzFlow, useDuplicateWzFlow } from '@/hooks/useWzFlows';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import type { WzFlow } from '@/types/wz-automation';
 
 const platformLabels: Record<string, string> = {
@@ -22,6 +24,35 @@ export default function WzFlowList({ embedded = false }: { embedded?: boolean })
   const toggleFlow = useToggleWzFlow();
   const duplicateFlow = useDuplicateWzFlow();
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+
+  // Fetch funnel automations to know which flows should be hidden
+  const { data: funnelAutomations = [] } = useQuery({
+    queryKey: ['lead-funnel-automations-visibility'],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('lead_funnel_automations')
+        .select('wz_flow_id, show_in_automations');
+      if (error) throw error;
+      return (data || []) as { wz_flow_id: string; show_in_automations: boolean }[];
+    },
+  });
+
+  // Filter: hide flows that are linked to funnels but have NO link with show_in_automations=true
+  const visibleFlows = useMemo(() => {
+    // Group by flow_id
+    const flowVisibility = new Map<string, boolean>();
+    for (const auto of funnelAutomations) {
+      const current = flowVisibility.get(auto.wz_flow_id) || false;
+      flowVisibility.set(auto.wz_flow_id, current || auto.show_in_automations);
+    }
+    
+    return flows.filter(flow => {
+      // If no funnel link exists, show it (standalone flow)
+      if (!flowVisibility.has(flow.id)) return true;
+      // If at least one link has show_in_automations=true, show it
+      return flowVisibility.get(flow.id) === true;
+    });
+  }, [flows, funnelAutomations]);
 
   return (
     <div className={embedded ? 'space-y-6' : 'p-6 space-y-6 max-w-6xl mx-auto'}>
@@ -59,7 +90,7 @@ export default function WzFlowList({ embedded = false }: { embedded?: boolean })
             <div key={i} className="h-40 rounded-xl border border-border bg-card animate-pulse" />
           ))}
         </div>
-      ) : flows.length === 0 ? (
+      ) : visibleFlows.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center mb-4">
             <Zap className="h-10 w-10 text-primary" />
@@ -75,7 +106,7 @@ export default function WzFlowList({ embedded = false }: { embedded?: boolean })
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {flows.map((flow) => (
+          {visibleFlows.map((flow) => (
             <FlowCard
               key={flow.id}
               flow={flow}
