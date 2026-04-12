@@ -1,47 +1,87 @@
 
 
-## Redesign do Painel de Configuração de Nós (WzNodeConfigPanel)
+## Métricas por Nó no Canvas — Plano de Implementação
 
-### Problemas atuais
+### Resumo
 
-1. **Textarea com `resize-none`** — impossível expandir o campo de texto
-2. **Sheet muito estreito** (340-380px) — tudo fica apertado, especialmente com chips de variáveis + textarea + toggles
-3. **Layout comprimido** — muitos elementos empilhados em espaço mínimo
+Adicionar contadores de execução (Enviado/Sucesso/Falha) diretamente nos nós do canvas, estilo ManyChat.
 
-### Referência (imagem 483)
+### Pré-requisito: SQL no Supabase
 
-A ferramenta de referência usa um painel lateral largo (~420-450px) com:
-- Seletor de conexão (instância) com ícone e engrenagem
-- Área de texto generosa e expansível
-- Delay e blocos bem espaçados
-- Seções colapsáveis para organizar
+A tabela `wz_execution_logs` já existe e é populada pelo `wz-executor`. Precisamos apenas garantir que a query client-side funcione. Como o hook usa `as any` para contornar a tipagem, não precisa de migration.
 
-### Plano de mudanças
+Porém, precisamos de uma **política RLS** para leitura autenticada (caso ainda não exista). Cole este SQL no **SQL Editor do Supabase**:
 
-#### 1. Largura e textarea expansível
-- Aumentar Sheet de `w-[340px] sm:w-[380px]` para `w-[400px] sm:w-[440px]`
-- Remover `resize-none` do textarea de mensagem e trocar para `resize-y min-h-[100px]`
-- Manter `resize-none` apenas no campo de Notas (que é secundário)
+```sql
+-- Criar tabela caso não exista (idempotente)
+CREATE TABLE IF NOT EXISTS public.wz_execution_logs (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  execution_id uuid NOT NULL REFERENCES public.wz_executions(id) ON DELETE CASCADE,
+  node_id text NOT NULL,
+  node_type text NOT NULL DEFAULT '',
+  status text NOT NULL DEFAULT 'running',
+  input_data jsonb,
+  output_data jsonb,
+  error_message text,
+  started_at timestamptz NOT NULL DEFAULT now(),
+  finished_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
 
-#### 2. Melhorar espaçamento e legibilidade
-- Aumentar padding interno dos blocos de mensagem
-- Chips de variáveis em 2 linhas com scroll horizontal ou wrap mais limpo
-- Separar visualmente as seções (instância, mensagem, delay) com `border-b` ou headers
+ALTER TABLE public.wz_execution_logs ENABLE ROW LEVEL SECURITY;
 
-#### 3. Seção de instância mais visual
-- Mostrar ícone do WhatsApp no seletor de instância (como na referência)
-- Texto helper "Deixe em branco para usar a conexão dos blocos anteriores" (se aplicável)
+DROP POLICY IF EXISTS "Authenticated read wz_execution_logs" ON public.wz_execution_logs;
+CREATE POLICY "Authenticated read wz_execution_logs"
+  ON public.wz_execution_logs FOR SELECT TO authenticated USING (true);
 
-#### 4. Auto-resize do textarea
-- Implementar auto-grow: o textarea cresce conforme o usuário digita, sem precisar arrastar manualmente
+DROP POLICY IF EXISTS "Service write wz_execution_logs" ON public.wz_execution_logs;
+CREATE POLICY "Service write wz_execution_logs"
+  ON public.wz_execution_logs FOR ALL TO service_role USING (true) WITH CHECK (true);
 
-### Arquivos alterados
+-- Index para a query de agregação
+CREATE INDEX IF NOT EXISTS idx_wz_exec_logs_exec_id ON public.wz_execution_logs(execution_id);
+CREATE INDEX IF NOT EXISTS idx_wz_exec_logs_node_id ON public.wz_execution_logs(node_id);
+```
 
-| Arquivo | Mudança |
+### Implementação no código
+
+#### 1. Novo hook: `src/hooks/useWzFlowNodeStats.ts`
+- Recebe `flowId`
+- Busca `wz_execution_logs` via join com `wz_executions` (filtrado por flow_id)
+- Agrupa client-side por `node_id` → `{ total, success, failed }`
+- Retorna `Record<string, { total: number; success: number; failed: number }>`
+- Refresh automático a cada 30s
+
+#### 2. Atualizar `WzFlowCanvasEditor.tsx`
+- Importar `useWzFlowNodeStats(flowId)`
+- Injetar `data.stats` em cada nó antes de passar ao ReactFlow
+
+#### 3. Atualizar nós visuais
+
+**WzWhatsAppNode** — adicionar barra abaixo do body:
+```
+ 125 Enviado  |  118 Sucesso  |  7 Falha
+```
+Números em `font-mono text-[10px]`, cores: cinza/verde/vermelho.
+
+**WzTimerNode** — mostrar:
+```
+ 45 Total  |  12 Esperando  |  33 Concluído
+```
+"Esperando" = steps pendentes (buscar de `wz_scheduled_steps` no mesmo hook).
+
+**WzConditionNode** — mostrar contagem SIM/NÃO baseado em `output_data.result` dos logs.
+
+**WzSmartDelayNode** — similar ao Timer.
+
+#### 4. Arquivos alterados
+
+| Arquivo | Ação |
 |---|---|
-| `WzNodeConfigPanel.tsx` | Largura do Sheet, textarea resize-y + auto-grow, espaçamento entre seções, ícone na instância |
-
-### Escopo
-
-Foco em usabilidade — não muda funcionalidade, apenas ergonomia do painel.
+| `src/hooks/useWzFlowNodeStats.ts` | Criar (hook de agregação) |
+| `src/components/wz-automation/WzFlowCanvasEditor.tsx` | Injetar stats nos nós |
+| `src/components/wz-automation/nodes/WzWhatsAppNode.tsx` | Exibir métricas |
+| `src/components/wz-automation/nodes/WzTimerNode.tsx` | Exibir métricas |
+| `src/components/wz-automation/nodes/WzConditionNode.tsx` | Exibir métricas |
+| `src/components/wz-automation/nodes/WzSmartDelayNode.tsx` | Exibir métricas |
 
