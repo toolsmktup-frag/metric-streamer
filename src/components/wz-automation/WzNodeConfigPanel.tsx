@@ -699,29 +699,23 @@ function AbSplitConfig({ data, update }: { data: any; update: (k: string, v: any
 
   const toggleSeller = (member: any) => {
     const exists = sellers.find((s: any) => s.id === member.id);
+    let newSellers: { id: string; name: string }[];
     if (exists) {
-      const newSellers = sellers.filter((s: any) => s.id !== member.id);
-      update('sellers', newSellers);
-      // If assign_and_branch, update paths to match sellers
-      if (assignAction === 'assign_and_branch') {
-        update('paths', newSellers.map((s: any, i: number) => ({
-          label: s.name.split(' ')[0],
-          percent: Math.floor(100 / Math.max(newSellers.length, 1)),
-          sellerId: s.id,
-          sellerName: s.name,
-        })));
-      }
+      newSellers = sellers.filter((s: any) => s.id !== member.id);
     } else {
-      const newSellers = [...sellers, { id: member.id, name: member.full_name || 'Sem nome' }];
+      newSellers = [...sellers, { id: member.id, name: member.full_name || 'Sem nome' }];
+    }
+
+    if (assignAction === 'assign_and_branch' && newSellers.length > 0) {
+      const newPaths = newSellers.map((s: any) => ({
+        label: s.name.split(' ')[0],
+        percent: Math.floor(100 / newSellers.length),
+        sellerId: s.id,
+        sellerName: s.name,
+      }));
+      update('sellerToggleSelection', { sellers: newSellers, paths: newPaths });
+    } else {
       update('sellers', newSellers);
-      if (assignAction === 'assign_and_branch') {
-        update('paths', newSellers.map((s: any, i: number) => ({
-          label: s.name.split(' ')[0],
-          percent: Math.floor(100 / newSellers.length),
-          sellerId: s.id,
-          sellerName: s.name,
-        })));
-      }
     }
   };
 
