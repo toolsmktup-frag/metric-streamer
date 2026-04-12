@@ -535,8 +535,19 @@ async function processWhatsAppNode(
   const instanceId = nodeData.instanceId;
   if (!instanceId) { result.summary = "Sem instância"; return result; }
 
-  const { data: instance } = await supabase
+  // Try chat instances first, fallback to manual (wz_instances)
+  let instance: { api_url: string; api_token: string } | null = null;
+  const { data: chatInst } = await supabase
     .from("whatsapp_instances").select("api_url, api_token").eq("id", instanceId).single();
+  if (chatInst) {
+    instance = chatInst;
+  } else {
+    const { data: manualInst } = await supabase
+      .from("wz_instances").select("api_url, api_key").eq("id", instanceId).single();
+    if (manualInst) {
+      instance = { api_url: manualInst.api_url, api_token: manualInst.api_key };
+    }
+  }
   if (!instance) { result.summary = "Instância não encontrada"; return result; }
 
   const phone = execution.contact_phone;
