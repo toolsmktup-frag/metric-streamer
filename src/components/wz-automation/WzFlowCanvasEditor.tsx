@@ -33,6 +33,7 @@ import WzWebhookNode from './nodes/WzWebhookNode';
 import WzTagNode from './nodes/WzTagNode';
 import WzGotoNode from './nodes/WzGotoNode';
 import { useWzFlow, useCreateWzFlow, useUpdateWzFlow } from '@/hooks/useWzFlows';
+import { useWzFlowNodeStats } from '@/hooks/useWzFlowNodeStats';
 
 const nodeTypes: NodeTypes = {
   trigger: WzTriggerNode,
@@ -78,6 +79,8 @@ export default function WzFlowCanvasEditor() {
   const [saving, setSaving] = useState(false);
   const [flowId, setFlowId] = useState<string | null>(isNew ? null : id!);
   const [reactFlowInstance, setReactFlowInstance] = useState<any>(null);
+
+  const { data: nodeStatsMap } = useWzFlowNodeStats(flowId);
 
   // Load existing flow
   useEffect(() => {
@@ -287,7 +290,10 @@ export default function WzFlowCanvasEditor() {
         {/* Canvas */}
         <div className="flex-1" ref={reactFlowWrapper}>
           <ReactFlow
-            nodes={nodes}
+            nodes={nodes.map((n) => ({
+              ...n,
+              data: { ...n.data, stats: nodeStatsMap?.[n.id] },
+            }))}
             edges={edges}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}

@@ -2,6 +2,7 @@ import React from 'react';
 import { Handle, Position } from '@xyflow/react';
 import { CalendarClock, StickyNote } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import type { WzNodeStats } from '@/hooks/useWzFlowNodeStats';
 
 interface WzSmartDelayNodeData {
   label: string;
@@ -9,6 +10,7 @@ interface WzSmartDelayNodeData {
   targetDay?: string;
   businessDaysOnly?: boolean;
   notes?: string;
+  stats?: WzNodeStats;
   [key: string]: unknown;
 }
 
@@ -27,6 +29,7 @@ function WzSmartDelayNode({ data, selected }: { data: WzSmartDelayNodeData; sele
   const timeText = data.targetTime || '09:00';
   const dayText = dayLabels[data.targetDay || 'any'] || data.targetDay;
   const summary = data.targetDay ? `${dayText} às ${timeText}` : `Às ${timeText}`;
+  const stats = data.stats;
 
   return (
     <div
@@ -61,6 +64,26 @@ function WzSmartDelayNode({ data, selected }: { data: WzSmartDelayNodeData; sele
           <span className="ml-1.5 text-[10px] text-teal-600 font-medium">(dias úteis)</span>
         )}
       </div>
+
+      {/* Metrics bar */}
+      {stats && stats.total > 0 && (
+        <div className="bg-muted/50 px-4 py-1.5 border-t border-border flex items-center gap-3">
+          <div className="flex items-center gap-1">
+            <span className="font-mono text-[10px] text-muted-foreground font-semibold">{stats.total}</span>
+            <span className="text-[9px] text-muted-foreground">Total</span>
+          </div>
+          {stats.pending > 0 && (
+            <div className="flex items-center gap-1">
+              <span className="font-mono text-[10px] text-amber-600 font-semibold">{stats.pending}</span>
+              <span className="text-[9px] text-amber-600">Esperando</span>
+            </div>
+          )}
+          <div className="flex items-center gap-1">
+            <span className="font-mono text-[10px] text-emerald-600 font-semibold">{stats.success}</span>
+            <span className="text-[9px] text-emerald-600">Concluído</span>
+          </div>
+        </div>
+      )}
 
       <Handle
         type="source"

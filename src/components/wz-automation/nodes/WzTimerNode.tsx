@@ -2,12 +2,14 @@ import React from 'react';
 import { Handle, Position } from '@xyflow/react';
 import { Clock, StickyNote } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import type { WzNodeStats } from '@/hooks/useWzFlowNodeStats';
 
 interface WzTimerNodeData {
   label: string;
   delay?: number;
   unit?: 'minutes' | 'hours' | 'days';
   notes?: string;
+  stats?: WzNodeStats;
   [key: string]: unknown;
 }
 
@@ -22,6 +24,7 @@ function WzTimerNode({ data, selected }: { data: WzTimerNodeData; selected?: boo
   const delayText = data.delay
     ? `${data.delay} ${unitLabels[data.unit || 'minutes'] || data.unit}`
     : 'Configurar...';
+  const stats = data.stats;
 
   return (
     <div
@@ -53,6 +56,26 @@ function WzTimerNode({ data, selected }: { data: WzTimerNodeData; selected?: boo
       <div className="bg-card px-4 py-2.5 border-t border-border">
         <span className="text-xs text-foreground">{delayText}</span>
       </div>
+
+      {/* Metrics bar */}
+      {stats && stats.total > 0 && (
+        <div className="bg-muted/50 px-4 py-1.5 border-t border-border flex items-center gap-3">
+          <div className="flex items-center gap-1">
+            <span className="font-mono text-[10px] text-muted-foreground font-semibold">{stats.total}</span>
+            <span className="text-[9px] text-muted-foreground">Total</span>
+          </div>
+          {stats.pending > 0 && (
+            <div className="flex items-center gap-1">
+              <span className="font-mono text-[10px] text-amber-600 font-semibold">{stats.pending}</span>
+              <span className="text-[9px] text-amber-600">Esperando</span>
+            </div>
+          )}
+          <div className="flex items-center gap-1">
+            <span className="font-mono text-[10px] text-emerald-600 font-semibold">{stats.success}</span>
+            <span className="text-[9px] text-emerald-600">Concluído</span>
+          </div>
+        </div>
+      )}
 
       <Handle
         type="source"

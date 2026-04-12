@@ -2,6 +2,7 @@ import React from 'react';
 import { Handle, Position } from '@xyflow/react';
 import { GitBranch, StickyNote } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import type { WzNodeStats } from '@/hooks/useWzFlowNodeStats';
 
 interface WzConditionNodeData {
   label: string;
@@ -9,6 +10,7 @@ interface WzConditionNodeData {
   operator?: string;
   compareValue?: string;
   notes?: string;
+  stats?: WzNodeStats;
   [key: string]: unknown;
 }
 
@@ -25,6 +27,7 @@ function WzConditionNode({ data, selected }: { data: WzConditionNodeData; select
   const ruleText = data.variable && data.operator && data.compareValue
     ? `${data.variable} ${operatorLabels[data.operator] || data.operator} ${data.compareValue}`
     : 'Configurar regra...';
+  const stats = data.stats;
 
   return (
     <div
@@ -56,6 +59,24 @@ function WzConditionNode({ data, selected }: { data: WzConditionNodeData; select
       <div className="bg-card px-4 py-2.5 border-t border-border">
         <span className="text-xs text-foreground">{ruleText}</span>
       </div>
+
+      {/* Metrics bar */}
+      {stats && stats.total > 0 && (
+        <div className="bg-muted/50 px-4 py-1.5 border-t border-border flex items-center gap-3">
+          <div className="flex items-center gap-1">
+            <span className="font-mono text-[10px] text-muted-foreground font-semibold">{stats.total}</span>
+            <span className="text-[9px] text-muted-foreground">Avaliado</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="font-mono text-[10px] text-emerald-600 font-semibold">{stats.success}</span>
+            <span className="text-[9px] text-emerald-600">SIM</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="font-mono text-[10px] text-destructive font-semibold">{stats.failed}</span>
+            <span className="text-[9px] text-destructive">NÃO</span>
+          </div>
+        </div>
+      )}
 
       {/* Two output handles: SIM (left) and NÃO (right) */}
       <div className="relative h-5">
