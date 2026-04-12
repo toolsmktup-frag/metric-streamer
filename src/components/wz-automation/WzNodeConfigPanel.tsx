@@ -667,7 +667,7 @@ function AbSplitConfig({ data, update }: { data: any; update: (k: string, v: any
   const isSeller = mode === 'round_robin' || mode === 'random';
 
   const { data: teamMembers = [] } = useTeamMembers();
-  const assignableMembers = teamMembers.filter((m: any) => m.status === 'active');
+  const assignableMembers = teamMembers.filter((m: any) => ['vendedor', 'vendedora', 'suporte'].includes(m.role) && m.status === 'active');
 
   const updatePercent = (index: number, percent: number) => {
     const updated = [...paths];
