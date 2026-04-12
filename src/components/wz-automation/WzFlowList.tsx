@@ -1,11 +1,13 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Zap, MoreVertical, Pencil, Trash2, Play, Pause, Copy } from 'lucide-react';
+import { Plus, Zap, MoreVertical, Pencil, Trash2, Play, Pause, Copy, ChevronDown, ChevronRight, List, LayoutGrid, Filter } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useWzFlows, useDeleteWzFlow, useToggleWzFlow, useDuplicateWzFlow } from '@/hooks/useWzFlows';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -17,6 +19,26 @@ const platformLabels: Record<string, string> = {
   guru: 'Guru',
 };
 
+interface FunnelInfo {
+  id: string;
+  name: string;
+  color: string | null;
+}
+
+interface FunnelAutomationRow {
+  wz_flow_id: string;
+  show_in_automations: boolean;
+  funnel_id: string;
+  lead_funnels: FunnelInfo | null;
+}
+
+interface FunnelGroup {
+  id: string;
+  name: string;
+  color: string | null;
+  flows: WzFlow[];
+}
+
 export default function WzFlowList({ embedded = false }: { embedded?: boolean }) {
   const navigate = useNavigate();
   const { data: flows = [], isLoading } = useWzFlows();
@@ -24,22 +46,25 @@ export default function WzFlowList({ embedded = false }: { embedded?: boolean })
   const toggleFlow = useToggleWzFlow();
   const duplicateFlow = useDuplicateWzFlow();
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [funnelFilter, setFunnelFilter] = useState<string>('all');
+  const [viewMode, setViewMode] = useState<'grouped' | 'flat'>('grouped');
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
+  const [initialized, setInitialized] = useState(false);
 
-  // Fetch funnel automations to know which flows should be hidden
+  // Fetch funnel automations with funnel info
   const { data: funnelAutomations = [] } = useQuery({
     queryKey: ['lead-funnel-automations-visibility'],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from('lead_funnel_automations')
-        .select('wz_flow_id, show_in_automations');
+        .select('wz_flow_id, show_in_automations, funnel_id, lead_funnels(id, name, color)');
       if (error) throw error;
-      return (data || []) as { wz_flow_id: string; show_in_automations: boolean }[];
+      return (data || []) as FunnelAutomationRow[];
     },
   });
 
   // Filter: hide flows that are linked to funnels but have NO link with show_in_automations=true
   const visibleFlows = useMemo(() => {
-    // Group by flow_id
     const flowVisibility = new Map<string, boolean>();
     for (const auto of funnelAutomations) {
       const current = flowVisibility.get(auto.wz_flow_id) || false;
@@ -47,12 +72,87 @@ export default function WzFlowList({ embedded = false }: { embedded?: boolean })
     }
     
     return flows.filter(flow => {
-      // If no funnel link exists, show it (standalone flow)
       if (!flowVisibility.has(flow.id)) return true;
-      // If at least one link has show_in_automations=true, show it
       return flowVisibility.get(flow.id) === true;
     });
   }, [flows, funnelAutomations]);
+
+  // Build funnel groups
+  const { groups, allFunnels } = useMemo(() => {
+    // Map flow_id -> list of funnels
+    const flowFunnels = new Map<string, FunnelInfo[]>();
+    const funnelMap = new Map<string, FunnelInfo>();
+
+    for (const auto of funnelAutomations) {
+      if (auto.lead_funnels) {
+        funnelMap.set(auto.lead_funnels.id, auto.lead_funnels);
+        const existing = flowFunnels.get(auto.wz_flow_id) || [];
+        if (!existing.find(f => f.id === auto.lead_funnels!.id)) {
+          existing.push(auto.lead_funnels);
+        }
+        flowFunnels.set(auto.wz_flow_id, existing);
+      }
+    }
+
+    const groupMap = new Map<string, FunnelGroup>();
+    const standalone: WzFlow[] = [];
+
+    for (const flow of visibleFlows) {
+      const funnels = flowFunnels.get(flow.id);
+      if (!funnels || funnels.length === 0) {
+        standalone.push(flow);
+      } else {
+        for (const funnel of funnels) {
+          if (!groupMap.has(funnel.id)) {
+            groupMap.set(funnel.id, { id: funnel.id, name: funnel.name, color: funnel.color, flows: [] });
+          }
+          groupMap.get(funnel.id)!.flows.push(flow);
+        }
+      }
+    }
+
+    const result: FunnelGroup[] = [...groupMap.values()].sort((a, b) => a.name.localeCompare(b.name));
+    if (standalone.length > 0) {
+      result.push({ id: 'standalone', name: 'Avulsos', color: null, flows: standalone });
+    }
+
+    return { groups: result, allFunnels: [...funnelMap.values()].sort((a, b) => a.name.localeCompare(b.name)) };
+  }, [visibleFlows, funnelAutomations]);
+
+  // Initialize all sections as expanded once groups load
+  if (!initialized && groups.length > 0) {
+    setExpandedSections(new Set(groups.map(g => g.id)));
+    setInitialized(true);
+  }
+
+  const filteredGroups = useMemo(() => {
+    if (funnelFilter === 'all') return groups;
+    return groups.filter(g => g.id === funnelFilter);
+  }, [groups, funnelFilter]);
+
+  const toggleSection = (id: string) => {
+    setExpandedSections(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const renderFlowGrid = (flowList: WzFlow[]) => (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {flowList.map((flow) => (
+        <FlowCard
+          key={flow.id}
+          flow={flow}
+          onEdit={() => navigate(`/ferramentas/automacoes/${flow.id}`)}
+          onDelete={() => setDeleteTarget(flow.id)}
+          onDuplicate={() => duplicateFlow.mutate(flow.id)}
+          onToggle={(active) => toggleFlow.mutate({ id: flow.id, is_active: active })}
+        />
+      ))}
+    </div>
+  );
 
   return (
     <div className={embedded ? 'space-y-6' : 'p-6 space-y-6 max-w-6xl mx-auto'}>
@@ -83,6 +183,53 @@ export default function WzFlowList({ embedded = false }: { embedded?: boolean })
         </div>
       )}
 
+      {/* Toolbar: Filter + View Toggle */}
+      {!isLoading && visibleFlows.length > 0 && (
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <Filter className="h-4 w-4 text-muted-foreground" />
+            <Select value={funnelFilter} onValueChange={setFunnelFilter}>
+              <SelectTrigger className="w-[200px] h-9 text-sm">
+                <SelectValue placeholder="Filtrar por funil" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os funis</SelectItem>
+                {allFunnels.map(f => (
+                  <SelectItem key={f.id} value={f.id}>
+                    <span className="flex items-center gap-2">
+                      {f.color && (
+                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: f.color }} />
+                      )}
+                      {f.name}
+                    </span>
+                  </SelectItem>
+                ))}
+                <SelectItem value="standalone">Avulsos</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-center border border-border rounded-md overflow-hidden ml-auto">
+            <Button
+              variant={viewMode === 'grouped' ? 'secondary' : 'ghost'}
+              size="sm"
+              className="rounded-none h-9 px-3"
+              onClick={() => setViewMode('grouped')}
+            >
+              <List className="h-4 w-4" />
+            </Button>
+            <Button
+              variant={viewMode === 'flat' ? 'secondary' : 'ghost'}
+              size="sm"
+              className="rounded-none h-9 px-3"
+              onClick={() => setViewMode('flat')}
+            >
+              <LayoutGrid className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Flow Cards */}
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -104,17 +251,34 @@ export default function WzFlowList({ embedded = false }: { embedded?: boolean })
             Criar Primeiro Fluxo
           </Button>
         </div>
+      ) : viewMode === 'flat' ? (
+        renderFlowGrid(funnelFilter === 'all' ? visibleFlows : filteredGroups.flatMap(g => g.flows))
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {visibleFlows.map((flow) => (
-            <FlowCard
-              key={flow.id}
-              flow={flow}
-              onEdit={() => navigate(`/ferramentas/automacoes/${flow.id}`)}
-              onDelete={() => setDeleteTarget(flow.id)}
-              onDuplicate={() => duplicateFlow.mutate(flow.id)}
-              onToggle={(active) => toggleFlow.mutate({ id: flow.id, is_active: active })}
-            />
+        <div className="space-y-4">
+          {filteredGroups.map((group) => (
+            <Collapsible
+              key={group.id}
+              open={expandedSections.has(group.id)}
+              onOpenChange={() => toggleSection(group.id)}
+            >
+              <CollapsibleTrigger className="flex items-center gap-2 w-full p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors group/section">
+                {expandedSections.has(group.id) ? (
+                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                )}
+                {group.color && (
+                  <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: group.color }} />
+                )}
+                <span className="font-semibold text-foreground text-sm">{group.name}</span>
+                <Badge variant="secondary" className="text-xs ml-1">
+                  {group.flows.length} automação{group.flows.length !== 1 ? 'ões' : ''}
+                </Badge>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="pt-3 pl-2">
+                {renderFlowGrid(group.flows)}
+              </CollapsibleContent>
+            </Collapsible>
           ))}
         </div>
       )}
