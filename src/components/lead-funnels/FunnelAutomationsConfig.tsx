@@ -60,8 +60,11 @@ const FunnelAutomationsConfig: React.FC<FunnelAutomationsConfigProps> = ({ funne
     }
   };
 
-  const handleToggle = (auto: LeadFunnelAutomation, is_active: boolean) => {
-    updateMutation.mutate({ id: auto.id, funnel_id: funnelId, is_active });
+  const handleToggle = async (auto: LeadFunnelAutomation, is_active: boolean) => {
+    await (supabase as any).from('wz_flows').update({ is_active, updated_at: new Date().toISOString() }).eq('id', auto.wz_flow_id);
+    qc.invalidateQueries({ queryKey: ['wz-flows'] });
+    qc.invalidateQueries({ queryKey: ['wz-flow', auto.wz_flow_id] });
+    qc.invalidateQueries({ queryKey: ['lead-funnel-automations', funnelId] });
   };
 
   const handleToggleShowInAutomations = (auto: LeadFunnelAutomation, show: boolean) => {
@@ -115,7 +118,7 @@ const FunnelAutomationsConfig: React.FC<FunnelAutomationsConfigProps> = ({ funne
             <div key={auto.id} className="border border-border rounded-lg p-3 space-y-2">
               <div className="flex items-center gap-3">
                 <Switch
-                  checked={auto.is_active}
+                  checked={auto.wz_flow?.is_active ?? false}
                   onCheckedChange={(v) => handleToggle(auto, v)}
                 />
                 <span className="font-medium text-sm text-foreground flex-1">

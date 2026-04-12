@@ -82,7 +82,12 @@ const FunnelAutomationsTab: React.FC<FunnelAutomationsTabProps> = ({ funnelId, f
             key={auto.id}
             automation={auto}
             funnelId={funnelId}
-            onToggle={(is_active) => updateMutation.mutate({ id: auto.id, funnel_id: funnelId, is_active })}
+            onToggle={async (is_active) => {
+              await (supabase as any).from('wz_flows').update({ is_active, updated_at: new Date().toISOString() }).eq('id', auto.wz_flow_id);
+              qc.invalidateQueries({ queryKey: ['wz-flows'] });
+              qc.invalidateQueries({ queryKey: ['wz-flow', auto.wz_flow_id] });
+              qc.invalidateQueries({ queryKey: ['lead-funnel-automations', funnelId] });
+            }}
             onToggleVisibility={(show) => updateMutation.mutate({ id: auto.id, funnel_id: funnelId, show_in_automations: show })}
           />
         ))}
@@ -103,7 +108,7 @@ function AutomationCard({ automation, funnelId, onToggle, onToggleVisibility }: 
   return (
     <div className="border border-border rounded-lg p-4 space-y-3">
       <div className="flex items-center gap-3">
-        <Switch checked={automation.is_active} onCheckedChange={onToggle} />
+        <Switch checked={automation.wz_flow?.is_active ?? false} onCheckedChange={onToggle} />
         <span className="font-medium text-foreground flex-1">
           {automation.wz_flow?.name || 'Fluxo sem nome'}
         </span>
