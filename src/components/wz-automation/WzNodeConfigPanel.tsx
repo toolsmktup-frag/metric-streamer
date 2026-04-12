@@ -444,6 +444,27 @@ function WhatsAppConfig({ data, update }: { data: any; update: (k: string, v: an
                       {block.text.length}/1024
                     </div>
 
+                    {/* Variable preview */}
+                    {block.text && /\{\{.*?\}\}/.test(block.text) && (
+                      <div className="rounded-md border border-border bg-muted/30 px-3 py-2 mt-1">
+                        <div className="flex items-center gap-1 mb-1">
+                          <Eye className="h-3 w-3 text-muted-foreground" />
+                          <span className="text-[10px] text-muted-foreground font-medium">Preview</span>
+                        </div>
+                        <p className="text-xs text-foreground leading-relaxed whitespace-pre-wrap">
+                          {block.text.split(/(\{\{.*?\}\})/).map((part, idx) =>
+                            /^\{\{.*?\}\}$/.test(part) ? (
+                              <span key={idx} className="bg-primary/20 text-primary font-semibold rounded px-1 py-0.5 text-[11px]">
+                                {part}
+                              </span>
+                            ) : (
+                              <span key={idx}>{part}</span>
+                            )
+                          )}
+                        </p>
+                      </div>
+                    )}
+
                     {block.type === 'image' && (
                       <>
                         <div className="space-y-1">
