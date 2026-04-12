@@ -272,7 +272,7 @@ export default function WzFlowList({ embedded = false }: { embedded?: boolean })
                 )}
                 <span className="font-semibold text-foreground text-sm">{group.name}</span>
                 <Badge variant="secondary" className="text-xs ml-1">
-                  {group.flows.length} automação{group.flows.length !== 1 ? 'ões' : ''}
+                  {group.flows.length} automaç{group.flows.length !== 1 ? 'ões' : 'ão'}
                 </Badge>
               </CollapsibleTrigger>
               <CollapsibleContent className="pt-3 pl-2">
@@ -366,7 +366,7 @@ function FlowCard({
           {platformLabels[flow.platform] || flow.platform}
         </Badge>
         <span className="text-xs text-muted-foreground">
-          {triggerNodes.length} gatilho{triggerNodes.length !== 1 ? 's' : ''} · {actionNodes.length} ação{actionNodes.length !== 1 ? 'ões' : ''}
+          {triggerNodes.length} gatilho{triggerNodes.length !== 1 ? 's' : ''} · {actionNodes.length} aç{actionNodes.length !== 1 ? 'ões' : 'ão'}
         </span>
       </div>
 
