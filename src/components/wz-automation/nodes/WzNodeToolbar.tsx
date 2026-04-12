@@ -5,8 +5,8 @@ import { cn } from '@/lib/utils';
 interface WzNodeToolbarProps {
   visible: boolean;
   disabled?: boolean;
-  onToggleDisable?: () => void;
-  onDuplicate?: () => void;
+  onToggleDisable?: unknown;
+  onDuplicate?: unknown;
 }
 
 export default function WzNodeToolbar({ visible, disabled, onToggleDisable, onDuplicate }: WzNodeToolbarProps) {
@@ -21,7 +21,7 @@ export default function WzNodeToolbar({ visible, disabled, onToggleDisable, onDu
           'p-1.5 rounded-md hover:bg-muted transition-colors',
           disabled ? 'text-destructive' : 'text-emerald-500'
         )}
-        onClick={(e) => { e.stopPropagation(); onToggleDisable?.(); }}
+        onClick={(e) => { e.stopPropagation(); typeof onToggleDisable === 'function' && onToggleDisable(); }}
       >
         {disabled ? <PowerOff className="h-3.5 w-3.5" /> : <Power className="h-3.5 w-3.5" />}
       </button>
@@ -29,7 +29,7 @@ export default function WzNodeToolbar({ visible, disabled, onToggleDisable, onDu
         type="button"
         title="Duplicar (Ctrl+C → Ctrl+V)"
         className="p-1.5 rounded-md hover:bg-muted transition-colors text-muted-foreground"
-        onClick={(e) => { e.stopPropagation(); onDuplicate?.(); }}
+        onClick={(e) => { e.stopPropagation(); typeof onDuplicate === 'function' && onDuplicate(); }}
       >
         <Copy className="h-3.5 w-3.5" />
       </button>
