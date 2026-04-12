@@ -22,9 +22,10 @@ interface WzProductSelectorProps {
   label?: string;
   customLabels?: Record<string, string>;
   onCustomLabelsChange?: (labels: Record<string, string>) => void;
+  onManualAdd?: (id: string, name: string) => void;
 }
 
-export default function WzProductSelector({ selectedIds, onChange, label = 'Filtrar por produto(s)', customLabels = {}, onCustomLabelsChange }: WzProductSelectorProps) {
+export default function WzProductSelector({ selectedIds, onChange, label = 'Filtrar por produto(s)', customLabels = {}, onCustomLabelsChange, onManualAdd }: WzProductSelectorProps) {
   const { data: products = [], isLoading } = useAllFunnelProducts();
   const [search, setSearch] = useState('');
   const [open, setOpen] = useState(false);
@@ -79,9 +80,13 @@ export default function WzProductSelector({ selectedIds, onChange, label = 'Filt
     const id = manualId.trim();
     const name = manualName.trim();
     if (id && !selectedIds.includes(id)) {
-      onChange([...selectedIds, id]);
-      if (name && onCustomLabelsChange) {
-        onCustomLabelsChange({ ...customLabels, [id]: name });
+      if (onManualAdd) {
+        onManualAdd(id, name);
+      } else {
+        onChange([...selectedIds, id]);
+        if (name && onCustomLabelsChange) {
+          onCustomLabelsChange({ ...customLabels, [id]: name });
+        }
       }
     }
     setManualId('');

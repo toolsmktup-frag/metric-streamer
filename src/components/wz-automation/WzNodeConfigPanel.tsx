@@ -218,6 +218,12 @@ function TriggerConfig({ data, update }: { data: any; update: (k: string, v: any
         label="Filtrar por produto(s) (opcional)"
         customLabels={data.productIdLabels || {}}
         onCustomLabelsChange={(labels) => update('productIdLabels', labels)}
+        onManualAdd={(id, name) => {
+          const currentIds = Array.isArray(data.productIdFilter) ? data.productIdFilter : (data.productIdFilter ? [data.productIdFilter] : []);
+          const newIds = [...currentIds, id];
+          const newLabels = { ...(data.productIdLabels || {}), ...(name ? { [id]: name } : {}) };
+          onUpdate(node.id, { ...data, productIdFilter: newIds, productIdLabels: newLabels });
+        }}
       />
       <WzMultiInput
         values={Array.isArray(data.offerFilter) ? data.offerFilter : (data.offerFilter ? [data.offerFilter] : [])}
