@@ -84,17 +84,18 @@ export function useDistinctLeadProducts(funnelId: string | null) {
         .select('product_name_contains, source_funnel_product_id')
         .eq('lead_funnel_id', funnelId);
 
-      if (funnelProducts && funnelProducts.length > 0) {
+      const fragments = (funnelProducts || [])
+        .map((fp: any) => fp.product_name_contains?.trim()?.toLowerCase())
+        .filter(Boolean) as string[];
+
+      if (fragments.length > 0) {
         const filtered = Array.from(names).filter(name => {
           const lower = name.toLowerCase();
-          return funnelProducts.some((fp: any) => {
-            if (fp.product_name_contains && lower.includes(fp.product_name_contains.toLowerCase())) {
-              return true;
-            }
-            return false;
-          });
+          // Bidirecional: nome contém fragmento OU fragmento contém nome
+          return fragments.some(frag => lower.includes(frag) || frag.includes(lower));
         });
-        return filtered.sort();
+        // Se o filtro eliminou tudo, retorna todos (fallback)
+        if (filtered.length > 0) return filtered.sort();
       }
 
       return Array.from(names).sort();
