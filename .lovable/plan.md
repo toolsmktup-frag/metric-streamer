@@ -1,51 +1,26 @@
 
 
-# Plano: Corrigir roteamento de produtos para o funil RECOMPRA - POTES
+# Atualizar mapeamento de 9 potes no Step 1
 
-## Problema confirmado
+## Alteracao
 
-A RPC `sync_lead_from_sale` recebe o `product_name` do webhook (ex: `"3 potes ArticulaBEM – Soulnaturi (VSL)"`) e tenta encontrar o funil correto comparando com `lead_funnel_products.product_name_contains` via ILIKE. Os fragmentos configurados atualmente (ex: `"Articulabem Pote 30 dias"`) **não existem** nos nomes reais, então o match falha e os eventos caem apenas na BASE DE LEADS.
+No arquivo `docs/sql/step1-create-product-mappings.sql`, trocar o ID do produto para a linha de "9 potes":
 
-A tabela `lead_product_mappings` para este funil está **vazia** — sem mapeamento exato.
+**De:** `0a4601b0-e352-4bc4-b597-3f9001259bca` (Pote 360 dias)
+**Para:** `5be2641e-c901-45bf-b2d5-0e054f0665ff` (9 Potes Articulabem, 250 dias)
 
-## Nomes reais detectados (11 variantes)
+Tambem atualizar o comentario no cabecalho do arquivo para refletir a correspondencia correta.
 
-| Produto (nome real do webhook) | Ocorrências |
-|---|---|
-| 3 potes ArticulaBEM – Soulnaturi (VSL) | 372 |
-| 3 potes ArticulaBEM – Soulnaturi | 211 |
-| Pote Grátis ArticulaBEM – Soulnaturi | 164 |
-| 1 pote ArticulaBEM – Soulnaturi | 152 |
-| 6 potes ArticulaBEM – Soulnaturi | 116 |
-| 1 Pote Grátis do Articulabem | 70 |
-| 9 potes ArticulaBEM – Soulnaturi | 52 |
-| 12 potes ArticulaBEM – Soulnaturi | 34 |
-| Upsell 1 – 3 potes ArticulaBEM – Soulnaturi | 4 |
-| Pote Extra ArticulaBEM – Soulnaturi (Bump do pote grátis) | 2 |
-| 3 Potes Articulabem | 1 |
+O Step 2 nao precisa de alteracao — ele referencia leads/eventos, nao produtos.
 
-## Solução em 2 passos
+## Resumo dos mapeamentos finais
 
-### Passo 1 — Criar mapeamentos via SQL
-
-Gerar um script SQL para inserir os 11 nomes reais na tabela `lead_product_mappings`, vinculando cada um ao `lead_funnel_product` correto do funil RECOMPRA - POTES (`19f75912-295e-4c67-acad-275ce6849c5c`).
-
-**Você precisará me informar**: qual dos seus produtos configurados (IDs da query anterior) corresponde a cada nome. Por exemplo:
-- "1 pote" e "Pote Grátis" → produto de 30 dias?
-- "3 potes" → produto de 90 dias?
-- "6 potes" → produto de 180 dias?
-- etc.
-
-Ou, se preferir, posso gerar o SQL assumindo uma correspondência lógica baseada na quantidade de potes.
-
-### Passo 2 — Reprocessar eventos antigos
-
-Gerar um script SQL que:
-1. Busca todos os `lead_events` na BASE DE LEADS com `product_name ILIKE '%articulabem%'`
-2. Para cada um, aplica o mapeamento correto e posiciona o lead no funil RECOMPRA - POTES
-3. Aplica as `stage_transition_rules` para mover o lead para a etapa correta (Comprou, Pix Gerado, Cancelado, etc.)
-
-## O que preciso de você
-
-Me envie o resultado da query dos produtos configurados (a segunda query que rodou — `lead_funnel_products`) para eu poder fazer a correspondência nome ↔ produto. Ou me diga a lógica (ex: "1 pote = 30 dias, 3 potes = 90 dias...").
+| Nome real | Produto | ID |
+|---|---|---|
+| 1 pote / Pote Extra | Pote 30 dias | d8aba5bf... |
+| 3 potes / Upsell 1 | Pote 90 dias | 7e620568... |
+| 6 potes | Pote 180 dias | c7d1a80e... |
+| 9 potes | 9 Potes Articulabem | 5be2641e... |
+| 12 potes | Pote 360 dias | 0a4601b0... |
+| Pote Gratis | Gratis 30 dias | a1f32030... |
 
