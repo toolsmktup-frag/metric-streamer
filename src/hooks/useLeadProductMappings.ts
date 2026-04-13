@@ -78,26 +78,6 @@ export function useDistinctLeadProducts(funnelId: string | null) {
         }
       }
 
-      // 4. Filter by lead_funnel_products configured for this funnel
-      const { data: funnelProducts } = await (supabase as any)
-        .from('lead_funnel_products')
-        .select('product_name_contains, source_funnel_product_id')
-        .eq('lead_funnel_id', funnelId);
-
-      const fragments = (funnelProducts || [])
-        .map((fp: any) => fp.product_name_contains?.trim()?.toLowerCase())
-        .filter(Boolean) as string[];
-
-      if (fragments.length > 0) {
-        const filtered = Array.from(names).filter(name => {
-          const lower = name.toLowerCase();
-          // Bidirecional: nome contém fragmento OU fragmento contém nome
-          return fragments.some(frag => lower.includes(frag) || frag.includes(lower));
-        });
-        // Se o filtro eliminou tudo, retorna todos (fallback)
-        if (filtered.length > 0) return filtered.sort();
-      }
-
       return Array.from(names).sort();
     },
     enabled: !!funnelId,
