@@ -120,3 +120,36 @@ export function useSaveLeadProductMappings() {
     },
   });
 }
+
+export interface CrossFunnelMapping {
+  funnel_name: string;
+  product_display_name: string;
+}
+
+/**
+ * Fetch ALL lead_product_mappings across all funnels, with funnel name and product display info.
+ * Returns a map: raw_product_name → CrossFunnelMapping[]
+ */
+export function useAllLeadProductMappings(excludeFunnelId?: string | null) {
+  return useQuery({
+    queryKey: ['all-lead-product-mappings', excludeFunnelId],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('lead_product_mappings')
+        .select('raw_product_name, lead_funnel_id, lead_funnel_product:lead_funnel_products(display_name, product_name_contains), lead_funnel:lead_funnels(name)');
+      if (error) throw error;
+
+      const map: Record<string, CrossFunnelMapping[]> = {};
+      for (const row of data || []) {
+        if (excludeFunnelId && row.lead_funnel_id === excludeFunnelId) continue;
+        const funnelName = row.lead_funnel?.name || 'Outro funil';
+        const productName = row.lead_funnel_product?.display_name || row.lead_funnel_product?.product_name_contains || '';
+        const key = row.raw_product_name;
+        if (!map[key]) map[key] = [];
+        map[key].push({ funnel_name: funnelName, product_display_name: productName });
+      }
+      return map;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+}
