@@ -6,7 +6,7 @@
 --   1 pote / Pote Extra  → Pote 30 dias  (d8aba5bf-6498-46ca-9dd6-ad112384912e)
 --   3 potes / Upsell 1   → Pote 90 dias  (7e620568-35bf-47f8-a96a-f237b9181ecb)
 --   6 potes              → Pote 180 dias (c7d1a80e-7e14-450d-bbad-6f31d11c9f51)
---   9 potes              → Pote 360 dias (0a4601b0-e352-4bc4-b597-3f9001259bca)
+--   9 potes              → 9 Potes Articulabem (5be2641e-c901-45bf-b2d5-0e054f0665ff)
 --   12 potes             → Pote 360 dias (0a4601b0-e352-4bc4-b597-3f9001259bca)
 --   Pote Grátis          → Gratis 30 dias(a1f32030-5655-47d4-a119-888919f341cb)
 --
@@ -27,7 +27,7 @@ INSERT INTO lead_product_mappings (lead_funnel_id, raw_product_name, lead_funnel
   ('19f75912-295e-4c67-acad-275ce6849c5c', '6 potes ArticulaBEM – Soulnaturi',         'c7d1a80e-7e14-450d-bbad-6f31d11c9f51'),
 
   -- 9 potes → 360 dias (não há 270, usando 360)
-  ('19f75912-295e-4c67-acad-275ce6849c5c', '9 potes ArticulaBEM – Soulnaturi',         '0a4601b0-e352-4bc4-b597-3f9001259bca'),
+  ('19f75912-295e-4c67-acad-275ce6849c5c', '9 potes ArticulaBEM – Soulnaturi',         '5be2641e-c901-45bf-b2d5-0e054f0665ff'),
 
   -- 12 potes → 360 dias
   ('19f75912-295e-4c67-acad-275ce6849c5c', '12 potes ArticulaBEM – Soulnaturi',        '0a4601b0-e352-4bc4-b597-3f9001259bca'),
