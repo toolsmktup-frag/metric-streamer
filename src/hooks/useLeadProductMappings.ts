@@ -78,6 +78,25 @@ export function useDistinctLeadProducts(funnelId: string | null) {
         }
       }
 
+      // 4. Filter by lead_funnel_products configured for this funnel
+      const { data: funnelProducts } = await (supabase as any)
+        .from('lead_funnel_products')
+        .select('product_name_contains, source_funnel_product_id')
+        .eq('lead_funnel_id', funnelId);
+
+      if (funnelProducts && funnelProducts.length > 0) {
+        const filtered = Array.from(names).filter(name => {
+          const lower = name.toLowerCase();
+          return funnelProducts.some((fp: any) => {
+            if (fp.product_name_contains && lower.includes(fp.product_name_contains.toLowerCase())) {
+              return true;
+            }
+            return false;
+          });
+        });
+        return filtered.sort();
+      }
+
       return Array.from(names).sort();
     },
     enabled: !!funnelId,
