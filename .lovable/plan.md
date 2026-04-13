@@ -1,35 +1,24 @@
 
 
-## Restaurar instâncias manuais (wz_instances) + manter as do Chat
+## Filtrar produtos distintos pelo contexto do funil
 
-### O que aconteceu
-A mudança anterior removeu a UI das `wz_instances` (onde estava a "Automação 1" com token `55f87766...`) e substituiu tudo pelas instâncias do Chat. A instância manual ainda existe no banco, mas ficou invisível na interface.
+### Problema
+O hook `useDistinctLeadProducts` busca todos os `product_name` de todos os eventos de compra dos leads posicionados neste funil. Porém, um lead pode ter compras de produtos de **outros** funis, e esses nomes aparecem na lista de vinculação sem relevância.
 
 ### Solução
-Manter **as duas fontes** na aba Instâncias das Automações:
-- **Seção 1**: Instâncias do Chat (`whatsapp_instances`) — gerenciadas pelo InstanceHub
-- **Seção 2**: Instâncias Manuais (`wz_instances`) — com formulário de editar/adicionar (Nome, URL, Token) como antes
+Após coletar os nomes distintos dos eventos, filtrar para manter apenas os que correspondem aos produtos configurados neste funil (`lead_funnel_products`). A correspondência usa:
+- **product_id** — se o evento tem `product_id` que bate com algum `lead_funnel_products.product_id`
+- **product_name_contains** — se o nome do produto contém o fragmento configurado (ILIKE)
 
-O executor já consulta `whatsapp_instances`. Vou adicionar um fallback: se o `instanceId` do nó não for encontrado em `whatsapp_instances`, busca em `wz_instances` (usando `api_url` + `api_key`).
+### Alteração
 
-### Alterações
+**Arquivo**: `src/hooks/useLeadProductMappings.ts` — função `useDistinctLeadProducts`
 
-**1. `WzInstanceManager.tsx`** — Restaurar a listagem mista
-- Seção "Instâncias do Chat" com as `whatsapp_instances` + botão "Gerenciar" abrindo InstanceHub
-- Seção "Instâncias Manuais" com as `wz_instances` + botões editar/adicionar/excluir (restaurar formulário Nome/URL/Token)
-- Ambas aparecem na mesma tela
+1. Receber o `funnelId` (já recebe)
+2. Buscar os `lead_funnel_products` deste funil (product_id + product_name_contains)
+3. Após montar o `Set<string>` de nomes, filtrar mantendo apenas os que:
+   - Contêm algum `product_name_contains` (case-insensitive), OU
+   - Têm um `product_id` correspondente nos eventos
 
-**2. `WzNodeConfigPanel.tsx`** — Seletor unificado
-- O dropdown de instância no editor de fluxo mostra **ambas as fontes**: instâncias do Chat (com label "Chat") e instâncias manuais (com label "Manual")
-- Salva o ID correspondente à tabela de origem
-
-**3. `wz-executor/index.ts`** — Fallback para wz_instances
-- Primeiro busca em `whatsapp_instances`
-- Se não encontrar, busca em `wz_instances` (mapeando `api_key` → token)
-- Garante que a "Automação 1" continue funcionando
-
-### Arquivos editados
-1. `src/components/wz-automation/WzInstanceManager.tsx`
-2. `src/components/wz-automation/WzNodeConfigPanel.tsx`
-3. `supabase/functions/wz-executor/index.ts`
+Isso reduz a lista para apenas os produtos relevantes ao funil, como mostra a imagem do usuário (ex: ArticulaBEM, SuperVITA, etc.).
 
