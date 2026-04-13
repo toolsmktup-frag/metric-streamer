@@ -1,26 +1,25 @@
 
 
-## Adicionar "Tag" como variável de condição nos fluxos
+## Corrigir eventos "Carrinho Abandonado" e "PIX Gerado" no CRM
 
-### Situação atual
-- O nó de **Tag** (add/remove) já funciona e persiste em `metadata.tags` do lead
-- O nó de **Condição** tem as variáveis: Valor, Produto, Plataforma, Nome, Método de Pagamento
-- **Falta "Tag"** na lista de variáveis da condição
-- No executor, `vars` não inclui as tags do lead — ele só lê `execution.variables` + contato
+### Problema 1: Bug no normalizeStatus do wz-receiver
+O mapa de normalização em `wz-receiver/index.ts` não inclui `abandoned_cart`, que é o valor que o ticto-webhook envia. Triggers configurados como `cart_abandoned` nunca dão match.
 
-### Solução
+### Problema 2 (possível): stage_transition_rules
+Se o funil "RECOMPRA - POTES" não tiver regras de transição para `pix_generated` → "Pix / Boleto Gerado" e `abandoned_cart` → "Recuperar", os leads entram mas ficam parados no primeiro stage.
 
-**1. `WzNodeConfigPanel.tsx`** — Adicionar opção "Tag" na lista de variáveis
-- Acrescentar `{ value: 'tag', label: 'Tag' }` ao array `conditionVariables`
+### Correção
 
-**2. `wz-executor/index.ts`** — Carregar tags do lead antes de avaliar condição
-- Antes do bloco `evaluateCondition`, buscar o lead pelo telefone e extrair `metadata.tags`
-- Quando `variable === 'tag'`, tratar de forma especial:
-  - Operador `contains` / `equals`: verificar se o array de tags inclui o valor comparado
-  - Operador `not_equals`: verificar se NÃO inclui
-- Setar `vars.tag` como string concatenada (join com vírgula) para manter compatibilidade com os demais operadores
+**Arquivo: `supabase/functions/wz-receiver/index.ts`**
+- Adicionar `abandoned_cart: "cart_abandoned"` ao mapa `normalizeStatus` (linha ~293)
+- Isso garante que tanto `abandoned_cart` (Ticto) quanto `cart_abandoned` e `abandoned` sejam todos normalizados para `cart_abandoned`
 
-### Arquivos editados
-1. `src/components/wz-automation/WzNodeConfigPanel.tsx` — adicionar "Tag" em `conditionVariables`
-2. `supabase/functions/wz-executor/index.ts` — buscar tags do lead e injetar em `vars` antes da avaliação de condição
+### Verificação necessária (no Supabase ou na UI)
+- Abrir o funil "RECOMPRA - POTES" → aba "Flow Editor" 
+- Confirmar que existem regras de transição para:
+  - Evento `pix_generated` → etapa "Pix / Boleto Gerado"
+  - Evento `abandoned_cart` → etapa "Recuperar"
+- Se não existirem, criá-las
 
+### Arquivo editado
+1. `supabase/functions/wz-receiver/index.ts` — adicionar `abandoned_cart` ao mapa de normalização
