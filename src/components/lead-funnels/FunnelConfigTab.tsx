@@ -404,6 +404,7 @@ const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSave
           onSave={onSaveMappings}
           saving={savingMappings}
           loading={loadingDistinctProducts}
+          funnelId={funnelId}
         />
       )}
 
