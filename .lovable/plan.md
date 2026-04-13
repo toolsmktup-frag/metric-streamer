@@ -1,25 +1,25 @@
 
 
-## Corrigir eventos "Carrinho Abandonado" e "PIX Gerado" no CRM
+## Reprocessar leads antigos com as novas regras de transição
 
-### Problema 1: Bug no normalizeStatus do wz-receiver
-O mapa de normalização em `wz-receiver/index.ts` não inclui `abandoned_cart`, que é o valor que o ticto-webhook envia. Triggers configurados como `cart_abandoned` nunca dão match.
+### Contexto
+As regras de transição estão configuradas corretamente (Carrinho Abandonado → Recuperar, Compra → Comprou, PIX/Boleto → Pix/Boleto Gerado, etc.). Porém leads que entraram antes dessas regras ficaram parados na primeira etapa. Precisamos de um script SQL para reposicioná-los.
 
-### Problema 2 (possível): stage_transition_rules
-Se o funil "RECOMPRA - POTES" não tiver regras de transição para `pix_generated` → "Pix / Boleto Gerado" e `abandoned_cart` → "Recuperar", os leads entram mas ficam parados no primeiro stage.
+### Solução
+Criar um script SQL (para rodar no SQL Editor do Supabase) que:
 
-### Correção
+1. Para cada lead posicionado no funil específico (`RECOMPRA - POTES`):
+   - Busca o **último evento** registrado em `lead_events` para esse lead nesse funil
+   - Verifica se existe uma `stage_transition_rule` que faz match com esse evento
+   - Se sim, atualiza o `lead_stage_positions` para a etapa correta (com o `value_classification` da regra)
 
-**Arquivo: `supabase/functions/wz-receiver/index.ts`**
-- Adicionar `abandoned_cart: "cart_abandoned"` ao mapa `normalizeStatus` (linha ~293)
-- Isso garante que tanto `abandoned_cart` (Ticto) quanto `cart_abandoned` e `abandoned` sejam todos normalizados para `cart_abandoned`
+2. Não altera leads que já estão na etapa certa (idempotente)
 
-### Verificação necessária (no Supabase ou na UI)
-- Abrir o funil "RECOMPRA - POTES" → aba "Flow Editor" 
-- Confirmar que existem regras de transição para:
-  - Evento `pix_generated` → etapa "Pix / Boleto Gerado"
-  - Evento `abandoned_cart` → etapa "Recuperar"
-- Se não existirem, criá-las
+### Arquivo gerado
+- `docs/sql/reprocess-leads-by-rules.sql` — script parametrizado com o `funnel_id`, pronto para colar no SQL Editor
 
-### Arquivo editado
-1. `supabase/functions/wz-receiver/index.ts` — adicionar `abandoned_cart` ao mapa de normalização
+### O que o script NÃO faz
+- Não cria leads novos
+- Não dispara automações WhatsApp
+- Não altera metadata — apenas move o lead para a etapa correta baseado no último evento
+
