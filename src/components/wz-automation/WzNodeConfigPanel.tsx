@@ -39,6 +39,7 @@ const conditionVariables = [
   { value: 'plataforma', label: 'Plataforma' },
   { value: 'nome', label: 'Nome' },
   { value: 'metodo_pagamento', label: 'Método de Pagamento' },
+  { value: 'tag', label: 'Tag' },
 ];
 
 const conditionOperators = [

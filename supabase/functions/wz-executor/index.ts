@@ -250,12 +250,31 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Node not found" }, 404);
     }
 
-    const vars = {
+    // Build vars with execution context
+    const vars: Record<string, any> = {
       ...(execution.variables || {}),
       _contact_name: execution.contact_name,
       _contact_email: execution.contact_email,
       _contact_phone: execution.contact_phone,
     };
+
+    // Load lead tags from metadata if contact has a phone
+    if (execution.contact_phone) {
+      try {
+        const { data: leadData } = await supabase
+          .from("leads")
+          .select("metadata")
+          .eq("phone", execution.contact_phone)
+          .maybeSingle();
+        const leadTags: string[] = leadData?.metadata?.tags || [];
+        vars._lead_tags = leadTags;
+        vars.tag = leadTags.join(", ");
+      } catch (e) {
+        console.warn("[wz-executor] Failed to load lead tags:", e);
+        vars._lead_tags = [];
+        vars.tag = "";
+      }
+    }
 
     const nodeData = node.data || {};
     const nodeType = node.type;
@@ -642,6 +661,21 @@ function evaluateCondition(nodeData: Record<string, any>, vars: Record<string, a
   const operator = nodeData.operator;
   const compareValue = nodeData.compareValue;
   if (!variable || !operator || compareValue === undefined) return false;
+
+  // Special handling for tag variable — check against the tags array
+  if (variable === "tag") {
+    const tags: string[] = (vars._lead_tags || []).map((t: string) => t.toLowerCase());
+    const expected = String(compareValue).toLowerCase();
+    switch (operator) {
+      case "equals":
+      case "contains":
+        return tags.includes(expected);
+      case "not_equals":
+        return !tags.includes(expected);
+      default:
+        return false;
+    }
+  }
 
   const actual = String(vars[variable] || "").toLowerCase();
   const expected = String(compareValue).toLowerCase();
