@@ -1,24 +1,33 @@
 
 
-## Filtrar produtos distintos pelo contexto do funil
+## Melhorar a listagem de vinculação de produtos
 
-### Problema
-O hook `useDistinctLeadProducts` busca todos os `product_name` de todos os eventos de compra dos leads posicionados neste funil. Porém, um lead pode ter compras de produtos de **outros** funis, e esses nomes aparecem na lista de vinculação sem relevância.
+### Problema atual
+A lista mostra todos os 51 produtos encontrados nos eventos dos leads, sem distinção. Fica difícil encontrar os que precisam de atenção (não vinculados) ou os que já existem em outros funis.
 
 ### Solução
-Após coletar os nomes distintos dos eventos, filtrar para manter apenas os que correspondem aos produtos configurados neste funil (`lead_funnel_products`). A correspondência usa:
-- **product_id** — se o evento tem `product_id` que bate com algum `lead_funnel_products.product_id`
-- **product_name_contains** — se o nome do produto contém o fragmento configurado (ILIKE)
+Reorganizar a UI em seções com destaque visual, e adicionar um hook para buscar mapeamentos de **outros funis**.
 
-### Alteração
+### Alterações
 
-**Arquivo**: `src/hooks/useLeadProductMappings.ts` — função `useDistinctLeadProducts`
+**1. Novo hook `useAllLeadProductMappings`** (em `useLeadProductMappings.ts`)
+- Busca todos os registros de `lead_product_mappings` (sem filtro de funnel) + join em `lead_funnel_products(display_name, product_name_contains)` e `lead_funnels(name)`
+- Retorna um mapa: `raw_product_name → { funnel_name, product_display_name }[]`
+- Permite saber se "3 potes ArticulaBEM - Soulnaturi (VSL)" já está vinculado em outro funil
 
-1. Receber o `funnelId` (já recebe)
-2. Buscar os `lead_funnel_products` deste funil (product_id + product_name_contains)
-3. Após montar o `Set<string>` de nomes, filtrar mantendo apenas os que:
-   - Contêm algum `product_name_contains` (case-insensitive), OU
-   - Têm um `product_id` correspondente nos eventos
+**2. Refatorar `ProductMappingConfig.tsx`**
+- Dividir a lista em 2 seções colapsáveis:
+  - **"Sem vínculo"** (destaque amarelo/amber) — produtos não mapeados neste funil. Mostrados abertos por padrão
+  - **"Vinculados"** (destaque verde) — produtos já mapeados. Colapsado por padrão
+- Para cada produto, se ele existir em mapeamento de outro funil, mostrar um badge discreto: "Também em: [Nome do Funil]"
+- Manter o seletor e o botão Salvar como estão
+- Contador no header de cada seção: "12 sem vínculo", "7 vinculados"
 
-Isso reduz a lista para apenas os produtos relevantes ao funil, como mostra a imagem do usuário (ex: ArticulaBEM, SuperVITA, etc.).
+**3. Passar dados do novo hook** (em `FunnelConfigTab.tsx`)
+- Chamar `useAllLeadProductMappings()` e passar para `ProductMappingConfig`
+
+### Arquivos editados
+1. `src/hooks/useLeadProductMappings.ts` — novo hook `useAllLeadProductMappings`
+2. `src/components/lead-funnels/ProductMappingConfig.tsx` — seções colapsáveis + badge de outros funis
+3. `src/components/lead-funnels/FunnelConfigTab.tsx` — passar prop extra
 
