@@ -290,6 +290,7 @@ function normalizeStatus(raw: string): string {
     cancelled: "cancellation",
     cancellation: "cancellation",
     abandoned: "cart_abandoned",
+    abandoned_cart: "cart_abandoned",
     cart_abandoned: "cart_abandoned",
   };
   return map[s] || s;
