@@ -414,6 +414,8 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
                           onWhatsAppClick={onWhatsAppClick}
                           hideValues={shouldHideValues}
                           stageClassification={stageClassificationMap.get(stage.id) || null}
+                          userRole={userRole}
+                          currentUserId={currentUserId}
                         />
                       ))}
                       {hasMore && (
