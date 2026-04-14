@@ -78,7 +78,7 @@ const LeadAssignSelect: React.FC<LeadAssignSelectProps> = ({ leadId, currentAssi
   }
 
   return (
-    <Select value={currentAssignedTo || '__none__'} onValueChange={handleChange}>
+    <Select value={currentAssignedTo || '__none__'} onValueChange={handleChange} disabled={!canAssign}>
       <SelectTrigger className="h-8 text-xs">
         <SelectValue placeholder="Atribuir vendedor..." />
       </SelectTrigger>
