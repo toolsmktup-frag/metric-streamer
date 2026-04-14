@@ -76,8 +76,8 @@ const LeadFunnelDetail: React.FC = () => {
 
   // Bulk purchase data for recontact fallback
   const { data: purchaseMap } = useBulkLeadPurchases(positions);
-  const { data: leadProductNamesMap } = useBulkLeadPurchaseProducts(id, positions);
-  const recontactMap = useRecontactDeadlines(positions, leadFunnelProducts, productMappings, purchaseMap, leadProductNamesMap);
+  const { data: leadPurchaseInfoMap } = useBulkLeadPurchaseProducts(id, positions);
+  const recontactMap = useRecontactDeadlines(positions, leadFunnelProducts, productMappings, purchaseMap, leadPurchaseInfoMap);
   const allCatalogProducts = paymentFunnels.flatMap(f => f.funnel_products || []);
 
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);

@@ -3,9 +3,15 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { Lead, LeadStagePosition } from '@/types/leadFunnels';
 
+export interface LeadPurchaseInfo {
+  productNames: string[];
+  lastPurchaseDate: string;
+}
+
 /**
  * Fetches all purchase-related events for leads in a funnel,
- * returning a Map<leadId, product_name[]> with ALL products each lead purchased.
+ * returning a Map<leadId, LeadPurchaseInfo> with ALL products each lead purchased
+ * and the date of their MOST RECENT purchase.
  * Used by useRecontactDeadlines to sum recontact_days across products.
  */
 export function useBulkLeadPurchaseProducts(
@@ -29,8 +35,8 @@ export function useBulkLeadPurchaseProducts(
 
   return useQuery({
     queryKey: ['bulk-lead-purchase-products', funnelId, stableKey],
-    queryFn: async (): Promise<Map<string, string[]>> => {
-      const result = new Map<string, string[]>();
+    queryFn: async (): Promise<Map<string, LeadPurchaseInfo>> => {
+      const result = new Map<string, LeadPurchaseInfo>();
       if (!funnelId || leadIds.length === 0) return result;
 
       // Fetch purchase events from lead_events in batches
@@ -41,9 +47,10 @@ export function useBulkLeadPurchaseProducts(
         const batch = leadIds.slice(i, i + BATCH);
         const { data, error } = await (supabase as any)
           .from('lead_events')
-          .select('lead_id, metadata')
+          .select('lead_id, metadata, created_at')
           .in('lead_id', batch)
           .in('event_name', purchaseEventNames)
+          .order('created_at', { ascending: false })
           .limit(100000);
 
         if (error) {
@@ -53,13 +60,20 @@ export function useBulkLeadPurchaseProducts(
 
         for (const row of data || []) {
           const productName = row.metadata?.product_name as string;
-          if (!productName) continue;
-          const arr = result.get(row.lead_id) || [];
-          // Avoid duplicate product names
-          if (!arr.includes(productName)) {
-            arr.push(productName);
+          const existing = result.get(row.lead_id);
+          if (!existing) {
+            // First row for this lead (most recent due to ordering)
+            result.set(row.lead_id, {
+              productNames: productName ? [productName] : [],
+              lastPurchaseDate: row.created_at,
+            });
+          } else {
+            // Add product name if not duplicate
+            if (productName && !existing.productNames.includes(productName)) {
+              existing.productNames.push(productName);
+            }
+            // lastPurchaseDate is already set from first (most recent) row
           }
-          result.set(row.lead_id, arr);
         }
       }
 
