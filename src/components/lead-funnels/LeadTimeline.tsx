@@ -11,6 +11,8 @@ import { Mail, Phone, ShoppingCart, DollarSign, MapPin, Activity, UserPlus, Cred
 import { formatCurrency } from '@/lib/formatters';
 import { parseLocalDateTime } from '@/lib/localDate';
 import LeadAssignSelect from './LeadAssignSelect';
+import { useCurrentUserRole } from '@/hooks/useCurrentUserRole';
+import { supabase } from '@/integrations/supabase/client';
 
 interface LeadTimelineProps {
   lead: Lead | null;
