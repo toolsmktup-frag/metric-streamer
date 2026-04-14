@@ -46,8 +46,12 @@ const LeadFunnelDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { data: funnel, isLoading } = useLeadFunnel(id ?? null);
+  const { data: userRole = 'vendedor' } = useCurrentUserRole();
+  const isAdmin = userRole === 'admin' || userRole === 'gestor';
   const { data: campaign } = useLeadCampaign(funnel?.campaign_id ?? null);
-  const { data: positions = [] } = useLeadsByFunnel(id ?? null);
+  const { data: positions = [] } = useLeadsByFunnel(id ?? null, {
+    refetchInterval: isAdmin ? false : 5000,
+  });
   const { data: leadCounts = {} } = useFunnelLeadCounts(id ?? null);
   const { data: sourceNodes = [] } = useFunnelSourceNodes(id ?? null);
   const { data: funnelEdges = [] } = useFunnelEdges(id ?? null);
@@ -64,8 +68,6 @@ const LeadFunnelDetail: React.FC = () => {
   const saveFunnelEdges = useSaveFunnelEdges();
   const moveLeadStage = useMoveLeadStage();
   const queryClient = useQueryClient();
-  const { data: userRole = 'vendedor' } = useCurrentUserRole();
-  const isAdmin = userRole === 'admin' || userRole === 'gestor';
   const { data: hasAccess, isLoading: loadingAccess } = useHasFunnelAccess(id ?? null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
