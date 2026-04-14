@@ -217,7 +217,9 @@ function normalizeGuru(body: Record<string, any>): NormalizedEvent {
 
   // ─── Offer: pode estar em product.offer.name ───
   const offerName = body.offer?.name || product.offer?.name || null;
-  const externalEventId = String(body.id || paymentObj.marketplace_id || body.transaction_id || "").trim() || null;
+  // Alinhado com guru-webhook: sale.transaction_id → payment.marketplace_id → sale.id → body.id → sale.order_id
+  const sale = body.sale || body;
+  const externalEventId = String(sale.transaction_id || paymentObj.marketplace_id || sale.id || body.id || sale.order_id || "").trim() || null;
 
   return {
     contact_phone: phone,
