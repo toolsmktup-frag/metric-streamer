@@ -85,7 +85,7 @@ const LeadTimeline: React.FC<LeadTimelineProps> = ({ lead, open, onClose }) => {
   const { data: purchaseData } = useLeadPurchases(lead?.email ?? null, lead?.phone ?? null);
   const { data: journey = [] } = useLeadFunnelJourney(lead?.id ?? null);
   const { data: userRole } = useCurrentUserRole();
-  const currentUserId = supabase.auth.getSession ? undefined : undefined; // will use state below
+  
 
   const [currentUid, setCurrentUid] = React.useState<string | undefined>();
   React.useEffect(() => {
