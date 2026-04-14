@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Mic, Square, Send, Trash2 } from 'lucide-react';
+import { Mic, Square, Send, Trash2, Play, Pause } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { sendWhatsAppMessage } from '@/hooks/useWhatsApp';
@@ -13,13 +13,20 @@ interface AudioRecorderProps {
   onOptimisticUpdate?: (tempId: string, status: string) => void;
 }
 
+type RecorderState = 'idle' | 'recording' | 'preview';
+
 export default function AudioRecorder({ instanceId, phone, onOptimisticSend, onOptimisticUpdate }: AudioRecorderProps) {
-  const [recording, setRecording] = useState(false);
+  const [state, setState] = useState<RecorderState>('idle');
   const [duration, setDuration] = useState(0);
+  const [playing, setPlaying] = useState(false);
   const mediaRecorder = useRef<MediaRecorder | null>(null);
   const chunks = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval>>();
   const streamRef = useRef<MediaStream | null>(null);
+  const blobRef = useRef<Blob | null>(null);
+  const mimeRef = useRef<string>('audio/webm');
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const objectUrlRef = useRef<string | null>(null);
 
   const cleanup = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -27,10 +34,20 @@ export default function AudioRecorder({ instanceId, phone, onOptimisticSend, onO
       streamRef.current.getTracks().forEach(t => t.stop());
       streamRef.current = null;
     }
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+    if (objectUrlRef.current) {
+      URL.revokeObjectURL(objectUrlRef.current);
+      objectUrlRef.current = null;
+    }
     mediaRecorder.current = null;
     chunks.current = [];
+    blobRef.current = null;
     setDuration(0);
-    setRecording(false);
+    setState('idle');
+    setPlaying(false);
   }, []);
 
   useEffect(() => {
@@ -48,6 +65,7 @@ export default function AudioRecorder({ instanceId, phone, onOptimisticSend, onO
           ? 'audio/ogg;codecs=opus'
           : 'audio/webm';
 
+      mimeRef.current = mimeType;
       const recorder = new MediaRecorder(stream, { mimeType });
       mediaRecorder.current = recorder;
       chunks.current = [];
@@ -57,7 +75,7 @@ export default function AudioRecorder({ instanceId, phone, onOptimisticSend, onO
       };
 
       recorder.start(100);
-      setRecording(true);
+      setState('recording');
       setDuration(0);
       timerRef.current = setInterval(() => setDuration(d => d + 1), 1000);
     } catch {
@@ -70,6 +88,107 @@ export default function AudioRecorder({ instanceId, phone, onOptimisticSend, onO
       mediaRecorder.current.stop();
     }
     cleanup();
+  };
+
+  const stopForPreview = () => {
+    if (!mediaRecorder.current || mediaRecorder.current.state !== 'recording') return;
+
+    const recorder = mediaRecorder.current;
+    recorder.onstop = () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(t => t.stop());
+        streamRef.current = null;
+      }
+
+      const blob = new Blob(chunks.current, { type: recorder.mimeType });
+      blobRef.current = blob;
+      setState('preview');
+    };
+    recorder.stop();
+  };
+
+  const togglePlayback = () => {
+    if (!blobRef.current) return;
+
+    if (playing && audioRef.current) {
+      audioRef.current.pause();
+      setPlaying(false);
+      return;
+    }
+
+    if (objectUrlRef.current) {
+      URL.revokeObjectURL(objectUrlRef.current);
+    }
+    const url = URL.createObjectURL(blobRef.current);
+    objectUrlRef.current = url;
+    const audio = new Audio(url);
+    audioRef.current = audio;
+    audio.onended = () => setPlaying(false);
+    audio.play();
+    setPlaying(true);
+  };
+
+  const sendFromPreview = async () => {
+    if (!blobRef.current) return;
+
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+    setPlaying(false);
+
+    const blob = blobRef.current;
+    const ext = mimeRef.current.includes('ogg') ? 'ogg' : 'webm';
+
+    const tempId = `temp-${crypto.randomUUID()}`;
+    const optimisticMsg: WhatsAppMessage = {
+      id: tempId,
+      organization_id: '',
+      instance_id: instanceId,
+      phone,
+      body: null,
+      message_type: 'audio',
+      direction: 'outbound',
+      status: 'pending',
+      media_url: null,
+      media_mime_type: mimeRef.current,
+      media_filename: null,
+      message_id_external: null,
+      payload_raw: null,
+      is_deleted: false,
+      lead_id: null,
+      sender_name: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    onOptimisticSend?.(optimisticMsg);
+    cleanup();
+
+    try {
+      const path = `${instanceId}/${Date.now()}.${ext}`;
+      const { error: uploadErr } = await supabase.storage
+        .from('whatsapp-media')
+        .upload(path, blob);
+      if (uploadErr) throw uploadErr;
+
+      const { data: urlData } = supabase.storage
+        .from('whatsapp-media')
+        .getPublicUrl(path);
+
+      await sendWhatsAppMessage({
+        instance_id: instanceId,
+        phone,
+        message_type: 'audio',
+        media_url: urlData.publicUrl,
+      });
+
+      onOptimisticUpdate?.(tempId, 'sent');
+    } catch (err: any) {
+      onOptimisticUpdate?.(tempId, 'failed');
+      toast.error(err.message || 'Erro ao enviar áudio');
+    }
   };
 
   const sendRecording = async () => {
@@ -112,7 +231,7 @@ export default function AudioRecorder({ instanceId, phone, onOptimisticSend, onO
         };
 
         onOptimisticSend?.(optimisticMsg);
-        setRecording(false);
+        setState('idle');
         setDuration(0);
 
         try {
@@ -152,7 +271,7 @@ export default function AudioRecorder({ instanceId, phone, onOptimisticSend, onO
     return `${m}:${sec.toString().padStart(2, '0')}`;
   };
 
-  if (!recording) {
+  if (state === 'idle') {
     return (
       <Button
         variant="ghost"
@@ -163,6 +282,48 @@ export default function AudioRecorder({ instanceId, phone, onOptimisticSend, onO
       >
         <Mic className="h-4 w-4" />
       </Button>
+    );
+  }
+
+  if (state === 'preview') {
+    return (
+      <div className="flex items-center gap-2 flex-1 bg-muted rounded-lg px-3 py-1.5">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 shrink-0 text-destructive hover:text-destructive"
+          onClick={cleanup}
+          title="Descartar"
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
+
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 shrink-0"
+          onClick={togglePlayback}
+          title={playing ? 'Pausar' : 'Ouvir'}
+        >
+          {playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+        </Button>
+
+        <div className="flex items-center gap-2 flex-1">
+          <span className="text-sm font-mono font-medium">
+            {formatTime(duration)}
+          </span>
+          <span className="text-xs text-muted-foreground">Gravado</span>
+        </div>
+
+        <Button
+          size="icon"
+          className="h-8 w-8 shrink-0"
+          onClick={sendFromPreview}
+          title="Enviar áudio"
+        >
+          <Send className="h-4 w-4" />
+        </Button>
+      </div>
     );
   }
 
@@ -185,6 +346,16 @@ export default function AudioRecorder({ instanceId, phone, onOptimisticSend, onO
         </span>
         <span className="text-xs text-muted-foreground">Gravando...</span>
       </div>
+
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8 shrink-0"
+        onClick={stopForPreview}
+        title="Parar e ouvir"
+      >
+        <Square className="h-4 w-4" />
+      </Button>
 
       <Button
         size="icon"
