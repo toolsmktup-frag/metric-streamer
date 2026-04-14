@@ -1,37 +1,35 @@
 
 
-# Recontato baseado na compra mais recente
+# Auditoria de Deduplicacao e Recontato
 
-## Mudanca
+## Status Atual
 
-Atualmente o sistema conta o prazo de recontato a partir da **primeira compra**. A proposta e contar a partir da **compra mais recente** e somar os `recontact_days` dos produtos adquiridos.
+Todas as 3 plataformas de webhook (Guru, Ticto, Eduzz) e o wz-receiver ja passam `transaction_id` no metadata — OK.
 
-Exemplo: Lead comprou Produto A (90d) em Jan e Produto B (180d) em Mar.
-- **Antes**: 90 + 180 = 270 dias contados de Jan
-- **Depois**: 90 + 180 = 270 dias contados de Mar (data mais recente)
+Os hooks de frontend (`useBulkLeadPurchaseProducts` e `useRecontactDeadlines`) ja filtram por `funnel_id` e usam `lastPurchaseDate` — OK.
 
-## Arquivos alterados
+O cron (`recontact-cron`) ja usa `lastDate` e filtra por `funnel_id` — OK.
 
-### 1. `src/hooks/useBulkLeadPurchaseProducts.ts`
-- Adicionar `created_at` ao SELECT dos eventos
-- Retornar `Map<string, { productNames: string[], lastPurchaseDate: string }>` em vez de `Map<string, string[]>`
-- Rastrear a data mais recente entre todos os eventos de compra
+## Problemas Encontrados
 
-### 2. `src/hooks/useRecontactDeadlines.ts`
-- Usar `lastPurchaseDate` do novo mapa como fonte prioritaria de data
-- Fallback: `metadata.purchased_at` → `purchaseMap.firstPurchaseDate`
-- Atualizar tipos e comentarios
+### 1. `process-import/index.ts` — SEM transaction_id no metadata
+A funcao de importacao de planilhas nao inclui `transaction_id`. Se o usuario reimportar a mesma planilha, vai duplicar eventos.
 
-### 3. `supabase/functions/recontact-cron/index.ts`
-- Na construcao do `leadPurchaseInfo`, rastrear `lastDate` alem de `firstDate`
-- Usar `lastDate` para calcular o deadline em vez de `firstDate`
+**Fix**: Adicionar `transaction_id: record.platform_transaction_id || record.order_id || null` ao `p_metadata`.
 
-### 4. `src/pages/LeadFunnelDetail.tsx`
-- Ajustar tipagem do retorno de `useBulkLeadPurchaseProducts` (desestruturacao)
+### 2. `import-ticto-csv/index.ts` — SEM transaction_id no metadata
+Mesmo problema. Importacao de CSV da Ticto nao inclui `transaction_id`.
+
+**Fix**: Adicionar `transaction_id: rec.platform_transaction_id || rec.order_hash || null` ao `p_metadata`.
+
+## Arquivos a alterar
+
+1. `supabase/functions/process-import/index.ts` — adicionar transaction_id ao p_metadata
+2. `supabase/functions/import-ticto-csv/index.ts` — adicionar transaction_id ao p_metadata
 
 ## Impacto
 
-- Leads com multiplas compras ganham mais tempo antes de serem marcados como "vencidos"
-- O cron tambem respeitara a data mais recente, evitando mover leads prematuramente
-- Sem impacto em leads com apenas 1 compra (first = last)
+- Importacoes futuras de planilhas ficam idempotentes (reimportar nao duplica)
+- Webhooks ja estao protegidos (nenhuma mudanca necessaria)
+- Frontend e cron ja estao corretos
 
