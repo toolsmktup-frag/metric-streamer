@@ -1,36 +1,32 @@
 
 
-# Fix: Eventos duplicados cross-pipeline (guru-webhook + wz-receiver)
+# Fix: Timeline duplicada mesmo com compras corretas
 
 ## Problema
 
-Quando um webhook Guru dispara, ele chega em **duas Edge Functions** simultaneamente:
-1. `guru-webhook` — extrai `transaction_id` como `sale.transaction_id || payment.marketplace_id || sale.id`
-2. `wz-receiver` — extrai como `body.id || paymentObj.marketplace_id || body.transaction_id`
+A lead **Luzia Helena** mostra 2 eventos "Compra: 1 pote ArticulaBEM" com timestamp **idêntico** (18/12/2025 09:57:39) na timeline, mas as compras estão corretas (sem duplicata).
 
-A **ordem de extração é diferente**, então o mesmo payload pode gerar `transaction_id` distintos. O índice único `ux_lead_events_txn_dedup` não impede a duplicata porque os IDs são diferentes.
+## Causa raiz
 
-Resultado: 2-3 eventos para a mesma compra (como visto na Luzia e na Maria De Lourdes).
+O `guru-webhook` faz **duas chamadas** ao `sync_lead_from_sale` para cada webhook Guru:
 
-## Solução
+1. **Linha 93-108**: Encaminha o payload inteiro para `wz-receiver`, que por sua vez chama `sync_lead_from_sale`
+2. **Linha 340-373**: Chama `sync_lead_from_sale` diretamente
 
-### 1. Unificar extração de `transaction_id` no wz-receiver (normalizeGuru)
+As duas chamadas usam o mesmo `event_name` ("purchase") e o mesmo `transaction_id`, então o índice único `ux_lead_events_txn_dedup` (v7) deveria bloquear a segunda. Porém, **a RPC v7 provavelmente não está deployed** — o que está rodando ainda é a v4/v5/v6 que não tem `ON CONFLICT DO NOTHING`.
 
-Alinhar a ordem de extração do `external_event_id` no `normalizeGuru` do wz-receiver para ser **idêntica** à do guru-webhook:
+## Solução (2 passos)
 
-```
-// ANTES (wz-receiver)
-body.id || paymentObj.marketplace_id || body.transaction_id
+### 1. Deploy da RPC v7 (deduplicação race-safe)
 
-// DEPOIS (wz-receiver) — mesma ordem do guru-webhook
-sale.transaction_id || payment.marketplace_id || sale.id || body.id || sale.order_id
-```
+Rodar o SQL de `docs/rpc-sync-lead-from-sale-v7.sql` no SQL Editor do Supabase. Isso:
+- Cria o índice único parcial `ux_lead_events_txn_dedup` em `(lead_id, funnel_id, event_name, metadata->>'transaction_id')`
+- Recria a RPC com `INSERT ... ON CONFLICT DO NOTHING` nos lead_events
+- Limpa duplicatas históricas por `transaction_id`
 
-Onde `sale = body.sale || body` e `payment = body.payment || {}`.
+### 2. Cleanup adicional para duplicatas sem transaction_id
 
-### 2. Cleanup: remover duplicatas existentes da lead_events
-
-SQL para limpar duplicatas históricas — manter apenas o evento mais antigo por `(lead_id, funnel_id, event_name)` quando o `metadata->>'product_name'` é igual:
+Rodar SQL complementar para pegar duplicatas que não tinham `transaction_id` no metadata (eventos antigos):
 
 ```sql
 DELETE FROM lead_events
@@ -38,10 +34,10 @@ WHERE id IN (
   SELECT id FROM (
     SELECT id,
       ROW_NUMBER() OVER (
-        PARTITION BY lead_id, funnel_id, event_name, 
+        PARTITION BY lead_id, funnel_id, event_name,
           COALESCE(metadata->>'product_name', ''),
-          DATE_TRUNC('minute', created_at)
-        ORDER BY created_at ASC
+          created_at
+        ORDER BY id ASC
       ) AS rn
     FROM lead_events
   ) ranked
@@ -49,22 +45,17 @@ WHERE id IN (
 );
 ```
 
-Este cleanup agrupa eventos que são do mesmo lead, mesmo funil, mesmo event_name, mesmo product_name, e aconteceram no mesmo minuto — mantém o primeiro e remove os demais.
+Note: este usa `created_at` **exato** (sem truncar para minuto), pegando duplicatas com timestamp idêntico ao segundo.
 
-### 3. Gerar TXT consolidado
+## Resultado esperado
 
-Gerar arquivo com:
-- SQL de cleanup
-- Código atualizado do wz-receiver para redeploy
+- Duplicatas históricas limpas (incluindo Luzia Helena)
+- Novos webhooks Guru protegidos pelo índice único — mesmo com duas chamadas ao `sync_lead_from_sale`, apenas 1 evento é inserido
+- Sem impacto em Ticto/Eduzz
 
-## Arquivos a alterar
+## Arquivo a gerar
 
-1. `supabase/functions/wz-receiver/index.ts` — alinhar `normalizeGuru.external_event_id`
-2. Gerar SQL de cleanup + TXT para deploy
-
-## Impacto
-
-- Novos webhooks Guru geram apenas 1 evento (mesmo `transaction_id` em ambos pipelines)
-- Dados históricos ficam limpos
-- Sem impacto em Ticto/Eduzz (não passam pelo guru-webhook)
+TXT consolidado com:
+- SQL da v7 (criação do índice + RPC)
+- SQL de cleanup complementar (por `created_at` exato)
 
