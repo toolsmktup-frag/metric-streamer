@@ -1,63 +1,37 @@
 
 
-# Deduplicação de Eventos no CRM (lead_events)
+# Recontato baseado na compra mais recente
 
-## Problema
+## Mudanca
 
-Os webhooks da Guru (e potencialmente Ticto/Eduzz) disparam múltiplas vezes para a mesma transação. A RPC `sync_lead_from_sale` faz `INSERT INTO lead_events` sem nenhuma verificação de duplicata, gerando dezenas de eventos repetidos na timeline do lead (como os 8+ "canceled" no mesmo segundo que você viu).
+Atualmente o sistema conta o prazo de recontato a partir da **primeira compra**. A proposta e contar a partir da **compra mais recente** e somar os `recontact_days` dos produtos adquiridos.
 
-## Causa raiz
-
-1. O metadata enviado ao `sync_lead_from_sale` não inclui um identificador único da transação (como `transaction_id` ou `order_id`)
-2. A tabela `lead_events` não tem constraint de unicidade
-3. Nenhum check prévio antes do INSERT
-
-## Solução em 2 partes
-
-### Parte 1: Passar transaction_id no metadata dos webhooks
-
-Alterar os 3 webhooks para incluir o ID da transação no metadata:
-
-- **guru-webhook**: adicionar `transaction_id: record.id` (ou `record.transaction_id`)
-- **ticto-webhook**: adicionar `transaction_id: record.platform_transaction_id`
-- **eduzz-webhook**: adicionar `transaction_id` equivalente
-
-### Parte 2: Deduplicar na RPC sync_lead_from_sale
-
-Antes de cada `INSERT INTO lead_events`, adicionar um check:
-
-```sql
--- Só insere se não existir evento com mesmo lead + funnel + event_name + transaction_id
-IF NOT EXISTS (
-  SELECT 1 FROM lead_events
-  WHERE lead_id = v_lead_id
-    AND funnel_id = v_base_funnel_id
-    AND event_name = p_event_name
-    AND metadata->>'transaction_id' = (v_enriched_meta->>'transaction_id')
-) THEN
-  INSERT INTO lead_events (...)
-  VALUES (...);
-END IF;
-```
-
-Repetir para o INSERT do funil de produto.
-
-### Parte 3 (opcional): Limpar duplicatas existentes
-
-Script SQL para remover eventos duplicados históricos, mantendo apenas o primeiro de cada grupo (lead + funnel + event_name + timestamp arredondado ao minuto + product_name).
+Exemplo: Lead comprou Produto A (90d) em Jan e Produto B (180d) em Mar.
+- **Antes**: 90 + 180 = 270 dias contados de Jan
+- **Depois**: 90 + 180 = 270 dias contados de Mar (data mais recente)
 
 ## Arquivos alterados
 
-1. `supabase/functions/guru-webhook/index.ts` — adicionar transaction_id ao metadata
-2. `supabase/functions/ticto-webhook/index.ts` — idem
-3. `supabase/functions/eduzz-webhook/index.ts` — idem
-4. Nova migration SQL — atualizar a RPC `sync_lead_from_sale` com dedup
-5. Script de limpeza (opcional) — remover duplicatas históricas
+### 1. `src/hooks/useBulkLeadPurchaseProducts.ts`
+- Adicionar `created_at` ao SELECT dos eventos
+- Retornar `Map<string, { productNames: string[], lastPurchaseDate: string }>` em vez de `Map<string, string[]>`
+- Rastrear a data mais recente entre todos os eventos de compra
+
+### 2. `src/hooks/useRecontactDeadlines.ts`
+- Usar `lastPurchaseDate` do novo mapa como fonte prioritaria de data
+- Fallback: `metadata.purchased_at` → `purchaseMap.firstPurchaseDate`
+- Atualizar tipos e comentarios
+
+### 3. `supabase/functions/recontact-cron/index.ts`
+- Na construcao do `leadPurchaseInfo`, rastrear `lastDate` alem de `firstDate`
+- Usar `lastDate` para calcular o deadline em vez de `firstDate`
+
+### 4. `src/pages/LeadFunnelDetail.tsx`
+- Ajustar tipagem do retorno de `useBulkLeadPurchaseProducts` (desestruturacao)
 
 ## Impacto
 
-- Eventos futuros: zero duplicatas
-- Timeline limpa e confiável
-- Contagens de KPIs mais precisas
-- Sem impacto no roteamento ou transição de etapas (a lógica continua a mesma, só não repete)
+- Leads com multiplas compras ganham mais tempo antes de serem marcados como "vencidos"
+- O cron tambem respeitara a data mais recente, evitando mover leads prematuramente
+- Sem impacto em leads com apenas 1 compra (first = last)
 
