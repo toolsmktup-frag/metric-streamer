@@ -9,15 +9,23 @@ interface LeadAssignSelectProps {
   leadId: string;
   currentAssignedTo: string | null;
   compact?: boolean;
+  userRole?: string;
+  currentUserId?: string;
 }
 
 function getInitials(name: string | null): string {
   return (name || '?').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
 }
 
-const LeadAssignSelect: React.FC<LeadAssignSelectProps> = ({ leadId, currentAssignedTo, compact }) => {
+const LeadAssignSelect: React.FC<LeadAssignSelectProps> = ({ leadId, currentAssignedTo, compact, userRole, currentUserId }) => {
   const { data: members = [] } = useTeamMembers();
   const assignLead = useAssignLead();
+
+  const isSeller = userRole === 'vendedor' || userRole === 'vendedora' || userRole === 'suporte';
+  const isAdmin = userRole === 'admin' || userRole === 'gestor';
+
+  // Seller can only assign cards that are unassigned or assigned to themselves
+  const canAssign = !userRole || isAdmin || !currentAssignedTo || currentAssignedTo === currentUserId;
 
   const assignableMembers = members.filter(m =>
     ['vendedor', 'vendedora', 'suporte'].includes(m.role) && m.status === 'active'
@@ -32,10 +40,10 @@ const LeadAssignSelect: React.FC<LeadAssignSelectProps> = ({ leadId, currentAssi
 
   if (compact) {
     return (
-      <Select value={currentAssignedTo || '__none__'} onValueChange={handleChange}>
+      <Select value={currentAssignedTo || '__none__'} onValueChange={handleChange} disabled={!canAssign}>
         <SelectTrigger
-          className="h-6 w-6 p-0 border-0 bg-transparent [&>svg]:hidden"
-          title={currentMember?.full_name || 'Atribuir vendedor'}
+          className={`h-6 w-6 p-0 border-0 bg-transparent [&>svg]:hidden ${!canAssign ? 'opacity-50 cursor-not-allowed' : ''}`}
+          title={!canAssign ? 'Apenas o responsável pode transferir' : (currentMember?.full_name || 'Atribuir vendedor')}
         >
           <Avatar className="h-6 w-6">
             {currentMember?.avatar_url ? (
@@ -70,7 +78,7 @@ const LeadAssignSelect: React.FC<LeadAssignSelectProps> = ({ leadId, currentAssi
   }
 
   return (
-    <Select value={currentAssignedTo || '__none__'} onValueChange={handleChange}>
+    <Select value={currentAssignedTo || '__none__'} onValueChange={handleChange} disabled={!canAssign}>
       <SelectTrigger className="h-8 text-xs">
         <SelectValue placeholder="Atribuir vendedor..." />
       </SelectTrigger>
