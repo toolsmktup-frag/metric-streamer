@@ -84,6 +84,13 @@ const LeadTimeline: React.FC<LeadTimelineProps> = ({ lead, open, onClose }) => {
   const { data: events = [] } = useLeadEvents(lead?.id ?? null);
   const { data: purchaseData } = useLeadPurchases(lead?.email ?? null, lead?.phone ?? null);
   const { data: journey = [] } = useLeadFunnelJourney(lead?.id ?? null);
+  const { data: userRole } = useCurrentUserRole();
+  const currentUserId = supabase.auth.getSession ? undefined : undefined; // will use state below
+
+  const [currentUid, setCurrentUid] = React.useState<string | undefined>();
+  React.useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setCurrentUid(data.user?.id ?? undefined));
+  }, []);
 
   const sortedEvents = useMemo(
     () => [...events].sort((a, b) => getEventDate(a).getTime() - getEventDate(b).getTime()).reverse(),
@@ -125,7 +132,7 @@ const LeadTimeline: React.FC<LeadTimelineProps> = ({ lead, open, onClose }) => {
                   <User className="h-3.5 w-3.5 text-muted-foreground" />
                   <span className="text-xs text-muted-foreground">Vendedor:</span>
                   <div className="flex-1 max-w-[200px]">
-                    <LeadAssignSelect leadId={lead.id} currentAssignedTo={lead.assigned_to} />
+                    <LeadAssignSelect leadId={lead.id} currentAssignedTo={lead.assigned_to} userRole={userRole} currentUserId={currentUid} />
                   </div>
                 </div>
 
