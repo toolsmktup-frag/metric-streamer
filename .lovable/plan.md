@@ -1,22 +1,63 @@
 
 
-# Gerar arquivo TXT com os scripts SQL para rodar no Supabase
+# Deduplicação de Eventos no CRM (lead_events)
 
-Vou juntar os dois scripts (Step 1 e Step 2) em um único arquivo `.txt` para você copiar e colar no SQL Editor do Supabase.
+## Problema
 
-## Conteúdo do arquivo
+Os webhooks da Guru (e potencialmente Ticto/Eduzz) disparam múltiplas vezes para a mesma transação. A RPC `sync_lead_from_sale` faz `INSERT INTO lead_events` sem nenhuma verificação de duplicata, gerando dezenas de eventos repetidos na timeline do lead (como os 8+ "canceled" no mesmo segundo que você viu).
 
-1. **PASSO 1** — Insert dos mapeamentos de produto na tabela `lead_product_mappings`
-2. **PASSO 2** — Preview query (comentada) + bloco DO para reprocessar leads históricos
+## Causa raiz
 
-## Instruções de uso
+1. O metadata enviado ao `sync_lead_from_sale` não inclui um identificador único da transação (como `transaction_id` ou `order_id`)
+2. A tabela `lead_events` não tem constraint de unicidade
+3. Nenhum check prévio antes do INSERT
 
-1. Abra o SQL Editor do Supabase
-2. Cole o conteúdo do PASSO 1 e rode — isso cria os mapeamentos
-3. Cole o conteúdo do PASSO 2 e rode — isso reprocessa os leads existentes
-4. Verifique as mensagens NOTICE no resultado para ver quantos leads foram processados
+## Solução em 2 partes
 
-## Implementação
+### Parte 1: Passar transaction_id no metadata dos webhooks
 
-- Criar arquivo `/mnt/documents/scripts-recompra-potes.txt` com ambos os scripts concatenados, separados por comentários claros
+Alterar os 3 webhooks para incluir o ID da transação no metadata:
+
+- **guru-webhook**: adicionar `transaction_id: record.id` (ou `record.transaction_id`)
+- **ticto-webhook**: adicionar `transaction_id: record.platform_transaction_id`
+- **eduzz-webhook**: adicionar `transaction_id` equivalente
+
+### Parte 2: Deduplicar na RPC sync_lead_from_sale
+
+Antes de cada `INSERT INTO lead_events`, adicionar um check:
+
+```sql
+-- Só insere se não existir evento com mesmo lead + funnel + event_name + transaction_id
+IF NOT EXISTS (
+  SELECT 1 FROM lead_events
+  WHERE lead_id = v_lead_id
+    AND funnel_id = v_base_funnel_id
+    AND event_name = p_event_name
+    AND metadata->>'transaction_id' = (v_enriched_meta->>'transaction_id')
+) THEN
+  INSERT INTO lead_events (...)
+  VALUES (...);
+END IF;
+```
+
+Repetir para o INSERT do funil de produto.
+
+### Parte 3 (opcional): Limpar duplicatas existentes
+
+Script SQL para remover eventos duplicados históricos, mantendo apenas o primeiro de cada grupo (lead + funnel + event_name + timestamp arredondado ao minuto + product_name).
+
+## Arquivos alterados
+
+1. `supabase/functions/guru-webhook/index.ts` — adicionar transaction_id ao metadata
+2. `supabase/functions/ticto-webhook/index.ts` — idem
+3. `supabase/functions/eduzz-webhook/index.ts` — idem
+4. Nova migration SQL — atualizar a RPC `sync_lead_from_sale` com dedup
+5. Script de limpeza (opcional) — remover duplicatas históricas
+
+## Impacto
+
+- Eventos futuros: zero duplicatas
+- Timeline limpa e confiável
+- Contagens de KPIs mais precisas
+- Sem impacto no roteamento ou transição de etapas (a lógica continua a mesma, só não repete)
 
