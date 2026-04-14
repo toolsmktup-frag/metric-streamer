@@ -19,6 +19,8 @@ interface LeadCardProps {
   recontactInfo?: RecontactInfo;
   hideValues?: boolean;
   stageClassification?: ValueClassification | null;
+  userRole?: string;
+  currentUserId?: string;
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -36,7 +38,7 @@ function friendlyStatus(status: string): string {
   return STATUS_LABELS[status.toLowerCase().trim()] || status;
 }
 
-const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, onWhatsAppClick, isDragging, isRevenue = true, purchaseSummary, recontactInfo, hideValues, stageClassification }) => {
+const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, onWhatsAppClick, isDragging, isRevenue = true, purchaseSummary, recontactInfo, hideValues, stageClassification, userRole, currentUserId }) => {
   const lead = position.lead;
   // Fallback: try metadata for phone if lead.phone is empty
   const leadPhone = lead.phone || (lead.metadata?.phone as string) || (lead.metadata?.cel as string) || (lead.metadata?.telefone as string) || null;
@@ -107,7 +109,7 @@ const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, onWhatsAppClick,
         {/* Assign seller + WhatsApp shortcut */}
         <div className="ml-auto flex items-center gap-1 shrink-0">
           <div onClick={e => e.stopPropagation()}>
-            <LeadAssignSelect leadId={lead.id} currentAssignedTo={lead.assigned_to} compact />
+            <LeadAssignSelect leadId={lead.id} currentAssignedTo={lead.assigned_to} compact userRole={userRole} currentUserId={currentUserId} />
           </div>
           {leadPhone && onWhatsAppClick && (
             <button

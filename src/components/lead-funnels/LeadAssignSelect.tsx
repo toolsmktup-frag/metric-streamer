@@ -9,15 +9,23 @@ interface LeadAssignSelectProps {
   leadId: string;
   currentAssignedTo: string | null;
   compact?: boolean;
+  userRole?: string;
+  currentUserId?: string;
 }
 
 function getInitials(name: string | null): string {
   return (name || '?').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
 }
 
-const LeadAssignSelect: React.FC<LeadAssignSelectProps> = ({ leadId, currentAssignedTo, compact }) => {
+const LeadAssignSelect: React.FC<LeadAssignSelectProps> = ({ leadId, currentAssignedTo, compact, userRole, currentUserId }) => {
   const { data: members = [] } = useTeamMembers();
   const assignLead = useAssignLead();
+
+  const isSeller = userRole === 'vendedor' || userRole === 'vendedora' || userRole === 'suporte';
+  const isAdmin = userRole === 'admin' || userRole === 'gestor';
+
+  // Seller can only assign cards that are unassigned or assigned to themselves
+  const canAssign = !userRole || isAdmin || !currentAssignedTo || currentAssignedTo === currentUserId;
 
   const assignableMembers = members.filter(m =>
     ['vendedor', 'vendedora', 'suporte'].includes(m.role) && m.status === 'active'
