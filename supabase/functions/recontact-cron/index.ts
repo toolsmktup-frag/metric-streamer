@@ -73,6 +73,7 @@ Deno.serve(async (req) => {
       const { data: purchaseEvents } = await supabase
         .from("lead_events")
         .select("lead_id, metadata, created_at")
+        .eq("funnel_id", funnelId)
         .in("lead_id", leadIds)
         .in("event_name", purchaseEventNames)
         .order("created_at", { ascending: true });
