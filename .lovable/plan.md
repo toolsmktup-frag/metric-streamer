@@ -1,35 +1,70 @@
 
 
-# Auditoria de Deduplicacao e Recontato
+# Fix: Eventos duplicados cross-pipeline (guru-webhook + wz-receiver)
 
-## Status Atual
+## Problema
 
-Todas as 3 plataformas de webhook (Guru, Ticto, Eduzz) e o wz-receiver ja passam `transaction_id` no metadata — OK.
+Quando um webhook Guru dispara, ele chega em **duas Edge Functions** simultaneamente:
+1. `guru-webhook` — extrai `transaction_id` como `sale.transaction_id || payment.marketplace_id || sale.id`
+2. `wz-receiver` — extrai como `body.id || paymentObj.marketplace_id || body.transaction_id`
 
-Os hooks de frontend (`useBulkLeadPurchaseProducts` e `useRecontactDeadlines`) ja filtram por `funnel_id` e usam `lastPurchaseDate` — OK.
+A **ordem de extração é diferente**, então o mesmo payload pode gerar `transaction_id` distintos. O índice único `ux_lead_events_txn_dedup` não impede a duplicata porque os IDs são diferentes.
 
-O cron (`recontact-cron`) ja usa `lastDate` e filtra por `funnel_id` — OK.
+Resultado: 2-3 eventos para a mesma compra (como visto na Luzia e na Maria De Lourdes).
 
-## Problemas Encontrados
+## Solução
 
-### 1. `process-import/index.ts` — SEM transaction_id no metadata
-A funcao de importacao de planilhas nao inclui `transaction_id`. Se o usuario reimportar a mesma planilha, vai duplicar eventos.
+### 1. Unificar extração de `transaction_id` no wz-receiver (normalizeGuru)
 
-**Fix**: Adicionar `transaction_id: record.platform_transaction_id || record.order_id || null` ao `p_metadata`.
+Alinhar a ordem de extração do `external_event_id` no `normalizeGuru` do wz-receiver para ser **idêntica** à do guru-webhook:
 
-### 2. `import-ticto-csv/index.ts` — SEM transaction_id no metadata
-Mesmo problema. Importacao de CSV da Ticto nao inclui `transaction_id`.
+```
+// ANTES (wz-receiver)
+body.id || paymentObj.marketplace_id || body.transaction_id
 
-**Fix**: Adicionar `transaction_id: rec.platform_transaction_id || rec.order_hash || null` ao `p_metadata`.
+// DEPOIS (wz-receiver) — mesma ordem do guru-webhook
+sale.transaction_id || payment.marketplace_id || sale.id || body.id || sale.order_id
+```
+
+Onde `sale = body.sale || body` e `payment = body.payment || {}`.
+
+### 2. Cleanup: remover duplicatas existentes da lead_events
+
+SQL para limpar duplicatas históricas — manter apenas o evento mais antigo por `(lead_id, funnel_id, event_name)` quando o `metadata->>'product_name'` é igual:
+
+```sql
+DELETE FROM lead_events
+WHERE id IN (
+  SELECT id FROM (
+    SELECT id,
+      ROW_NUMBER() OVER (
+        PARTITION BY lead_id, funnel_id, event_name, 
+          COALESCE(metadata->>'product_name', ''),
+          DATE_TRUNC('minute', created_at)
+        ORDER BY created_at ASC
+      ) AS rn
+    FROM lead_events
+  ) ranked
+  WHERE rn > 1
+);
+```
+
+Este cleanup agrupa eventos que são do mesmo lead, mesmo funil, mesmo event_name, mesmo product_name, e aconteceram no mesmo minuto — mantém o primeiro e remove os demais.
+
+### 3. Gerar TXT consolidado
+
+Gerar arquivo com:
+- SQL de cleanup
+- Código atualizado do wz-receiver para redeploy
 
 ## Arquivos a alterar
 
-1. `supabase/functions/process-import/index.ts` — adicionar transaction_id ao p_metadata
-2. `supabase/functions/import-ticto-csv/index.ts` — adicionar transaction_id ao p_metadata
+1. `supabase/functions/wz-receiver/index.ts` — alinhar `normalizeGuru.external_event_id`
+2. Gerar SQL de cleanup + TXT para deploy
 
 ## Impacto
 
-- Importacoes futuras de planilhas ficam idempotentes (reimportar nao duplica)
-- Webhooks ja estao protegidos (nenhuma mudanca necessaria)
-- Frontend e cron ja estao corretos
+- Novos webhooks Guru geram apenas 1 evento (mesmo `transaction_id` em ambos pipelines)
+- Dados históricos ficam limpos
+- Sem impacto em Ticto/Eduzz (não passam pelo guru-webhook)
 
