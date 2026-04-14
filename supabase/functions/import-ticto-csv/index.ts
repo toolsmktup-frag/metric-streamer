@@ -161,6 +161,7 @@ Deno.serve(async (req) => {
           status: rec.status,
           amount_cents: rec.paid_amount,
           source: "csv_import",
+          transaction_id: rec.transaction_hash || rec.order_hash || null,
         },
       }).then(() => { leadsSynced++; }).catch((err: any) => {
         console.error("Lead sync error (non-fatal):", err);
