@@ -39,7 +39,10 @@ async function fetchAllRows<T>(
   return rows;
 }
 
-export function useLeadsByFunnel(funnelId: string | null) {
+export function useLeadsByFunnel(
+  funnelId: string | null,
+  options?: { refetchInterval?: number | false }
+) {
   return useQuery({
     queryKey: ['leads-by-funnel', funnelId],
     queryFn: async () => {
@@ -51,6 +54,9 @@ export function useLeadsByFunnel(funnelId: string | null) {
       );
     },
     enabled: !!funnelId,
+    refetchInterval: options?.refetchInterval ?? false,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   });
 }
 
