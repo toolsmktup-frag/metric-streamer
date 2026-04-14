@@ -77,17 +77,22 @@ Deno.serve(async (req) => {
         .in("event_name", purchaseEventNames)
         .order("created_at", { ascending: true });
 
-      // Build per-lead: first purchase date + all product names
-      const leadPurchaseInfo = new Map<string, { firstDate: string; productNames: string[] }>();
+      // Build per-lead: first/last purchase date + all product names
+      const leadPurchaseInfo = new Map<string, { firstDate: string; lastDate: string; productNames: string[] }>();
       for (const evt of purchaseEvents || []) {
         const productName = (evt.metadata as any)?.product_name as string || "";
         const existing = leadPurchaseInfo.get(evt.lead_id);
         if (!existing) {
           leadPurchaseInfo.set(evt.lead_id, {
             firstDate: evt.created_at,
+            lastDate: evt.created_at,
             productNames: productName ? [productName] : [],
           });
         } else {
+          // Update lastDate if this event is more recent
+          if (evt.created_at > existing.lastDate) {
+            existing.lastDate = evt.created_at;
+          }
           if (productName && !existing.productNames.includes(productName)) {
             existing.productNames.push(productName);
           }
@@ -125,8 +130,11 @@ Deno.serve(async (req) => {
         // Get purchase info from events
         const info = leadPurchaseInfo.get(pos.lead_id);
 
-        // Resolve first purchase date: metadata > events
-        let purchasedAt = (metadata.purchased_at as string) || "";
+        // Resolve purchase date: most recent event > metadata > first event
+        let purchasedAt = info?.lastDate || "";
+        if (!purchasedAt) {
+          purchasedAt = (metadata.purchased_at as string) || "";
+        }
         if (!purchasedAt && info) {
           purchasedAt = info.firstDate;
         }

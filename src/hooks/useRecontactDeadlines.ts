@@ -4,6 +4,7 @@ import { parseLocalDateTime } from '@/lib/localDate';
 import type { Lead, LeadStagePosition } from '@/types/leadFunnels';
 import type { LeadProductMapping } from '@/hooks/useLeadProductMappings';
 import type { PurchaseSummary } from '@/hooks/useBulkLeadPurchases';
+import type { LeadPurchaseInfo } from '@/hooks/useBulkLeadPurchaseProducts';
 
 export interface RecontactProduct {
   id?: string;
@@ -26,23 +27,24 @@ export interface RecontactInfo {
  * with recontact_days, then calculate countdown.
  *
  * SOMA LINEAR: When a lead has multiple purchases in the same funnel,
- * the recontact_days are SUMMED and counted from the FIRST purchase date.
- * Ex: Product A (90d) + Product B (180d) = 270 days from first purchase.
+ * the recontact_days are SUMMED and counted from the MOST RECENT purchase date.
+ * Ex: Product A (90d) + Product B (180d) = 270 days from last purchase.
  *
  * Priority for product matching:
  * 1. Explicit mapping (lead_product_mappings table)
  * 2. Substring match (product_name_contains) as fallback
  *
  * Date source priority:
- * 1. metadata.purchased_at (parsed with BR date support)
- * 2. purchaseMap.firstPurchaseDate (from customer_purchases table)
+ * 1. lastPurchaseDate from bulk purchase events (most recent event)
+ * 2. metadata.purchased_at (parsed with BR date support)
+ * 3. purchaseMap.firstPurchaseDate (from customer_purchases table)
  */
 export function useRecontactDeadlines(
   positions: (LeadStagePosition & { lead: Lead })[],
   products: RecontactProduct[] | undefined,
   mappings?: LeadProductMapping[],
   purchaseMap?: Map<string, PurchaseSummary>,
-  leadProductNamesMap?: Map<string, string[]>,
+  leadPurchaseInfoMap?: Map<string, LeadPurchaseInfo>,
 ): Map<string, RecontactInfo> {
   return useMemo(() => {
     const map = new Map<string, RecontactInfo>();
@@ -83,9 +85,10 @@ export function useRecontactDeadlines(
 
     for (const pos of positions) {
       const lead = pos.lead;
+      const purchaseInfo = leadPurchaseInfoMap?.get(pos.lead_id);
 
       // Get ALL product names this lead has purchased
-      const allProductNames = leadProductNamesMap?.get(pos.lead_id) || [];
+      const allProductNames = purchaseInfo?.productNames || [];
       const metadataProductName = (lead.metadata?.product_name as string) || '';
       
       // If we have bulk product names, use those; otherwise fallback to metadata
@@ -93,8 +96,11 @@ export function useRecontactDeadlines(
         ? allProductNames
         : metadataProductName ? [metadataProductName] : [];
 
-      // Resolve first purchase date
-      let purchasedAtRaw = (lead.metadata?.purchased_at as string) || '';
+      // Resolve purchase date — priority: lastPurchaseDate > metadata > purchaseMap
+      let purchasedAtRaw = purchaseInfo?.lastPurchaseDate || '';
+      if (!purchasedAtRaw) {
+        purchasedAtRaw = (lead.metadata?.purchased_at as string) || '';
+      }
       if (!purchasedAtRaw && purchaseMap) {
         const summary = purchaseMap.get(pos.lead_id);
         if (summary?.firstPurchaseDate) {
@@ -102,7 +108,7 @@ export function useRecontactDeadlines(
         }
       }
 
-      // No products found → skip (no fallback multiplier)
+      // No products found → skip
       if (productNamesToCheck.length === 0) {
         console.debug(`[recontact] lead=${pos.lead_id}: no products found, skipping`);
         continue;
@@ -153,5 +159,5 @@ export function useRecontactDeadlines(
     }
 
     return map;
-  }, [positions, products, mappings, purchaseMap, leadProductNamesMap]);
+  }, [positions, products, mappings, purchaseMap, leadPurchaseInfoMap]);
 }
