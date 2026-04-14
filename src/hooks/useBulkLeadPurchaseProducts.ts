@@ -48,6 +48,7 @@ export function useBulkLeadPurchaseProducts(
         const { data, error } = await (supabase as any)
           .from('lead_events')
           .select('lead_id, metadata, created_at')
+          .eq('funnel_id', funnelId)
           .in('lead_id', batch)
           .in('event_name', purchaseEventNames)
           .order('created_at', { ascending: false })
