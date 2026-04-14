@@ -40,10 +40,10 @@ const LeadAssignSelect: React.FC<LeadAssignSelectProps> = ({ leadId, currentAssi
 
   if (compact) {
     return (
-      <Select value={currentAssignedTo || '__none__'} onValueChange={handleChange}>
+      <Select value={currentAssignedTo || '__none__'} onValueChange={handleChange} disabled={!canAssign}>
         <SelectTrigger
-          className="h-6 w-6 p-0 border-0 bg-transparent [&>svg]:hidden"
-          title={currentMember?.full_name || 'Atribuir vendedor'}
+          className={`h-6 w-6 p-0 border-0 bg-transparent [&>svg]:hidden ${!canAssign ? 'opacity-50 cursor-not-allowed' : ''}`}
+          title={!canAssign ? 'Apenas o responsável pode transferir' : (currentMember?.full_name || 'Atribuir vendedor')}
         >
           <Avatar className="h-6 w-6">
             {currentMember?.avatar_url ? (
