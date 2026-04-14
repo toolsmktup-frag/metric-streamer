@@ -311,6 +311,7 @@ Deno.serve(async (req) => {
           p_purchased_at: new Date(datePaid).toISOString(),
           p_metadata: {
             platform: "eduzz",
+            transaction_id: String(invoiceId || ""),
             product_name: productName,
             status: normalizedStatus,
             amount_reais: amountReais,

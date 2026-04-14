@@ -498,6 +498,7 @@ Deno.serve(async (req) => {
           p_purchased_at: orderDate || new Date().toISOString(),
           p_metadata: {
             platform: "ticto",
+            transaction_id: String(record.platform_transaction_id || record.order_hash || ""),
             product_name: record.product_name,
             status: record.status,
             amount_cents: record.paid_amount,

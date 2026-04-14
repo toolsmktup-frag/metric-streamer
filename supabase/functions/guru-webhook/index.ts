@@ -353,6 +353,7 @@ Deno.serve(async (req) => {
           p_purchased_at: new Date(purchasedAt).toISOString(),
           p_metadata: {
             platform: "guru",
+            transaction_id: String(transactionId || ""),
             product_name: productName,
             status: normalizedStatus,
             amount: record.gross_amount,
