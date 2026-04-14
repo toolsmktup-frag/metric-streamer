@@ -422,6 +422,8 @@ Deno.serve(async (req) => {
           p_product_name: event.product_name || null,
           p_metadata: {
             platform: event.platform,
+            transaction_id: event.external_event_id,
+            external_event_id: event.external_event_id,
             product_name: event.product_name,
             status: event.status,
             amount: event.gross_amount || event.paid_amount || null,
