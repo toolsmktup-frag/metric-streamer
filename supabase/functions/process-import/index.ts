@@ -347,6 +347,7 @@ Deno.serve(async (req) => {
           status: "authorized",
           amount: record.gross_amount || 0,
           source: "planilha_import",
+          transaction_id: record.platform_transaction_id || record.order_id || null,
         },
       }).then(() => { leadsSynced++; }).catch((err: any) => {
         console.error("Lead sync error (non-fatal):", err);
