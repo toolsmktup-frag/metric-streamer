@@ -1,17 +1,53 @@
 import React, { useMemo } from 'react';
 import { LeadFunnelStage, Lead, LeadStagePosition } from '@/types/leadFunnels';
 import { MetricCard } from '@/components/kpi/MetricCard';
-import { Users, DollarSign, TrendingDown, Receipt, Package } from 'lucide-react';
+import { Users, DollarSign, TrendingDown, Receipt, Package, Eye, MousePointerClick, Mail, Globe } from 'lucide-react';
 import { formatCurrency, formatPercent } from '@/lib/formatters';
 import { isRevenueStage } from '@/lib/revenueStage';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 
 interface Props {
   stages: LeadFunnelStage[];
   positions: (LeadStagePosition & { lead: Lead })[];
+  funnelId: string;
 }
 
-const FunnelMetricsTab: React.FC<Props> = ({ stages, positions }) => {
+const FunnelMetricsTab: React.FC<Props> = ({ stages, positions, funnelId }) => {
   const sortedStages = useMemo(() => [...stages].sort((a, b) => a.sort_order - b.sort_order), [stages]);
+
+  // Fetch tracking metrics from clicks table
+  const { data: trackingMetrics } = useQuery({
+    queryKey: ['funnel-tracking-metrics', funnelId],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('clicks')
+        .select('event_type, visitor_id, email, page_url, stage_id, created_at')
+        .eq('funnel_id', funnelId);
+
+      if (error) {
+        console.error('Error fetching tracking metrics:', error);
+        return { pageviews: 0, uniqueVisitors: 0, emailCaptures: 0, uniquePages: 0, stageViews: new Map<string, number>() };
+      }
+
+      const rows = (data || []) as any[];
+      const pageviews = rows.filter(r => r.event_type === 'pageview').length;
+      const uniqueVisitors = new Set(rows.map(r => r.visitor_id)).size;
+      const emailCaptures = rows.filter(r => r.event_type === 'email_capture').length;
+      const uniquePages = new Set(rows.filter(r => r.page_url).map(r => r.page_url)).size;
+
+      // Stage-level views
+      const stageViews = new Map<string, number>();
+      for (const row of rows) {
+        if (row.event_type === 'pageview' && row.stage_id) {
+          stageViews.set(row.stage_id, (stageViews.get(row.stage_id) || 0) + 1);
+        }
+      }
+
+      return { pageviews, uniqueVisitors, emailCaptures, uniquePages, stageViews };
+    },
+    refetchInterval: 30000,
+  });
 
   const metrics = useMemo(() => {
     let confirmedRevenue = 0;
@@ -88,6 +124,37 @@ const FunnelMetricsTab: React.FC<Props> = ({ stages, positions }) => {
         />
       </div>
 
+      {/* Tracking Metrics */}
+      {trackingMetrics && trackingMetrics.pageviews > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <MetricCard
+            label="Pageviews"
+            value={trackingMetrics.pageviews.toLocaleString('pt-BR')}
+            icon={Eye}
+            color="bg-blue-500/10 text-blue-600"
+          />
+          <MetricCard
+            label="Visitantes Únicos"
+            value={trackingMetrics.uniqueVisitors.toLocaleString('pt-BR')}
+            icon={Globe}
+            color="bg-indigo-500/10 text-indigo-600"
+          />
+          <MetricCard
+            label="Emails Capturados"
+            value={trackingMetrics.emailCaptures.toLocaleString('pt-BR')}
+            icon={Mail}
+            color="bg-violet-500/10 text-violet-600"
+          />
+          <MetricCard
+            label="Taxa Captura"
+            value={trackingMetrics.uniqueVisitors > 0 ? formatPercent((trackingMetrics.emailCaptures / trackingMetrics.uniqueVisitors) * 100) : '0%'}
+            sub={`${trackingMetrics.uniquePages} páginas rastreadas`}
+            icon={MousePointerClick}
+            color="bg-cyan-500/10 text-cyan-600"
+          />
+        </div>
+      )}
+
       {/* Distribution by stage */}
       <div className="rounded-xl border border-border bg-card p-5">
         <h3 className="text-sm font-semibold text-foreground mb-4">Distribuição por Etapa</h3>
@@ -110,6 +177,11 @@ const FunnelMetricsTab: React.FC<Props> = ({ stages, positions }) => {
                 />
               </div>
               <span className="text-sm font-mono text-foreground w-12 text-right">{count}</span>
+              {trackingMetrics?.stageViews?.get(stage.id) != null && (
+                <span className="text-[11px] text-muted-foreground w-16 text-right" title="Pageviews do tracking">
+                  <Eye className="inline h-3 w-3 mr-0.5" />{trackingMetrics.stageViews.get(stage.id)}
+                </span>
+              )}
               {revenue > 0 && (
                 <span className={`text-xs font-semibold w-28 text-right ${isRevenue ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}`}>
                   {isRevenue ? '' : '-'}{formatCurrency(revenue)}

@@ -379,7 +379,7 @@ const LeadFunnelDetail: React.FC = () => {
 
         {isAdmin && (
           <TabsContent value="metrics" className="mt-4">
-            <FunnelMetricsTab stages={stages} positions={positions} />
+            <FunnelMetricsTab stages={stages} positions={positions} funnelId={funnel.id} />
           </TabsContent>
         )}
 
