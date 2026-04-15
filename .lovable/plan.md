@@ -1,43 +1,45 @@
 
 
-## Auto-mover lead de etapa via pageview tracking
+## Correção de bugs no track-event e webhook-lead
 
-### Como funciona hoje
-O `track-event` insere na tabela `clicks` e pronto. Não move ninguém.
+### Bug 1: track-event insere colunas erradas no lead_events (CRÍTICO)
+No `supabase/functions/track-event/index.ts` linhas 177-183, o insert usa:
+- `event_type` → deveria ser `event_name`
+- `new_stage_id` → não existe na tabela
+- `source` → não existe na tabela
+- Falta `funnel_id` (obrigatório)
 
-### O que precisa mudar
-Após inserir o click, o `track-event` deve tentar identificar o lead pelo `visitor_id` e movê-lo para a etapa (`stage_id`) do snippet.
+Isso faz o insert falhar silenciosamente — o lead é movido de etapa mas o evento **não aparece na timeline**.
 
-### Lógica de identificação
-1. Buscar na tabela `clicks` se esse `visitor_id` já tem um `email` capturado (evento `email_capture` anterior)
-2. Se sim, buscar o lead pelo email na tabela `leads`
-3. Se o lead existir e tiver posição no funil (`lead_stage_positions`), atualizar para o novo `stage_id`
-4. Se não tiver posição ainda, criar uma na primeira etapa
-
-### Mudança técnica
-
-**`supabase/functions/track-event/index.ts`** — após o insert na `clicks`:
-
-```text
-Se event_type === "pageview" && stage_id && funnel_id:
-  1. SELECT email FROM clicks WHERE visitor_id = X AND email IS NOT NULL LIMIT 1
-  2. Se achou email → SELECT id FROM leads WHERE email = Y LIMIT 1
-  3. Se achou lead → UPSERT lead_stage_positions (lead_id, funnel_id) 
-     SET stage_id = Z, entered_at = NOW()
-     ON CONFLICT (lead_id, funnel_id) DO UPDATE
-  4. INSERT lead_events (stage_change) para registrar a movimentação
+**Fix**: Corrigir para:
+```typescript
+await supabase.from("lead_events").insert({
+  lead_id: leadId,
+  funnel_id: funnelId,
+  event_name: "stage_change",
+  metadata: { 
+    source: "tracking_pageview",
+    visitor_id: visitorId, 
+    page_url: cleanRecord.page_url,
+    to_stage_id: stageId 
+  },
+});
 ```
 
-### Fluxo prático
-```text
-LP captura: pageview (vid=ABC) → email_capture (vid=ABC, email=fulano@x)
-Redirect:   pageview (vid=ABC, stage_id=044ab...) 
-            → track-event identifica ABC → email fulano@x → lead → move pra etapa 2
+### Bug 2: webhook-lead não captura `sck`
+O payload traz `sck` (tracking concatenado) mas o webhook-lead só extrai `xcod`. Adicionar `sck` ao metadata.
+
+**Fix** em `supabase/functions/webhook-lead/index.ts`:
+```typescript
+const sck = body.sck || null;
+const metadata = { 
+  ...(body.metadata || {}), 
+  ...(xcod ? { xcod } : {}),
+  ...(sck ? { sck } : {}) 
+};
 ```
 
-### Proteções
-- Só executa se `event_type === "pageview"` e ambos `stage_id` + `funnel_id` presentes
-- Não bloqueia o response — lógica de movimentação é fire-and-forget (já retorna 200 antes)
-- Se não encontrar email ou lead, ignora silenciosamente (só loga)
-- Usa `ON CONFLICT` para evitar duplicatas (constraint `unique_lead_per_funnel`)
+### Arquivos alterados
+1. `supabase/functions/track-event/index.ts` — corrigir colunas do lead_events insert
+2. `supabase/functions/webhook-lead/index.ts` — adicionar `sck` ao metadata
 
