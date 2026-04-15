@@ -3,6 +3,12 @@ import { supabase } from '@/integrations/supabase/client';
 import type { WzInstance } from '@/types/wz-automation';
 import { toast } from 'sonner';
 
+export interface WzInstanceProfile {
+  phone_number?: string;
+  profile_pic_url?: string;
+  status?: string;
+}
+
 export function useWzInstances() {
   return useQuery({
     queryKey: ['wz-instances'],
@@ -14,6 +20,37 @@ export function useWzInstances() {
       if (error) throw error;
       return (data || []) as unknown as WzInstance[];
     },
+  });
+}
+
+export function useWzInstanceProfiles(instances: WzInstance[]) {
+  return useQuery({
+    queryKey: ['wz-instance-profiles', instances.map(i => i.id).join(',')],
+    queryFn: async () => {
+      const profiles: Record<string, WzInstanceProfile> = {};
+      await Promise.all(
+        instances.map(async (inst) => {
+          try {
+            const url = inst.api_url.replace(/\/+$/, '');
+            const res = await fetch(`${url}/instance/status`, {
+              headers: { token: inst.api_key },
+            });
+            if (!res.ok) return;
+            const data = await res.json();
+            profiles[inst.id] = {
+              phone_number: data?.phone || data?.number || data?.instance?.phone || data?.user?.id?.replace('@s.whatsapp.net', ''),
+              profile_pic_url: data?.profilePicUrl || data?.instance?.profilePicUrl || data?.user?.profilePictureUrl,
+              status: data?.state || data?.status || data?.instance?.state,
+            };
+          } catch {
+            // ignore
+          }
+        })
+      );
+      return profiles;
+    },
+    enabled: instances.length > 0,
+    refetchInterval: 30000,
   });
 }
 
