@@ -14,6 +14,7 @@ import {
 export default function WzInstanceManager({ embedded = false }: { embedded?: boolean }) {
   const { instances: chatInstances, loading: chatLoading, refetch } = useWhatsAppInstances();
   const { data: manualInstances = [], isLoading: manualLoading } = useWzInstances();
+  const { data: manualProfiles = {} } = useWzInstanceProfiles(manualInstances);
   const createMutation = useCreateWzInstance();
   const updateMutation = useUpdateWzInstance();
   const deleteMutation = useDeleteWzInstance();
