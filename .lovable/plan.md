@@ -1,43 +1,45 @@
 
 
-## Compatibilizar webhook-lead com payloads de páginas de captura
+## Verificação real do snippet na página do usuário
 
-### Problema
-O payload enviado pela página de captura usa nomes de campos diferentes do esperado pela edge function:
+### O problema
+Hoje o botão "Verificar eventos" só consulta o banco pra ver se já tem cliques. Não verifica se o snippet **está instalado** na página. Você quer que ele acesse a página e confirme que o código está lá.
 
-| Página envia | Função espera | Status |
-|---|---|---|
-| `nome` | `name` | ❌ não reconhece |
-| `whatsapp` | `phone` | ❌ não reconhece |
-| (nenhum) | `event` | ❌ retorna erro 400 |
-| `xcod` | — | ❌ ignorado |
-| `utm_source` | `utm_source` | ✅ ok |
-| `utm_campaign` | `utm_campaign` | ✅ ok |
-| `utm_medium` | `utm_medium` | ✅ ok |
-| `utm_content` | `utm_content` | ✅ ok |
-| `utm_term` | `utm_term` | ✅ ok |
+### A solução
+Criar uma Edge Function `verify-tracking-snippet` que:
+1. Recebe a URL da página (ex: `workshopervas.matheuscolombo.com.br`)
+2. Faz um `fetch` do HTML da página no server-side
+3. Analisa o HTML procurando pelo `tracker.js` com o `stage_id` correto
+4. Retorna um diagnóstico detalhado
 
-### Correção
+### O que a função vai checar
 
-**Arquivo: `supabase/functions/webhook-lead/index.ts`**
+| Verificação | Resultado |
+|---|---|
+| Snippet `tracker.js` encontrado no HTML | ✅ / ❌ |
+| `data-endpoint` aponta pro endpoint correto | ✅ / ❌ |
+| `data-stage-id` bate com o stage atual | ✅ / ❌ |
+| `data-funnel-id` bate com o funil atual | ✅ / ❌ |
+| Snippet está no `<head>` (não no body) | ✅ / ⚠️ |
 
-Adicionar aliases na extração do body para aceitar ambos os formatos:
+### Mudanças
 
-```typescript
-const phone = body.phone || body.whatsapp || body.telefone || null;
-const name = body.name || body.nome || null;
-const email = body.email || null;
-const event = body.event || 'capture'; // default "capture" se não vier
-const xcod = body.xcod || null;
-```
+**1. Nova Edge Function: `supabase/functions/verify-tracking-snippet/index.ts`**
+- Recebe `{ url, funnel_id, stage_id }` via POST
+- Faz fetch do HTML da URL
+- Usa regex pra encontrar as tags `<script>` com `tracker.js`
+- Valida os atributos `data-endpoint`, `data-funnel-id`, `data-stage-id`
+- Retorna objeto com cada check (found, endpoint_ok, funnel_ok, stage_ok, in_head)
 
-- **`event` com fallback `"capture"`** — se a página não mandar `event`, assume `capture` automaticamente (faz sentido pra páginas de captura)
-- **`xcod`** salvo no campo `metadata` do lead para rastreamento
-- **`whatsapp` / `nome`** como aliases de `phone` / `name`
-- Nenhuma mudança no banco, só na edge function
+**2. Atualizar `TrackingSnippetPopover.tsx`**
+- Adicionar botão "Verificar instalação" (separado do "Verificar eventos")
+- Ao clicar, chama a edge function passando a `pageUrl` da etapa
+- Mostra resultado detalhado: checklist visual com cada item
+- Se `pageUrl` não estiver configurada, mostra aviso pedindo pra preencher
 
 ### Detalhes técnicos
-- O `xcod` será armazenado em `metadata.xcod` para consulta futura
-- O fallback de `event` para `"capture"` significa que a página não precisa enviar esse campo — vai funcionar direto
-- Os UTMs já batem, então continuam funcionando normalmente
+- A Edge Function precisa `verify_jwt = false` no config.toml (ou usar apikey)
+- Timeout de 10s no fetch da página externa
+- Se a página retornar erro (404, timeout), reporta como "página inacessível"
+- O botão só aparece se a etapa tiver `pageUrl` preenchida
 
