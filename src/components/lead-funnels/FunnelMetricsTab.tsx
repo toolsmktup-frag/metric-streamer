@@ -177,6 +177,11 @@ const FunnelMetricsTab: React.FC<Props> = ({ stages, positions, funnelId }) => {
                 />
               </div>
               <span className="text-sm font-mono text-foreground w-12 text-right">{count}</span>
+              {trackingMetrics?.stageViews?.get(stage.id) != null && (
+                <span className="text-[11px] text-muted-foreground w-16 text-right" title="Pageviews do tracking">
+                  <Eye className="inline h-3 w-3 mr-0.5" />{trackingMetrics.stageViews.get(stage.id)}
+                </span>
+              )}
               {revenue > 0 && (
                 <span className={`text-xs font-semibold w-28 text-right ${isRevenue ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}`}>
                   {isRevenue ? '' : '-'}{formatCurrency(revenue)}
