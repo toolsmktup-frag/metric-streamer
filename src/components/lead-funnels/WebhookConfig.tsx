@@ -7,6 +7,8 @@ interface WebhookConfigProps {
   funnel: LeadFunnel;
 }
 
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVtZmJvY3BtcGh0ZnRxY2V6YWliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI5ODc4ODAsImV4cCI6MjA4ODU2Mzg4MH0.EpE1RwQhmk4C9YFdVjnJXp__cI8LPiic5dMqIMP1g8M";
+
 const WebhookConfig: React.FC<WebhookConfigProps> = ({ funnel }) => {
   const [copied, setCopied] = useState<string | null>(null);
 
@@ -29,6 +31,7 @@ const WebhookConfig: React.FC<WebhookConfigProps> = ({ funnel }) => {
 
   const curlExample = `curl -X POST "${webhookUrl}" \\
   -H "Content-Type: application/json" \\
+  -H "apikey: ${SUPABASE_ANON_KEY}" \\
   -H "X-Funnel-Token: ${funnel.webhook_token}" \\
   -d '${JSON.stringify({
     event: 'signup',
@@ -61,6 +64,17 @@ const WebhookConfig: React.FC<WebhookConfigProps> = ({ funnel }) => {
         <div className="mt-1 flex items-center gap-2 bg-muted rounded-lg px-3 py-2">
           <code className="text-sm text-foreground flex-1 break-all">{webhookUrl}</code>
           <CopyBtn text={webhookUrl} label="url" />
+        </div>
+      </div>
+
+      {/* API Key */}
+      <div>
+        <label className="text-sm font-semibold text-foreground">API Key (Header obrigatório)</label>
+        <div className="mt-1 flex items-center gap-2 bg-muted rounded-lg px-3 py-2">
+          <code className="text-sm text-foreground flex-1 font-mono break-all">
+            apikey: {SUPABASE_ANON_KEY}
+          </code>
+          <CopyBtn text={SUPABASE_ANON_KEY} label="apikey" />
         </div>
       </div>
 
@@ -102,8 +116,9 @@ const WebhookConfig: React.FC<WebhookConfigProps> = ({ funnel }) => {
       <div className="bg-accent/50 border border-border rounded-lg p-4">
         <h4 className="text-sm font-semibold text-foreground mb-2">Como integrar</h4>
         <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
-          <li>Copie a URL e o Token acima</li>
+          <li>Copie a URL, a API Key e o Funnel Token acima</li>
           <li>No n8n/Zapier/Typebot, configure um HTTP POST para a URL</li>
+          <li>Adicione o header <code className="text-foreground">apikey</code> com o valor da API Key</li>
           <li>Adicione o header <code className="text-foreground">X-Funnel-Token</code> com o valor do token</li>
           <li>Envie o body JSON com o campo <code className="text-foreground">event</code> + <code className="text-foreground">phone</code> ou <code className="text-foreground">email</code></li>
           <li>O lead será criado/atualizado automaticamente e movido conforme as regras de transição</li>
