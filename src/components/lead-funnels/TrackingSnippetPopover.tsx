@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
-import { Code, Copy, Check, Loader2, CircleCheck, CircleX } from 'lucide-react';
+import { Code, Copy, Check, Loader2, CircleCheck, CircleX, Search } from 'lucide-react';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 
 interface TrackingSnippetPopoverProps {
   funnelId: string;
@@ -22,7 +23,8 @@ const TrackingSnippetPopover: React.FC<TrackingSnippetPopoverProps> = ({
 }) => {
   const [copied, setCopied] = useState(false);
   const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState<'success' | 'error' | null>(null);
+  const [testResult, setTestResult] = useState<'success' | 'error' | 'no_events' | null>(null);
+  const [eventCount, setEventCount] = useState<number | null>(null);
 
   const snippet = `<script src="${TRACKER_SRC}"
         data-endpoint="${ENDPOINT}"
@@ -44,28 +46,36 @@ const TrackingSnippetPopover: React.FC<TrackingSnippetPopoverProps> = ({
   const handleTest = async () => {
     setTesting(true);
     setTestResult(null);
+    setEventCount(null);
     try {
-      const res = await fetch(ENDPOINT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          visitor_id: crypto.randomUUID(),
-          event: 'tracking_test',
-          funnel_id: funnelId,
-          stage_id: stageId,
-          page_url: pageUrl,
-          timestamp: new Date().toISOString(),
-        }),
-      });
-      setTestResult(res.ok ? 'success' : 'error');
-      if (res.ok) {
-        toast.success('Tracking funcionando!');
+      // Query real events from clicks table for this stage_id
+      const { data, error, count } = await supabase
+        .from('clicks')
+        .select('id', { count: 'exact', head: false })
+        .eq('stage_id', stageId)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (error) {
+        console.error('[TrackingTest] Query error:', error);
+        setTestResult('error');
+        toast.error(`Erro ao consultar: ${error.message}`);
+        return;
+      }
+
+      const total = count ?? 0;
+      setEventCount(total);
+
+      if (total > 0) {
+        setTestResult('success');
+        toast.success(`Tracking ativo! ${total} evento${total > 1 ? 's' : ''} registrado${total > 1 ? 's' : ''}.`);
       } else {
-        toast.error(`Erro: ${res.status}`);
+        setTestResult('no_events');
+        toast.info('Nenhum evento encontrado ainda. Acesse a página com o snippet instalado para gerar o primeiro pageview.');
       }
     } catch {
       setTestResult('error');
-      toast.error('Não foi possível conectar ao endpoint');
+      toast.error('Não foi possível verificar os eventos');
     } finally {
       setTesting(false);
     }
@@ -93,7 +103,7 @@ const TrackingSnippetPopover: React.FC<TrackingSnippetPopoverProps> = ({
             {snippet}
           </pre>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <Button variant="outline" size="sm" onClick={handleCopy} className="gap-1.5">
               {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
               {copied ? 'Copiado' : 'Copiar'}
@@ -106,15 +116,24 @@ const TrackingSnippetPopover: React.FC<TrackingSnippetPopoverProps> = ({
                 <CircleCheck className="h-3.5 w-3.5 text-emerald-500" />
               ) : testResult === 'error' ? (
                 <CircleX className="h-3.5 w-3.5 text-destructive" />
-              ) : null}
-              Testar
+              ) : (
+                <Search className="h-3.5 w-3.5" />
+              )}
+              Verificar eventos
             </Button>
 
-            {testResult === 'success' && (
-              <span className="text-xs text-emerald-500 font-medium">✅ Funcionando</span>
+            {testResult === 'success' && eventCount !== null && (
+              <span className="text-xs text-emerald-500 font-medium">
+                ✅ {eventCount} evento{eventCount > 1 ? 's' : ''} encontrado{eventCount > 1 ? 's' : ''}
+              </span>
+            )}
+            {testResult === 'no_events' && (
+              <span className="text-xs text-amber-500 font-medium">
+                ⚠️ Nenhum evento ainda — acesse a página para gerar
+              </span>
             )}
             {testResult === 'error' && (
-              <span className="text-xs text-destructive font-medium">❌ Falhou</span>
+              <span className="text-xs text-destructive font-medium">❌ Erro na verificação</span>
             )}
           </div>
         </div>
