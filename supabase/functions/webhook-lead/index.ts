@@ -27,14 +27,15 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json()
-    const { event, phone, email, name, metadata, utm_source, utm_medium, utm_campaign, utm_content, utm_term } = body
 
-    if (!event) {
-      return new Response(JSON.stringify({ error: 'Missing event field' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
+    // Aliases for capture page compatibility
+    const phone = body.phone || body.whatsapp || body.telefone || null
+    const email = body.email || null
+    const name = body.name || body.nome || null
+    const event = body.event || 'capture'
+    const xcod = body.xcod || null
+    const { utm_source, utm_medium, utm_campaign, utm_content, utm_term } = body
+    const metadata = { ...(body.metadata || {}), ...(xcod ? { xcod } : {}) }
 
     if (!phone && !email) {
       return new Response(JSON.stringify({ error: 'Phone or email required' }), {
