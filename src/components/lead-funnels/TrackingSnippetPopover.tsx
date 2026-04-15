@@ -49,7 +49,7 @@ const TrackingSnippetPopover: React.FC<TrackingSnippetPopoverProps> = ({
     setEventCount(null);
     try {
       // Query real events from clicks table for this stage_id
-      const { data, error, count } = await supabase
+      const { data, error, count } = await (supabase as any)
         .from('clicks')
         .select('id', { count: 'exact', head: false })
         .eq('stage_id', stageId)
