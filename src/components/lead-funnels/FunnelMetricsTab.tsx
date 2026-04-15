@@ -211,6 +211,12 @@ const FunnelMetricsTab: React.FC<Props> = ({ stages, positions, funnelId }) => {
         </div>
       )}
 
+      {/* UTM Breakdowns */}
+      <UtmBreakdown positions={positions} field="utm_source" label="Fontes (utm_source)" icon={Globe} />
+      <UtmBreakdown positions={positions} field="utm_medium" label="Mídia (utm_medium)" icon={MousePointerClick} />
+      <UtmBreakdown positions={positions} field="utm_campaign" label="Campanhas (utm_campaign)" icon={Package} />
+      <UtmBreakdown positions={positions} field="utm_content" label="Criativos (utm_content)" icon={Eye} />
+
       {/* Top Products */}
       <ProductsRanking positions={positions} stages={stages} />
     </div>
