@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { LeadFunnelStage, Lead, LeadStagePosition } from '@/types/leadFunnels';
 import { MetricCard } from '@/components/kpi/MetricCard';
-import { Users, DollarSign, TrendingDown, Receipt, Package, Eye, MousePointerClick, Mail, Globe } from 'lucide-react';
+import { Users, DollarSign, TrendingDown, Receipt, Package, Eye, MousePointerClick, Mail, Globe, LucideIcon } from 'lucide-react';
 import { formatCurrency, formatPercent } from '@/lib/formatters';
 import { isRevenueStage } from '@/lib/revenueStage';
 import { useQuery } from '@tanstack/react-query';
@@ -211,8 +211,67 @@ const FunnelMetricsTab: React.FC<Props> = ({ stages, positions, funnelId }) => {
         </div>
       )}
 
+      {/* UTM Breakdowns */}
+      <UtmBreakdown positions={positions} field="utm_source" label="Fontes (utm_source)" icon={Globe} />
+      <UtmBreakdown positions={positions} field="utm_medium" label="Mídia (utm_medium)" icon={MousePointerClick} />
+      <UtmBreakdown positions={positions} field="utm_campaign" label="Campanhas (utm_campaign)" icon={Package} />
+      <UtmBreakdown positions={positions} field="utm_content" label="Criativos (utm_content)" icon={Eye} />
+
       {/* Top Products */}
       <ProductsRanking positions={positions} stages={stages} />
+    </div>
+  );
+};
+
+/* ---- UTM Breakdown Sub-component ---- */
+const UtmBreakdown: React.FC<{
+  positions: (LeadStagePosition & { lead: Lead })[];
+  field: 'utm_source' | 'utm_medium' | 'utm_campaign' | 'utm_content';
+  label: string;
+  icon: LucideIcon;
+}> = ({ positions, field, label, icon: Icon }) => {
+  const items = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const pos of positions) {
+      const val = (pos.lead[field] as string)?.trim();
+      if (!val) continue;
+      map.set(val, (map.get(val) || 0) + 1);
+    }
+    return Array.from(map.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 15);
+  }, [positions, field]);
+
+  const maxCount = Math.max(...items.map(i => i.count), 1);
+  const total = items.reduce((s, i) => s + i.count, 0);
+
+  if (items.length === 0) return null;
+
+  return (
+    <div className="rounded-xl border border-border bg-card p-5">
+      <div className="flex items-center gap-2 mb-4">
+        <Icon className="h-4 w-4 text-foreground" />
+        <h3 className="text-sm font-semibold text-foreground">{label}</h3>
+        <span className="text-xs text-muted-foreground ml-auto">{total} leads com dados</span>
+      </div>
+      <div className="space-y-2">
+        {items.map((item) => (
+          <div key={item.name} className="flex items-center gap-3">
+            <span className="text-sm font-medium text-foreground w-52 truncate" title={item.name}>{item.name}</span>
+            <div className="flex-1 h-5 bg-muted rounded-full overflow-hidden">
+              <div
+                className="h-full rounded-full bg-primary/60 transition-all"
+                style={{ width: `${(item.count / maxCount) * 100}%`, minWidth: item.count > 0 ? '6px' : '0' }}
+              />
+            </div>
+            <span className="text-sm font-mono text-foreground w-10 text-right">{item.count}</span>
+            <span className="text-xs text-muted-foreground w-12 text-right">
+              {total > 0 ? `${((item.count / total) * 100).toFixed(0)}%` : '0%'}
+            </span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 };
