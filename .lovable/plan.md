@@ -1,33 +1,43 @@
 
 
-## Cross-domain visitor stitching via tracker.js v1.3
+## Auto-mover lead de etapa via pageview tracking
 
-### O que muda
-Duas coisas no `tracker.js`:
+### Como funciona hoje
+O `track-event` insere na tabela `clicks` e pronto. Não move ninguém.
 
-1. **Aceitar `ms_vid` na URL** — se a página de destino receber `?ms_vid=ABC`, usa esse ID em vez de criar um novo. Isso conecta os pageviews entre domínios.
+### O que precisa mudar
+Após inserir o click, o `track-event` deve tentar identificar o lead pelo `visitor_id` e movê-lo para a etapa (`stage_id`) do snippet.
 
-2. **Auto-decorar links externos** — após o DOM carregar, o script percorre todos os `<a href>` que apontem pra domínios diferentes e appenda `?ms_vid={visitor_id}` automaticamente. Você não precisa mexer em nada nos seus botões.
+### Lógica de identificação
+1. Buscar na tabela `clicks` se esse `visitor_id` já tem um `email` capturado (evento `email_capture` anterior)
+2. Se sim, buscar o lead pelo email na tabela `leads`
+3. Se o lead existir e tiver posição no funil (`lead_stage_positions`), atualizar para o novo `stage_id`
+4. Se não tiver posição ainda, criar uma na primeira etapa
 
-### Fluxo prático
+### Mudança técnica
+
+**`supabase/functions/track-event/index.ts`** — após o insert na `clicks`:
 
 ```text
-LP captura (seu domínio)              join-now-vip.lovable.app
-────────────────────────              ──────────────────────────
-visitor_id = ABC                      ?ms_vid=ABC → visitor_id = ABC
-pageview (stage 1)                    pageview (stage 2)
-email_capture (email=fulano@x)        → mesmo visitor_id = ABC
-                                      → você sabe quem é
+Se event_type === "pageview" && stage_id && funnel_id:
+  1. SELECT email FROM clicks WHERE visitor_id = X AND email IS NOT NULL LIMIT 1
+  2. Se achou email → SELECT id FROM leads WHERE email = Y LIMIT 1
+  3. Se achou lead → UPSERT lead_stage_positions (lead_id, funnel_id) 
+     SET stage_id = Z, entered_at = NOW()
+     ON CONFLICT (lead_id, funnel_id) DO UPDATE
+  4. INSERT lead_events (stage_change) para registrar a movimentação
 ```
 
-### Recomendação
-**Auto-decoração é melhor** — zero trabalho manual, funciona com qualquer botão/link que você colocar na página. Se depois trocar a URL de redirect, continua funcionando sem mexer em nada.
+### Fluxo prático
+```text
+LP captura: pageview (vid=ABC) → email_capture (vid=ABC, email=fulano@x)
+Redirect:   pageview (vid=ABC, stage_id=044ab...) 
+            → track-event identifica ABC → email fulano@x → lead → move pra etapa 2
+```
 
-### Mudanças técnicas
-
-**`public/tracking/tracker.js`** (v1.2 → v1.3):
-- `getOrCreateVisitorId()`: checar `getParam("ms_vid")` antes de gerar UUID novo
-- Nova função `decorateOutboundLinks()`: percorre `<a>` tags, filtra links de domínio diferente, appenda `ms_vid`
-- Chamar após DOMContentLoaded + no MutationObserver (pega links dinâmicos)
-- Atualizar versão no `TRACKER_SRC` do `TrackingSnippetPopover.tsx`
+### Proteções
+- Só executa se `event_type === "pageview"` e ambos `stage_id` + `funnel_id` presentes
+- Não bloqueia o response — lógica de movimentação é fire-and-forget (já retorna 200 antes)
+- Se não encontrar email ou lead, ignora silenciosamente (só loga)
+- Usa `ON CONFLICT` para evitar duplicatas (constraint `unique_lead_per_funnel`)
 
