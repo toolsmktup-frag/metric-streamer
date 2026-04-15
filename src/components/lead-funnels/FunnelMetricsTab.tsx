@@ -1,7 +1,8 @@
 import React, { useMemo } from 'react';
 import { LeadFunnelStage, Lead, LeadStagePosition } from '@/types/leadFunnels';
 import { MetricCard } from '@/components/kpi/MetricCard';
-import { Users, DollarSign, TrendingDown, Receipt, Package, Eye, MousePointerClick, Mail, Globe, LucideIcon } from 'lucide-react';
+import { Users, DollarSign, TrendingDown, Receipt, Package, Eye, MousePointerClick, Mail, Globe, LucideIcon, Download } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { formatCurrency, formatPercent } from '@/lib/formatters';
 import { isRevenueStage } from '@/lib/revenueStage';
 import { useQuery } from '@tanstack/react-query';
@@ -217,6 +218,9 @@ const FunnelMetricsTab: React.FC<Props> = ({ stages, positions, funnelId }) => {
       <UtmBreakdown positions={positions} field="utm_campaign" label="Campanhas (utm_campaign)" icon={Package} />
       <UtmBreakdown positions={positions} field="utm_content" label="Criativos (utm_content)" icon={Eye} />
 
+      {/* Export all UTMs button */}
+      <ExportAllUtmsButton positions={positions} />
+
       {/* Top Products */}
       <ProductsRanking positions={positions} stages={stages} />
     </div>
@@ -253,7 +257,26 @@ const UtmBreakdown: React.FC<{
       <div className="flex items-center gap-2 mb-4">
         <Icon className="h-4 w-4 text-foreground" />
         <h3 className="text-sm font-semibold text-foreground">{label}</h3>
-        <span className="text-xs text-muted-foreground ml-auto">{total} leads com dados</span>
+        <span className="text-xs text-muted-foreground ml-auto mr-2">{total} leads com dados</span>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 px-2 text-xs"
+          onClick={() => {
+            const csv = `${field},quantidade,percentual\n` + items.map(i =>
+              `"${i.name.replace(/"/g, '""')}",${i.count},${total > 0 ? ((i.count / total) * 100).toFixed(1) : 0}%`
+            ).join('\n');
+            const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${field}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+          }}
+        >
+          <Download className="h-3 w-3 mr-1" /> CSV
+        </Button>
       </div>
       <div className="space-y-2">
         {items.map((item) => (
@@ -272,6 +295,37 @@ const UtmBreakdown: React.FC<{
           </div>
         ))}
       </div>
+    </div>
+  );
+};
+
+/* ---- Export All UTMs Button ---- */
+const ExportAllUtmsButton: React.FC<{ positions: (LeadStagePosition & { lead: Lead })[] }> = ({ positions }) => {
+  const hasAnyUtm = positions.some(p => p.lead.utm_source || p.lead.utm_medium || p.lead.utm_campaign || p.lead.utm_content || p.lead.utm_term);
+  if (!hasAnyUtm) return null;
+
+  const handleExport = () => {
+    const header = 'nome,telefone,email,utm_source,utm_medium,utm_campaign,utm_content,utm_term,criado_em';
+    const rows = positions.map(p => {
+      const l = p.lead;
+      const esc = (v: string | null) => `"${(v || '').replace(/"/g, '""')}"`;
+      return [esc(l.name), esc(l.phone), esc(l.email), esc(l.utm_source), esc(l.utm_medium), esc(l.utm_campaign), esc(l.utm_content), esc(l.utm_term), esc(l.created_at)].join(',');
+    });
+    const csv = [header, ...rows].join('\n');
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'leads_com_utms.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="flex justify-end">
+      <Button variant="outline" size="sm" onClick={handleExport}>
+        <Download className="h-4 w-4 mr-2" /> Exportar todos os leads com UTMs (CSV)
+      </Button>
     </div>
   );
 };
