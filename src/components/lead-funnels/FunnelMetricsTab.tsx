@@ -299,6 +299,37 @@ const UtmBreakdown: React.FC<{
   );
 };
 
+/* ---- Export All UTMs Button ---- */
+const ExportAllUtmsButton: React.FC<{ positions: (LeadStagePosition & { lead: Lead })[] }> = ({ positions }) => {
+  const hasAnyUtm = positions.some(p => p.lead.utm_source || p.lead.utm_medium || p.lead.utm_campaign || p.lead.utm_content || p.lead.utm_term);
+  if (!hasAnyUtm) return null;
+
+  const handleExport = () => {
+    const header = 'nome,telefone,email,utm_source,utm_medium,utm_campaign,utm_content,utm_term,criado_em';
+    const rows = positions.map(p => {
+      const l = p.lead;
+      const esc = (v: string | null) => `"${(v || '').replace(/"/g, '""')}"`;
+      return [esc(l.name), esc(l.phone), esc(l.email), esc(l.utm_source), esc(l.utm_medium), esc(l.utm_campaign), esc(l.utm_content), esc(l.utm_term), esc(l.created_at)].join(',');
+    });
+    const csv = [header, ...rows].join('\n');
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'leads_com_utms.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="flex justify-end">
+      <Button variant="outline" size="sm" onClick={handleExport}>
+        <Download className="h-4 w-4 mr-2" /> Exportar todos os leads com UTMs (CSV)
+      </Button>
+    </div>
+  );
+};
+
 /* ---- Products Ranking Sub-component ---- */
 interface ProductStat {
   name: string;
