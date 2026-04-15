@@ -34,8 +34,9 @@ Deno.serve(async (req) => {
     const name = body.name || body.nome || null
     const event = body.event || 'capture'
     const xcod = body.xcod || null
+    const sck = body.sck || null
     const { utm_source, utm_medium, utm_campaign, utm_content, utm_term } = body
-    const metadata = { ...(body.metadata || {}), ...(xcod ? { xcod } : {}) }
+    const metadata = { ...(body.metadata || {}), ...(xcod ? { xcod } : {}), ...(sck ? { sck } : {}) }
 
     if (!phone && !email) {
       return new Response(JSON.stringify({ error: 'Phone or email required' }), {

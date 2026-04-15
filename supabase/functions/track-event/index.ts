@@ -176,10 +176,14 @@ Deno.serve(async (req) => {
               // 4. Record stage change event
               await supabase.from("lead_events").insert({
                 lead_id: leadId,
-                event_type: "stage_change",
-                new_stage_id: stageId,
-                source: "tracking_pageview",
-                metadata: { visitor_id: visitorId, page_url: cleanRecord.page_url },
+                funnel_id: funnelId,
+                event_name: "stage_change",
+                metadata: {
+                  source: "tracking_pageview",
+                  visitor_id: visitorId,
+                  page_url: cleanRecord.page_url,
+                  to_stage_id: stageId,
+                },
               });
             }
           }
