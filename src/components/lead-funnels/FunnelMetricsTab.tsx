@@ -20,9 +20,9 @@ const FunnelMetricsTab: React.FC<Props> = ({ stages, positions, funnelId }) => {
   const { data: trackingMetrics } = useQuery({
     queryKey: ['funnel-tracking-metrics', funnelId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('clicks')
-        .select('event_type, visitor_id, email, page_url, created_at')
+        .select('event_type, visitor_id, email, page_url, stage_id, created_at')
         .eq('funnel_id', funnelId);
 
       if (error) {
@@ -30,26 +30,17 @@ const FunnelMetricsTab: React.FC<Props> = ({ stages, positions, funnelId }) => {
         return { pageviews: 0, uniqueVisitors: 0, emailCaptures: 0, uniquePages: 0, stageViews: new Map<string, number>() };
       }
 
-      const rows = data || [];
+      const rows = (data || []) as any[];
       const pageviews = rows.filter(r => r.event_type === 'pageview').length;
       const uniqueVisitors = new Set(rows.map(r => r.visitor_id)).size;
       const emailCaptures = rows.filter(r => r.event_type === 'email_capture').length;
       const uniquePages = new Set(rows.filter(r => r.page_url).map(r => r.page_url)).size;
 
       // Stage-level views
-      const stageViewsRaw = await supabase
-        .from('clicks')
-        .select('stage_id, visitor_id')
-        .eq('funnel_id', funnelId)
-        .eq('event_type', 'pageview')
-        .not('stage_id', 'is', null);
-
       const stageViews = new Map<string, number>();
-      if (stageViewsRaw.data) {
-        for (const row of stageViewsRaw.data) {
-          if (row.stage_id) {
-            stageViews.set(row.stage_id, (stageViews.get(row.stage_id) || 0) + 1);
-          }
+      for (const row of rows) {
+        if (row.event_type === 'pageview' && row.stage_id) {
+          stageViews.set(row.stage_id, (stageViews.get(row.stage_id) || 0) + 1);
         }
       }
 
