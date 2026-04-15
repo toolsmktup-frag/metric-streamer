@@ -1,13 +1,16 @@
 import React, { useMemo } from 'react';
 import { LeadFunnelStage, Lead, LeadStagePosition } from '@/types/leadFunnels';
 import { MetricCard } from '@/components/kpi/MetricCard';
-import { Users, DollarSign, TrendingDown, Receipt, Package } from 'lucide-react';
+import { Users, DollarSign, TrendingDown, Receipt, Package, Eye, MousePointerClick, Mail, Globe } from 'lucide-react';
 import { formatCurrency, formatPercent } from '@/lib/formatters';
 import { isRevenueStage } from '@/lib/revenueStage';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 
 interface Props {
   stages: LeadFunnelStage[];
   positions: (LeadStagePosition & { lead: Lead })[];
+  funnelId: string;
 }
 
 const FunnelMetricsTab: React.FC<Props> = ({ stages, positions }) => {
