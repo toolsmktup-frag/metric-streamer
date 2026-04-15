@@ -133,26 +133,42 @@ export default function WzInstanceManager({ embedded = false }: { embedded?: boo
           {manualInstances.length > 0 && (
             <div className="space-y-3">
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Instâncias Manuais</h2>
-              {manualInstances.map(inst => (
-                <div key={inst.id} className="rounded-xl border border-border bg-card p-4 flex items-center gap-4">
-                  <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center shrink-0">
-                    <Server className="h-5 w-5 text-muted-foreground" />
+              {manualInstances.map(inst => {
+                const profile = manualProfiles[inst.id];
+                const isConnected = profile?.status === 'open' || profile?.status === 'connected';
+                return (
+                  <div key={inst.id} className="rounded-xl border border-border bg-card p-4 flex items-center gap-4">
+                    <div className="relative shrink-0">
+                      {profile?.profile_pic_url ? (
+                        <img src={profile.profile_pic_url} alt="" className="h-10 w-10 rounded-full object-cover" />
+                      ) : (
+                        <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
+                          <Server className="h-5 w-5 text-muted-foreground" />
+                        </div>
+                      )}
+                      <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-card ${isConnected ? 'bg-emerald-500' : 'bg-destructive'}`} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-foreground">{inst.name}</h3>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {profile?.phone_number || inst.api_url}
+                      </p>
+                    </div>
+                    <Badge variant="secondary" className="text-[10px]">Manual</Badge>
+                    <Badge variant={isConnected ? 'default' : 'destructive'} className="text-xs">
+                      {isConnected ? 'Conectado' : 'Desconectado'}
+                    </Badge>
+                    <div className="flex gap-1">
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(inst)}>
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => deleteMutation.mutate(inst.id)}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-foreground">{inst.name}</h3>
-                    <p className="text-xs text-muted-foreground truncate">{inst.api_url}</p>
-                  </div>
-                  <Badge variant="secondary" className="text-[10px]">Manual</Badge>
-                  <div className="flex gap-1">
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(inst)}>
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => deleteMutation.mutate(inst.id)}>
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
