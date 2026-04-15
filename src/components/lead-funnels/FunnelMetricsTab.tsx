@@ -124,6 +124,37 @@ const FunnelMetricsTab: React.FC<Props> = ({ stages, positions, funnelId }) => {
         />
       </div>
 
+      {/* Tracking Metrics */}
+      {trackingMetrics && trackingMetrics.pageviews > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <MetricCard
+            label="Pageviews"
+            value={trackingMetrics.pageviews.toLocaleString('pt-BR')}
+            icon={Eye}
+            color="bg-blue-500/10 text-blue-600"
+          />
+          <MetricCard
+            label="Visitantes Únicos"
+            value={trackingMetrics.uniqueVisitors.toLocaleString('pt-BR')}
+            icon={Globe}
+            color="bg-indigo-500/10 text-indigo-600"
+          />
+          <MetricCard
+            label="Emails Capturados"
+            value={trackingMetrics.emailCaptures.toLocaleString('pt-BR')}
+            icon={Mail}
+            color="bg-violet-500/10 text-violet-600"
+          />
+          <MetricCard
+            label="Taxa Captura"
+            value={trackingMetrics.uniqueVisitors > 0 ? formatPercent((trackingMetrics.emailCaptures / trackingMetrics.uniqueVisitors) * 100) : '0%'}
+            sub={`${trackingMetrics.uniquePages} páginas rastreadas`}
+            icon={MousePointerClick}
+            color="bg-cyan-500/10 text-cyan-600"
+          />
+        </div>
+      )}
+
       {/* Distribution by stage */}
       <div className="rounded-xl border border-border bg-card p-5">
         <h3 className="text-sm font-semibold text-foreground mb-4">Distribuição por Etapa</h3>
