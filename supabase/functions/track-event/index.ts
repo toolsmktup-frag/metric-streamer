@@ -111,16 +111,85 @@ Deno.serve(async (req) => {
 
     if (dbError) {
       console.error("[track-event] DB insert error:", dbError.message);
-      // Fallback: log payload so data is not lost
       console.log("[track-event] fallback-log:", JSON.stringify(cleanRecord));
     } else {
       console.log("[track-event] inserted OK:", cleanRecord.event_type, cleanRecord.visitor_id);
     }
 
-    return new Response(
+    // Return immediately — stage move is fire-and-forget
+    const response = new Response(
       JSON.stringify({ ok: true, visitor_id: visitorId }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
+
+    // Auto-move lead stage based on pageview tracking
+    const stageId = sanitizeString((body as any).stage_id, 36);
+    const funnelId = sanitizeString((body as any).funnel_id, 36);
+
+    if (event === "pageview" && stageId && funnelId) {
+      try {
+        // 1. Find email previously captured for this visitor
+        const { data: clickRow } = await supabase
+          .from("clicks")
+          .select("email")
+          .eq("visitor_id", visitorId)
+          .not("email", "is", null)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        const capturedEmail = clickRow?.email;
+        if (!capturedEmail) {
+          console.log("[track-event] no email found for visitor", visitorId);
+        } else {
+          // 2. Find lead by email
+          const { data: leadRow } = await supabase
+            .from("leads")
+            .select("id")
+            .eq("email", capturedEmail)
+            .limit(1)
+            .maybeSingle();
+
+          if (!leadRow) {
+            console.log("[track-event] no lead found for email", capturedEmail);
+          } else {
+            const leadId = leadRow.id;
+
+            // 3. Upsert lead_stage_positions
+            const { error: upsertErr } = await supabase
+              .from("lead_stage_positions")
+              .upsert(
+                {
+                  lead_id: leadId,
+                  funnel_id: funnelId,
+                  stage_id: stageId,
+                  entered_at: new Date().toISOString(),
+                },
+                { onConflict: "lead_id,funnel_id" }
+              );
+
+            if (upsertErr) {
+              console.error("[track-event] stage upsert error:", upsertErr.message);
+            } else {
+              console.log("[track-event] moved lead", leadId, "to stage", stageId);
+
+              // 4. Record stage change event
+              await supabase.from("lead_events").insert({
+                lead_id: leadId,
+                event_type: "stage_change",
+                new_stage_id: stageId,
+                source: "tracking_pageview",
+                metadata: { visitor_id: visitorId, page_url: cleanRecord.page_url },
+              });
+            }
+          }
+        }
+      } catch (moveErr) {
+        console.error("[track-event] stage move error:", moveErr);
+      }
+    }
+
+    return response;
   } catch (err) {
     console.error("[track-event] error:", err);
     return new Response(
