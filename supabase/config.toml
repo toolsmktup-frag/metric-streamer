@@ -62,3 +62,6 @@ verify_jwt = false
 
 [functions.auto-rules-engine]
 verify_jwt = false
+
+[functions.verify-tracking-snippet]
+verify_jwt = false
