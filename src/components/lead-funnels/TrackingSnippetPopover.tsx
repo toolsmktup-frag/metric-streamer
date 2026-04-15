@@ -13,7 +13,7 @@ interface TrackingSnippetPopoverProps {
 }
 
 const ENDPOINT = 'https://emfbocpmphtftqcezaib.supabase.co/functions/v1/track-event';
-const TRACKER_SRC = 'https://metric-streamer.lovable.app/tracking/tracker.js?v=1.2';
+const TRACKER_SRC = 'https://metric-streamer.lovable.app/tracking/tracker.js?v=1.3';
 
 interface SnippetChecks {
   found: boolean;
