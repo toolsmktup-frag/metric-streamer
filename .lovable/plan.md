@@ -1,21 +1,43 @@
 
 
-## Corrigir WebhookConfig para incluir header `apikey`
+## Compatibilizar webhook-lead com payloads de páginas de captura
 
 ### Problema
-O Supabase gateway exige o header `apikey` em toda request para Edge Functions. O componente `WebhookConfig.tsx` não mostra esse header, fazendo com que integrações externas (n8n, Zapier, etc.) falhem com 401.
+O payload enviado pela página de captura usa nomes de campos diferentes do esperado pela edge function:
+
+| Página envia | Função espera | Status |
+|---|---|---|
+| `nome` | `name` | ❌ não reconhece |
+| `whatsapp` | `phone` | ❌ não reconhece |
+| (nenhum) | `event` | ❌ retorna erro 400 |
+| `xcod` | — | ❌ ignorado |
+| `utm_source` | `utm_source` | ✅ ok |
+| `utm_campaign` | `utm_campaign` | ✅ ok |
+| `utm_medium` | `utm_medium` | ✅ ok |
+| `utm_content` | `utm_content` | ✅ ok |
+| `utm_term` | `utm_term` | ✅ ok |
 
 ### Correção
 
-**Arquivo: `src/components/lead-funnels/WebhookConfig.tsx`**
+**Arquivo: `supabase/functions/webhook-lead/index.ts`**
 
-1. Adicionar a anon key como constante (já existe em `client.ts`)
-2. Mostrar o header `apikey` junto com o `X-Funnel-Token` na seção de headers
-3. Atualizar o cURL de exemplo para incluir `-H "apikey: ..."` 
-4. Atualizar as instruções "Como integrar" para mencionar os dois headers obrigatórios
+Adicionar aliases na extração do body para aceitar ambos os formatos:
+
+```typescript
+const phone = body.phone || body.whatsapp || body.telefone || null;
+const name = body.name || body.nome || null;
+const email = body.email || null;
+const event = body.event || 'capture'; // default "capture" se não vier
+const xcod = body.xcod || null;
+```
+
+- **`event` com fallback `"capture"`** — se a página não mandar `event`, assume `capture` automaticamente (faz sentido pra páginas de captura)
+- **`xcod`** salvo no campo `metadata` do lead para rastreamento
+- **`whatsapp` / `nome`** como aliases de `phone` / `name`
+- Nenhuma mudança no banco, só na edge function
 
 ### Detalhes técnicos
-- A anon key será lida de `import.meta.env.VITE_SUPABASE_URL` pattern ou hardcoded (como já está no `client.ts`)
-- O cURL passará a ter 3 headers: `Content-Type`, `apikey`, e `X-Funnel-Token`
-- A seção de instruções será atualizada para listar ambos os headers
+- O `xcod` será armazenado em `metadata.xcod` para consulta futura
+- O fallback de `event` para `"capture"` significa que a página não precisa enviar esse campo — vai funcionar direto
+- Os UTMs já batem, então continuam funcionando normalmente
 
