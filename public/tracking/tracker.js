@@ -1,15 +1,8 @@
 /**
- * Metric Streamer — Tracker v1.2
+ * Metric Streamer — Tracker v1.3
  * 
- * Script standalone para landing pages.
- * Cole no <head> da LP:
- * 
- *   <script src="https://SEU_DOMINIO/tracking/tracker.js"
- *           data-endpoint="https://emfbocpmphtftqcezaib.supabase.co/functions/v1/track-event"
- *           data-funnel-id="OPTIONAL_FUNNEL_UUID"
- *           data-stage-id="OPTIONAL_STAGE_UUID"
- *           defer
- *   ></script>
+ * Cross-domain identity stitching via ?ms_vid= parameter.
+ * Auto-decorates outbound links with visitor_id.
  */
 (function () {
   "use strict";
@@ -27,7 +20,6 @@
     return;
   }
 
-  // Anon key pública — necessária para o gateway do Supabase aceitar a request
   var ANON_KEY =
     config.anonKey ||
     (scriptTag && scriptTag.getAttribute("data-anon-key")) ||
@@ -40,6 +32,10 @@
   }
 
   // ── UUID v4 ─────────────────────────────────────────────
+  function isValidUUID(str) {
+    return typeof str === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+  }
+
   function uuidv4() {
     if (typeof crypto !== "undefined" && crypto.randomUUID) {
       return crypto.randomUUID();
@@ -66,26 +62,6 @@
     return match ? decodeURIComponent(match[2]) : null;
   }
 
-  // ── Visitor ID (cookie 1yr + localStorage backup) ──────
-  function getOrCreateVisitorId() {
-    var COOKIE_NAME = "_ms_vid";
-    var LS_KEY = "_ms_vid";
-    var vid = getCookie(COOKIE_NAME);
-
-    if (!vid) {
-      try { vid = localStorage.getItem(LS_KEY); } catch (e) {}
-    }
-
-    if (!vid) {
-      vid = uuidv4();
-    }
-
-    setCookie(COOKIE_NAME, vid, 365);
-    try { localStorage.setItem(LS_KEY, vid); } catch (e) {}
-
-    return vid;
-  }
-
   // ── URL params ──────────────────────────────────────────
   function getParam(name) {
     try {
@@ -94,6 +70,39 @@
     } catch (e) {
       return undefined;
     }
+  }
+
+  // ── Visitor ID (cross-domain → cookie → localStorage → new) ──
+  function getOrCreateVisitorId() {
+    var COOKIE_NAME = "_ms_vid";
+    var LS_KEY = "_ms_vid";
+
+    // 1) Check URL param (cross-domain stitching)
+    var urlVid = getParam("ms_vid");
+    if (urlVid && isValidUUID(urlVid)) {
+      log("Using ms_vid from URL:", urlVid);
+      setCookie(COOKIE_NAME, urlVid, 365);
+      try { localStorage.setItem(LS_KEY, urlVid); } catch (e) {}
+      return urlVid;
+    }
+
+    // 2) Cookie
+    var vid = getCookie(COOKIE_NAME);
+
+    // 3) localStorage fallback
+    if (!vid) {
+      try { vid = localStorage.getItem(LS_KEY); } catch (e) {}
+    }
+
+    // 4) Generate new
+    if (!vid) {
+      vid = uuidv4();
+    }
+
+    setCookie(COOKIE_NAME, vid, 365);
+    try { localStorage.setItem(LS_KEY, vid); } catch (e) {}
+
+    return vid;
   }
 
   // ── Persist fbclid → fbc cookie (Meta standard) ────────
@@ -158,7 +167,6 @@
 
     log("Sending", eventName, payload);
 
-    // Primary: fetch with apikey header (required by Supabase gateway)
     try {
       fetch(ENDPOINT, {
         method: "POST",
@@ -178,7 +186,6 @@
         })
         .catch(function (err) {
           log("fetch error, trying sendBeacon fallback:", err);
-          // Fallback: sendBeacon (no custom headers, but better than nothing)
           if (navigator.sendBeacon) {
             var blob = new Blob([json], { type: "application/json" });
             navigator.sendBeacon(ENDPOINT, blob);
@@ -220,20 +227,53 @@
     }
   }
 
+  // ── Cross-domain link decoration ───────────────────────
+  var currentVisitorId = getOrCreateVisitorId();
+
+  function decorateOutboundLinks() {
+    var links = document.querySelectorAll("a[href]");
+    for (var i = 0; i < links.length; i++) {
+      var link = links[i];
+      if (link.__ms_decorated) continue;
+      try {
+        var url = new URL(link.href);
+        // Only decorate http(s) links to different domains
+        if (
+          (url.protocol === "http:" || url.protocol === "https:") &&
+          url.hostname !== window.location.hostname &&
+          !url.searchParams.has("ms_vid")
+        ) {
+          url.searchParams.set("ms_vid", currentVisitorId);
+          link.href = url.toString();
+          link.__ms_decorated = true;
+          log("Decorated link:", link.href);
+        }
+      } catch (e) {
+        // skip invalid URLs
+      }
+    }
+  }
+
   // ── Auto-track pageview ────────────────────────────────
   sendEvent("pageview");
 
-  // ── Attach email listeners (now + observe DOM changes) ─
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", attachEmailListeners);
-  } else {
+  // ── Attach listeners after DOM ready ───────────────────
+  function onReady() {
     attachEmailListeners();
+    decorateOutboundLinks();
   }
 
-  // Observe for dynamically added inputs
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", onReady);
+  } else {
+    onReady();
+  }
+
+  // ── Observe for dynamically added elements ─────────────
   if (typeof MutationObserver !== "undefined") {
     var observer = new MutationObserver(function () {
       attachEmailListeners();
+      decorateOutboundLinks();
     });
     observer.observe(document.body || document.documentElement, {
       childList: true,
