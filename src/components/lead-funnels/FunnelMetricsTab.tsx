@@ -13,8 +13,50 @@ interface Props {
   funnelId: string;
 }
 
-const FunnelMetricsTab: React.FC<Props> = ({ stages, positions }) => {
+const FunnelMetricsTab: React.FC<Props> = ({ stages, positions, funnelId }) => {
   const sortedStages = useMemo(() => [...stages].sort((a, b) => a.sort_order - b.sort_order), [stages]);
+
+  // Fetch tracking metrics from clicks table
+  const { data: trackingMetrics } = useQuery({
+    queryKey: ['funnel-tracking-metrics', funnelId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('clicks')
+        .select('event_type, visitor_id, email, page_url, created_at')
+        .eq('funnel_id', funnelId);
+
+      if (error) {
+        console.error('Error fetching tracking metrics:', error);
+        return { pageviews: 0, uniqueVisitors: 0, emailCaptures: 0, uniquePages: 0, stageViews: new Map<string, number>() };
+      }
+
+      const rows = data || [];
+      const pageviews = rows.filter(r => r.event_type === 'pageview').length;
+      const uniqueVisitors = new Set(rows.map(r => r.visitor_id)).size;
+      const emailCaptures = rows.filter(r => r.event_type === 'email_capture').length;
+      const uniquePages = new Set(rows.filter(r => r.page_url).map(r => r.page_url)).size;
+
+      // Stage-level views
+      const stageViewsRaw = await supabase
+        .from('clicks')
+        .select('stage_id, visitor_id')
+        .eq('funnel_id', funnelId)
+        .eq('event_type', 'pageview')
+        .not('stage_id', 'is', null);
+
+      const stageViews = new Map<string, number>();
+      if (stageViewsRaw.data) {
+        for (const row of stageViewsRaw.data) {
+          if (row.stage_id) {
+            stageViews.set(row.stage_id, (stageViews.get(row.stage_id) || 0) + 1);
+          }
+        }
+      }
+
+      return { pageviews, uniqueVisitors, emailCaptures, uniquePages, stageViews };
+    },
+    refetchInterval: 30000,
+  });
 
   const metrics = useMemo(() => {
     let confirmedRevenue = 0;
