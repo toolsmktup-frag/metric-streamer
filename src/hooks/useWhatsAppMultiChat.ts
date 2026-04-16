@@ -54,18 +54,20 @@ export function useWhatsAppMultiChats(instances: WhatsAppInstance[]) {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const { data } = await (supabase as any)
-        .from('whatsapp_instances')
-        .select('id, instance_name, nickname, display_name')
-        .order('created_at', { ascending: true });
-      if (cancelled || !data) return;
+      const { data, error } = await (supabase as any).rpc('get_org_instance_labels');
+      if (cancelled) return;
+      if (error) {
+        console.error('[useWhatsAppMultiChats] get_org_instance_labels failed:', error);
+        return;
+      }
       const map = new Map<string, InstanceMeta>();
-      (data as any[]).forEach((inst, index) => {
+      (data as any[] | null)?.forEach((inst, index) => {
         map.set(inst.id, {
-          instance_name: inst.nickname || inst.display_name || inst.instance_name || 'Instância',
+          instance_name: inst.label || 'Instância',
           instance_color: getInstanceColor(index),
         });
       });
+      console.log('[useWhatsAppMultiChats] loaded', map.size, 'instance labels');
       setGlobalMeta(map);
     })();
     return () => { cancelled = true; };
