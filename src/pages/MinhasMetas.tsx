@@ -92,13 +92,63 @@ function getRemainingWorkDays(): number {
   return Math.max(count, 1);
 }
 
-function getDailyGoalInfo(monthRevenue: number, goalAmount: number, todayRevenue: number) {
-  if (goalAmount <= 0) return null;
-  const remaining = Math.max(goalAmount - monthRevenue, 0);
+function getDailyGoalInfo(
+  monthRevenue: number,
+  goalsArray: { amount: number; label: string; emoji: string }[],
+  todayRevenue: number
+) {
+  const validGoals = goalsArray.filter(g => g.amount > 0);
+  if (validGoals.length === 0) return null;
+
   const workDays = getRemainingWorkDays();
-  const dailyTarget = remaining <= 0 ? 0 : remaining / workDays;
-  const percent = dailyTarget > 0 ? Math.min((todayRevenue / dailyTarget) * 100, 150) : (todayRevenue > 0 ? 100 : 0);
-  return { dailyTarget, percent, todayRevenue, remaining, monthlyDone: remaining <= 0 };
+
+  // Calculate daily target for each goal tier
+  const dailyTargets = validGoals.map(g => {
+    const remaining = Math.max(g.amount - monthRevenue, 0);
+    return { ...g, dailyTarget: remaining <= 0 ? 0 : remaining / workDays, monthlyDone: remaining <= 0 };
+  });
+
+  // Find the active daily goal: first one not yet beaten today
+  let activeIdx = 0;
+  for (let i = 0; i < dailyTargets.length; i++) {
+    if (dailyTargets[i].monthlyDone) {
+      activeIdx = i + 1;
+      continue;
+    }
+    if (todayRevenue >= dailyTargets[i].dailyTarget && i < dailyTargets.length - 1) {
+      activeIdx = i + 1;
+      continue;
+    }
+    activeIdx = i;
+    break;
+  }
+
+  // All monthly goals done
+  if (dailyTargets.every(d => d.monthlyDone)) {
+    return { dailyTarget: 0, percent: 100, todayRevenue, remaining: 0, monthlyDone: true, activeLabel: validGoals[validGoals.length - 1].label, activeEmoji: '🏆', allDailyGoalsBeat: true, dailyTargets, activeIdx: validGoals.length - 1 };
+  }
+
+  // All daily goals beaten today (but monthly not done yet)
+  if (activeIdx >= dailyTargets.length) {
+    const last = dailyTargets[dailyTargets.length - 1];
+    return { dailyTarget: last.dailyTarget, percent: (last.dailyTarget > 0 ? (todayRevenue / last.dailyTarget) * 100 : 100), todayRevenue, remaining: 0, monthlyDone: false, activeLabel: last.label, activeEmoji: '🎉', allDailyGoalsBeat: true, dailyTargets, activeIdx: dailyTargets.length - 1 };
+  }
+
+  const current = dailyTargets[activeIdx];
+  const percent = current.dailyTarget > 0 ? Math.min((todayRevenue / current.dailyTarget) * 100, 100) : (todayRevenue > 0 ? 100 : 0);
+
+  return {
+    dailyTarget: current.dailyTarget,
+    percent,
+    todayRevenue,
+    remaining: Math.max(current.dailyTarget - todayRevenue, 0),
+    monthlyDone: false,
+    activeLabel: current.label,
+    activeEmoji: current.emoji,
+    allDailyGoalsBeat: false,
+    dailyTargets,
+    activeIdx,
+  };
 }
 
 function getDailyMotivationalMessage(percent: number, name: string, dailyTarget: number, todayRevenue: number, monthlyDone: boolean) {
