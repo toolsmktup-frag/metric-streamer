@@ -168,9 +168,14 @@ export function useWhatsAppChats(instanceId: string | null) {
   const [chats, setChats] = useState<ChatSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const initialLoad = useRef(true);
+  const inFlight = useRef(false);
 
   const fetchChats = useCallback(async () => {
     if (!instanceId) return;
+    // Prevent overlapping requests (avoid pile-up when backend is slow)
+    if (inFlight.current) return;
+    inFlight.current = true;
+
     if (initialLoad.current) setLoading(true);
 
     try {
@@ -192,12 +197,13 @@ export function useWhatsAppChats(instanceId: string | null) {
     } finally {
       setLoading(false);
       initialLoad.current = false;
+      inFlight.current = false;
     }
   }, [instanceId]);
 
   useEffect(() => {
     fetchChats();
-    const interval = setInterval(fetchChats, 10000);
+    const interval = setInterval(fetchChats, 20000);
     return () => clearInterval(interval);
   }, [fetchChats]);
 
