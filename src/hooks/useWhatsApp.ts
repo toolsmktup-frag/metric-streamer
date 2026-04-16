@@ -232,12 +232,15 @@ export function useWhatsAppMessages(instanceId: string | null, phone: string | n
     fetchMessages();
   }, [fetchMessages]);
 
-  // Realtime subscription — listen by phone (works for both single and all mode)
+  // Realtime subscription — composite key (instance_id + phone) when in single mode
   useEffect(() => {
     if (!instanceId || !phone) return;
 
+    const isAll = instanceId === 'all';
+    const channelName = isAll ? `wa-msgs-${phone}` : `wa-msgs-${instanceId}-${phone}`;
+
     const channel = supabase
-      .channel(`whatsapp-msgs-${phone}`)
+      .channel(channelName)
       .on(
         'postgres_changes',
         {
@@ -247,18 +250,22 @@ export function useWhatsAppMessages(instanceId: string | null, phone: string | n
           filter: `phone=eq.${phone}`,
         },
         (payload) => {
+          const newRow = payload.new as any;
+          // Drop events from other instances when in single mode
+          if (!isAll && newRow?.instance_id && newRow.instance_id !== instanceId) return;
+
           if (payload.eventType === 'INSERT') {
             setMessages(prev => {
               const exists = prev.some(
-                m => m.id === (payload.new as any).id ||
-                  (m.message_id_external && m.message_id_external === (payload.new as any).message_id_external)
+                m => m.id === newRow.id ||
+                  (m.message_id_external && m.message_id_external === newRow.message_id_external)
               );
               if (exists) return prev;
-              return [...prev, payload.new as WhatsAppMessage];
+              return [...prev, newRow as WhatsAppMessage];
             });
           } else if (payload.eventType === 'UPDATE') {
             setMessages(prev =>
-              prev.map(m => m.id === (payload.new as any).id ? { ...m, ...payload.new } as WhatsAppMessage : m)
+              prev.map(m => m.id === newRow.id ? { ...m, ...newRow } as WhatsAppMessage : m)
             );
           }
         }
