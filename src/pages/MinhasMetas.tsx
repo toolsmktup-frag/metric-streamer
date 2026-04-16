@@ -452,12 +452,27 @@ export default function MinhasMetas() {
                   <p className="text-lg font-bold text-emerald-600">Meta do mês já batida!</p>
                   <p className="text-sm text-muted-foreground">Cada venda agora é bônus. Continue arrasando!</p>
                 </div>
+              ) : dailyGoal.allDailyGoalsBeat ? (
+                <div className="text-center py-4 space-y-3">
+                  <div className="text-4xl mb-1">🎉👑</div>
+                  <p className="text-lg font-bold text-emerald-600">TODAS AS METAS DO DIA BATIDAS!</p>
+                  <p className="text-sm text-muted-foreground">Você já fechou {formatCurrency(dailyGoal.todayRevenue)} hoje. Cada venda agora é bônus!</p>
+                  {/* Mini indicators showing all beaten */}
+                  <div className="flex justify-center gap-2 pt-1">
+                    {dailyGoal.dailyTargets.map((dt, i) => (
+                      <div key={i} className="flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-500/10 text-emerald-600 text-xs font-semibold">
+                        ✅ {dt.label}
+                      </div>
+                    ))}
+                  </div>
+                </div>
               ) : (
                 <>
+                  {/* Active daily goal header */}
                   <div className="text-center space-y-1">
                     <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs font-bold uppercase tracking-wider">
                       <Target className="h-3.5 w-3.5" />
-                      Meta do Dia
+                      Meta do Dia — {dailyGoal.activeLabel}
                     </div>
                     <p className="text-sm text-muted-foreground">
                       Sua meta de hoje é fechar
@@ -468,6 +483,29 @@ export default function MinhasMetas() {
                     <p className="text-sm text-muted-foreground">em vendas!</p>
                   </div>
 
+                  {/* Multi-tier daily indicators */}
+                  <div className="flex justify-center gap-2">
+                    {dailyGoal.dailyTargets.map((dt, i) => {
+                      const beaten = dt.monthlyDone || dailyGoal.todayRevenue >= dt.dailyTarget;
+                      const isActive = i === dailyGoal.activeIdx;
+                      return (
+                        <div
+                          key={i}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                            beaten
+                              ? 'border-emerald-400 bg-emerald-500/10 text-emerald-600'
+                              : isActive
+                              ? 'border-amber-400 bg-amber-500/10 text-amber-600'
+                              : 'border-border bg-muted/30 text-muted-foreground opacity-50'
+                          }`}
+                        >
+                          {beaten ? '✅' : isActive ? dt.emoji : '🔒'} {dt.label}: {formatCurrency(dt.dailyTarget)}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Progress bar */}
                   <div className="space-y-2">
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">Você já fechou</span>
@@ -490,15 +528,16 @@ export default function MinhasMetas() {
                       />
                     </div>
                     <div className="flex justify-between text-xs text-muted-foreground">
-                      <span>{dailyGoal.percent.toFixed(0)}% da meta do dia</span>
+                      <span>{dailyGoal.percent.toFixed(0)}% da {dailyGoal.activeLabel} do dia</span>
                       {dailyGoal.percent < 100 && (
-                        <span>Faltam {formatCurrency(Math.max(dailyGoal.dailyTarget - dailyGoal.todayRevenue, 0))}</span>
+                        <span>Faltam {formatCurrency(dailyGoal.remaining)}</span>
                       )}
                     </div>
                   </div>
 
+                  {/* Motivational message */}
                   <motion.div
-                    key={Math.floor(dailyGoal.percent / 30)}
+                    key={`${dailyGoal.activeIdx}_${Math.floor(dailyGoal.percent / 30)}`}
                     initial={{ opacity: 0, y: 5 }}
                     animate={{ opacity: 1, y: 0 }}
                     className={`text-center p-3 rounded-lg ${
