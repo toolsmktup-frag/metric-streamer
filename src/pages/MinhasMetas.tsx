@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { format, subDays, startOfDay, endOfDay } from 'date-fns';
+import { format, subDays, startOfDay, endOfDay, getDaysInMonth, getDate, isSunday, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import confetti from 'canvas-confetti';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -80,6 +80,36 @@ function getPercentColor(percent: number) {
   return 'bg-red-500 text-white';
 }
 
+function getRemainingWorkDays(): number {
+  const now = new Date();
+  const totalDays = getDaysInMonth(now);
+  const today = getDate(now);
+  let count = 0;
+  for (let d = today; d <= totalDays; d++) {
+    const date = new Date(now.getFullYear(), now.getMonth(), d);
+    if (!isSunday(date)) count++;
+  }
+  return Math.max(count, 1);
+}
+
+function getDailyGoalInfo(monthRevenue: number, goalAmount: number, todayRevenue: number) {
+  if (goalAmount <= 0) return null;
+  const remaining = Math.max(goalAmount - monthRevenue, 0);
+  const workDays = getRemainingWorkDays();
+  const dailyTarget = remaining <= 0 ? 0 : remaining / workDays;
+  const percent = dailyTarget > 0 ? Math.min((todayRevenue / dailyTarget) * 100, 150) : (todayRevenue > 0 ? 100 : 0);
+  return { dailyTarget, percent, todayRevenue, remaining, monthlyDone: remaining <= 0 };
+}
+
+function getDailyMotivationalMessage(percent: number, name: string, dailyTarget: number, todayRevenue: number, monthlyDone: boolean) {
+  if (monthlyDone) return { text: `Meta do mês já batida! Cada venda agora é bônus, ${name}! 🏆✨`, emoji: '🏆' };
+  if (percent >= 100) return { text: `BATEU A META DO DIA! Você é fera, ${name}! Continue assim! 🎉🔥`, emoji: '🎉' };
+  if (percent >= 70) return { text: `Quase lá! Falta pouco pra fechar o dia! Você consegue! 🚀`, emoji: '🚀' };
+  if (percent >= 30) return { text: `Tá no caminho certo! Tem leads pra ligar? Bora converter! 💪`, emoji: '💪' };
+  if (todayRevenue > 0) return { text: `Bom começo! Continue assim e bate a meta do dia! 🔥`, emoji: '🔥' };
+  return { text: `Bora começar o dia forte, ${name}! Sua meta de hoje te espera! 💪`, emoji: '🎯' };
+}
+
 const PERIOD_PRESETS = [
   { label: 'Hoje', getDates: () => ({ start: startOfDay(new Date()), end: endOfDay(new Date()) }) },
   { label: 'Ontem', getDates: () => { const d = subDays(new Date(), 1); return { start: startOfDay(d), end: endOfDay(d) }; } },
@@ -130,6 +160,18 @@ export default function MinhasMetas() {
   const hasAnyGoal = goals.some(g => g.amount > 0);
 
   const activeGoal = getActiveGoal(monthRevenue, goals);
+
+  // Daily goal breakdown
+  const dailyGoal = useMemo(() => {
+    const primaryGoal = goals.find(g => g.amount > 0);
+    if (!primaryGoal) return null;
+    return getDailyGoalInfo(monthRevenue, primaryGoal.amount, stats?.todayRevenue || 0);
+  }, [monthRevenue, goals, stats?.todayRevenue]);
+
+  const dailyMessage = useMemo(() => {
+    if (!dailyGoal) return null;
+    return getDailyMotivationalMessage(dailyGoal.percent, sellerName, dailyGoal.dailyTarget, dailyGoal.todayRevenue, dailyGoal.monthlyDone);
+  }, [dailyGoal, sellerName]);
 
   const level = getSellerLevel(stats?.monthSales || 0);
   const unlockedKeys = new Set(achievements.map(a => a.achievement_key));
@@ -343,6 +385,93 @@ export default function MinhasMetas() {
           </CardContent>
         </Card>
       </motion.div>
+
+      {/* Daily Goal Card */}
+      {hasAnyGoal && dailyGoal && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.12 }}
+        >
+          <Card className="overflow-hidden border-2 border-amber-400/30 bg-gradient-to-br from-card to-amber-500/5">
+            <CardContent className="p-5 space-y-4">
+              {isLoading ? (
+                <Skeleton className="h-24 w-full" />
+              ) : dailyGoal.monthlyDone ? (
+                <div className="text-center py-4">
+                  <div className="text-4xl mb-2">🏆</div>
+                  <p className="text-lg font-bold text-emerald-600">Meta do mês já batida!</p>
+                  <p className="text-sm text-muted-foreground">Cada venda agora é bônus. Continue arrasando!</p>
+                </div>
+              ) : (
+                <>
+                  <div className="text-center space-y-1">
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs font-bold uppercase tracking-wider">
+                      <Target className="h-3.5 w-3.5" />
+                      Meta do Dia
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Sua meta de hoje é fechar
+                    </p>
+                    <p className="text-3xl md:text-4xl font-bold text-foreground">
+                      {formatCurrency(dailyGoal.dailyTarget)}
+                    </p>
+                    <p className="text-sm text-muted-foreground">em vendas!</p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Você já fechou</span>
+                      <span className={`font-bold ${dailyGoal.percent >= 100 ? 'text-emerald-600' : 'text-foreground'}`}>
+                        {formatCurrency(dailyGoal.todayRevenue)}
+                      </span>
+                    </div>
+                    <div className="relative h-3 w-full bg-secondary rounded-full overflow-hidden">
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${Math.min(dailyGoal.percent, 100)}%` }}
+                        transition={{ duration: 1.2, ease: 'easeOut' }}
+                        className={`h-full rounded-full ${
+                          dailyGoal.percent >= 100
+                            ? 'bg-gradient-to-r from-emerald-400 to-emerald-600'
+                            : dailyGoal.percent >= 50
+                            ? 'bg-gradient-to-r from-amber-400 to-amber-500'
+                            : 'bg-gradient-to-r from-orange-400 to-amber-400'
+                        }`}
+                      />
+                    </div>
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>{dailyGoal.percent.toFixed(0)}% da meta do dia</span>
+                      {dailyGoal.percent < 100 && (
+                        <span>Faltam {formatCurrency(Math.max(dailyGoal.dailyTarget - dailyGoal.todayRevenue, 0))}</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <motion.div
+                    key={Math.floor(dailyGoal.percent / 30)}
+                    initial={{ opacity: 0, y: 5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className={`text-center p-3 rounded-lg ${
+                      dailyGoal.percent >= 100
+                        ? 'bg-emerald-500/10 border border-emerald-500/20'
+                        : 'bg-muted/50'
+                    }`}
+                  >
+                    <p className="text-sm font-medium text-foreground">
+                      {dailyMessage?.emoji} {dailyMessage?.text}
+                    </p>
+                  </motion.div>
+
+                  <p className="text-[11px] text-center text-muted-foreground">
+                    Calculado com base nos {getRemainingWorkDays()} dias úteis restantes no mês (excl. domingos)
+                  </p>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
 
       {/* Main Goal Card — Active goal progress */}
       <motion.div
