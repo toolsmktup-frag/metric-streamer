@@ -196,7 +196,7 @@ Deno.serve(async (req) => {
 
     const { data: message, error: messageErr } = await adminClient
       .from('whatsapp_messages')
-      .select('id, organization_id, instance_id, message_id_external, payload_raw, message_type, phone')
+      .select('id, organization_id, instance_id, message_id_external, payload_raw, message_type, phone, media_url, media_mime_type')
       .eq('id', message_id)
       .eq('organization_id', orgId)
       .single()
@@ -260,6 +260,17 @@ Deno.serve(async (req) => {
       })
     }
 
+    // Short-circuit: if media_url already points to our internal Storage bucket,
+    // return it directly without calling UAZAPI.
+    if (message.media_url && typeof message.media_url === 'string' && message.media_url.includes(`/storage/v1/object/public/${MEDIA_BUCKET}/`)) {
+      return new Response(JSON.stringify({
+        mimetype: message.media_mime_type || 'application/octet-stream',
+        fileURL: message.media_url,
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
     const candidates = getMessageIdCandidates(message)
     if (candidates.length === 0) {
       return new Response(JSON.stringify({ error: 'No message download id available' }), {
@@ -273,7 +284,30 @@ Deno.serve(async (req) => {
     for (const candidate of candidates) {
       try {
         const media = await downloadMessageMedia(instance.api_url, instance.api_token, candidate)
-        return new Response(JSON.stringify(media), {
+
+        // On-demand backfill: if we got base64, persist it to Storage so future calls are fast.
+        if (media.base64) {
+          const publicUrl = await backfillToStorage(adminClient, {
+            messageRowId: message.id,
+            orgId: message.organization_id,
+            instanceId: message.instance_id,
+            base64: media.base64,
+            mime: media.mimetype,
+            messageType: message.message_type || 'document',
+          })
+          if (publicUrl) {
+            return new Response(JSON.stringify({
+              mimetype: media.mimetype,
+              fileURL: publicUrl,
+            }), {
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            })
+          }
+        }
+
+        // Fallback to dataUrl/fileURL response
+        const { base64: _b, ...mediaResponse } = media as any
+        return new Response(JSON.stringify(mediaResponse), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
       } catch (error) {
@@ -284,7 +318,6 @@ Deno.serve(async (req) => {
     }
 
     if (allNotFound) {
-      // Mensagem antiga / expirada no servidor UAZAPI — retorna fallback gracioso
       return new Response(JSON.stringify({
         error: 'MESSAGE_NOT_FOUND',
         fallback: true,
