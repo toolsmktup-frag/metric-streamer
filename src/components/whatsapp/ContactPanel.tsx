@@ -13,6 +13,8 @@ import { useMoveLeadStage } from '@/hooks/useMoveLeadStage';
 import { useMoveLeadFunnel } from '@/hooks/useMoveLeadFunnel';
 import { useLeadFunnels } from '@/hooks/useLeadFunnels';
 import { useCurrentUserRole } from '@/hooks/useCurrentUserRole';
+import FunnelLinker from './FunnelLinker';
+import TagsEditor from './TagsEditor';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
 import { format, formatDistanceToNow } from 'date-fns';
@@ -257,7 +259,11 @@ export default function ContactPanel({ phone, senderName }: ContactPanelProps) {
           )}
         </h4>
         {journey.length === 0 ? (
-          <p className="text-xs text-muted-foreground italic">Nenhum funil vinculado</p>
+          lead?.id ? (
+            <FunnelLinker leadId={lead.id} />
+          ) : (
+            <p className="text-xs text-muted-foreground italic">Nenhum funil vinculado</p>
+          )
         ) : (
           <div className="space-y-1.5">
             {journey.map((j: any) => {
@@ -391,12 +397,16 @@ export default function ContactPanel({ phone, senderName }: ContactPanelProps) {
         )}
       </div>
 
-      {/* Tags placeholder */}
+      {/* Tags */}
       <div>
         <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
           <Tag className="h-3 w-3" /> Tags
         </h4>
-        <p className="text-xs text-muted-foreground italic">Nenhuma tag vinculada</p>
+        {lead?.id ? (
+          <TagsEditor leadId={lead.id} />
+        ) : (
+          <p className="text-xs text-muted-foreground italic">Lead não encontrado</p>
+        )}
       </div>
     </div>
   );
