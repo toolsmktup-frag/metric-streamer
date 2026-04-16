@@ -165,7 +165,45 @@ Deno.serve(async (req) => {
       })
     }
 
-    const { data: instance, error: instErr } = await userClient
+    // --- Authorization: sellers must own the instance AND the lead phone ---
+    const { data: profile } = await adminClient
+      .from('user_profiles')
+      .select('role')
+      .eq('id', userData.user.id)
+      .maybeSingle()
+    const role = profile?.role || 'vendedor'
+    const isAdmin = role === 'admin' || role === 'gestor'
+    const cleanPhone = normalizePhone(phone)
+
+    if (!isAdmin) {
+      const { data: instAccess } = await adminClient
+        .from('whatsapp_instance_access')
+        .select('instance_id')
+        .eq('user_id', userData.user.id)
+        .eq('instance_id', instance_id)
+        .maybeSingle()
+      if (!instAccess) {
+        return new Response(JSON.stringify({ error: 'Forbidden: instance not allowed' }), {
+          status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+      const phoneAlt = cleanPhone.startsWith('55') ? cleanPhone.slice(2) : `55${cleanPhone}`
+      const { data: ownedLead } = await adminClient
+        .from('leads')
+        .select('id')
+        .eq('organization_id', orgId)
+        .eq('assigned_to', userData.user.id)
+        .in('phone', [cleanPhone, `+${cleanPhone}`, phoneAlt, `+${phoneAlt}`])
+        .limit(1)
+        .maybeSingle()
+      if (!ownedLead) {
+        return new Response(JSON.stringify({ error: 'Forbidden: lead not assigned to you' }), {
+          status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+    }
+
+    const { data: instance, error: instErr } = await adminClient
       .from('whatsapp_instances')
       .select('*')
       .eq('id', instance_id)
