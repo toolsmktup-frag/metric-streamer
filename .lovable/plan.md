@@ -1,47 +1,61 @@
 
 
-## Plano: aliviar `whatsapp-chats` no front + back
+## Plano
 
-Os índices já estão no banco. Agora preciso impedir que o front dispare requisição nova enquanto a anterior ainda está rodando, e enxugar mais a edge function.
+### Parte 1 — Corrigir badge "Instância" genérico no modo "Todas as instâncias"
 
-### 1. Travar polling concorrente nos hooks
+**Causa**: `useWhatsAppMultiChats` recebe só as instâncias visíveis ao usuário (filtradas por `whatsapp_instance_access`). Mas a edge function retorna chats de instâncias da org inteira. Quando o `instance_id` do chat não bate com nada no array, cai no fallback `'Instância'`.
 
-**`src/hooks/useWhatsAppMultiChat.ts`**
-- Adicionar `inFlight = useRef(false)`
-- No início de `fetchAllChats`: se `inFlight.current === true`, retornar sem disparar
-- Marcar `true` antes do `fetch`, `false` no `finally`
-- Aumentar intervalo de polling de 15s → 20s
+Pior: o backend já filtra os chats por permissão do vendedor, mas mesmo pro admin/gestor, a lista de `instances` recebida pode estar com nomes desatualizados ou faltando alguma instância recém-criada que ainda não foi recarregada.
 
-**`src/hooks/useWhatsApp.ts`** (`useWhatsAppChats`)
-- Mesma trava de `inFlight`
-- Mesmo intervalo 20s
+**Correção em `src/hooks/useWhatsAppMultiChat.ts`**:
+- Buscar uma vez (e cachear via state) **todas** as instâncias da org direto da tabela `whatsapp_instances` só para montar o mapa `instance_id → { name, color }`
+- Usar essa lista global no `instanceMeta`, ignorando o array `instances` filtrado
+- Manter o array `instances` filtrado só para definir as cores estáveis (ordem por `created_at`)
 
-Isso resolve o efeito “pile-up” quando uma chamada demora 30-40s e o front já disparou outras 2 por cima.
+Resultado: o badge mostra o nome real da instância (`gabi-01--`, `dani-02--`, etc.) ou o nickname configurado, nunca mais o fallback genérico.
 
-### 2. Enxugar `supabase/functions/whatsapp-chats/index.ts`
+### Parte 2 — Persistir mídia no Supabase Storage (resolver 404 da UAZAPI)
 
-- Reduzir limite de mensagens varridas:
-  - unified (`instance_id=all`): 500 → 300
-  - single instance: 300 → 200
-- Garantir que o `select` continua sem `payload_raw`
-- Confirmar que o erro serializa via `serializeError` (sem voltar `[object Object]`)
-- Bump de versão pra forçar redeploy
+**Causa**: UAZAPI expira mídia depois de alguns dias. Quando o usuário tenta abrir áudio/imagem antiga, o `whatsapp-media` retorna 404.
 
-### 3. O que NÃO entra agora
+**Correção em duas frentes**:
 
-- Tabela de resumo de threads pré-calculada (só se ainda falhar depois desses 2 ajustes)
-- Mudança de RLS / permissões (já feito em etapas anteriores)
+1. **Bucket de Storage** (migration):
+   - Criar bucket `whatsapp-media` (privado)
+   - Policy permitindo leitura para usuários autenticados da org dona do arquivo (via path `{org_id}/{instance_id}/{message_id}.{ext}`)
+
+2. **Webhook `uazapi-webhook`**:
+   - Quando chegar mensagem de mídia (image/audio/video/document/sticker), disparar download imediato via UAZAPI (`/message/download`)
+   - Salvar binário no bucket `whatsapp-media` com path determinístico
+   - Atualizar `whatsapp_messages.media_url` com a URL signed/pública do Storage
+   - Fire-and-forget (não bloquear o webhook se download falhar; deixa o `media_url` original do WhatsApp como fallback)
+
+3. **Edge function `whatsapp-media`**:
+   - Antes de chamar UAZAPI, verificar se `media_url` já aponta pro Storage interno → retornar direto
+   - Só chamar UAZAPI se ainda não foi persistido
+   - Quando conseguir baixar com sucesso, salvar no Storage também (backfill on-demand)
+
+4. **Front (`MediaMessage` / componente que toca áudio/imagem)**:
+   - Tratar resposta `{ fallback: true, error: 'MESSAGE_NOT_FOUND' }` mostrando placeholder amigável
 
 ### Arquivos tocados
 
-- `src/hooks/useWhatsAppMultiChat.ts`
-- `src/hooks/useWhatsApp.ts`
-- `supabase/functions/whatsapp-chats/index.ts`
+- `src/hooks/useWhatsAppMultiChat.ts` — buscar todas instâncias da org pro badge
+- `supabase/migrations/<new>.sql` — bucket `whatsapp-media` + policies
+- `supabase/functions/uazapi-webhook/index.ts` — persistir mídia ao receber
+- `supabase/functions/whatsapp-media/index.ts` — preferir Storage, fazer backfill
+- `src/components/whatsapp/MediaMessage.tsx` (ou equivalente) — placeholder pra mídia indisponível
 
 ### Resultado esperado
 
-- Sem mais 504 por requisições empilhadas
-- Sem mais 546 por sobrecarga do worker
-- Erros reais aparecendo como string legível, não `[object Object]`
-- Lista de chats carrega em tempo aceitável mesmo nas instâncias pesadas
+- Badge no modo "Todas as instâncias" mostra o nome correto de cada instância
+- Mídias novas ficam armazenadas pra sempre no nosso Storage
+- Mídias antigas que ainda existem na UAZAPI são copiadas pro Storage no primeiro acesso
+- Mídias já expiradas mostram placeholder em vez de erro
+
+### O que NÃO entra agora
+
+- Migração retroativa de mídias antigas (vai sendo feita on-demand conforme abrirem)
+- Limpeza/expiração automática do bucket (definir depois conforme volume)
 
