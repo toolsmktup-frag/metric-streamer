@@ -120,6 +120,29 @@ export default function ContactPanel({ phone, senderName }: ContactPanelProps) {
     setNoteText('');
   };
 
+  if (!canSeeCrm) {
+    return (
+      <div className="p-4 space-y-4 overflow-y-auto h-full">
+        <div className="flex flex-col items-center gap-2 pb-4 border-b border-border">
+          <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
+            <User className="h-8 w-8 text-primary" />
+          </div>
+          <h3 className="font-semibold text-foreground text-sm">
+            {senderName || formatPhone(phone)}
+          </h3>
+          <span className="text-xs text-muted-foreground">{formatPhone(phone)}</span>
+        </div>
+        <div className="rounded-lg border border-border bg-muted/30 p-4 flex flex-col items-center text-center gap-2">
+          <Lock className="h-5 w-5 text-muted-foreground" />
+          <p className="text-xs font-medium text-foreground">Lead não atribuído a você</p>
+          <p className="text-[11px] text-muted-foreground">
+            Notas, vendas, funis e timeline ficam visíveis apenas para o vendedor responsável ou para gestores.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-4 space-y-4 overflow-y-auto h-full">
       {/* Contact header */}
