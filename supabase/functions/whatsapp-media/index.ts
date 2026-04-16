@@ -1,4 +1,4 @@
-// v1.0.1 - redeploy for matheuscolombo.uazapi.com migration
+// v1.1.0 - prefer Storage, backfill on-demand
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
@@ -47,6 +47,56 @@ class MediaNotFoundError extends Error {
   }
 }
 
+const MEDIA_BUCKET = 'whatsapp-media'
+
+function extFromMime(mime: string, fallback: string): string {
+  if (!mime) return fallback
+  if (mime.includes('jpeg') || mime.includes('jpg')) return 'jpg'
+  if (mime.includes('png')) return 'png'
+  if (mime.includes('webp')) return 'webp'
+  if (mime.includes('gif')) return 'gif'
+  if (mime.includes('mp4')) return 'mp4'
+  if (mime.includes('quicktime')) return 'mov'
+  if (mime.includes('ogg')) return 'ogg'
+  if (mime.includes('mpeg') || mime.includes('mp3')) return 'mp3'
+  if (mime.includes('wav')) return 'wav'
+  if (mime.includes('pdf')) return 'pdf'
+  return fallback
+}
+
+/** Save downloaded media to Storage and return public URL. Best effort. */
+async function backfillToStorage(
+  adminClient: any,
+  params: { messageRowId: string; orgId: string; instanceId: string; base64: string; mime: string; messageType: string }
+): Promise<string | null> {
+  try {
+    const { messageRowId, orgId, instanceId, base64, mime, messageType } = params
+    const fallbackExt = messageType === 'image' ? 'jpg' : messageType === 'video' ? 'mp4' : (messageType === 'audio' || messageType === 'ptt') ? 'ogg' : 'bin'
+    const ext = extFromMime(mime, fallbackExt)
+    const path = `${orgId}/${instanceId}/${messageRowId}.${ext}`
+    const binary = Uint8Array.from(atob(base64), c => c.charCodeAt(0))
+    const { error: upErr } = await adminClient.storage
+      .from(MEDIA_BUCKET)
+      .upload(path, binary, { contentType: mime || 'application/octet-stream', upsert: true })
+    if (upErr) {
+      console.warn('[backfill] upload failed', upErr.message)
+      return null
+    }
+    const { data: pub } = adminClient.storage.from(MEDIA_BUCKET).getPublicUrl(path)
+    const publicUrl = pub?.publicUrl || null
+    if (publicUrl) {
+      await adminClient
+        .from('whatsapp_messages')
+        .update({ media_url: publicUrl, media_mime_type: mime || null, updated_at: new Date().toISOString() })
+        .eq('id', messageRowId)
+    }
+    return publicUrl
+  } catch (err) {
+    console.warn('[backfill] error', (err as Error).message)
+    return null
+  }
+}
+
 async function downloadMessageMedia(apiUrl: string, apiToken: string, messageId: string) {
   const baseUrl = apiUrl.replace(/\/+$/, '')
   const res = await fetch(`${baseUrl}/message/download`, {
@@ -73,6 +123,7 @@ async function downloadMessageMedia(apiUrl: string, apiToken: string, messageId:
   if (data?.base64Data) {
     return {
       mimetype,
+      base64: data.base64Data as string,
       dataUrl: `data:${mimetype};base64,${data.base64Data}`,
     }
   }
@@ -80,7 +131,7 @@ async function downloadMessageMedia(apiUrl: string, apiToken: string, messageId:
   if (data?.fileURL) {
     return {
       mimetype,
-      fileURL: data.fileURL,
+      fileURL: data.fileURL as string,
     }
   }
 
