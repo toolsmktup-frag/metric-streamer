@@ -15,14 +15,13 @@ async function getAuthHeaders() {
   };
 }
 
-// Colors for instance badges
 const INSTANCE_COLORS = [
   'hsl(var(--primary))',
-  'hsl(142, 76%, 36%)',   // green
-  'hsl(262, 83%, 58%)',   // purple
-  'hsl(24, 95%, 53%)',    // orange
-  'hsl(350, 89%, 60%)',   // red
-  'hsl(199, 89%, 48%)',   // sky blue
+  'hsl(142, 76%, 36%)',
+  'hsl(262, 83%, 58%)',
+  'hsl(24, 95%, 53%)',
+  'hsl(350, 89%, 60%)',
+  'hsl(199, 89%, 48%)',
 ];
 
 export function getInstanceColor(index: number): string {
@@ -40,7 +39,6 @@ export function useWhatsAppMultiChats(instances: WhatsAppInstance[]) {
   const [loading, setLoading] = useState(true);
   const initialLoad = useRef(true);
 
-  // Stabilize dependency on instance list by ID string
   const instanceIds = JSON.stringify(instances.map(i => i.id));
 
   const fetchAllChats = useCallback(async () => {
@@ -54,34 +52,43 @@ export function useWhatsAppMultiChats(instances: WhatsAppInstance[]) {
 
     try {
       const headers = await getAuthHeaders();
-
-      const results = await Promise.all(
-        instances.map(async (inst, index) => {
-          try {
-            const res = await fetch(
-              `${SUPABASE_URL}/functions/v1/whatsapp-chats?action=list_chats&instance_id=${inst.id}`,
-              { headers }
-            );
-            if (!res.ok) {
-              const errorText = await res.text();
-              console.error('Error fetching multi chats:', inst.id, errorText);
-              return [];
-            }
-            const data: ChatSummary[] = await res.json();
-            return data.map(chat => ({
-              ...chat,
-              instance_id: chat.instance_id || inst.id,
-              instance_name: getInstanceDisplayName(inst),
-              instance_color: getInstanceColor(index),
-            }));
-          } catch {
-            return [];
-          }
-        })
+      const res = await fetch(
+        `${SUPABASE_URL}/functions/v1/whatsapp-chats?action=list_chats&instance_id=all`,
+        { headers }
       );
 
-      const merged = results
-        .flat()
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error('Error fetching unified chats:', errorText);
+        setChats([]);
+        return;
+      }
+
+      const data: ChatSummary[] = await res.json();
+      const instanceMeta = new Map(
+        instances.map((inst, index) => [
+          inst.id,
+          {
+            instance_name: getInstanceDisplayName(inst),
+            instance_color: getInstanceColor(index),
+          },
+        ])
+      );
+
+      const merged = (Array.isArray(data) ? data : [])
+        .map((chat): MultiChatSummary => {
+          const meta = instanceMeta.get(chat.instance_id || '') || {
+            instance_name: 'Instância',
+            instance_color: getInstanceColor(0),
+          };
+
+          return {
+            ...chat,
+            instance_id: chat.instance_id || '',
+            instance_name: meta.instance_name,
+            instance_color: meta.instance_color,
+          };
+        })
         .sort((a, b) =>
           new Date(b.last_message.created_at).getTime() -
           new Date(a.last_message.created_at).getTime()
@@ -90,16 +97,16 @@ export function useWhatsAppMultiChats(instances: WhatsAppInstance[]) {
       setChats(merged);
     } catch (err) {
       console.error('Error fetching multi chats:', err);
+      setChats([]);
     } finally {
       setLoading(false);
       initialLoad.current = false;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [instanceIds]);
 
   useEffect(() => {
     fetchAllChats();
-    const interval = setInterval(fetchAllChats, 10000);
+    const interval = setInterval(fetchAllChats, 15000);
     return () => clearInterval(interval);
   }, [fetchAllChats]);
 
