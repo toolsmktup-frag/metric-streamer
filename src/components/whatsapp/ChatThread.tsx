@@ -47,6 +47,7 @@ function AudioPlayer({ message, src, isOutbound = false }: { message: WhatsAppMe
   const [duration, setDuration] = useState(0);
   const [resolvedSrc, setResolvedSrc] = useState<string | null>(() => needsProxyDownload(src) ? null : src);
   const [resolving, setResolving] = useState(() => needsProxyDownload(src));
+  const [unavailable, setUnavailable] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -59,12 +60,19 @@ function AudioPlayer({ message, src, isOutbound = false }: { message: WhatsAppMe
 
     setResolvedSrc(null);
     setResolving(true);
+    setUnavailable(false);
 
     supabase.functions.invoke('whatsapp-media', {
       body: { message_id: message.id },
     }).then(({ data, error }) => {
       if (cancelled) return;
       if (error) throw error;
+
+      if (data?.fallback === true) {
+        setUnavailable(true);
+        setResolving(false);
+        return;
+      }
 
       const nextSrc = data?.dataUrl || data?.fileURL || null;
       if (!nextSrc) throw new Error('No playable media returned');
@@ -81,6 +89,15 @@ function AudioPlayer({ message, src, isOutbound = false }: { message: WhatsAppMe
       cancelled = true;
     };
   }, [message.id, src]);
+
+  if (unavailable) {
+    return (
+      <div className="flex items-center gap-2 min-w-[200px] text-xs text-muted-foreground italic">
+        <Play className="h-4 w-4 shrink-0 opacity-50" />
+        <span>Áudio expirado no WhatsApp</span>
+      </div>
+    );
+  }
 
   const playableSrc = resolvedSrc || undefined;
 
@@ -224,6 +241,7 @@ function ProxiedImage({ message, fallbackUrl, caption }: { message: WhatsAppMess
     }).then(({ data, error: err }) => {
       if (cancelled) return;
       if (err) { setError(true); setLoading(false); return; }
+      if (data?.fallback === true) { setError(true); setLoading(false); return; }
       const url = data?.dataUrl || data?.fileURL || null;
       if (url) setResolvedUrl(url);
       else setError(true);
@@ -232,7 +250,7 @@ function ProxiedImage({ message, fallbackUrl, caption }: { message: WhatsAppMess
     return () => { cancelled = true; };
   }, [message.id, fallbackUrl]);
 
-  if (error) return <div className="text-xs text-muted-foreground italic">Imagem não disponível</div>;
+  if (error) return <div className="text-xs text-muted-foreground italic">Imagem expirada no WhatsApp</div>;
 
   return (
     <div className="max-w-[240px]">
@@ -264,6 +282,7 @@ function ProxiedVideo({ message, fallbackUrl, caption }: { message: WhatsAppMess
     }).then(({ data, error: err }) => {
       if (cancelled) return;
       if (err) { setError(true); setLoading(false); return; }
+      if (data?.fallback === true) { setError(true); setLoading(false); return; }
       const url = data?.dataUrl || data?.fileURL || null;
       if (url) setResolvedUrl(url);
       else setError(true);
@@ -272,7 +291,7 @@ function ProxiedVideo({ message, fallbackUrl, caption }: { message: WhatsAppMess
     return () => { cancelled = true; };
   }, [message.id, fallbackUrl]);
 
-  if (error) return <div className="text-xs text-muted-foreground italic">Vídeo não disponível</div>;
+  if (error) return <div className="text-xs text-muted-foreground italic">Vídeo expirado no WhatsApp</div>;
 
   return (
     <div className="max-w-[280px]">
