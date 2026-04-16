@@ -184,21 +184,18 @@ Deno.serve(async (req) => {
     }
 
     if (action === 'list_chats') {
+      const chatListLimit = 800
+
       let messagesQuery = adminClient
         .from('whatsapp_messages')
-        .select('*')
+        .select('id, organization_id, instance_id, phone, body, message_type, direction, status, is_deleted, lead_id, sender_name, created_at, updated_at')
         .eq('organization_id', orgId)
+        .not('phone', 'is', null)
         .order('created_at', { ascending: false })
-        .limit(2000)
-
-      let contactsQuery = adminClient
-        .from('whatsapp_contacts')
-        .select('phone, name, profile_pic_url, instance_id')
-        .eq('organization_id', orgId)
+        .limit(chatListLimit)
 
       if (!isAllMode) {
         messagesQuery = messagesQuery.eq('instance_id', instanceId)
-        contactsQuery = contactsQuery.eq('instance_id', instanceId)
       } else if (!ctx.isAdmin && ctx.allowedInstanceIds) {
         const ids = [...ctx.allowedInstanceIds]
         if (ids.length === 0) {
@@ -207,29 +204,23 @@ Deno.serve(async (req) => {
           })
         }
         messagesQuery = messagesQuery.in('instance_id', ids)
-        contactsQuery = contactsQuery.in('instance_id', ids)
       }
 
-      const [messagesResult, contactsResult] = await Promise.all([messagesQuery, contactsQuery])
-      if (messagesResult.error) {
-        throw new Error(`messages query failed: ${serializeError(messagesResult.error)}`)
-      }
-      if (contactsResult.error) {
-        console.warn('[whatsapp-chats] contacts query failed (continuing without contacts):', contactsResult.error.message || contactsResult.error)
+      const { data: recentMessages, error: messagesError } = await messagesQuery
+      if (messagesError) {
+        throw new Error(`messages query failed: ${serializeError(messagesError)}`)
       }
 
-      // Seller phone whitelist
       const restrictByPhone = !ctx.isAdmin && ctx.allowedPhones !== null
-
-      const contactMap = new Map(
-        (contactsResult.data || []).map((c: any) => [`${c.instance_id}__${c.phone}`, c])
-      )
-
-      // Use composite key instance_id + phone so threads are NOT merged across instances
       const chatMap = new Map<string, any>()
+      const relevantPhones = new Set<string>()
+      const relevantInstanceIds = new Set<string>()
 
-      for (const msg of messagesResult.data || []) {
-        const cleanPhone = normalizePhone(msg.phone)
+      for (const msg of recentMessages || []) {
+        if (!msg?.phone || !msg?.instance_id) continue
+
+        const cleanPhone = normalizePhone(String(msg.phone))
+        if (!cleanPhone) continue
         if (restrictByPhone && !ctx.allowedPhones!.has(cleanPhone)) continue
 
         const key = `${msg.instance_id}__${msg.phone}`
@@ -241,13 +232,41 @@ Deno.serve(async (req) => {
             sender_name: msg.sender_name,
             unread_count: 0,
           })
+          relevantPhones.add(msg.phone)
+          relevantInstanceIds.add(msg.instance_id)
         }
+
         const current = chatMap.get(key)
         if (!current.sender_name && msg.sender_name && msg.direction === 'inbound') {
           current.sender_name = msg.sender_name
         }
         if (msg.direction === 'inbound' && msg.status !== 'read' && !msg.is_deleted) {
           current.unread_count++
+        }
+      }
+
+      let contactMap = new Map<string, any>()
+      if (relevantPhones.size > 0 && relevantPhones.size <= 250) {
+        let contactsQuery = adminClient
+          .from('whatsapp_contacts')
+          .select('phone, name, profile_pic_url, instance_id')
+          .eq('organization_id', orgId)
+          .in('phone', [...relevantPhones])
+
+        const contactInstanceIds = [...relevantInstanceIds]
+        if (contactInstanceIds.length === 1) {
+          contactsQuery = contactsQuery.eq('instance_id', contactInstanceIds[0])
+        } else if (contactInstanceIds.length > 1) {
+          contactsQuery = contactsQuery.in('instance_id', contactInstanceIds)
+        }
+
+        const { data: contactsData, error: contactsError } = await contactsQuery
+        if (contactsError) {
+          console.warn('[whatsapp-chats] contacts query failed (continuing without contacts):', serializeError(contactsError))
+        } else {
+          contactMap = new Map(
+            (contactsData || []).map((c: any) => [`${c.instance_id}__${c.phone}`, c])
+          )
         }
       }
 

@@ -62,7 +62,11 @@ export function useWhatsAppMultiChats(instances: WhatsAppInstance[]) {
               `${SUPABASE_URL}/functions/v1/whatsapp-chats?action=list_chats&instance_id=${inst.id}`,
               { headers }
             );
-            if (!res.ok) return [];
+            if (!res.ok) {
+              const errorText = await res.text();
+              console.error('Error fetching multi chats:', inst.id, errorText);
+              return [];
+            }
             const data: ChatSummary[] = await res.json();
             return data.map(chat => ({
               ...chat,
