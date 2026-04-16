@@ -501,24 +501,23 @@ export default function MinhasMetas() {
       >
         <KpiCard
           icon={<ShoppingCart className="h-4 w-4" />}
-          label="Vendas Hoje"
-          value={String(stats?.todayLeads || 0)}
+          label="Vendas do Período"
+          value={String(stats?.periodSales || 0)}
           sub={`Média: ${(stats?.avgDailyLeads || 0).toFixed(1)}/dia`}
           loading={isLoading}
         />
         <KpiCard
           icon={<DollarSign className="h-4 w-4" />}
-          label="Receita Hoje"
-          value={formatCurrency(stats?.todayRevenue || 0)}
-          sub={todayVariation !== 0 ? `${todayVariation >= 0 ? '↑' : '↓'} ${Math.abs(todayVariation).toFixed(0)}% vs ontem` : 'vs ontem'}
-          subColor={todayVariation >= 0 ? 'text-emerald-500' : 'text-destructive'}
+          label="Receita do Período"
+          value={formatCurrency(stats?.periodRevenue || 0)}
+          sub={periodLabel}
           loading={isLoading}
         />
         <KpiCard
           icon={<TrendingUp className="h-4 w-4" />}
-          label="Comissão no Mês"
-          value={formatCurrency(stats?.monthCommission || 0)}
-          sub={`${stats?.monthSales || 0} vendas`}
+          label="Comissão do Período"
+          value={formatCurrency(stats?.periodCommission || 0)}
+          sub={`${stats?.periodSales || 0} vendas`}
           loading={isLoading}
         />
         <KpiCard
