@@ -275,8 +275,12 @@ export default function ContactPanel({ phone, senderName }: ContactPanelProps) {
         {journey.length === 0 ? (
           lead?.id ? (
             <FunnelLinker leadId={lead.id} />
+          ) : ensureLead.isPending || isFetchingLead ? (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground italic">
+              <Loader2 className="h-3 w-3 animate-spin" /> Preparando lead…
+            </div>
           ) : (
-            <p className="text-xs text-muted-foreground italic">Nenhum funil vinculado</p>
+            <p className="text-xs text-muted-foreground italic">Não foi possível preparar o lead deste contato</p>
           )
         ) : (
           <div className="space-y-1.5">
