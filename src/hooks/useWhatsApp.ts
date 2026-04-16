@@ -54,6 +54,8 @@ export interface WhatsAppMessage {
 
 export interface ChatSummary {
   phone: string;
+  /** Instance this chat belongs to. Always present from backend so we can use a composite key. */
+  instance_id?: string;
   last_message: WhatsAppMessage;
   sender_name: string | null;
   unread_count: number;
