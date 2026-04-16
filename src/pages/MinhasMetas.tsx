@@ -92,21 +92,72 @@ function getRemainingWorkDays(): number {
   return Math.max(count, 1);
 }
 
-function getDailyGoalInfo(monthRevenue: number, goalAmount: number, todayRevenue: number) {
-  if (goalAmount <= 0) return null;
-  const remaining = Math.max(goalAmount - monthRevenue, 0);
+function getDailyGoalInfo(
+  monthRevenue: number,
+  goalsArray: { amount: number; label: string; emoji: string }[],
+  todayRevenue: number
+) {
+  const validGoals = goalsArray.filter(g => g.amount > 0);
+  if (validGoals.length === 0) return null;
+
   const workDays = getRemainingWorkDays();
-  const dailyTarget = remaining <= 0 ? 0 : remaining / workDays;
-  const percent = dailyTarget > 0 ? Math.min((todayRevenue / dailyTarget) * 100, 150) : (todayRevenue > 0 ? 100 : 0);
-  return { dailyTarget, percent, todayRevenue, remaining, monthlyDone: remaining <= 0 };
+
+  // Calculate daily target for each goal tier
+  const dailyTargets = validGoals.map(g => {
+    const remaining = Math.max(g.amount - monthRevenue, 0);
+    return { ...g, dailyTarget: remaining <= 0 ? 0 : remaining / workDays, monthlyDone: remaining <= 0 };
+  });
+
+  // Find the active daily goal: first one not yet beaten today
+  let activeIdx = 0;
+  for (let i = 0; i < dailyTargets.length; i++) {
+    if (dailyTargets[i].monthlyDone) {
+      activeIdx = i + 1;
+      continue;
+    }
+    if (todayRevenue >= dailyTargets[i].dailyTarget && i < dailyTargets.length - 1) {
+      activeIdx = i + 1;
+      continue;
+    }
+    activeIdx = i;
+    break;
+  }
+
+  // All monthly goals done
+  if (dailyTargets.every(d => d.monthlyDone)) {
+    return { dailyTarget: 0, percent: 100, todayRevenue, remaining: 0, monthlyDone: true, activeLabel: validGoals[validGoals.length - 1].label, activeEmoji: '🏆', allDailyGoalsBeat: true, dailyTargets, activeIdx: validGoals.length - 1 };
+  }
+
+  // All daily goals beaten today (but monthly not done yet)
+  if (activeIdx >= dailyTargets.length) {
+    const last = dailyTargets[dailyTargets.length - 1];
+    return { dailyTarget: last.dailyTarget, percent: (last.dailyTarget > 0 ? (todayRevenue / last.dailyTarget) * 100 : 100), todayRevenue, remaining: 0, monthlyDone: false, activeLabel: last.label, activeEmoji: '🎉', allDailyGoalsBeat: true, dailyTargets, activeIdx: dailyTargets.length - 1 };
+  }
+
+  const current = dailyTargets[activeIdx];
+  const percent = current.dailyTarget > 0 ? Math.min((todayRevenue / current.dailyTarget) * 100, 100) : (todayRevenue > 0 ? 100 : 0);
+
+  return {
+    dailyTarget: current.dailyTarget,
+    percent,
+    todayRevenue,
+    remaining: Math.max(current.dailyTarget - todayRevenue, 0),
+    monthlyDone: false,
+    activeLabel: current.label,
+    activeEmoji: current.emoji,
+    allDailyGoalsBeat: false,
+    dailyTargets,
+    activeIdx,
+  };
 }
 
-function getDailyMotivationalMessage(percent: number, name: string, dailyTarget: number, todayRevenue: number, monthlyDone: boolean) {
+function getDailyMotivationalMessage(percent: number, name: string, allBeat: boolean, monthlyDone: boolean, activeLabel: string) {
   if (monthlyDone) return { text: `Meta do mês já batida! Cada venda agora é bônus, ${name}! 🏆✨`, emoji: '🏆' };
-  if (percent >= 100) return { text: `BATEU A META DO DIA! Você é fera, ${name}! Continue assim! 🎉🔥`, emoji: '🎉' };
-  if (percent >= 70) return { text: `Quase lá! Falta pouco pra fechar o dia! Você consegue! 🚀`, emoji: '🚀' };
+  if (allBeat) return { text: `TODAS AS METAS DO DIA BATIDAS! Você é lenda, ${name}! 🎉👑`, emoji: '🎉' };
+  if (percent >= 100) return { text: `${activeLabel} do dia batida! Bora pra próxima! 🚀🔥`, emoji: '🚀' };
+  if (percent >= 70) return { text: `Quase lá na ${activeLabel}! Falta pouco pra fechar! 🚀`, emoji: '🚀' };
   if (percent >= 30) return { text: `Tá no caminho certo! Tem leads pra ligar? Bora converter! 💪`, emoji: '💪' };
-  if (todayRevenue > 0) return { text: `Bom começo! Continue assim e bate a meta do dia! 🔥`, emoji: '🔥' };
+  if (percent > 0) return { text: `Bom começo! Continue assim e bate a ${activeLabel} do dia! 🔥`, emoji: '🔥' };
   return { text: `Bora começar o dia forte, ${name}! Sua meta de hoje te espera! 💪`, emoji: '🎯' };
 }
 
@@ -163,14 +214,12 @@ export default function MinhasMetas() {
 
   // Daily goal breakdown
   const dailyGoal = useMemo(() => {
-    const primaryGoal = goals.find(g => g.amount > 0);
-    if (!primaryGoal) return null;
-    return getDailyGoalInfo(monthRevenue, primaryGoal.amount, stats?.todayRevenue || 0);
+    return getDailyGoalInfo(monthRevenue, goals, stats?.todayRevenue || 0);
   }, [monthRevenue, goals, stats?.todayRevenue]);
 
   const dailyMessage = useMemo(() => {
     if (!dailyGoal) return null;
-    return getDailyMotivationalMessage(dailyGoal.percent, sellerName, dailyGoal.dailyTarget, dailyGoal.todayRevenue, dailyGoal.monthlyDone);
+    return getDailyMotivationalMessage(dailyGoal.percent, sellerName, dailyGoal.allDailyGoalsBeat, dailyGoal.monthlyDone, dailyGoal.activeLabel);
   }, [dailyGoal, sellerName]);
 
   const level = getSellerLevel(stats?.monthSales || 0);
@@ -403,12 +452,27 @@ export default function MinhasMetas() {
                   <p className="text-lg font-bold text-emerald-600">Meta do mês já batida!</p>
                   <p className="text-sm text-muted-foreground">Cada venda agora é bônus. Continue arrasando!</p>
                 </div>
+              ) : dailyGoal.allDailyGoalsBeat ? (
+                <div className="text-center py-4 space-y-3">
+                  <div className="text-4xl mb-1">🎉👑</div>
+                  <p className="text-lg font-bold text-emerald-600">TODAS AS METAS DO DIA BATIDAS!</p>
+                  <p className="text-sm text-muted-foreground">Você já fechou {formatCurrency(dailyGoal.todayRevenue)} hoje. Cada venda agora é bônus!</p>
+                  {/* Mini indicators showing all beaten */}
+                  <div className="flex justify-center gap-2 pt-1">
+                    {dailyGoal.dailyTargets.map((dt, i) => (
+                      <div key={i} className="flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-500/10 text-emerald-600 text-xs font-semibold">
+                        ✅ {dt.label}
+                      </div>
+                    ))}
+                  </div>
+                </div>
               ) : (
                 <>
+                  {/* Active daily goal header */}
                   <div className="text-center space-y-1">
                     <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs font-bold uppercase tracking-wider">
                       <Target className="h-3.5 w-3.5" />
-                      Meta do Dia
+                      Meta do Dia — {dailyGoal.activeLabel}
                     </div>
                     <p className="text-sm text-muted-foreground">
                       Sua meta de hoje é fechar
@@ -419,6 +483,29 @@ export default function MinhasMetas() {
                     <p className="text-sm text-muted-foreground">em vendas!</p>
                   </div>
 
+                  {/* Multi-tier daily indicators */}
+                  <div className="flex justify-center gap-2">
+                    {dailyGoal.dailyTargets.map((dt, i) => {
+                      const beaten = dt.monthlyDone || dailyGoal.todayRevenue >= dt.dailyTarget;
+                      const isActive = i === dailyGoal.activeIdx;
+                      return (
+                        <div
+                          key={i}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                            beaten
+                              ? 'border-emerald-400 bg-emerald-500/10 text-emerald-600'
+                              : isActive
+                              ? 'border-amber-400 bg-amber-500/10 text-amber-600'
+                              : 'border-border bg-muted/30 text-muted-foreground opacity-50'
+                          }`}
+                        >
+                          {beaten ? '✅' : isActive ? dt.emoji : '🔒'} {dt.label}: {formatCurrency(dt.dailyTarget)}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Progress bar */}
                   <div className="space-y-2">
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">Você já fechou</span>
@@ -441,15 +528,16 @@ export default function MinhasMetas() {
                       />
                     </div>
                     <div className="flex justify-between text-xs text-muted-foreground">
-                      <span>{dailyGoal.percent.toFixed(0)}% da meta do dia</span>
+                      <span>{dailyGoal.percent.toFixed(0)}% da {dailyGoal.activeLabel} do dia</span>
                       {dailyGoal.percent < 100 && (
-                        <span>Faltam {formatCurrency(Math.max(dailyGoal.dailyTarget - dailyGoal.todayRevenue, 0))}</span>
+                        <span>Faltam {formatCurrency(dailyGoal.remaining)}</span>
                       )}
                     </div>
                   </div>
 
+                  {/* Motivational message */}
                   <motion.div
-                    key={Math.floor(dailyGoal.percent / 30)}
+                    key={`${dailyGoal.activeIdx}_${Math.floor(dailyGoal.percent / 30)}`}
                     initial={{ opacity: 0, y: 5 }}
                     animate={{ opacity: 1, y: 0 }}
                     className={`text-center p-3 rounded-lg ${
