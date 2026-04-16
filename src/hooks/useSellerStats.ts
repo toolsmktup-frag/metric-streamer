@@ -2,6 +2,22 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { startOfMonth, endOfDay, startOfDay, subDays, format, differenceInDays } from 'date-fns';
 
+const COMMISSION_RATE = 0.10;
+
+function toAmount(value: unknown): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function getCommissionAmount(sale: { revenue?: unknown; affiliate_commission?: unknown }): number {
+  const affiliateCommission = toAmount(sale.affiliate_commission);
+  if (affiliateCommission > 0) {
+    return affiliateCommission;
+  }
+
+  return toAmount(sale.revenue) * COMMISSION_RATE;
+}
+
 export interface SellerStats {
   monthSales: number;
   monthRevenue: number;
@@ -44,8 +60,8 @@ async function fetchSellerStats(sellerName: string, periodRange?: SellerStatsDat
   const approved = sales.filter((s: any) => s.status === 'authorized');
 
   const monthSales = approved.length;
-  const monthRevenue = approved.reduce((sum: number, s: any) => sum + (s.revenue || 0), 0);
-  const monthCommission = approved.reduce((sum: number, s: any) => sum + (s.affiliate_commission || 0), 0);
+  const monthRevenue = approved.reduce((sum: number, s: any) => sum + toAmount(s.revenue), 0);
+  const monthCommission = approved.reduce((sum: number, s: any) => sum + getCommissionAmount(s), 0);
 
   // Today
   const todayStr = format(today, 'yyyy-MM-dd');
@@ -59,7 +75,7 @@ async function fetchSellerStats(sellerName: string, periodRange?: SellerStatsDat
   for (const s of approved) {
     const d = (s.purchased_at || '').slice(0, 10);
     const entry = dayMap.get(d) || { revenue: 0, count: 0 };
-    entry.revenue += s.revenue || 0;
+    entry.revenue += toAmount(s.revenue);
     entry.count++;
     dayMap.set(d, entry);
   }
@@ -105,8 +121,8 @@ async function fetchSellerStats(sellerName: string, periodRange?: SellerStatsDat
         return d >= pStartStr && d <= pEndStr;
       });
       periodSales = periodApproved.length;
-      periodRevenue = periodApproved.reduce((sum: number, s: any) => sum + (s.revenue || 0), 0);
-      periodCommission = periodApproved.reduce((sum: number, s: any) => sum + (s.affiliate_commission || 0), 0);
+      periodRevenue = periodApproved.reduce((sum: number, s: any) => sum + toAmount(s.revenue), 0);
+      periodCommission = periodApproved.reduce((sum: number, s: any) => sum + getCommissionAmount(s), 0);
     } else {
       // Need separate query
       const { data: periodData } = await (supabase as any)
@@ -118,8 +134,8 @@ async function fetchSellerStats(sellerName: string, periodRange?: SellerStatsDat
 
       const pApproved = ((periodData || []) as any[]).filter((s: any) => s.status === 'authorized');
       periodSales = pApproved.length;
-      periodRevenue = pApproved.reduce((sum: number, s: any) => sum + (s.revenue || 0), 0);
-      periodCommission = pApproved.reduce((sum: number, s: any) => sum + (s.affiliate_commission || 0), 0);
+      periodRevenue = pApproved.reduce((sum: number, s: any) => sum + toAmount(s.revenue), 0);
+      periodCommission = pApproved.reduce((sum: number, s: any) => sum + getCommissionAmount(s), 0);
     }
   }
 
@@ -127,9 +143,9 @@ async function fetchSellerStats(sellerName: string, periodRange?: SellerStatsDat
     monthSales,
     monthRevenue,
     monthCommission,
-    todaySales: todaySales.reduce((s: number, t: any) => s + (t.revenue || 0), 0),
-    todayRevenue: todaySales.reduce((s: number, t: any) => s + (t.revenue || 0), 0),
-    yesterdayRevenue: yesterdaySales.reduce((s: number, t: any) => s + (t.revenue || 0), 0),
+    todaySales: todaySales.length,
+    todayRevenue: todaySales.reduce((s: number, t: any) => s + toAmount(t.revenue), 0),
+    yesterdayRevenue: yesterdaySales.reduce((s: number, t: any) => s + toAmount(t.revenue), 0),
     todayLeads: todaySales.length,
     avgDailyLeads: daysInMonth > 0 ? monthSales / daysInMonth : 0,
     monthConversion: 0,
