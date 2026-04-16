@@ -69,11 +69,8 @@ export default function ContactPanel({ phone, senderName }: ContactPanelProps) {
   const { data: role = 'vendedor' } = useCurrentUserRole();
   const isAdmin = role === 'admin' || role === 'gestor';
 
-  const { data: lead } = useLeadByPhone(phone);
+  const { data: lead, refetch: refetchLead, isFetching: isFetchingLead } = useLeadByPhone(phone);
 
-  // --- Authorization gate ---
-  // Sellers can only see CRM data (notes/purchases/funnels/timeline) for leads
-  // explicitly assigned to them. Otherwise we show a locked state.
   const { data: currentUserId } = useQuery({
     queryKey: ['auth-user-id'],
     queryFn: async () => {
@@ -83,6 +80,22 @@ export default function ContactPanel({ phone, senderName }: ContactPanelProps) {
     staleTime: 5 * 60 * 1000,
   });
   const canSeeCrm = isAdmin || (lead?.assigned_to && lead.assigned_to === currentUserId);
+
+  // Auto-cria lead pro chat do WhatsApp quando ainda não existe.
+  // Vendedor recebe assigned_to = ele mesmo (libera canSeeCrm na mesma hora).
+  const ensureLead = useEnsureLead();
+  const ensuredFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!phone) return;
+    if (lead?.id) { ensuredFor.current = phone; return; }
+    if (isFetchingLead || ensureLead.isPending) return;
+    if (ensuredFor.current === phone) return;
+    ensuredFor.current = phone;
+    ensureLead.mutate(
+      { phone, name: senderName },
+      { onSuccess: () => { refetchLead(); } }
+    );
+  }, [phone, lead?.id, isFetchingLead, senderName, ensureLead, refetchLead]);
 
   const { notes, loading: notesLoading, addNote, deleteNote } = useContactNotes(canSeeCrm ? phone : null);
   const [noteText, setNoteText] = useState('');
