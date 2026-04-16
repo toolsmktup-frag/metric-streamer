@@ -218,6 +218,7 @@ Deno.serve(async (req) => {
     }
 
     let lastError = 'Unknown error'
+    let allNotFound = candidates.length > 0
     for (const candidate of candidates) {
       try {
         const media = await downloadMessageMedia(instance.api_url, instance.api_token, candidate)
@@ -226,8 +227,21 @@ Deno.serve(async (req) => {
         })
       } catch (error) {
         lastError = error instanceof Error ? error.message : String(error)
+        if (!(error instanceof MediaNotFoundError)) allNotFound = false
         console.error('[whatsapp-media] download failed for candidate', candidate, lastError)
       }
+    }
+
+    if (allNotFound) {
+      // Mensagem antiga / expirada no servidor UAZAPI — retorna fallback gracioso
+      return new Response(JSON.stringify({
+        error: 'MESSAGE_NOT_FOUND',
+        fallback: true,
+        message: 'Mídia não está mais disponível no servidor do WhatsApp',
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
     }
 
     return new Response(JSON.stringify({ error: lastError }), {
