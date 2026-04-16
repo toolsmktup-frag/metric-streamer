@@ -202,6 +202,9 @@ Deno.serve(async (req) => {
 
       const [messagesResult, contactsResult] = await Promise.all([messagesQuery, contactsQuery])
       if (messagesResult.error) throw messagesResult.error
+      if (contactsResult.error) {
+        console.warn('[whatsapp-chats] contacts query failed (continuing without contacts):', contactsResult.error.message || contactsResult.error)
+      }
 
       // Seller phone whitelist
       const restrictByPhone = !ctx.isAdmin && ctx.allowedPhones !== null
@@ -343,9 +346,15 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ error: 'Invalid action' }), {
       status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
-    console.error('whatsapp-chats error:', message)
+  } catch (err: any) {
+    let message: string
+    if (err instanceof Error) message = err.message
+    else if (err && typeof err === 'object') {
+      message = err.message || err.error_description || err.error || err.hint || err.details || JSON.stringify(err)
+    } else {
+      message = String(err)
+    }
+    console.error('whatsapp-chats error:', message, err)
     return new Response(JSON.stringify({ error: message }), {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
