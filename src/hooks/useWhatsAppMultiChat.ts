@@ -99,7 +99,8 @@ export function useWhatsAppMultiChats(instances: WhatsAppInstance[]) {
       }
 
       const data: ChatSummary[] = await res.json();
-      const instanceMeta = new Map(
+      // Local fallback meta from filtered instances (covers fresh inserts not yet in globalMeta)
+      const localMeta = new Map<string, InstanceMeta>(
         instances.map((inst, index) => [
           inst.id,
           {
@@ -111,14 +112,15 @@ export function useWhatsAppMultiChats(instances: WhatsAppInstance[]) {
 
       const merged = (Array.isArray(data) ? data : [])
         .map((chat): MultiChatSummary => {
-          const meta = instanceMeta.get(chat.instance_id || '') || {
+          const iid = chat.instance_id || '';
+          const meta = globalMeta.get(iid) || localMeta.get(iid) || {
             instance_name: 'Instância',
             instance_color: getInstanceColor(0),
           };
 
           return {
             ...chat,
-            instance_id: chat.instance_id || '',
+            instance_id: iid,
             instance_name: meta.instance_name,
             instance_color: meta.instance_color,
           };
@@ -137,7 +139,7 @@ export function useWhatsAppMultiChats(instances: WhatsAppInstance[]) {
       initialLoad.current = false;
       inFlight.current = false;
     }
-  }, [instanceIds]);
+  }, [instanceIds, globalMeta]);
 
   useEffect(() => {
     fetchAllChats();
