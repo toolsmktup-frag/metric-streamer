@@ -3,6 +3,11 @@ import { supabase } from '@/integrations/supabase/client';
 import type { ChatSummary, WhatsAppInstance } from './useWhatsApp';
 import { getInstanceDisplayName } from './useWhatsApp';
 
+interface InstanceMeta {
+  instance_name: string;
+  instance_color: string;
+}
+
 const SUPABASE_URL = 'https://emfbocpmphtftqcezaib.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVtZmJvY3BtcGh0ZnRxY2V6YWliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI5ODc4ODAsImV4cCI6MjA4ODU2Mzg4MH0.EpE1RwQhmk4C9YFdVjnJXp__cI8LPiic5dMqIMP1g8M';
 
@@ -37,10 +42,34 @@ export interface MultiChatSummary extends ChatSummary {
 export function useWhatsAppMultiChats(instances: WhatsAppInstance[]) {
   const [chats, setChats] = useState<MultiChatSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [globalMeta, setGlobalMeta] = useState<Map<string, InstanceMeta>>(new Map());
   const initialLoad = useRef(true);
   const inFlight = useRef(false);
 
   const instanceIds = JSON.stringify(instances.map(i => i.id));
+
+  // Fetch ALL org instances once (for badge name resolution in unified mode).
+  // The chats endpoint may return chats from instances the user doesn't have direct access to
+  // (e.g. admin viewing all), so we need the full org map to label badges correctly.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data } = await (supabase as any)
+        .from('whatsapp_instances')
+        .select('id, instance_name, nickname, display_name')
+        .order('created_at', { ascending: true });
+      if (cancelled || !data) return;
+      const map = new Map<string, InstanceMeta>();
+      (data as any[]).forEach((inst, index) => {
+        map.set(inst.id, {
+          instance_name: inst.nickname || inst.display_name || inst.instance_name || 'Instância',
+          instance_color: getInstanceColor(index),
+        });
+      });
+      setGlobalMeta(map);
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const fetchAllChats = useCallback(async () => {
     if (instances.length === 0) {
