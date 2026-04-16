@@ -1,22 +1,27 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { format } from 'date-fns';
+import { format, subDays, startOfDay, endOfDay } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import confetti from 'canvas-confetti';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/lib/formatters';
 import { useSellerGoal } from '@/hooks/useSellerGoals';
-import { useSellerStats } from '@/hooks/useSellerStats';
+import { useSellerStats, type SellerStatsDateRange } from '@/hooks/useSellerStats';
 import { useSellerAchievements, useAutoUnlockAchievements, ACHIEVEMENTS, getSellerLevel } from '@/hooks/useSellerAchievements';
 import {
   Trophy, Target, Flame, TrendingUp, DollarSign, ShoppingCart,
-  Bell, BarChart3
+  Bell, BarChart3, CalendarIcon, ChevronDown
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import { motion } from 'framer-motion';
+import type { DateRange as DayPickerRange } from 'react-day-picker';
 
 const GOAL_LABELS = ['Meta 1', 'Meta 2', 'Meta 3'];
 const GOAL_EMOJIS = ['🥉', '🥈', '🥇'];
