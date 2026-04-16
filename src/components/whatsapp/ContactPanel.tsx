@@ -262,6 +262,22 @@ export default function ContactPanel({ phone, senderName }: ContactPanelProps) {
         )}
       </div>
 
+      {/* Tags */}
+      <div>
+        <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
+          <Tag className="h-3 w-3" /> Tags
+        </h4>
+        {lead?.id ? (
+          <TagsEditor leadId={lead.id} />
+        ) : ensureLead.isPending || isFetchingLead ? (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground italic">
+            <Loader2 className="h-3 w-3 animate-spin" /> Preparando lead…
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground italic">Lead indisponível</p>
+        )}
+      </div>
+
       {/* Funnels */}
       <div>
         <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
