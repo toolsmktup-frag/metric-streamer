@@ -161,6 +161,18 @@ export default function MinhasMetas() {
 
   const activeGoal = getActiveGoal(monthRevenue, goals);
 
+  // Daily goal breakdown
+  const dailyGoal = useMemo(() => {
+    const primaryGoal = goals.find(g => g.amount > 0);
+    if (!primaryGoal) return null;
+    return getDailyGoalInfo(monthRevenue, primaryGoal.amount, stats?.todayRevenue || 0);
+  }, [monthRevenue, goals, stats?.todayRevenue]);
+
+  const dailyMessage = useMemo(() => {
+    if (!dailyGoal) return null;
+    return getDailyMotivationalMessage(dailyGoal.percent, sellerName, dailyGoal.dailyTarget, dailyGoal.todayRevenue, dailyGoal.monthlyDone);
+  }, [dailyGoal, sellerName]);
+
   const level = getSellerLevel(stats?.monthSales || 0);
   const unlockedKeys = new Set(achievements.map(a => a.achievement_key));
 
