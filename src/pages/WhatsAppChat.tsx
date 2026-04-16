@@ -362,7 +362,7 @@ export default function WhatsAppChat() {
           <div className="w-[280px] shrink-0 border-l border-border bg-card">
             <ContactPanel
               phone={selectedPhone}
-              senderName={selectedChat?.sender_name || null}
+              senderName={selectedChat?.contact_name || selectedChat?.sender_name || null}
             />
           </div>
         )}

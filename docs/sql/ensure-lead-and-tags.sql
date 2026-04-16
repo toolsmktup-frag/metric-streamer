@@ -1,11 +1,11 @@
 -- ============================================
--- SETUP: Sistema de Tags + RPC ensure_lead_for_phone
--- Cole TUDO no SQL Editor do Supabase e rode de uma vez
+-- SETUP: Sistema de Tags + RPC ensure_lead_for_phone (v2)
+-- Cole TUDO no SQL Editor do Supabase e rode
 -- Idempotente: pode rodar de novo sem quebrar
 -- ============================================
 
 -- =========================================================
--- PARTE 1: Sistema de Tags (caso ainda não tenha rodado)
+-- PARTE 1: Sistema de Tags
 -- =========================================================
 
 CREATE TABLE IF NOT EXISTS public.lead_tags (
@@ -63,10 +63,10 @@ GRANT EXECUTE ON FUNCTION public.get_org_tags_with_usage() TO authenticated;
 
 
 -- =========================================================
--- PARTE 2: RPC ensure_lead_for_phone
--- Garante que existe um lead para o telefone do chat.
--- Se não existir, cria. Se for vendedor, atribui ao próprio.
--- Retorna a linha completa do lead.
+-- PARTE 2: RPC ensure_lead_for_phone (v2 — sem coluna `source`)
+-- - Insere apenas em colunas que existem em public.leads
+-- - Guarda 'whatsapp_chat' em metadata.source (jsonb)
+-- - Lê role de public.user_profiles (com fallback p/ user_roles)
 -- =========================================================
 
 CREATE OR REPLACE FUNCTION public.ensure_lead_for_phone(
@@ -100,16 +100,29 @@ BEGIN
     RAISE EXCEPTION 'Usuário sem organização';
   END IF;
 
-  -- Descobre papel do usuário (best effort — se a tabela não existir, assume admin)
+  -- Role: tenta user_profiles primeiro (fonte de verdade no app), fallback p/ user_roles
   BEGIN
     SELECT role::text INTO v_role
-    FROM public.user_roles
-    WHERE user_id = v_user_id
-    ORDER BY CASE role::text WHEN 'admin' THEN 1 WHEN 'gestor' THEN 2 ELSE 3 END
+    FROM public.user_profiles
+    WHERE id = v_user_id
     LIMIT 1;
-  EXCEPTION WHEN undefined_table THEN
-    v_role := 'admin';
+  EXCEPTION WHEN undefined_table OR undefined_column THEN
+    v_role := NULL;
   END;
+
+  IF v_role IS NULL THEN
+    BEGIN
+      SELECT role::text INTO v_role
+      FROM public.user_roles
+      WHERE user_id = v_user_id
+      ORDER BY CASE role::text WHEN 'admin' THEN 1 WHEN 'gestor' THEN 2 ELSE 3 END
+      LIMIT 1;
+    EXCEPTION WHEN undefined_table THEN
+      v_role := 'admin';
+    END;
+  END IF;
+
+  v_role := COALESCE(v_role, 'vendedor');
 
   v_digits := regexp_replace(p_phone, '\D', '', 'g');
 
@@ -130,7 +143,7 @@ BEGIN
   LIMIT 1;
 
   IF FOUND THEN
-    -- Se vendedor sem assigned_to, reivindica para si (mesma lógica de seller-assignment)
+    -- Vendedor sem assigned_to → reivindica para si
     IF v_role NOT IN ('admin', 'gestor') AND v_lead.assigned_to IS NULL THEN
       UPDATE public.leads
       SET assigned_to = v_user_id, updated_at = now()
@@ -140,25 +153,25 @@ BEGIN
     RETURN v_lead;
   END IF;
 
-  -- Cria novo lead
+  -- Cria novo lead — APENAS colunas que existem em public.leads
   v_assign_to := CASE WHEN v_role NOT IN ('admin', 'gestor') THEN v_user_id ELSE NULL END;
 
-  INSERT INTO public.leads (organization_id, phone, name, assigned_to, source)
+  INSERT INTO public.leads (organization_id, phone, name, assigned_to, metadata)
   VALUES (
     v_org_id,
     COALESCE(NULLIF(v_digits, ''), p_phone),
     NULLIF(trim(coalesce(p_name, '')), ''),
     v_assign_to,
-    'whatsapp_chat'
+    jsonb_build_object('source', 'whatsapp_chat', 'created_via', 'whatsapp_contact_panel')
   )
   RETURNING * INTO v_lead;
 
-  -- Registra evento de criação
+  -- Evento de criação (best effort)
   BEGIN
     INSERT INTO public.lead_events (lead_id, event_name, metadata)
     VALUES (v_lead.id, 'criado', jsonb_build_object('source', 'whatsapp_contact_panel'));
   EXCEPTION WHEN OTHERS THEN
-    NULL; -- não falha a criação por causa do evento
+    NULL;
   END;
 
   RETURN v_lead;

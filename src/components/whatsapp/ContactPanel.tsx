@@ -97,6 +97,20 @@ export default function ContactPanel({ phone, senderName }: ContactPanelProps) {
     );
   }, [phone, lead?.id, isFetchingLead, senderName, ensureLead, refetchLead]);
 
+  const retryEnsureLead = () => {
+    if (!phone) return;
+    ensuredFor.current = null;
+    ensureLead.reset();
+    ensureLead.mutate(
+      { phone, name: senderName },
+      { onSuccess: () => { refetchLead(); } }
+    );
+  };
+
+  const ensureErrorMsg = ensureLead.isError
+    ? ((ensureLead.error as any)?.message || 'Falha ao preparar lead')
+    : null;
+
   const { notes, loading: notesLoading, addNote, deleteNote } = useContactNotes(canSeeCrm ? phone : null);
   const [noteText, setNoteText] = useState('');
 
@@ -273,6 +287,13 @@ export default function ContactPanel({ phone, senderName }: ContactPanelProps) {
           <div className="flex items-center gap-2 text-xs text-muted-foreground italic">
             <Loader2 className="h-3 w-3 animate-spin" /> Preparando lead…
           </div>
+        ) : ensureErrorMsg ? (
+          <div className="space-y-1.5">
+            <p className="text-[11px] text-destructive">{ensureErrorMsg}</p>
+            <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={retryEnsureLead}>
+              Tentar de novo
+            </Button>
+          </div>
         ) : (
           <p className="text-xs text-muted-foreground italic">Lead indisponível</p>
         )}
@@ -294,6 +315,13 @@ export default function ContactPanel({ phone, senderName }: ContactPanelProps) {
           ) : ensureLead.isPending || isFetchingLead ? (
             <div className="flex items-center gap-2 text-xs text-muted-foreground italic">
               <Loader2 className="h-3 w-3 animate-spin" /> Preparando lead…
+            </div>
+          ) : ensureErrorMsg ? (
+            <div className="space-y-1.5">
+              <p className="text-[11px] text-destructive">{ensureErrorMsg}</p>
+              <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={retryEnsureLead}>
+                Tentar de novo
+              </Button>
             </div>
           ) : (
             <p className="text-xs text-muted-foreground italic">Não foi possível preparar o lead deste contato</p>

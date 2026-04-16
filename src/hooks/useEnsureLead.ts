@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 import type { Lead } from '@/types/leadFunnels';
 
 /**
@@ -25,6 +26,11 @@ export function useEnsureLead() {
       if (!lead?.phone) return;
       qc.invalidateQueries({ queryKey: ['lead-by-phone'] });
       qc.invalidateQueries({ queryKey: ['lead-tags', lead.id] });
+    },
+    onError: (err: any) => {
+      const msg = err?.message || 'Falha ao preparar lead deste contato';
+      console.error('[useEnsureLead] error:', err);
+      toast.error(msg);
     },
   });
 }
