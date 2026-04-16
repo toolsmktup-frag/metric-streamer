@@ -38,6 +38,7 @@ export function useWhatsAppMultiChats(instances: WhatsAppInstance[]) {
   const [chats, setChats] = useState<MultiChatSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const initialLoad = useRef(true);
+  const inFlight = useRef(false);
 
   const instanceIds = JSON.stringify(instances.map(i => i.id));
 
@@ -47,6 +48,10 @@ export function useWhatsAppMultiChats(instances: WhatsAppInstance[]) {
       setLoading(false);
       return;
     }
+
+    // Prevent overlapping requests (avoid pile-up when backend is slow)
+    if (inFlight.current) return;
+    inFlight.current = true;
 
     if (initialLoad.current) setLoading(true);
 
@@ -101,12 +106,13 @@ export function useWhatsAppMultiChats(instances: WhatsAppInstance[]) {
     } finally {
       setLoading(false);
       initialLoad.current = false;
+      inFlight.current = false;
     }
   }, [instanceIds]);
 
   useEffect(() => {
     fetchAllChats();
-    const interval = setInterval(fetchAllChats, 15000);
+    const interval = setInterval(fetchAllChats, 20000);
     return () => clearInterval(interval);
   }, [fetchAllChats]);
 

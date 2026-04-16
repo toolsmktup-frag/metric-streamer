@@ -1,4 +1,4 @@
-// v2.1.0 - performance hardening for unified chat + lighter seller authorization
+// v2.2.0 - reduced scan limits + concurrency safety on the client side
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
@@ -265,7 +265,7 @@ Deno.serve(async (req) => {
     }
 
     if (action === 'list_chats') {
-      const scanLimit = isAllMode ? 500 : 300
+      const scanLimit = isAllMode ? 300 : 200
 
       let messagesQuery = adminClient
         .from('whatsapp_messages')
