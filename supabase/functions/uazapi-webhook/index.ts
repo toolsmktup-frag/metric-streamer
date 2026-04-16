@@ -1,9 +1,108 @@
-// v1.0.1 - redeploy for matheuscolombo.uazapi.com migration
+// v1.1.0 - persist media to Supabase Storage
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+
+const MEDIA_BUCKET = 'whatsapp-media'
+const MEDIA_TYPES = new Set(['image', 'audio', 'ptt', 'video', 'document', 'sticker'])
+
+function extFromMime(mime: string, fallback: string): string {
+  if (!mime) return fallback
+  if (mime.includes('jpeg') || mime.includes('jpg')) return 'jpg'
+  if (mime.includes('png')) return 'png'
+  if (mime.includes('webp')) return 'webp'
+  if (mime.includes('gif')) return 'gif'
+  if (mime.includes('mp4')) return 'mp4'
+  if (mime.includes('quicktime')) return 'mov'
+  if (mime.includes('ogg')) return 'ogg'
+  if (mime.includes('mpeg') || mime.includes('mp3')) return 'mp3'
+  if (mime.includes('wav')) return 'wav'
+  if (mime.includes('pdf')) return 'pdf'
+  return fallback
+}
+
+function defaultExt(messageType: string): string {
+  switch (messageType) {
+    case 'image': return 'jpg'
+    case 'video': return 'mp4'
+    case 'audio':
+    case 'ptt': return 'ogg'
+    case 'sticker': return 'webp'
+    default: return 'bin'
+  }
+}
+
+/**
+ * Fire-and-forget: download media via UAZAPI and persist to Storage.
+ * Updates whatsapp_messages.media_url to the public Storage URL on success.
+ */
+async function persistMediaAsync(
+  adminClient: any,
+  params: {
+    messageRowId: string
+    orgId: string
+    instanceId: string
+    apiUrl: string
+    apiToken: string
+    externalMessageId: string
+    messageType: string
+  }
+) {
+  try {
+    const { messageRowId, orgId, instanceId, apiUrl, apiToken, externalMessageId, messageType } = params
+    if (!apiUrl || !apiToken || !externalMessageId) return
+
+    const baseUrl = apiUrl.replace(/\/+$/, '')
+    const res = await fetch(`${baseUrl}/message/download`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json', token: apiToken },
+      body: JSON.stringify({
+        id: externalMessageId,
+        return_base64: true,
+        return_link: false,
+        generate_mp3: messageType === 'audio' || messageType === 'ptt',
+        transcribe: false,
+      }),
+    })
+
+    if (!res.ok) {
+      console.warn('[persistMedia] UAZAPI download failed', res.status, externalMessageId)
+      return
+    }
+    const data = await res.json().catch(() => null)
+    const base64 = data?.base64Data
+    const mime = data?.mimetype || ''
+    if (!base64) return
+
+    const binary = Uint8Array.from(atob(base64), c => c.charCodeAt(0))
+    const ext = extFromMime(mime, defaultExt(messageType))
+    const path = `${orgId}/${instanceId}/${messageRowId}.${ext}`
+
+    const { error: upErr } = await adminClient.storage
+      .from(MEDIA_BUCKET)
+      .upload(path, binary, { contentType: mime || 'application/octet-stream', upsert: true })
+
+    if (upErr) {
+      console.error('[persistMedia] upload failed', upErr.message)
+      return
+    }
+
+    const { data: pub } = adminClient.storage.from(MEDIA_BUCKET).getPublicUrl(path)
+    const publicUrl = pub?.publicUrl
+    if (!publicUrl) return
+
+    await adminClient
+      .from('whatsapp_messages')
+      .update({ media_url: publicUrl, media_mime_type: mime || null, updated_at: new Date().toISOString() })
+      .eq('id', messageRowId)
+
+    console.log('[persistMedia] saved', path)
+  } catch (err) {
+    console.error('[persistMedia] error', (err as Error).message)
+  }
 }
 
 /**
