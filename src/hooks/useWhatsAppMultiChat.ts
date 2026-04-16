@@ -66,7 +66,7 @@ export function useWhatsAppMultiChats(instances: WhatsAppInstance[]) {
             const data: ChatSummary[] = await res.json();
             return data.map(chat => ({
               ...chat,
-              instance_id: inst.id,
+              instance_id: chat.instance_id || inst.id,
               instance_name: getInstanceDisplayName(inst),
               instance_color: getInstanceColor(index),
             }));

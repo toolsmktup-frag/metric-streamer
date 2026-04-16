@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { User, Tag, StickyNote, Trash2, Send, ShoppingCart, DollarSign, MapPin, Activity, CreditCard, CheckCircle2, XCircle, Clock, RotateCcw, AlertTriangle, UserPlus, Eye, FileText, type LucideIcon } from 'lucide-react';
+import { User, Tag, StickyNote, Trash2, Send, ShoppingCart, DollarSign, MapPin, Activity, CreditCard, CheckCircle2, XCircle, Clock, RotateCcw, AlertTriangle, UserPlus, Eye, FileText, Lock, type LucideIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
@@ -12,6 +12,9 @@ import { useLeadFunnelStages } from '@/hooks/useLeadFunnelStages';
 import { useMoveLeadStage } from '@/hooks/useMoveLeadStage';
 import { useMoveLeadFunnel } from '@/hooks/useMoveLeadFunnel';
 import { useLeadFunnels } from '@/hooks/useLeadFunnels';
+import { useCurrentUserRole } from '@/hooks/useCurrentUserRole';
+import { supabase } from '@/integrations/supabase/client';
+import { useQuery } from '@tanstack/react-query';
 import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { formatCurrency } from '@/lib/formatters';
@@ -60,13 +63,30 @@ function getEventDate(ev: { created_at: string; metadata: Record<string, unknown
 }
 
 export default function ContactPanel({ phone, senderName }: ContactPanelProps) {
-  const { notes, loading: notesLoading, addNote, deleteNote } = useContactNotes(phone);
-  const [noteText, setNoteText] = useState('');
+  const { data: role = 'vendedor' } = useCurrentUserRole();
+  const isAdmin = role === 'admin' || role === 'gestor';
 
   const { data: lead } = useLeadByPhone(phone);
-  const { data: purchaseData } = useLeadPurchases(lead?.email ?? null, phone);
-  const { data: journey = [] } = useLeadFunnelJourney(lead?.id ?? null);
-  const { data: events = [] } = useLeadEvents(lead?.id ?? null);
+
+  // --- Authorization gate ---
+  // Sellers can only see CRM data (notes/purchases/funnels/timeline) for leads
+  // explicitly assigned to them. Otherwise we show a locked state.
+  const { data: currentUserId } = useQuery({
+    queryKey: ['auth-user-id'],
+    queryFn: async () => {
+      const { data } = await supabase.auth.getUser();
+      return data?.user?.id || null;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+  const canSeeCrm = isAdmin || (lead?.assigned_to && lead.assigned_to === currentUserId);
+
+  const { notes, loading: notesLoading, addNote, deleteNote } = useContactNotes(canSeeCrm ? phone : null);
+  const [noteText, setNoteText] = useState('');
+
+  const { data: purchaseData } = useLeadPurchases(canSeeCrm ? (lead?.email ?? null) : null, canSeeCrm ? phone : null);
+  const { data: journey = [] } = useLeadFunnelJourney(canSeeCrm ? (lead?.id ?? null) : null);
+  const { data: events = [] } = useLeadEvents(canSeeCrm ? (lead?.id ?? null) : null);
 
   const funnelIds = useMemo(() => Array.from(new Set<string>(journey.map((j: any) => j.funnel_id))), [journey]);
   const { data: stagesByFunnel = {} } = useLeadFunnelStages(funnelIds);
@@ -99,6 +119,29 @@ export default function ContactPanel({ phone, senderName }: ContactPanelProps) {
     await addNote(noteText);
     setNoteText('');
   };
+
+  if (!canSeeCrm) {
+    return (
+      <div className="p-4 space-y-4 overflow-y-auto h-full">
+        <div className="flex flex-col items-center gap-2 pb-4 border-b border-border">
+          <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
+            <User className="h-8 w-8 text-primary" />
+          </div>
+          <h3 className="font-semibold text-foreground text-sm">
+            {senderName || formatPhone(phone)}
+          </h3>
+          <span className="text-xs text-muted-foreground">{formatPhone(phone)}</span>
+        </div>
+        <div className="rounded-lg border border-border bg-muted/30 p-4 flex flex-col items-center text-center gap-2">
+          <Lock className="h-5 w-5 text-muted-foreground" />
+          <p className="text-xs font-medium text-foreground">Lead não atribuído a você</p>
+          <p className="text-[11px] text-muted-foreground">
+            Notas, vendas, funis e timeline ficam visíveis apenas para o vendedor responsável ou para gestores.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 space-y-4 overflow-y-auto h-full">

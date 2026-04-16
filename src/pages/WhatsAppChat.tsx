@@ -29,6 +29,7 @@ export default function WhatsAppChat() {
   const { instances, loading: loadingInstances, refetch: refetchInstances } = useWhatsAppInstances();
   const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null);
   const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
+  const [selectedChatInstanceId, setSelectedChatInstanceId] = useState<string | null>(null);
   const [showPanel, setShowPanel] = useState(true);
   const backRoute = useRef<string | null>(null);
   
@@ -54,6 +55,7 @@ export default function WhatsAppChat() {
     if (instanceStillExists) return;
 
     setSelectedPhone(null);
+    setSelectedChatInstanceId(null);
     setReplyInstanceId(null);
 
     if (instances.length === 1) {
@@ -86,7 +88,7 @@ export default function WhatsAppChat() {
 
   const isAllMode = selectedInstanceId === 'all';
 
-  useEffect(() => { setOptimisticMessages([]); }, [selectedPhone]);
+  useEffect(() => { setOptimisticMessages([]); }, [selectedPhone, selectedChatInstanceId]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -110,8 +112,10 @@ export default function WhatsAppChat() {
   const activeInstanceData = instances.find(i => i.id === singleInstanceId);
   const isDisconnected = activeInstanceData ? activeInstanceData.status !== 'connected' : false;
 
-  // For messages: in "all" mode pass 'all', otherwise use the single instance
-  const effectiveInstanceId = isAllMode ? 'all' : singleInstanceId;
+  // For messages: if a specific chat instance is locked, use it; otherwise 'all' or single
+  const effectiveInstanceId = selectedChatInstanceId
+    ? selectedChatInstanceId
+    : (isAllMode ? 'all' : singleInstanceId);
 
   const { chats: singleChats, loading: loadingSingleChats, refetch: refetchSingleChats } = useWhatsAppChats(singleInstanceId);
   const { chats: multiChats, loading: loadingMultiChats, refetch: refetchMultiChats } = useWhatsAppMultiChats(
@@ -166,13 +170,24 @@ export default function WhatsAppChat() {
     );
   }, []);
 
-  const handleSelectChat = useCallback((phone: string, _instanceId?: string) => {
+  const handleSelectChat = useCallback((phone: string, instanceId?: string) => {
     setSelectedPhone(phone);
-  }, []);
+    // In 'all' mode, lock the chat to the instance it came from (composite identity)
+    setSelectedChatInstanceId(isAllMode && instanceId ? instanceId : null);
+  }, [isAllMode]);
+
+  const selectedKey = selectedPhone
+    ? (selectedChatInstanceId ? `${selectedChatInstanceId}__${selectedPhone}` : (singleInstanceId ? `${singleInstanceId}__${selectedPhone}` : selectedPhone))
+    : null;
 
   const selectedChat = useMemo(
-    () => activeChats.find(c => c.phone === selectedPhone),
-    [activeChats, selectedPhone]
+    () => activeChats.find(c => {
+      if (selectedChatInstanceId) {
+        return c.phone === selectedPhone && (c as any).instance_id === selectedChatInstanceId;
+      }
+      return c.phone === selectedPhone;
+    }),
+    [activeChats, selectedPhone, selectedChatInstanceId]
   );
 
   useEffect(() => {
@@ -183,6 +198,7 @@ export default function WhatsAppChat() {
   const handleInstanceChange = (value: string) => {
     setSelectedInstanceId(value === 'all' ? 'all' : value);
     setSelectedPhone(null);
+    setSelectedChatInstanceId(null);
     setReplyInstanceId(null);
   };
 
@@ -316,7 +332,7 @@ export default function WhatsAppChat() {
           <ChatList
             chats={activeChats}
             loading={loadingChats}
-            selectedPhone={selectedPhone}
+            selectedKey={selectedKey}
             onSelectChat={handleSelectChat}
             showInstanceBadge={isAllMode}
           />

@@ -135,7 +135,7 @@ Deno.serve(async (req) => {
 
     const { data: message, error: messageErr } = await adminClient
       .from('whatsapp_messages')
-      .select('id, organization_id, instance_id, message_id_external, payload_raw, message_type')
+      .select('id, organization_id, instance_id, message_id_external, payload_raw, message_type, phone')
       .eq('id', message_id)
       .eq('organization_id', orgId)
       .single()
@@ -145,6 +145,44 @@ Deno.serve(async (req) => {
         status: 404,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
+    }
+
+    // --- Authorization: sellers can only fetch media for instances + leads they own ---
+    const { data: profile } = await adminClient
+      .from('user_profiles')
+      .select('role')
+      .eq('id', userData.user.id)
+      .maybeSingle()
+    const role = profile?.role || 'vendedor'
+    const isAdmin = role === 'admin' || role === 'gestor'
+
+    if (!isAdmin) {
+      const { data: instAccess } = await adminClient
+        .from('whatsapp_instance_access')
+        .select('instance_id')
+        .eq('user_id', userData.user.id)
+        .eq('instance_id', message.instance_id)
+        .maybeSingle()
+      if (!instAccess) {
+        return new Response(JSON.stringify({ error: 'Forbidden: instance not allowed' }), {
+          status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+      const cleanPhone = (message.phone || '').replace(/\D/g, '')
+      const phoneAlt = cleanPhone.startsWith('55') ? cleanPhone.slice(2) : `55${cleanPhone}`
+      const { data: ownedLead } = await adminClient
+        .from('leads')
+        .select('id')
+        .eq('organization_id', orgId)
+        .eq('assigned_to', userData.user.id)
+        .in('phone', [cleanPhone, `+${cleanPhone}`, phoneAlt, `+${phoneAlt}`])
+        .limit(1)
+        .maybeSingle()
+      if (!ownedLead) {
+        return new Response(JSON.stringify({ error: 'Forbidden: lead not assigned to you' }), {
+          status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
     }
 
     const { data: instance, error: instanceErr } = await adminClient
