@@ -1,5 +1,15 @@
-// v2.0.0 - strict per-seller authorization
+// v2.0.2 - resilient error serialization + tolerate missing contacts table
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+
+function serializeError(err: any): string {
+  if (!err) return 'Unknown error'
+  if (err instanceof Error) return err.message
+  if (typeof err === 'string') return err
+  if (typeof err === 'object') {
+    return err.message || err.error_description || err.error || err.hint || err.details || err.code || JSON.stringify(err)
+  }
+  return String(err)
+}
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -201,7 +211,9 @@ Deno.serve(async (req) => {
       }
 
       const [messagesResult, contactsResult] = await Promise.all([messagesQuery, contactsQuery])
-      if (messagesResult.error) throw messagesResult.error
+      if (messagesResult.error) {
+        throw new Error(`messages query failed: ${serializeError(messagesResult.error)}`)
+      }
       if (contactsResult.error) {
         console.warn('[whatsapp-chats] contacts query failed (continuing without contacts):', contactsResult.error.message || contactsResult.error)
       }
@@ -292,7 +304,7 @@ Deno.serve(async (req) => {
       }
 
       const { data: messages, error: msgErr } = await messagesQuery
-      if (msgErr) throw msgErr
+      if (msgErr) throw new Error(`messages query failed: ${serializeError(msgErr)}`)
 
       const messageList = messages || []
       const unreadInbound = messageList.filter(m => m.direction === 'inbound' && m.status !== 'read' && !m.is_deleted)
