@@ -270,7 +270,7 @@ Deno.serve(async (req) => {
     if (baseUrl) {
       const { data, error } = await supabaseAdmin
         .from('whatsapp_instances')
-        .select('id, organization_id')
+        .select('id, organization_id, api_url, api_token')
         .eq('api_url', baseUrl)
         .maybeSingle()
       if (data) {
@@ -278,10 +278,9 @@ Deno.serve(async (req) => {
         console.log('Instance found by api_url match:', baseUrl)
       } else {
         console.log('No instance found by api_url:', baseUrl, error)
-        // Try with trailing slash variants
         const { data: d2 } = await supabaseAdmin
           .from('whatsapp_instances')
-          .select('id, organization_id')
+          .select('id, organization_id, api_url, api_token')
           .ilike('api_url', `${baseUrl}%`)
           .maybeSingle()
         if (d2) {
@@ -295,7 +294,7 @@ Deno.serve(async (req) => {
     if (!instanceData && instanceName) {
       const { data, error } = await supabaseAdmin
         .from('whatsapp_instances')
-        .select('id, organization_id')
+        .select('id, organization_id, api_url, api_token')
         .eq('instance_name', instanceName)
         .maybeSingle()
       if (data) {
@@ -311,7 +310,7 @@ Deno.serve(async (req) => {
     if (!instanceData && payloadToken) {
       const { data } = await supabaseAdmin
         .from('whatsapp_instances')
-        .select('id, organization_id')
+        .select('id, organization_id, api_url, api_token')
         .eq('api_token', payloadToken)
         .maybeSingle()
       if (data) {
@@ -419,7 +418,7 @@ Deno.serve(async (req) => {
     const direction = isFromMe ? 'outbound' : 'inbound'
     const status = isFromMe ? 'sent' : 'delivered'
 
-    const { error: insertErr } = await supabaseAdmin
+    const { data: insertedRow, error: insertErr } = await supabaseAdmin
       .from('whatsapp_messages')
       .insert({
         organization_id: orgId,
@@ -435,10 +434,34 @@ Deno.serve(async (req) => {
         sender_name: senderName,
         lead_id: leadId,
       })
+      .select('id')
+      .single()
 
     if (insertErr) {
       console.error('Error inserting message:', insertErr)
       throw insertErr
+    }
+
+    // Fire-and-forget: persist media to Storage if this is a media message (inbound only;
+    // outbound media we already uploaded ourselves via ChatInput).
+    if (
+      insertedRow?.id &&
+      direction === 'inbound' &&
+      MEDIA_TYPES.has(messageType) &&
+      externalId &&
+      instanceData.api_url &&
+      instanceData.api_token
+    ) {
+      // Don't await; let the webhook return fast
+      persistMediaAsync(supabaseAdmin, {
+        messageRowId: insertedRow.id,
+        orgId,
+        instanceId,
+        apiUrl: instanceData.api_url,
+        apiToken: instanceData.api_token,
+        externalMessageId: externalId,
+        messageType,
+      })
     }
 
     // Upsert contact info when we have a sender name (inbound or from chat metadata)
