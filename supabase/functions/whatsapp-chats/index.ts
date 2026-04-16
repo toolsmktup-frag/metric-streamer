@@ -359,13 +359,7 @@ Deno.serve(async (req) => {
       status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   } catch (err: any) {
-    let message: string
-    if (err instanceof Error) message = err.message
-    else if (err && typeof err === 'object') {
-      message = err.message || err.error_description || err.error || err.hint || err.details || JSON.stringify(err)
-    } else {
-      message = String(err)
-    }
+    const message = serializeError(err)
     console.error('whatsapp-chats error:', message, err)
     return new Response(JSON.stringify({ error: message }), {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
