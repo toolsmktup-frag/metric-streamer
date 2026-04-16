@@ -1,5 +1,6 @@
-import { useState, useMemo } from 'react';
-import { User, Tag, StickyNote, Trash2, Send, ShoppingCart, DollarSign, MapPin, Activity, CreditCard, CheckCircle2, XCircle, Clock, RotateCcw, AlertTriangle, UserPlus, Eye, FileText, Lock, type LucideIcon } from 'lucide-react';
+import { useState, useMemo, useEffect, useRef } from 'react';
+import { User, Tag, StickyNote, Trash2, Send, ShoppingCart, DollarSign, MapPin, Activity, CreditCard, CheckCircle2, XCircle, Clock, RotateCcw, AlertTriangle, UserPlus, Eye, FileText, Lock, Loader2, type LucideIcon } from 'lucide-react';
+import { useEnsureLead } from '@/hooks/useEnsureLead';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
@@ -68,11 +69,8 @@ export default function ContactPanel({ phone, senderName }: ContactPanelProps) {
   const { data: role = 'vendedor' } = useCurrentUserRole();
   const isAdmin = role === 'admin' || role === 'gestor';
 
-  const { data: lead } = useLeadByPhone(phone);
+  const { data: lead, refetch: refetchLead, isFetching: isFetchingLead } = useLeadByPhone(phone);
 
-  // --- Authorization gate ---
-  // Sellers can only see CRM data (notes/purchases/funnels/timeline) for leads
-  // explicitly assigned to them. Otherwise we show a locked state.
   const { data: currentUserId } = useQuery({
     queryKey: ['auth-user-id'],
     queryFn: async () => {
@@ -82,6 +80,22 @@ export default function ContactPanel({ phone, senderName }: ContactPanelProps) {
     staleTime: 5 * 60 * 1000,
   });
   const canSeeCrm = isAdmin || (lead?.assigned_to && lead.assigned_to === currentUserId);
+
+  // Auto-cria lead pro chat do WhatsApp quando ainda não existe.
+  // Vendedor recebe assigned_to = ele mesmo (libera canSeeCrm na mesma hora).
+  const ensureLead = useEnsureLead();
+  const ensuredFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!phone) return;
+    if (lead?.id) { ensuredFor.current = phone; return; }
+    if (isFetchingLead || ensureLead.isPending) return;
+    if (ensuredFor.current === phone) return;
+    ensuredFor.current = phone;
+    ensureLead.mutate(
+      { phone, name: senderName },
+      { onSuccess: () => { refetchLead(); } }
+    );
+  }, [phone, lead?.id, isFetchingLead, senderName, ensureLead, refetchLead]);
 
   const { notes, loading: notesLoading, addNote, deleteNote } = useContactNotes(canSeeCrm ? phone : null);
   const [noteText, setNoteText] = useState('');
@@ -248,6 +262,22 @@ export default function ContactPanel({ phone, senderName }: ContactPanelProps) {
         )}
       </div>
 
+      {/* Tags */}
+      <div>
+        <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
+          <Tag className="h-3 w-3" /> Tags
+        </h4>
+        {lead?.id ? (
+          <TagsEditor leadId={lead.id} />
+        ) : ensureLead.isPending || isFetchingLead ? (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground italic">
+            <Loader2 className="h-3 w-3 animate-spin" /> Preparando lead…
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground italic">Lead indisponível</p>
+        )}
+      </div>
+
       {/* Funnels */}
       <div>
         <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
@@ -261,8 +291,12 @@ export default function ContactPanel({ phone, senderName }: ContactPanelProps) {
         {journey.length === 0 ? (
           lead?.id ? (
             <FunnelLinker leadId={lead.id} />
+          ) : ensureLead.isPending || isFetchingLead ? (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground italic">
+              <Loader2 className="h-3 w-3 animate-spin" /> Preparando lead…
+            </div>
           ) : (
-            <p className="text-xs text-muted-foreground italic">Nenhum funil vinculado</p>
+            <p className="text-xs text-muted-foreground italic">Não foi possível preparar o lead deste contato</p>
           )
         ) : (
           <div className="space-y-1.5">
