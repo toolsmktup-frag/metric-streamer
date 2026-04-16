@@ -39,6 +39,18 @@ export interface MultiChatSummary extends ChatSummary {
   instance_color: string;
 }
 
+function getChatInstanceId(chat: ChatSummary): string {
+  return chat.instance_id || chat.last_message?.instance_id || '';
+}
+
+function getChatFallbackInstanceName(chat: ChatSummary): string | null {
+  const rawInstanceName = chat.last_message?.payload_raw?.instanceName;
+  if (typeof rawInstanceName !== 'string') return null;
+
+  const trimmed = rawInstanceName.trim();
+  return trimmed || null;
+}
+
 export function useWhatsAppMultiChats(instances: WhatsAppInstance[]) {
   const [chats, setChats] = useState<MultiChatSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -114,9 +126,10 @@ export function useWhatsAppMultiChats(instances: WhatsAppInstance[]) {
 
       const merged = (Array.isArray(data) ? data : [])
         .map((chat): MultiChatSummary => {
-          const iid = chat.instance_id || '';
+          const iid = getChatInstanceId(chat);
+          const fallbackInstanceName = getChatFallbackInstanceName(chat);
           const meta = globalMeta.get(iid) || localMeta.get(iid) || {
-            instance_name: 'Instância',
+            instance_name: fallbackInstanceName || 'Instância',
             instance_color: getInstanceColor(0),
           };
 
