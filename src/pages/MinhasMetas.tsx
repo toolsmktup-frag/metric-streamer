@@ -151,12 +151,13 @@ function getDailyGoalInfo(
   };
 }
 
-function getDailyMotivationalMessage(percent: number, name: string, dailyTarget: number, todayRevenue: number, monthlyDone: boolean) {
+function getDailyMotivationalMessage(percent: number, name: string, allBeat: boolean, monthlyDone: boolean, activeLabel: string) {
   if (monthlyDone) return { text: `Meta do mês já batida! Cada venda agora é bônus, ${name}! 🏆✨`, emoji: '🏆' };
-  if (percent >= 100) return { text: `BATEU A META DO DIA! Você é fera, ${name}! Continue assim! 🎉🔥`, emoji: '🎉' };
-  if (percent >= 70) return { text: `Quase lá! Falta pouco pra fechar o dia! Você consegue! 🚀`, emoji: '🚀' };
+  if (allBeat) return { text: `TODAS AS METAS DO DIA BATIDAS! Você é lenda, ${name}! 🎉👑`, emoji: '🎉' };
+  if (percent >= 100) return { text: `${activeLabel} do dia batida! Bora pra próxima! 🚀🔥`, emoji: '🚀' };
+  if (percent >= 70) return { text: `Quase lá na ${activeLabel}! Falta pouco pra fechar! 🚀`, emoji: '🚀' };
   if (percent >= 30) return { text: `Tá no caminho certo! Tem leads pra ligar? Bora converter! 💪`, emoji: '💪' };
-  if (todayRevenue > 0) return { text: `Bom começo! Continue assim e bate a meta do dia! 🔥`, emoji: '🔥' };
+  if (percent > 0) return { text: `Bom começo! Continue assim e bate a ${activeLabel} do dia! 🔥`, emoji: '🔥' };
   return { text: `Bora começar o dia forte, ${name}! Sua meta de hoje te espera! 💪`, emoji: '🎯' };
 }
 
