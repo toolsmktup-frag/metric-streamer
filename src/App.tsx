@@ -108,7 +108,7 @@ const App = () => (
           {/* Configurações do usuário */}
           <Route path="/configuracoes" element={<Protected><UserSettings /></Protected>} />
           {/* WhatsApp Chat - fullscreen layout */}
-          <Route path="/whatsapp" element={<Protected><WhatsAppChat /></Protected>} />
+          <Route path="/whatsapp" element={<Protected><PermissionRoute requiredPermission="mod_whatsapp"><WhatsAppChat /></PermissionRoute></Protected>} />
           {/* Automações WhatsApp */}
           <Route path="/ferramentas/automacoes" element={<Protected><WzAutomacoes /></Protected>} />
           <Route path="/ferramentas/automacoes/novo" element={<Protected><WzFlowCanvas /></Protected>} />
