@@ -1,4 +1,4 @@
-// v1.0.1 - redeploy for matheuscolombo.uazapi.com migration
+// v1.1.0 - prefer Storage, backfill on-demand
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
@@ -47,6 +47,56 @@ class MediaNotFoundError extends Error {
   }
 }
 
+const MEDIA_BUCKET = 'whatsapp-media'
+
+function extFromMime(mime: string, fallback: string): string {
+  if (!mime) return fallback
+  if (mime.includes('jpeg') || mime.includes('jpg')) return 'jpg'
+  if (mime.includes('png')) return 'png'
+  if (mime.includes('webp')) return 'webp'
+  if (mime.includes('gif')) return 'gif'
+  if (mime.includes('mp4')) return 'mp4'
+  if (mime.includes('quicktime')) return 'mov'
+  if (mime.includes('ogg')) return 'ogg'
+  if (mime.includes('mpeg') || mime.includes('mp3')) return 'mp3'
+  if (mime.includes('wav')) return 'wav'
+  if (mime.includes('pdf')) return 'pdf'
+  return fallback
+}
+
+/** Save downloaded media to Storage and return public URL. Best effort. */
+async function backfillToStorage(
+  adminClient: any,
+  params: { messageRowId: string; orgId: string; instanceId: string; base64: string; mime: string; messageType: string }
+): Promise<string | null> {
+  try {
+    const { messageRowId, orgId, instanceId, base64, mime, messageType } = params
+    const fallbackExt = messageType === 'image' ? 'jpg' : messageType === 'video' ? 'mp4' : (messageType === 'audio' || messageType === 'ptt') ? 'ogg' : 'bin'
+    const ext = extFromMime(mime, fallbackExt)
+    const path = `${orgId}/${instanceId}/${messageRowId}.${ext}`
+    const binary = Uint8Array.from(atob(base64), c => c.charCodeAt(0))
+    const { error: upErr } = await adminClient.storage
+      .from(MEDIA_BUCKET)
+      .upload(path, binary, { contentType: mime || 'application/octet-stream', upsert: true })
+    if (upErr) {
+      console.warn('[backfill] upload failed', upErr.message)
+      return null
+    }
+    const { data: pub } = adminClient.storage.from(MEDIA_BUCKET).getPublicUrl(path)
+    const publicUrl = pub?.publicUrl || null
+    if (publicUrl) {
+      await adminClient
+        .from('whatsapp_messages')
+        .update({ media_url: publicUrl, media_mime_type: mime || null, updated_at: new Date().toISOString() })
+        .eq('id', messageRowId)
+    }
+    return publicUrl
+  } catch (err) {
+    console.warn('[backfill] error', (err as Error).message)
+    return null
+  }
+}
+
 async function downloadMessageMedia(apiUrl: string, apiToken: string, messageId: string) {
   const baseUrl = apiUrl.replace(/\/+$/, '')
   const res = await fetch(`${baseUrl}/message/download`, {
@@ -73,6 +123,7 @@ async function downloadMessageMedia(apiUrl: string, apiToken: string, messageId:
   if (data?.base64Data) {
     return {
       mimetype,
+      base64: data.base64Data as string,
       dataUrl: `data:${mimetype};base64,${data.base64Data}`,
     }
   }
@@ -80,7 +131,7 @@ async function downloadMessageMedia(apiUrl: string, apiToken: string, messageId:
   if (data?.fileURL) {
     return {
       mimetype,
-      fileURL: data.fileURL,
+      fileURL: data.fileURL as string,
     }
   }
 
@@ -145,7 +196,7 @@ Deno.serve(async (req) => {
 
     const { data: message, error: messageErr } = await adminClient
       .from('whatsapp_messages')
-      .select('id, organization_id, instance_id, message_id_external, payload_raw, message_type, phone')
+      .select('id, organization_id, instance_id, message_id_external, payload_raw, message_type, phone, media_url, media_mime_type')
       .eq('id', message_id)
       .eq('organization_id', orgId)
       .single()
@@ -209,6 +260,17 @@ Deno.serve(async (req) => {
       })
     }
 
+    // Short-circuit: if media_url already points to our internal Storage bucket,
+    // return it directly without calling UAZAPI.
+    if (message.media_url && typeof message.media_url === 'string' && message.media_url.includes(`/storage/v1/object/public/${MEDIA_BUCKET}/`)) {
+      return new Response(JSON.stringify({
+        mimetype: message.media_mime_type || 'application/octet-stream',
+        fileURL: message.media_url,
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
     const candidates = getMessageIdCandidates(message)
     if (candidates.length === 0) {
       return new Response(JSON.stringify({ error: 'No message download id available' }), {
@@ -222,7 +284,30 @@ Deno.serve(async (req) => {
     for (const candidate of candidates) {
       try {
         const media = await downloadMessageMedia(instance.api_url, instance.api_token, candidate)
-        return new Response(JSON.stringify(media), {
+
+        // On-demand backfill: if we got base64, persist it to Storage so future calls are fast.
+        if (media.base64) {
+          const publicUrl = await backfillToStorage(adminClient, {
+            messageRowId: message.id,
+            orgId: message.organization_id,
+            instanceId: message.instance_id,
+            base64: media.base64,
+            mime: media.mimetype,
+            messageType: message.message_type || 'document',
+          })
+          if (publicUrl) {
+            return new Response(JSON.stringify({
+              mimetype: media.mimetype,
+              fileURL: publicUrl,
+            }), {
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            })
+          }
+        }
+
+        // Fallback to dataUrl/fileURL response
+        const { base64: _b, ...mediaResponse } = media as any
+        return new Response(JSON.stringify(mediaResponse), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
       } catch (error) {
@@ -233,7 +318,6 @@ Deno.serve(async (req) => {
     }
 
     if (allNotFound) {
-      // Mensagem antiga / expirada no servidor UAZAPI — retorna fallback gracioso
       return new Response(JSON.stringify({
         error: 'MESSAGE_NOT_FOUND',
         fallback: true,
