@@ -80,6 +80,36 @@ function getPercentColor(percent: number) {
   return 'bg-red-500 text-white';
 }
 
+function getRemainingWorkDays(): number {
+  const now = new Date();
+  const totalDays = getDaysInMonth(now);
+  const today = getDate(now);
+  let count = 0;
+  for (let d = today; d <= totalDays; d++) {
+    const date = new Date(now.getFullYear(), now.getMonth(), d);
+    if (!isSunday(date)) count++;
+  }
+  return Math.max(count, 1);
+}
+
+function getDailyGoalInfo(monthRevenue: number, goalAmount: number, todayRevenue: number) {
+  if (goalAmount <= 0) return null;
+  const remaining = Math.max(goalAmount - monthRevenue, 0);
+  const workDays = getRemainingWorkDays();
+  const dailyTarget = remaining <= 0 ? 0 : remaining / workDays;
+  const percent = dailyTarget > 0 ? Math.min((todayRevenue / dailyTarget) * 100, 150) : (todayRevenue > 0 ? 100 : 0);
+  return { dailyTarget, percent, todayRevenue, remaining, monthlyDone: remaining <= 0 };
+}
+
+function getDailyMotivationalMessage(percent: number, name: string, dailyTarget: number, todayRevenue: number, monthlyDone: boolean) {
+  if (monthlyDone) return { text: `Meta do mês já batida! Cada venda agora é bônus, ${name}! 🏆✨`, emoji: '🏆' };
+  if (percent >= 100) return { text: `BATEU A META DO DIA! Você é fera, ${name}! Continue assim! 🎉🔥`, emoji: '🎉' };
+  if (percent >= 70) return { text: `Quase lá! Falta pouco pra fechar o dia! Você consegue! 🚀`, emoji: '🚀' };
+  if (percent >= 30) return { text: `Tá no caminho certo! Tem leads pra ligar? Bora converter! 💪`, emoji: '💪' };
+  if (todayRevenue > 0) return { text: `Bom começo! Continue assim e bate a meta do dia! 🔥`, emoji: '🔥' };
+  return { text: `Bora começar o dia forte, ${name}! Sua meta de hoje te espera! 💪`, emoji: '🎯' };
+}
+
 const PERIOD_PRESETS = [
   { label: 'Hoje', getDates: () => ({ start: startOfDay(new Date()), end: endOfDay(new Date()) }) },
   { label: 'Ontem', getDates: () => { const d = subDays(new Date(), 1); return { start: startOfDay(d), end: endOfDay(d) }; } },
