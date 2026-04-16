@@ -386,6 +386,93 @@ export default function MinhasMetas() {
         </Card>
       </motion.div>
 
+      {/* Daily Goal Card */}
+      {hasAnyGoal && dailyGoal && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.12 }}
+        >
+          <Card className="overflow-hidden border-2 border-amber-400/30 bg-gradient-to-br from-card to-amber-500/5">
+            <CardContent className="p-5 space-y-4">
+              {isLoading ? (
+                <Skeleton className="h-24 w-full" />
+              ) : dailyGoal.monthlyDone ? (
+                <div className="text-center py-4">
+                  <div className="text-4xl mb-2">🏆</div>
+                  <p className="text-lg font-bold text-emerald-600">Meta do mês já batida!</p>
+                  <p className="text-sm text-muted-foreground">Cada venda agora é bônus. Continue arrasando!</p>
+                </div>
+              ) : (
+                <>
+                  <div className="text-center space-y-1">
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs font-bold uppercase tracking-wider">
+                      <Target className="h-3.5 w-3.5" />
+                      Meta do Dia
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Sua meta de hoje é fechar
+                    </p>
+                    <p className="text-3xl md:text-4xl font-bold text-foreground">
+                      {formatCurrency(dailyGoal.dailyTarget)}
+                    </p>
+                    <p className="text-sm text-muted-foreground">em vendas!</p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Você já fechou</span>
+                      <span className={`font-bold ${dailyGoal.percent >= 100 ? 'text-emerald-600' : 'text-foreground'}`}>
+                        {formatCurrency(dailyGoal.todayRevenue)}
+                      </span>
+                    </div>
+                    <div className="relative h-3 w-full bg-secondary rounded-full overflow-hidden">
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${Math.min(dailyGoal.percent, 100)}%` }}
+                        transition={{ duration: 1.2, ease: 'easeOut' }}
+                        className={`h-full rounded-full ${
+                          dailyGoal.percent >= 100
+                            ? 'bg-gradient-to-r from-emerald-400 to-emerald-600'
+                            : dailyGoal.percent >= 50
+                            ? 'bg-gradient-to-r from-amber-400 to-amber-500'
+                            : 'bg-gradient-to-r from-orange-400 to-amber-400'
+                        }`}
+                      />
+                    </div>
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>{dailyGoal.percent.toFixed(0)}% da meta do dia</span>
+                      {dailyGoal.percent < 100 && (
+                        <span>Faltam {formatCurrency(Math.max(dailyGoal.dailyTarget - dailyGoal.todayRevenue, 0))}</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <motion.div
+                    key={Math.floor(dailyGoal.percent / 30)}
+                    initial={{ opacity: 0, y: 5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className={`text-center p-3 rounded-lg ${
+                      dailyGoal.percent >= 100
+                        ? 'bg-emerald-500/10 border border-emerald-500/20'
+                        : 'bg-muted/50'
+                    }`}
+                  >
+                    <p className="text-sm font-medium text-foreground">
+                      {dailyMessage?.emoji} {dailyMessage?.text}
+                    </p>
+                  </motion.div>
+
+                  <p className="text-[11px] text-center text-muted-foreground">
+                    Calculado com base nos {getRemainingWorkDays()} dias úteis restantes no mês (excl. domingos)
+                  </p>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
+
       {/* Main Goal Card — Active goal progress */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
