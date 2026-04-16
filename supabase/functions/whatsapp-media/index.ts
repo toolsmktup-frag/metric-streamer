@@ -40,6 +40,13 @@ async function parseJsonResponse(res: Response) {
   }
 }
 
+class MediaNotFoundError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'MediaNotFoundError'
+  }
+}
+
 async function downloadMessageMedia(apiUrl: string, apiToken: string, messageId: string) {
   const baseUrl = apiUrl.replace(/\/+$/, '')
   const res = await fetch(`${baseUrl}/message/download`, {
@@ -56,6 +63,9 @@ async function downloadMessageMedia(apiUrl: string, apiToken: string, messageId:
 
   const { text, data } = await parseJsonResponse(res)
   if (!res.ok) {
+    if (res.status === 404) {
+      throw new MediaNotFoundError(`UAZAPI 404 for ${messageId}: ${text.slice(0, 200)}`)
+    }
     throw new Error(`UAZAPI returned ${res.status}: ${text.slice(0, 300)}`)
   }
 
@@ -208,6 +218,7 @@ Deno.serve(async (req) => {
     }
 
     let lastError = 'Unknown error'
+    let allNotFound = candidates.length > 0
     for (const candidate of candidates) {
       try {
         const media = await downloadMessageMedia(instance.api_url, instance.api_token, candidate)
@@ -216,8 +227,21 @@ Deno.serve(async (req) => {
         })
       } catch (error) {
         lastError = error instanceof Error ? error.message : String(error)
+        if (!(error instanceof MediaNotFoundError)) allNotFound = false
         console.error('[whatsapp-media] download failed for candidate', candidate, lastError)
       }
+    }
+
+    if (allNotFound) {
+      // Mensagem antiga / expirada no servidor UAZAPI — retorna fallback gracioso
+      return new Response(JSON.stringify({
+        error: 'MESSAGE_NOT_FOUND',
+        fallback: true,
+        message: 'Mídia não está mais disponível no servidor do WhatsApp',
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
     }
 
     return new Response(JSON.stringify({ error: lastError }), {
