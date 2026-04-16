@@ -40,6 +40,13 @@ async function parseJsonResponse(res: Response) {
   }
 }
 
+class MediaNotFoundError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'MediaNotFoundError'
+  }
+}
+
 async function downloadMessageMedia(apiUrl: string, apiToken: string, messageId: string) {
   const baseUrl = apiUrl.replace(/\/+$/, '')
   const res = await fetch(`${baseUrl}/message/download`, {
@@ -56,6 +63,9 @@ async function downloadMessageMedia(apiUrl: string, apiToken: string, messageId:
 
   const { text, data } = await parseJsonResponse(res)
   if (!res.ok) {
+    if (res.status === 404) {
+      throw new MediaNotFoundError(`UAZAPI 404 for ${messageId}: ${text.slice(0, 200)}`)
+    }
     throw new Error(`UAZAPI returned ${res.status}: ${text.slice(0, 300)}`)
   }
 
