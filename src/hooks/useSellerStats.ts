@@ -15,9 +15,18 @@ export interface SellerStats {
   prevMonthConversion: number;
   streak: number;
   salesByDay: { date: string; revenue: number; count: number }[];
+  // Period-filtered stats
+  periodSales: number;
+  periodRevenue: number;
+  periodCommission: number;
 }
 
-async function fetchSellerStats(sellerName: string): Promise<SellerStats> {
+export interface SellerStatsDateRange {
+  start: Date;
+  end: Date;
+}
+
+async function fetchSellerStats(sellerName: string, periodRange?: SellerStatsDateRange): Promise<SellerStats> {
   const now = new Date();
   const monthStart = startOfMonth(now);
   const today = startOfDay(now);
@@ -58,7 +67,6 @@ async function fetchSellerStats(sellerName: string): Promise<SellerStats> {
   // Streak calculation
   let streak = 0;
   let checkDate = new Date(today);
-  // If no sales today, start checking from yesterday
   if (!dayMap.has(todayStr)) {
     checkDate = new Date(yesterday);
   }
@@ -76,8 +84,44 @@ async function fetchSellerStats(sellerName: string): Promise<SellerStats> {
     .map(([date, v]) => ({ date, ...v }))
     .sort((a, b) => a.date.localeCompare(b.date));
 
-  // Avg daily leads (simplified - use sales as proxy)
   const daysInMonth = differenceInDays(now, monthStart) + 1;
+
+  // Period-filtered stats (separate query if range differs from month)
+  let periodSales = 0;
+  let periodRevenue = 0;
+  let periodCommission = 0;
+
+  if (periodRange) {
+    const pStart = startOfDay(periodRange.start);
+    const pEnd = endOfDay(periodRange.end);
+
+    // Check if period is within the month data we already have
+    if (pStart >= monthStart && pEnd <= endOfDay(now)) {
+      // Filter from existing data
+      const pStartStr = format(pStart, 'yyyy-MM-dd');
+      const pEndStr = format(pEnd, 'yyyy-MM-dd');
+      const periodApproved = approved.filter((s: any) => {
+        const d = (s.purchased_at || '').slice(0, 10);
+        return d >= pStartStr && d <= pEndStr;
+      });
+      periodSales = periodApproved.length;
+      periodRevenue = periodApproved.reduce((sum: number, s: any) => sum + (s.revenue || 0), 0);
+      periodCommission = periodApproved.reduce((sum: number, s: any) => sum + (s.affiliate_commission || 0), 0);
+    } else {
+      // Need separate query
+      const { data: periodData } = await (supabase as any)
+        .from('v_all_sales')
+        .select('revenue, affiliate_commission, status')
+        .ilike('affiliate_name', `%${sellerName}%`)
+        .gte('purchased_at', pStart.toISOString())
+        .lte('purchased_at', pEnd.toISOString());
+
+      const pApproved = ((periodData || []) as any[]).filter((s: any) => s.status === 'authorized');
+      periodSales = pApproved.length;
+      periodRevenue = pApproved.reduce((sum: number, s: any) => sum + (s.revenue || 0), 0);
+      periodCommission = pApproved.reduce((sum: number, s: any) => sum + (s.affiliate_commission || 0), 0);
+    }
+  }
 
   return {
     monthSales,
@@ -88,17 +132,20 @@ async function fetchSellerStats(sellerName: string): Promise<SellerStats> {
     yesterdayRevenue: yesterdaySales.reduce((s: number, t: any) => s + (t.revenue || 0), 0),
     todayLeads: todaySales.length,
     avgDailyLeads: daysInMonth > 0 ? monthSales / daysInMonth : 0,
-    monthConversion: 0, // Needs leads data
+    monthConversion: 0,
     prevMonthConversion: 0,
     streak,
     salesByDay,
+    periodSales,
+    periodRevenue,
+    periodCommission,
   };
 }
 
-export function useSellerStats(sellerName?: string) {
+export function useSellerStats(sellerName?: string, periodRange?: SellerStatsDateRange) {
   return useQuery({
-    queryKey: ['seller-stats', sellerName],
-    queryFn: () => fetchSellerStats(sellerName!),
+    queryKey: ['seller-stats', sellerName, periodRange?.start?.toISOString(), periodRange?.end?.toISOString()],
+    queryFn: () => fetchSellerStats(sellerName!, periodRange),
     enabled: !!sellerName,
     staleTime: 30 * 1000,
     refetchOnWindowFocus: true,
