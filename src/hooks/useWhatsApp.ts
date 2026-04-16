@@ -179,10 +179,14 @@ export function useWhatsAppChats(instanceId: string | null) {
         `${SUPABASE_URL}/functions/v1/whatsapp-chats?action=list_chats&instance_id=${instanceId}`,
         { headers }
       );
-      if (res.ok) {
-        const data = await res.json();
-        setChats(data);
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error('Error fetching chats:', errorText);
+        setChats([]);
+        return;
       }
+      const data = await res.json();
+      setChats(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Error fetching chats:', err);
     } finally {
