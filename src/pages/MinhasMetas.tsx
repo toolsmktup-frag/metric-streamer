@@ -218,6 +218,132 @@ export default function MinhasMetas() {
         </button>
       </motion.div>
 
+      {/* Period Filter + KPIs */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.15 }}
+      >
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <BarChart3 className="h-5 w-5 text-primary" />
+                Resumo por Período
+              </CardTitle>
+              <Popover open={periodOpen} onOpenChange={(v) => { setPeriodOpen(v); if (!v) setShowCustomCal(false); }}>
+                <PopoverTrigger asChild>
+                  <button className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium hover:bg-muted transition-colors">
+                    <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+                    {periodLabel}
+                    <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className={cn("p-1", showCustomCal ? "w-auto" : "w-48")} align="end">
+                  {!showCustomCal ? (
+                    <div>
+                      {PERIOD_PRESETS.map(preset => (
+                        <button
+                          key={preset.label}
+                          className={`w-full text-left px-3 py-2 text-sm rounded-md transition-colors ${
+                            periodLabel === preset.label ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
+                          }`}
+                          onClick={() => {
+                            const dates = preset.getDates();
+                            setPeriodRange(dates);
+                            setPeriodLabel(preset.label);
+                            setPeriodOpen(false);
+                          }}
+                        >
+                          {preset.label}
+                        </button>
+                      ))}
+                      <div className="border-t border-border mt-1 pt-1">
+                        <button
+                          className={`w-full text-left px-3 py-2 text-sm rounded-md transition-colors ${
+                            !PERIOD_PRESETS.some(p => p.label === periodLabel) ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
+                          }`}
+                          onClick={() => {
+                            setCustomRange({ from: periodRange.start, to: periodRange.end });
+                            setShowCustomCal(true);
+                          }}
+                        >
+                          Personalizado
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-2 space-y-3">
+                      <Calendar
+                        mode="range"
+                        selected={customRange}
+                        onSelect={setCustomRange}
+                        numberOfMonths={2}
+                        locale={ptBR}
+                        disabled={(date) => date > new Date()}
+                        className={cn("p-3 pointer-events-auto")}
+                      />
+                      <div className="flex items-center justify-between px-1">
+                        <button onClick={() => setShowCustomCal(false)} className="text-sm text-muted-foreground hover:text-foreground">
+                          Voltar
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (customRange?.from && customRange?.to) {
+                              const start = startOfDay(customRange.from);
+                              const end = endOfDay(customRange.to);
+                              setPeriodRange({ start, end });
+                              setPeriodLabel(`${format(start, 'dd/MM', { locale: ptBR })} - ${format(end, 'dd/MM', { locale: ptBR })}`);
+                              setShowCustomCal(false);
+                              setPeriodOpen(false);
+                            }
+                          }}
+                          disabled={!customRange?.from || !customRange?.to}
+                          className="px-4 py-1.5 text-sm font-medium rounded-lg bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50"
+                        >
+                          Aplicar
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </PopoverContent>
+              </Popover>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="text-center p-3 rounded-lg bg-muted/50">
+                <div className="flex items-center justify-center gap-1.5 text-muted-foreground mb-1">
+                  <ShoppingCart className="h-4 w-4" />
+                  <span className="text-xs font-medium">Vendas</span>
+                </div>
+                {isLoading ? <Skeleton className="h-7 w-16 mx-auto" /> : (
+                  <p className="text-2xl font-bold text-foreground">{stats?.periodSales || 0}</p>
+                )}
+              </div>
+              <div className="text-center p-3 rounded-lg bg-muted/50">
+                <div className="flex items-center justify-center gap-1.5 text-muted-foreground mb-1">
+                  <DollarSign className="h-4 w-4" />
+                  <span className="text-xs font-medium">Receita</span>
+                </div>
+                {isLoading ? <Skeleton className="h-7 w-24 mx-auto" /> : (
+                  <p className="text-2xl font-bold text-foreground">{formatCurrency(stats?.periodRevenue || 0)}</p>
+                )}
+              </div>
+              <div className="text-center p-3 rounded-lg bg-muted/50">
+                <div className="flex items-center justify-center gap-1.5 text-muted-foreground mb-1">
+                  <TrendingUp className="h-4 w-4" />
+                  <span className="text-xs font-medium">Comissão</span>
+                </div>
+                {isLoading ? <Skeleton className="h-7 w-24 mx-auto" /> : (
+                  <p className="text-2xl font-bold text-foreground">{formatCurrency(stats?.periodCommission || 0)}</p>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
+
       {/* Main Goal Card — Active goal progress */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
