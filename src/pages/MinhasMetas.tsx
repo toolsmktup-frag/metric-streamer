@@ -80,8 +80,20 @@ function getPercentColor(percent: number) {
   return 'bg-red-500 text-white';
 }
 
+const PERIOD_PRESETS = [
+  { label: 'Hoje', getDates: () => ({ start: startOfDay(new Date()), end: endOfDay(new Date()) }) },
+  { label: 'Ontem', getDates: () => { const d = subDays(new Date(), 1); return { start: startOfDay(d), end: endOfDay(d) }; } },
+  { label: 'Últimos 3 dias', getDates: () => ({ start: startOfDay(subDays(new Date(), 2)), end: endOfDay(new Date()) }) },
+  { label: 'Últimos 7 dias', getDates: () => ({ start: startOfDay(subDays(new Date(), 6)), end: endOfDay(new Date()) }) },
+];
+
 export default function MinhasMetas() {
   const [confettiFired, setConfettiFired] = useState(false);
+  const [periodLabel, setPeriodLabel] = useState('Hoje');
+  const [periodRange, setPeriodRange] = useState<SellerStatsDateRange>(() => PERIOD_PRESETS[0].getDates());
+  const [periodOpen, setPeriodOpen] = useState(false);
+  const [showCustomCal, setShowCustomCal] = useState(false);
+  const [customRange, setCustomRange] = useState<DayPickerRange | undefined>(undefined);
 
   const { data: currentUser } = useQuery({
     queryKey: ['current-user-profile-metas'],
@@ -103,7 +115,7 @@ export default function MinhasMetas() {
   const avatarUrl = currentUser?.avatar_url;
 
   const { data: goal, isLoading: goalLoading } = useSellerGoal(userId);
-  const { data: stats, isLoading: statsLoading } = useSellerStats(sellerName);
+  const { data: stats, isLoading: statsLoading } = useSellerStats(sellerName, periodRange);
   const { data: achievements = [] } = useSellerAchievements(userId);
 
   const isLoading = goalLoading || statsLoading;
