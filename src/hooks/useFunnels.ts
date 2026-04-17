@@ -145,3 +145,65 @@ export function useUpsertFunnelProducts() {
     },
   });
 }
+
+// ===========================================================
+// Multi-plataforma por funil (funnel_platforms)
+// ===========================================================
+
+export function useAddFunnelPlatform() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ funnelId, platform }: { funnelId: string; platform: PaymentPlatform }) => {
+      const { data, error } = await (supabase as any)
+        .from('funnel_platforms')
+        .insert({ funnel_id: funnelId, platform })
+        .select()
+        .single();
+      if (error) throw error;
+      return data as FunnelPlatform;
+    },
+    onSuccess: (_, { funnelId }) => {
+      queryClient.invalidateQueries({ queryKey: ['funnels'] });
+      queryClient.invalidateQueries({ queryKey: ['funnel', funnelId] });
+    },
+  });
+}
+
+export function useRegenerateFunnelPlatformToken() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, funnelId }: { id: string; funnelId: string }) => {
+      // Generates a new UUID-based token
+      const newToken = crypto.randomUUID();
+      const { data, error } = await (supabase as any)
+        .from('funnel_platforms')
+        .update({ webhook_token: newToken, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data as FunnelPlatform;
+    },
+    onSuccess: (_, { funnelId }) => {
+      queryClient.invalidateQueries({ queryKey: ['funnels'] });
+      queryClient.invalidateQueries({ queryKey: ['funnel', funnelId] });
+    },
+  });
+}
+
+export function useDeleteFunnelPlatform() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id }: { id: string; funnelId: string }) => {
+      const { error } = await (supabase as any)
+        .from('funnel_platforms')
+        .delete()
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: (_, { funnelId }) => {
+      queryClient.invalidateQueries({ queryKey: ['funnels'] });
+      queryClient.invalidateQueries({ queryKey: ['funnel', funnelId] });
+    },
+  });
+}
