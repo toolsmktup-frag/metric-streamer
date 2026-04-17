@@ -30,8 +30,6 @@ export interface Funnel {
   description: string | null;
   color: string;
   meta_account_id: string | null;
-  platform: PaymentPlatform;
-  webhook_token: string;
   is_active: boolean;
   sort_order: number;
   created_at: string;
@@ -78,13 +76,25 @@ export function useFunnel(id: string | null) {
 export function useCreateFunnel() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (funnel: Partial<Funnel>) => {
+    mutationFn: async (
+      funnel: Partial<Funnel> & { initial_platform?: PaymentPlatform }
+    ) => {
+      const { initial_platform, ...funnelData } = funnel;
       const { data, error } = await (supabase as any)
         .from('funnels')
-        .insert(funnel)
+        .insert(funnelData)
         .select()
         .single();
       if (error) throw error;
+
+      // Cria automaticamente a plataforma inicial em funnel_platforms
+      // (sem isso, o funil novo nasce sem webhook)
+      if (initial_platform && data?.id) {
+        const { error: platErr } = await (supabase as any)
+          .from('funnel_platforms')
+          .insert({ funnel_id: data.id, platform: initial_platform });
+        if (platErr) throw platErr;
+      }
       return data;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['funnels'] }),
