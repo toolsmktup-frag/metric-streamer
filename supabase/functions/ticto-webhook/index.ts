@@ -298,12 +298,24 @@ Deno.serve(async (req) => {
     let funnelId: string | null = null;
 
     if (webhookToken) {
-      const { data: funnelByToken } = await supabase
-        .from("funnels")
-        .select("id")
+      // 1) Novo: lookup em funnel_platforms (multi-plataforma por funil)
+      const { data: byPlatform } = await supabase
+        .from("funnel_platforms")
+        .select("funnel_id")
         .eq("webhook_token", webhookToken)
-        .single();
-      funnelId = funnelByToken?.id ?? null;
+        .eq("is_active", true)
+        .maybeSingle();
+      funnelId = byPlatform?.funnel_id ?? null;
+
+      // 2) Fallback legacy: token na tabela funnels
+      if (!funnelId) {
+        const { data: funnelByToken } = await supabase
+          .from("funnels")
+          .select("id")
+          .eq("webhook_token", webhookToken)
+          .maybeSingle();
+        funnelId = funnelByToken?.id ?? null;
+      }
     }
 
     if (!funnelId && productName) {
