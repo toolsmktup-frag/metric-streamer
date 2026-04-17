@@ -1,18 +1,52 @@
 
-Pergunta direta: precisa rodar mais algo no Supabase?
+Plano: Fase 1 — Auditoria de uso das colunas legacy
 
-**Resposta: NÃO.** A migração `funnel-platforms-multi.sql` já fez tudo:
-1. ✅ Tabela `funnel_platforms` criada com RLS
-2. ✅ Backfill rodou (3 funis viraram 3 linhas, tokens preservados)
-3. ✅ Coluna `platform` adicionada em `funnel_products`
-4. ✅ Auditoria confirmou: zero duplicatas, zero quebras
+### Objetivo
+Mapear TODAS as referências a `funnels.platform` e `funnels.webhook_token` no código (frontend + edge functions) pra decidir com segurança se dá pra dropar as colunas ou se precisa refatorar antes.
 
-**O que falta NÃO é Supabase, é uso da feature pela UI:**
-- Adicionar Ticto no funil Articulabem-1 (hoje só tem Guru)
-- Cadastrar a webhook URL nova lá na Ticto
-- Mapear produtos específicos de cada plataforma (opcional — sem mapear, segue como hoje)
+### O que vou fazer (read-only, zero risco)
 
-**Migrações futuras que PODEM ser úteis (não obrigatórias agora):**
-- Deprecar colunas `platform` e `webhook_token` da tabela `funnels` depois que o código todo migrar pra ler de `funnel_platforms` (hoje rodam em paralelo como fallback). Só fazer isso depois de 1-2 semanas rodando estável.
+**1. Buscar referências no código**
+- `code--search_files` por `webhook_token` em `src/**` e `supabase/functions/**`
+- `code--search_files` por `\.platform\b` em contexto de `funnels` (filtrar falsos positivos de `funnel_platforms.platform`)
+- `code--search_files` por `from('funnels')` e `.from("funnels")` pra ver todo SELECT/UPDATE na tabela
 
-Sem plano de execução porque não há trabalho a fazer. Resposta é informativa.
+**2. Classificar cada ocorrência em 3 buckets**
+- 🟢 **OK** — já lê/escreve em `funnel_platforms` (não bloqueia drop)
+- 🟡 **Fallback legacy** — lê de `funnels.webhook_token` como fallback (precisa remover antes do drop)
+- 🔴 **Legacy puro** — só lê de `funnels.platform`/`funnels.webhook_token` (precisa refatorar pra `funnel_platforms`)
+
+**3. Inspecionar pontos críticos esperados**
+- `supabase/functions/ticto-webhook/index.ts`
+- `supabase/functions/guru-webhook/index.ts`
+- `supabase/functions/eduzz-webhook/index.ts`
+- `src/hooks/useFunnels.ts` (já vi — usa `platform` no tipo)
+- `src/components/lead-funnels/WebhookConfig.tsx` (usa `funnel.webhook_token`)
+- Páginas de configuração de funil (`FunisConfigurar.tsx`)
+- Tipos TS (`src/types/`, `src/integrations/supabase/types.ts`)
+
+### Entregável (no chat)
+Relatório no formato:
+```
+## Auditoria de uso — funnels.platform / funnels.webhook_token
+
+### 🟢 OK (X ocorrências) — não bloqueia drop
+- arquivo:linha — descrição
+
+### 🟡 Fallback legacy (Y ocorrências) — remover antes do drop
+- arquivo:linha — descrição + ação sugerida
+
+### 🔴 Legacy puro (Z ocorrências) — refatorar antes do drop
+- arquivo:linha — descrição + ação sugerida
+
+### Veredito
+- ✅ Pode dropar agora / ⚠️ Precisa refatorar N arquivos / ❌ Bloqueado
+- Estimativa de trabalho pra Fase 2 (drop)
+```
+
+### Próximo passo (não é dessa fase)
+Com o relatório na mão, você decide:
+- **Verde:** vou direto pra Fase 2 (migration de drop + remoção do fallback nas edge functions)
+- **Amarelo/Vermelho:** te mostro o plano de refatoração antes da Fase 2
+
+Tudo aqui é leitura — nenhum arquivo alterado, nenhum SQL rodado.
