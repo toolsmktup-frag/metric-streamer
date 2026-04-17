@@ -163,6 +163,20 @@ Deno.serve(async (req) => {
         })
       }
 
+      // Auto-grant access to the creator so non-admin users (vendedoras) see the instance they just created
+      try {
+        const { error: accessErr } = await supabase
+          .from('whatsapp_instance_access')
+          .insert({
+            user_id: user.id,
+            instance_id: newInstance.id,
+            organization_id: profile.organization_id,
+          })
+        if (accessErr) console.error('[create_instance] auto-grant access failed:', accessErr.message)
+      } catch (e) {
+        console.error('[create_instance] auto-grant access exception:', (e as Error).message)
+      }
+
       const webhookUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/uazapi-webhook`
       try {
         await fetch(buildUazUrl(uazBaseUrl, '/webhook'), {
