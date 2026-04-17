@@ -45,7 +45,7 @@ export function useFunnels() {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from('funnels')
-        .select('*, funnel_products(*)')
+        .select('*, funnel_products(*), funnel_platforms(*)')
         .eq('is_active', true)
         .order('sort_order', { ascending: true });
 
@@ -63,7 +63,7 @@ export function useFunnel(id: string | null) {
       if (!id) return null;
       const { data, error } = await (supabase as any)
         .from('funnels')
-        .select('*, funnel_products(*)')
+        .select('*, funnel_products(*), funnel_platforms(*)')
         .eq('id', id)
         .single();
 
