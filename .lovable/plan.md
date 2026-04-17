@@ -1,41 +1,25 @@
 
-## Diagnóstico
-Quando vendedora cria uma instância via edge function `whatsapp-instance` (action `create_instance`):
-1. ✅ Cria na UAZAPI
-2. ✅ Insere em `whatsapp_instances`
-3. ❌ **NÃO** insere em `whatsapp_instance_access` pra ela mesma
+## SQL pendentes pra rodar no Supabase
 
-Resultado: vendedora cria, instância existe no banco, mas o filtro em `useWhatsApp.ts` (linha 102-114) só mostra instâncias que estão em `whatsapp_instance_access`. Como não tem registro, o array volta vazio → instância some pra ela.
+Baseado nas últimas features que implementamos, esses são os scripts que ainda dependem de você rodar no SQL Editor pra funcionar 100%:
 
-Admin vê porque o filtro é pulado pra `role === 'admin' || 'gestor'`.
+### 1. RPC de Venda Manual (CRÍTICO — feature recém-implementada)
+**Arquivo:** `docs/sql/insert-manual-sale.sql`
+**Pra que serve:** Cria a função `insert_manual_sale` usada pelo botão "Inserir venda manual" no `/crm-analytics`. Sem isso o botão dá erro.
 
-## Correção
+### 2. Tabela de Acesso a Instâncias WhatsApp (se ainda não rodou)
+**Arquivo:** `docs/whatsapp-instance-access.sql`
+**Pra que serve:** Cria a tabela `whatsapp_instance_access` + RLS. É o que sustenta a correção do auto-grant que acabei de fazer na edge function (vendedora ver instância que ela criou).
+**Como saber se já rodou:** se admin já consegue gerenciar acessos por instância em `/equipe`, então já tá rodada. Pula.
 
-**1. Edge function `supabase/functions/whatsapp-instance/index.ts`** — após o INSERT em `whatsapp_instances` (linha ~157), adicionar:
+### Como rodar
+1. Abre o **Supabase Dashboard → SQL Editor**
+2. Cola o conteúdo do arquivo, na ordem (1 depois 2 — mas a ordem não importa porque são independentes)
+3. Run
 
-```ts
-// Auto-grant access to the creator (so vendedora vê a instância que ela criou)
-await supabase.from('whatsapp_instance_access').insert({
-  user_id: userData.user.id,
-  instance_id: newInstance.id,
-  organization_id: profile.organization_id,
-});
-```
+### Validação rápida
+- **Pós #1:** `/crm-analytics` → botão "Inserir venda manual" → preenche e salva sem erro.
+- **Pós #2:** vendedora cria instância nova → ela aparece na lista dela na hora.
 
-Roda com service role (já é o `supabase` admin client da function), então passa pela RLS sem problema.
-
-**2. RLS — `whatsapp_instance_access`**
-A policy atual de INSERT (`docs/whatsapp-instance-access.sql`) só permite admin. A edge function usa service role, então passa. Não precisa mexer.
-
-**3. Backfill (opcional, mas recomendado)** — SQL pra rodar uma vez no Supabase, dando acesso retroativo a quem criou instâncias antes do fix:
-- Como `whatsapp_instances` não tem `created_by`, o backfill manual exige você escolher caso a caso. Alternativa: rodar um script que dá acesso a todas as vendedoras das instâncias órfãs (pode ser feito pela tela `/equipe` que já existe).
-- Pra o caso atual da Gabi: você abre Gerenciar Instâncias → seleciona a "Gabi 2" → marca a Gabi no painel de acessos. Resolve hoje.
-
-## Arquivos alterados
-- `supabase/functions/whatsapp-instance/index.ts` — +5 linhas após o insert
-
-## Validação
-1. Logar como vendedora → criar nova instância "teste-vendedora"
-2. Conferir que aparece na lista dela imediatamente (sem precisar admin marcar)
-3. Logar como admin → abrir gerenciar acessos da nova instância → confirmar que a vendedora já está marcada
-4. Pra Gabi 2 que já existe: admin marca manualmente em `/equipe` ou no painel de acessos da instância
+### Observação
+Outros arquivos em `docs/` e `docs/sql/` são de migrations antigas (Meta CAPI, recontact, lead funnels, tracking IDs, etc) — se você já rodou ao longo do tempo, ignora. Esses dois acima são os únicos atrelados a features recentes que dependem da sua ação.
