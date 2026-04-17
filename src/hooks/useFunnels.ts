@@ -1,6 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
+export type PaymentPlatform = 'ticto' | 'guru' | 'kiwify' | 'hotmart' | 'eduzz' | 'outro';
+
 export interface FunnelProduct {
   id: string;
   funnel_id: string;
@@ -9,6 +11,17 @@ export interface FunnelProduct {
   role: 'front' | 'order_bump' | 'upsell1' | 'upsell2' | 'upsell3' | 'downsell';
   display_name: string | null;
   recontact_days: number | null;
+  /** NULL = aplica a todas as plataformas. Caso contrário, apenas àquela plataforma. */
+  platform?: PaymentPlatform | null;
+}
+
+export interface FunnelPlatform {
+  id: string;
+  funnel_id: string;
+  platform: PaymentPlatform;
+  webhook_token: string;
+  is_active: boolean;
+  created_at: string;
 }
 
 export interface Funnel {
@@ -17,12 +30,13 @@ export interface Funnel {
   description: string | null;
   color: string;
   meta_account_id: string | null;
-  platform: 'ticto' | 'guru' | 'kiwify' | 'hotmart' | 'eduzz' | 'outro';
+  platform: PaymentPlatform;
   webhook_token: string;
   is_active: boolean;
   sort_order: number;
   created_at: string;
   funnel_products?: FunnelProduct[];
+  funnel_platforms?: FunnelPlatform[];
 }
 
 export function useFunnels() {
