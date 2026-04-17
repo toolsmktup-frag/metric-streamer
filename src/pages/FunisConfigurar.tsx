@@ -72,11 +72,12 @@ interface FunnelFormData {
   description: string;
   color: string;
   meta_account_id: string;
-  platform: PaymentPlatform;
+  /** Só usado ao CRIAR um funil novo (vira a 1ª funnel_platform). Ignorado em edição. */
+  initial_platform: PaymentPlatform;
 }
 
 function emptyForm(): FunnelFormData {
-  return { name: '', description: '', color: '#6366f1', meta_account_id: '', platform: 'ticto' };
+  return { name: '', description: '', color: '#6366f1', meta_account_id: '', initial_platform: 'ticto' };
 }
 
 // ────────────────────────────────────────────────────────────
@@ -352,12 +353,13 @@ export default function FunisConfigurar() {
 
   function startEdit(funnel: Funnel) {
     setEditingId(funnel.id);
+    const firstPlatform = funnel.funnel_platforms?.[0]?.platform ?? 'ticto';
     setForm({
       name: funnel.name,
       description: funnel.description || '',
       color: funnel.color,
       meta_account_id: funnel.meta_account_id || '',
-      platform: funnel.platform,
+      initial_platform: firstPlatform,
     });
     setProducts(
       (funnel.funnel_products || []).map((fp) => ({
@@ -419,7 +421,7 @@ export default function FunisConfigurar() {
           description: form.description || null,
           color: form.color,
           meta_account_id: form.meta_account_id || null,
-          platform: form.platform,
+          initial_platform: form.initial_platform,
         });
         funnelId = created.id;
       } else {
@@ -429,7 +431,6 @@ export default function FunisConfigurar() {
           description: form.description || null,
           color: form.color,
           meta_account_id: form.meta_account_id || null,
-          platform: form.platform,
         });
         funnelId = editingId!;
       }
