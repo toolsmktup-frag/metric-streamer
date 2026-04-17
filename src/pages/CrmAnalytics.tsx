@@ -17,6 +17,8 @@ import { cn } from '@/lib/utils';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { CalendarIcon } from 'lucide-react';
 import type { DateRange } from 'react-day-picker';
+import { useCurrentUserRole } from '@/hooks/useCurrentUserRole';
+import { ManualSaleDialog } from '@/components/crm/ManualSaleDialog';
 
 const COMMISSION_RATE = 0.10;
 
