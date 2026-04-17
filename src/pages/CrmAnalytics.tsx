@@ -17,6 +17,8 @@ import { cn } from '@/lib/utils';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { CalendarIcon } from 'lucide-react';
 import type { DateRange } from 'react-day-picker';
+import { useCurrentUserRole } from '@/hooks/useCurrentUserRole';
+import { ManualSaleDialog } from '@/components/crm/ManualSaleDialog';
 
 const COMMISSION_RATE = 0.10;
 
@@ -53,6 +55,9 @@ export default function CrmAnalytics() {
   const dateFrom = dateRange.from.toISOString();
   const dateTo = dateRange.to.toISOString();
   const daysInPeriod = Math.max(1, differenceInDays(dateRange.to, dateRange.from) + 1);
+
+  const { data: currentRole } = useCurrentUserRole();
+  const canInsertManualSale = currentRole === 'admin' || currentRole === 'gestor';
 
   // Fetch sellers
   const { data: sellers = [], isLoading: loadingSellers } = useQuery({
@@ -490,9 +495,14 @@ export default function CrmAnalytics() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Análise de CRM</h1>
-        <p className="text-sm text-muted-foreground">Performance das vendedoras e análise de leads</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Análise de CRM</h1>
+          <p className="text-sm text-muted-foreground">Performance das vendedoras e análise de leads</p>
+        </div>
+        {canInsertManualSale && sellers.length > 0 && (
+          <ManualSaleDialog sellers={sellers as Array<{ id: string; full_name: string | null }>} />
+        )}
       </div>
 
       {/* Filters */}
