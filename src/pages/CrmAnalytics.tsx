@@ -56,6 +56,9 @@ export default function CrmAnalytics() {
   const dateTo = dateRange.to.toISOString();
   const daysInPeriod = Math.max(1, differenceInDays(dateRange.to, dateRange.from) + 1);
 
+  const { data: currentRole } = useCurrentUserRole();
+  const canInsertManualSale = currentRole === 'admin' || currentRole === 'gestor';
+
   // Fetch sellers
   const { data: sellers = [], isLoading: loadingSellers } = useQuery({
     queryKey: ['crm-sellers'],
@@ -492,9 +495,14 @@ export default function CrmAnalytics() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Análise de CRM</h1>
-        <p className="text-sm text-muted-foreground">Performance das vendedoras e análise de leads</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Análise de CRM</h1>
+          <p className="text-sm text-muted-foreground">Performance das vendedoras e análise de leads</p>
+        </div>
+        {canInsertManualSale && sellers.length > 0 && (
+          <ManualSaleDialog sellers={sellers as Array<{ id: string; full_name: string | null }>} />
+        )}
       </div>
 
       {/* Filters */}
