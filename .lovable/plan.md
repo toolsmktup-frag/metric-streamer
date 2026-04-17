@@ -1,77 +1,93 @@
 
-## Plano: Multi-plataforma por funil
+## Plano: Auditoria de integridade pós-migração multi-plataforma
 
-### Auditoria rápida
-- `funnels.platform` hoje é string única (ticto/guru/kiwify/hotmart/eduzz/outro) + 1 `webhook_token`.
-- Webhooks (ticto/guru/eduzz) fazem lookup de funil por `webhook_token` na tabela `funnels`.
-- `funnel_products` classifica front/bump/upsell por `product_id` ou `product_name_contains` — sem distinção de plataforma.
-- Análises (CRM Analytics, resumo, campanhas) já agregam por `funnel_id`. Se webhook resolver o `funnel_id` certo, tudo une automaticamente.
+### Objetivo
+Garantir que **nenhuma venda foi perdida, duplicada ou desviada de funil** após:
+- Criação de `funnel_platforms` + backfill
+- Mudança de lookup nos webhooks (ticto/guru/eduzz) pra usar `funnel_platforms` com fallback em `funnels`
+- Adição da coluna `platform` em `funnel_products`
 
-### Decisão arquitetural
-**Tabela 1-N `funnel_platforms`** (mais escalável, isola tokens, evita bug):
-- Cada plataforma tem seu próprio `webhook_token` único → permite revogar/regenerar isolado.
-- Mantém `funnels.platform` como "plataforma primária" (legacy + default), sem breaking change.
-- Coluna `platform` opcional em `funnel_products` → NULL = vale pra todas; preenchida = específica daquela plataforma (resolve IDs diferentes Guru vs Ticto).
+### Auditoria automatizada (queries SQL read-only)
 
-### Passo a passo
+Vou rodar 7 checks no Supabase via SQL Editor — todos somente leitura, sem efeito colateral:
 
-**Passo 1 — SQL (você roda no Supabase SQL Editor)**
+**Check 1 — Backfill cobriu 100% dos funis**
 ```sql
--- 1. Tabela de plataformas por funil
-CREATE TABLE IF NOT EXISTS public.funnel_platforms (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  funnel_id uuid NOT NULL REFERENCES public.funnels(id) ON DELETE CASCADE,
-  platform text NOT NULL CHECK (platform IN ('ticto','guru','kiwify','hotmart','eduzz','outro')),
-  webhook_token text NOT NULL UNIQUE DEFAULT gen_random_uuid()::text,
-  is_active boolean NOT NULL DEFAULT true,
-  created_at timestamptz NOT NULL DEFAULT now(),
-  UNIQUE(funnel_id, platform)
-);
-
-ALTER TABLE public.funnel_platforms ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "view funnel_platforms" ON public.funnel_platforms
-  FOR SELECT TO authenticated USING (true);
-CREATE POLICY "manage funnel_platforms" ON public.funnel_platforms
-  FOR ALL TO authenticated
-  USING (public.get_user_role() IN ('admin','gestor'))
-  WITH CHECK (public.get_user_role() IN ('admin','gestor'));
-
-CREATE INDEX idx_funnel_platforms_token ON public.funnel_platforms(webhook_token);
-CREATE INDEX idx_funnel_platforms_funnel ON public.funnel_platforms(funnel_id);
-
--- 2. Backfill: cada funnel atual vira 1 funnel_platforms com seu token
-INSERT INTO public.funnel_platforms (funnel_id, platform, webhook_token)
-SELECT id, platform, webhook_token FROM public.funnels
-ON CONFLICT (funnel_id, platform) DO NOTHING;
-
--- 3. Coluna platform opcional em funnel_products
-ALTER TABLE public.funnel_products
-  ADD COLUMN IF NOT EXISTS platform text
-  CHECK (platform IS NULL OR platform IN ('ticto','guru','kiwify','hotmart','eduzz','outro'));
-
-CREATE INDEX IF NOT EXISTS idx_funnel_products_platform
-  ON public.funnel_products(funnel_id, platform);
+SELECT f.id, f.name, f.platform, f.webhook_token,
+       (SELECT count(*) FROM funnel_platforms fp WHERE fp.funnel_id = f.id) as platforms_count
+FROM funnels f
+ORDER BY platforms_count, f.name;
 ```
+Esperado: todo funil com pelo menos 1 linha. Se `platforms_count = 0` → backfill falhou.
 
-**Passo 2 — Edge functions (eu altero)**
-- `ticto-webhook`, `guru-webhook`, `eduzz-webhook`: mudar lookup de funil — primeiro tenta `funnel_platforms.webhook_token`, fallback no `funnels.webhook_token` (compat).
-- Resolução de produto: filtrar `funnel_products` por (`funnel_id` AND (`platform = X` OR `platform IS NULL`)).
+**Check 2 — Tokens preservados (zero break em webhooks já cadastrados)**
+```sql
+SELECT f.name, f.platform, f.webhook_token as token_funnel,
+       fp.webhook_token as token_platform,
+       (f.webhook_token = fp.webhook_token) as match
+FROM funnels f
+JOIN funnel_platforms fp ON fp.funnel_id = f.id AND fp.platform = f.platform;
+```
+Esperado: `match = true` em todas. Se `false` → webhook configurado vai resolver pro funil errado.
 
-**Passo 3 — UI `FunisConfigurar.tsx` (eu altero)**
-- Seção "Plataformas conectadas": lista de `funnel_platforms` com botão "+ Adicionar plataforma".
-- Cada item mostra: select de plataforma, webhook URL gerada, botão regenerar token, botão remover.
-- Editor de produtos ganha seletor "Aplica a: Todas / Guru / Ticto / ..." por linha.
+**Check 3 — Sem tokens duplicados entre tabelas (colisão impossível)**
+```sql
+SELECT webhook_token, count(*) as ocorrencias
+FROM (
+  SELECT webhook_token FROM funnels
+  UNION ALL
+  SELECT webhook_token FROM funnel_platforms
+) t
+GROUP BY webhook_token HAVING count(*) > 2;
+```
+Esperado: vazio (cada token aparece no máx 2x — uma em cada tabela, mesmo valor).
 
-**Passo 4 — Hooks (eu altero)**
-- `useFunnels.ts`: incluir `funnel_platforms(*)` no select.
-- Novos hooks: `useUpsertFunnelPlatform`, `useDeleteFunnelPlatform`.
+**Check 4 — Contagem de vendas das últimas 24h não caiu**
+```sql
+SELECT date_trunc('hour', purchased_at) as hora,
+       platform, count(*) as vendas, sum(revenue) as receita
+FROM v_all_sales
+WHERE purchased_at >= now() - interval '48 hours'
+GROUP BY 1, 2 ORDER BY 1 DESC, 2;
+```
+Esperado: padrão de volume contínuo nas horas pós-deploy comparado com pré-deploy. Se zero pós-deploy → webhook quebrou.
 
-### Validação
-1. Rodar SQL → conferir que cada funil existente tem 1 linha em `funnel_platforms` com mesmo token (nada quebra).
-2. Em `/funis/articulabem-1/configurar` → adicionar Ticto → copiar nova webhook URL → cadastrar na Ticto.
-3. Disparar venda teste Ticto → ver aparecendo no Resumo, KPIs e CRM Analytics do mesmo funil junto com vendas Guru.
-4. Cadastrar produto Ticto com ID diferente do Guru → confirmar que classificação front/bump/upsell respeita.
+**Check 5 — Duplicatas de transação (mesma venda processada 2x)**
+```sql
+SELECT platform, platform_transaction_id, count(*) as dupes
+FROM (
+  SELECT 'ticto' as platform, transaction_hash as platform_transaction_id FROM ticto_transactions WHERE created_at > now() - interval '7 days'
+  UNION ALL
+  SELECT 'guru', transaction_id FROM customer_purchases WHERE platform = 'guru' AND created_at > now() - interval '7 days'
+  UNION ALL
+  SELECT 'eduzz', transaction_id FROM customer_purchases WHERE platform = 'eduzz' AND created_at > now() - interval '7 days'
+) t
+GROUP BY platform, platform_transaction_id HAVING count(*) > 1;
+```
+Esperado: vazio.
 
-### Compatibilidade
-- `funnels.platform` e `funnels.webhook_token` ficam intactos (legacy fallback). Zero breaking change em webhooks já configurados.
+**Check 6 — Vendas órfãs (sem funnel_id resolvido) pós-deploy**
+```sql
+SELECT platform, count(*) as orfas
+FROM v_all_sales
+WHERE funnel_id IS NULL AND purchased_at > now() - interval '48 hours'
+GROUP BY platform;
+```
+Esperado: zero ou número similar a antes do deploy (vendas sem rastreamento sempre existem; aumento súbito = bug).
+
+**Check 7 — Classificação de produtos respeitando coluna platform**
+```sql
+SELECT funnel_id, platform, role, count(*)
+FROM funnel_products
+GROUP BY 1,2,3 ORDER BY 1,2;
+```
+Confere se a nova coluna `platform` foi aplicada onde você cadastrou — só validação visual.
+
+### Entregável
+Rodo todos os 7 checks, monto um relatório com:
+- ✅ / ❌ por check
+- Para cada ❌ → linhas problemáticas + ação corretiva sugerida
+- Comparativo de volume de vendas 48h antes vs 48h depois do deploy
+
+### Como vamos rodar
+Modo plano não tem acesso a SQL. Quando aprovar, eu **executo via tool `psql`** (read-only, todos `SELECT`) e te mando o relatório direto no chat. Zero risco, zero escrita.
