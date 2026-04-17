@@ -459,7 +459,7 @@ export default function FunisConfigurar() {
 
   const platformsForProducts: PaymentPlatform[] = editingPlatforms.length
     ? editingPlatforms.map((p) => p.platform)
-    : [form.platform];
+    : [form.initial_platform];
 
   return (
     <div className="space-y-6 max-w-3xl">
@@ -504,18 +504,20 @@ export default function FunisConfigurar() {
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label>Plataforma Primária</Label>
-                <Select value={form.platform} onValueChange={(v) => setForm((f) => ({ ...f, platform: v as PaymentPlatform }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {PLATFORM_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  Plataforma padrão. Para rodar em <strong>várias</strong>, use a seção abaixo (após salvar).
-                </p>
-              </div>
+              {editingId === 'new' && (
+                <div className="space-y-1">
+                  <Label>Plataforma Inicial</Label>
+                  <Select value={form.initial_platform} onValueChange={(v) => setForm((f) => ({ ...f, initial_platform: v as PaymentPlatform }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {PLATFORM_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Cria o 1º webhook. Depois você adiciona mais plataformas abaixo.
+                  </p>
+                </div>
+              )}
               <div className="space-y-1">
                 <Label>ID(s) da Conta Meta <span className="text-muted-foreground text-xs">(opcional)</span></Label>
                 <Input value={form.meta_account_id} onChange={(e) => setForm((f) => ({ ...f, meta_account_id: e.target.value }))} placeholder="283978142234803, 120214567890123" />
@@ -589,11 +591,8 @@ export default function FunisConfigurar() {
       <div className="space-y-3">
         {funnels.map((funnel) => {
           const platforms = funnel.funnel_platforms || [];
-          // legacy: se ainda não houver linhas em funnel_platforms, mostra a do próprio funnel
           const platformList: { platform: PaymentPlatform; token: string; id?: string }[] =
-            platforms.length > 0
-              ? platforms.map((p) => ({ platform: p.platform, token: p.webhook_token, id: p.id }))
-              : [{ platform: funnel.platform, token: funnel.webhook_token }];
+            platforms.map((p) => ({ platform: p.platform, token: p.webhook_token, id: p.id }));
 
           return (
             <Card key={funnel.id}>
