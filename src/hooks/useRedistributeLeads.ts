@@ -4,9 +4,10 @@ import { toast } from 'sonner';
 
 interface RedistributeParams {
   funnelId: string;
-  scope: 'unassigned' | 'assigned' | 'all';
+  scope: 'unassigned' | 'assigned' | 'all' | 'from_seller';
   stageIds: string[]; // empty = all stages
   sellerIds: string[];
+  fromSellerId?: string | null;
 }
 
 export function useRedistributeLeads() {
