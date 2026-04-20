@@ -76,6 +76,11 @@ export function useRedistributeLeads() {
           const lead = leadsMap.get(id);
           return !!lead?.assigned_to;
         });
+      } else if (scope === 'from_seller') {
+        filteredLeadIds = leadIds.filter(id => {
+          const lead = leadsMap.get(id);
+          return lead?.assigned_to === fromSellerId;
+        });
       } else {
         filteredLeadIds = leadIds;
       }
