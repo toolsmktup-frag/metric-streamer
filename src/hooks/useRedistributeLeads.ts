@@ -14,8 +14,9 @@ export function useRedistributeLeads() {
   const qc = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ funnelId, scope, stageIds, sellerIds }: RedistributeParams) => {
+    mutationFn: async ({ funnelId, scope, stageIds, sellerIds, fromSellerId }: RedistributeParams) => {
       if (!sellerIds.length) throw new Error('Selecione ao menos um vendedor');
+      if (scope === 'from_seller' && !fromSellerId) throw new Error('Selecione o vendedor de origem');
 
       // 1. Fetch positions in batches to avoid URL length limits
       const allPositions: any[] = [];
