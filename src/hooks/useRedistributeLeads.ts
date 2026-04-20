@@ -4,17 +4,19 @@ import { toast } from 'sonner';
 
 interface RedistributeParams {
   funnelId: string;
-  scope: 'unassigned' | 'assigned' | 'all';
+  scope: 'unassigned' | 'assigned' | 'all' | 'from_seller';
   stageIds: string[]; // empty = all stages
   sellerIds: string[];
+  fromSellerId?: string | null;
 }
 
 export function useRedistributeLeads() {
   const qc = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ funnelId, scope, stageIds, sellerIds }: RedistributeParams) => {
+    mutationFn: async ({ funnelId, scope, stageIds, sellerIds, fromSellerId }: RedistributeParams) => {
       if (!sellerIds.length) throw new Error('Selecione ao menos um vendedor');
+      if (scope === 'from_seller' && !fromSellerId) throw new Error('Selecione o vendedor de origem');
 
       // 1. Fetch positions in batches to avoid URL length limits
       const allPositions: any[] = [];
@@ -73,6 +75,11 @@ export function useRedistributeLeads() {
         filteredLeadIds = leadIds.filter(id => {
           const lead = leadsMap.get(id);
           return !!lead?.assigned_to;
+        });
+      } else if (scope === 'from_seller') {
+        filteredLeadIds = leadIds.filter(id => {
+          const lead = leadsMap.get(id);
+          return lead?.assigned_to === fromSellerId;
         });
       } else {
         filteredLeadIds = leadIds;
