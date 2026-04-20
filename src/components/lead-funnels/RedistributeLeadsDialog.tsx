@@ -17,7 +17,7 @@ interface Props {
   positions: (LeadStagePosition & { lead?: Lead })[];
 }
 
-type Scope = 'unassigned' | 'assigned' | 'all';
+type Scope = 'unassigned' | 'assigned' | 'all' | 'from_seller';
 
 interface Seller {
   id: string;
@@ -28,13 +28,13 @@ const RedistributeLeadsDialog: React.FC<Props> = ({ open, onOpenChange, funnelId
   const [scope, setScope] = useState<Scope>('unassigned');
   const [selectedStageIds, setSelectedStageIds] = useState<string[]>([]);
   const [selectedSellerIds, setSelectedSellerIds] = useState<string[]>([]);
+  const [fromSellerId, setFromSellerId] = useState<string | null>(null);
   const redistribute = useRedistributeLeads();
 
-  // Fetch sellers with access to this funnel
+  // Fetch sellers with access to this funnel (destination pool)
   const { data: sellers = [] } = useQuery({
     queryKey: ['funnel-sellers', funnelId],
     queryFn: async (): Promise<Seller[]> => {
-      // Get user IDs with access to this funnel
       const { data: orgId } = await (supabase as any).rpc('get_user_org_id');
       if (!orgId) return [];
 
@@ -48,7 +48,7 @@ const RedistributeLeadsDialog: React.FC<Props> = ({ open, onOpenChange, funnelId
       if (!accessRecords?.length) return [];
 
       const userIds = [...new Set(accessRecords.map((r: any) => r.user_id))] as string[];
-      
+
       const { data: profiles, error: profErr } = await (supabase as any)
         .from('user_profiles')
         .select('id, full_name, role')
@@ -64,7 +64,35 @@ const RedistributeLeadsDialog: React.FC<Props> = ({ open, onOpenChange, funnelId
     enabled: open,
   });
 
-  // Auto-select all sellers when loaded
+  // Fetch sellers WHO HAVE leads in this funnel (origin pool — includes inactive)
+  const { data: sellersWithLeads = [] } = useQuery({
+    queryKey: ['funnel-sellers-with-leads', funnelId],
+    queryFn: async (): Promise<Seller[]> => {
+      // Collect distinct assigned_to from current positions in memory first
+      const assignedIds = [
+        ...new Set(
+          positions
+            .map(p => p.lead?.assigned_to)
+            .filter((v): v is string => !!v)
+        ),
+      ];
+      if (!assignedIds.length) return [];
+
+      const { data: profiles, error } = await (supabase as any)
+        .from('user_profiles')
+        .select('id, full_name, status')
+        .in('id', assignedIds);
+      if (error) throw error;
+
+      return (profiles || []).map((p: any) => ({
+        id: p.id,
+        full_name: (p.full_name || 'Sem nome') + (p.status !== 'active' ? ' (inativo)' : ''),
+      }));
+    },
+    enabled: open && scope === 'from_seller',
+  });
+
+  // Auto-select all destination sellers when loaded
   useEffect(() => {
     if (sellers.length > 0 && selectedSellerIds.length === 0) {
       setSelectedSellerIds(sellers.map(s => s.id));
@@ -77,12 +105,25 @@ const RedistributeLeadsDialog: React.FC<Props> = ({ open, onOpenChange, funnelId
       setScope('unassigned');
       setSelectedStageIds([]);
       setSelectedSellerIds([]);
+      setFromSellerId(null);
     }
   }, [open]);
 
+  // Destination sellers exclude the origin seller
+  const destinationSellers = useMemo(
+    () => (scope === 'from_seller' && fromSellerId ? sellers.filter(s => s.id !== fromSellerId) : sellers),
+    [sellers, scope, fromSellerId]
+  );
+
+  const effectiveSelectedSellerIds = useMemo(
+    () => selectedSellerIds.filter(id => destinationSellers.some(s => s.id === id)),
+    [selectedSellerIds, destinationSellers]
+  );
+
   // Preview calculation
   const preview = useMemo(() => {
-    if (!selectedSellerIds.length) return { total: 0, perSeller: [] };
+    if (!effectiveSelectedSellerIds.length) return { total: 0, perSeller: [] as { id: string; name: string; count: number }[] };
+    if (scope === 'from_seller' && !fromSellerId) return { total: 0, perSeller: [] };
 
     let filtered = positions;
     if (selectedStageIds.length > 0) {
@@ -102,16 +143,21 @@ const RedistributeLeadsDialog: React.FC<Props> = ({ open, onOpenChange, funnelId
         const pos = filtered.find(p => p.lead_id === id);
         return !!pos?.lead?.assigned_to;
       });
+    } else if (scope === 'from_seller') {
+      scopeFiltered = uniqueLeadIds.filter(id => {
+        const pos = filtered.find(p => p.lead_id === id);
+        return pos?.lead?.assigned_to === fromSellerId;
+      });
     } else {
       scopeFiltered = uniqueLeadIds;
     }
 
     const total = scopeFiltered.length;
-    const base = Math.floor(total / selectedSellerIds.length);
-    const remainder = total % selectedSellerIds.length;
+    const base = Math.floor(total / effectiveSelectedSellerIds.length);
+    const remainder = total % effectiveSelectedSellerIds.length;
 
-    const perSeller = selectedSellerIds.map((id, idx) => {
-      const seller = sellers.find(s => s.id === id);
+    const perSeller = effectiveSelectedSellerIds.map((id, idx) => {
+      const seller = destinationSellers.find(s => s.id === id);
       return {
         id,
         name: seller?.full_name || 'Sem nome',
@@ -120,7 +166,7 @@ const RedistributeLeadsDialog: React.FC<Props> = ({ open, onOpenChange, funnelId
     });
 
     return { total, perSeller };
-  }, [positions, selectedStageIds, selectedSellerIds, scope, sellers]);
+  }, [positions, selectedStageIds, effectiveSelectedSellerIds, scope, fromSellerId, destinationSellers]);
 
   const toggleStage = (stageId: string) => {
     setSelectedStageIds(prev =>
@@ -136,10 +182,18 @@ const RedistributeLeadsDialog: React.FC<Props> = ({ open, onOpenChange, funnelId
 
   const handleConfirm = () => {
     redistribute.mutate(
-      { funnelId, scope, stageIds: selectedStageIds, sellerIds: selectedSellerIds },
+      {
+        funnelId,
+        scope,
+        stageIds: selectedStageIds,
+        sellerIds: effectiveSelectedSellerIds,
+        fromSellerId: scope === 'from_seller' ? fromSellerId : null,
+      },
       { onSuccess: () => onOpenChange(false) }
     );
   };
+
+  const sourceSellerName = sellersWithLeads.find(s => s.id === fromSellerId)?.full_name;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -166,9 +220,40 @@ const RedistributeLeadsDialog: React.FC<Props> = ({ open, onOpenChange, funnelId
                 <SelectItem value="unassigned">Leads sem vendedor</SelectItem>
                 <SelectItem value="assigned">Leads com vendedor</SelectItem>
                 <SelectItem value="all">Todos os leads</SelectItem>
+                <SelectItem value="from_seller">Leads de um vendedor específico</SelectItem>
               </SelectContent>
             </Select>
           </div>
+
+          {/* Source seller (only when scope = from_seller) */}
+          {scope === 'from_seller' && (
+            <div>
+              <label className="text-sm font-medium text-foreground mb-1.5 block">
+                Vendedor de origem
+              </label>
+              <Select value={fromSellerId || ''} onValueChange={v => setFromSellerId(v || null)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o vendedor de origem..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {sellersWithLeads.length === 0 ? (
+                    <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                      Nenhum vendedor com leads neste funil.
+                    </div>
+                  ) : (
+                    sellersWithLeads.map(s => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.full_name}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground mt-1">
+                Os leads atribuídos a este vendedor serão transferidos.
+              </p>
+            </div>
+          )}
 
           {/* Stage filter */}
           <div>
@@ -192,17 +277,17 @@ const RedistributeLeadsDialog: React.FC<Props> = ({ open, onOpenChange, funnelId
             )}
           </div>
 
-          {/* Sellers */}
+          {/* Destination Sellers */}
           <div>
             <label className="text-sm font-medium text-foreground mb-1.5 flex items-center gap-1.5">
               <Users className="h-4 w-4" />
-              Vendedores
+              {scope === 'from_seller' ? 'Distribuir para' : 'Vendedores'}
             </label>
-            {sellers.length === 0 ? (
+            {destinationSellers.length === 0 ? (
               <p className="text-sm text-muted-foreground">Nenhum vendedor com acesso a este funil.</p>
             ) : (
               <div className="space-y-1.5 max-h-32 overflow-y-auto">
-                {sellers.map(seller => (
+                {destinationSellers.map(seller => (
                   <label key={seller.id} className="flex items-center gap-2 cursor-pointer">
                     <Checkbox
                       checked={selectedSellerIds.includes(seller.id)}
@@ -216,10 +301,11 @@ const RedistributeLeadsDialog: React.FC<Props> = ({ open, onOpenChange, funnelId
           </div>
 
           {/* Preview */}
-          {selectedSellerIds.length > 0 && preview.total > 0 && (
+          {effectiveSelectedSellerIds.length > 0 && preview.total > 0 && (
             <div className="bg-muted/50 rounded-lg p-3">
               <p className="text-sm font-medium text-foreground mb-2">
-                Preview: {preview.total} lead(s) serão redistribuídos
+                Preview: {preview.total} lead(s)
+                {scope === 'from_seller' && sourceSellerName ? ` de ${sourceSellerName}` : ''} serão redistribuídos
               </p>
               <div className="space-y-1">
                 {preview.perSeller.map(s => (
@@ -232,7 +318,7 @@ const RedistributeLeadsDialog: React.FC<Props> = ({ open, onOpenChange, funnelId
             </div>
           )}
 
-          {selectedSellerIds.length > 0 && preview.total === 0 && (
+          {effectiveSelectedSellerIds.length > 0 && preview.total === 0 && (
             <p className="text-sm text-muted-foreground text-center py-2">
               Nenhum lead encontrado com os filtros selecionados.
             </p>
@@ -245,7 +331,12 @@ const RedistributeLeadsDialog: React.FC<Props> = ({ open, onOpenChange, funnelId
           </Button>
           <Button
             onClick={handleConfirm}
-            disabled={redistribute.isPending || selectedSellerIds.length === 0 || preview.total === 0}
+            disabled={
+              redistribute.isPending ||
+              effectiveSelectedSellerIds.length === 0 ||
+              preview.total === 0 ||
+              (scope === 'from_seller' && !fromSellerId)
+            }
           >
             {redistribute.isPending ? 'Redistribuindo...' : `Redistribuir ${preview.total} lead(s)`}
           </Button>
