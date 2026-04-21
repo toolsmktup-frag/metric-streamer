@@ -211,23 +211,54 @@ Deno.serve(async (req) => {
     const eventType = payload.EventType || payload.event || payload.type || ''
     console.log('EventType detected:', eventType)
 
+    // Detect group event by multiple signals (UAZAPI v2 sends PascalCase / mixed shapes)
+    const eventTypeLower = String(eventType).toLowerCase()
+    const groupJidCandidates = [
+      payload.groupjid, payload.GroupJID, payload.groupJid,
+      payload.chatid, payload.chatId,
+      payload.chat?.wa_chatid, payload.chat?.jid,
+      payload.group?.jid, payload.group?.JID,
+      payload.data?.groupjid, payload.data?.GroupJID,
+    ].filter(Boolean).map((v: any) => String(v))
+    const hasGroupJid = groupJidCandidates.some(jid => jid.endsWith('@g.us'))
+    const hasParticipants = !!(payload.Participants || payload.participants || payload.data?.Participants || payload.data?.participants)
+    const isGroupEventType = ['groups', 'group_participants', 'group.participants.update', 'presence', 'chats'].includes(eventTypeLower)
+      || eventTypeLower.includes('group')
+    const isGroupEvent = (isGroupEventType && (hasGroupJid || hasParticipants)) || (hasGroupJid && hasParticipants)
+
     // Detect messages: v2 sends EventType:"messages" with chat object
-    const isMessage = ['messages.upsert', 'message', 'message.new', 'messages'].includes(eventType)
+    const isMessage = !isGroupEvent && (
+      ['messages.upsert', 'message', 'message.new', 'messages'].includes(eventType)
       || payload.chat
       || payload.message
       || payload.messages
       || payload.data?.key
+    )
 
     if (!isMessage) {
-      if (String(eventType).toLowerCase().includes('group')) {
+      if (isGroupEvent) {
         const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+        const supabaseAdminAudit = createClient(supabaseUrl, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
+        // Fire-and-forget audit log (table may not exist; ignore errors)
+        try {
+          await supabaseAdminAudit.from('webhook_audit').insert({
+            source: 'uazapi',
+            event_type: `group:${eventTypeLower || 'unknown'}`,
+            payload,
+          })
+        } catch (_e) { /* table optional */ }
+
         const groupSyncRes = await fetch(`${supabaseUrl}/functions/v1/wz-group-sync`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!}`,
+          },
           body: JSON.stringify({ mode: 'webhook_event', payload }),
         })
         const groupSyncData = await groupSyncRes.json().catch(() => null)
-        return new Response(JSON.stringify({ ok: true, type: 'groups', groupSync: groupSyncData }), {
+        console.log('Group event forwarded:', eventTypeLower, 'jids:', groupJidCandidates, 'result:', groupSyncData)
+        return new Response(JSON.stringify({ ok: true, type: 'groups', eventType: eventTypeLower, groupSync: groupSyncData }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
       }
