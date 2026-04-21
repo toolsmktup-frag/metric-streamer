@@ -109,8 +109,8 @@ const SortableStageItem: React.FC<SortableStageItemProps> = ({
       </div>
 
       {advancedOpen && (
-        <div className="mt-3 grid grid-cols-[minmax(14rem,1fr)_auto_auto] items-end gap-3 border-t border-border pt-3 max-lg:grid-cols-1">
-          <div className="space-y-1 min-w-0">
+        <div className="mt-3 flex flex-wrap items-end gap-3 border-t border-border/60 pt-3">
+          <div className="space-y-1 min-w-0 flex-1 basis-64">
             <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
               <Link2 className="h-3.5 w-3.5" /> URL e rastreamento
             </span>
@@ -118,10 +118,10 @@ const SortableStageItem: React.FC<SortableStageItemProps> = ({
               value={stage.page_url || ''}
               onChange={e => onUpdate(idx, 'page_url', e.target.value)}
               placeholder="URL da página (opcional)"
-              className="min-w-0"
+              className="h-9 min-w-0"
             />
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 ml-auto">
             {stage.page_url && funnelId && stage.id && (
               <TrackingSnippetPopover
                 funnelId={funnelId}
@@ -130,17 +130,17 @@ const SortableStageItem: React.FC<SortableStageItemProps> = ({
                 pageUrl={stage.page_url}
               />
             )}
-            <div className="flex items-center gap-1.5 shrink-0" title="Ocultar valores para vendedores">
+            <div className="flex items-center gap-1.5 rounded-md border border-border/60 px-2 h-9 shrink-0" title="Ocultar valores para vendedores">
               <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
               <Switch
                 checked={!!stage.hide_values}
                 onCheckedChange={checked => onUpdate(idx, 'hide_values', checked)}
               />
             </div>
+            <Button variant="ghost" size="icon" onClick={() => onRemove(idx)} className="h-9 w-9 shrink-0" title="Remover etapa">
+              <Trash2 className="h-4 w-4 text-destructive" />
+            </Button>
           </div>
-          <Button variant="ghost" size="icon" onClick={() => onRemove(idx)} className="shrink-0 justify-self-end" title="Remover etapa">
-            <Trash2 className="h-4 w-4 text-destructive" />
-          </Button>
         </div>
       )}
     </div>
