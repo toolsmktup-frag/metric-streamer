@@ -6,7 +6,7 @@ import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, RefreshCw, Send, Users, Webhook, Save } from 'lucide-react';
+import { CheckCircle2, Loader2, RefreshCw, Send, Users, Webhook, Save, AlertCircle, Activity } from 'lucide-react';
 import { useWzInstances } from '@/hooks/useWzInstances';
 import {
   useApplyWzGroupSync,
@@ -16,12 +16,16 @@ import {
   useSaveWzGroupSyncConfig,
   useWzGroupList,
   useWzGroupSyncConfig,
+  useWzGroupSyncRuns,
+  useWzWebhookStatus,
   type WzGroupOption,
   type WzGroupSyncConfig,
   type WzGroupSyncResult,
 } from '@/hooks/useWzGroupSync';
 import type { LeadFunnelStage } from '@/types/leadFunnels';
 import { toast } from 'sonner';
+import { formatDistanceToNow } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 interface WhatsAppGroupSyncConfigProps {
   funnelId: string;
@@ -115,6 +119,10 @@ const WhatsAppGroupSyncConfig: React.FC<WhatsAppGroupSyncConfigProps> = ({ funne
   const [inviteGroupId, setInviteGroupId] = useState<string | null>(null);
   const [lastResult, setLastResult] = useState<WzGroupSyncResult | null>(null);
 
+  const { data: webhookStatus } = useWzWebhookStatus(funnelId, config.instance_id);
+  const { data: runs = [] } = useWzGroupSyncRuns(funnelId);
+  const webhookEvents = useMemo(() => runs.filter(r => r.mode === 'webhook_event').slice(0, 5), [runs]);
+
   useEffect(() => {
     if (savedConfig) {
       setConfig({ ...emptyConfig(funnelId), ...savedConfig, group_ids: savedConfig.group_ids || [] });
@@ -124,6 +132,7 @@ const WhatsAppGroupSyncConfig: React.FC<WhatsAppGroupSyncConfigProps> = ({ funne
 
   const selectedGroups = useMemo(() => new Set(config.group_ids), [config.group_ids]);
   const canRun = !!config.instance_id && config.group_ids.length > 0 && !!config.in_group_stage_id;
+  const automationOn = config.auto_move_on_join || config.auto_move_on_leave;
 
   const update = <K extends keyof WzGroupSyncConfig>(key: K, value: WzGroupSyncConfig[K]) => {
     setConfig(prev => ({ ...prev, [key]: value }));
@@ -145,7 +154,13 @@ const WhatsAppGroupSyncConfig: React.FC<WhatsAppGroupSyncConfigProps> = ({ funne
     if (!inviteGroupId && next[0]) setInviteGroupId(next[0]);
   };
 
-  const handleSave = () => saveConfig.mutate(config);
+  const handleSave = async () => {
+    await saveConfig.mutateAsync(config);
+    // Auto-register webhook when automation is on
+    if (config.instance_id && (config.auto_move_on_join || config.auto_move_on_leave)) {
+      try { await enableWebhook.mutateAsync(config); } catch (e) { /* surfaced by toast */ }
+    }
+  };
   const handlePreview = async () => setLastResult(await previewSync.mutateAsync(config));
   const handleApply = async () => setLastResult(await applySync.mutateAsync(config));
   const handleInvite = async () => setLastResult(await inviteMissing.mutateAsync({ ...config, invite_group_id: inviteGroupId }));
@@ -238,6 +253,62 @@ const WhatsAppGroupSyncConfig: React.FC<WhatsAppGroupSyncConfigProps> = ({ funne
         )}
 
         {lastResult && <ResultPanel result={lastResult} stages={stages} config={config} />}
+
+        {automationOn && config.instance_id && (
+          <div className="rounded-md border border-border bg-muted/20 p-3 space-y-2">
+            <div className="flex items-center gap-2 text-sm">
+              {webhookStatus?.registered && webhookStatus?.hasGroups ? (
+                <>
+                  <CheckCircle2 className="h-4 w-4 text-primary" />
+                  <span className="font-medium text-foreground">Monitoramento ativo</span>
+                  <span className="text-muted-foreground">— a UAZAPI vai notificar entradas e saídas em tempo real.</span>
+                </>
+              ) : webhookStatus ? (
+                <>
+                  <AlertCircle className="h-4 w-4 text-destructive" />
+                  <span className="font-medium text-foreground">Monitoramento não está completo</span>
+                  <span className="text-muted-foreground">
+                    {webhookStatus.error
+                      ? `— ${webhookStatus.error}`
+                      : webhookStatus.registered
+                        ? '— webhook registrado mas sem evento "groups". Clique em "Ativar webhook".'
+                        : '— webhook não registrado nesta instância. Clique em "Ativar webhook".'}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                  <span className="text-muted-foreground">Verificando status do webhook...</span>
+                </>
+              )}
+            </div>
+
+            {webhookEvents.length > 0 && (
+              <div className="pt-2 border-t border-border">
+                <div className="mb-1 flex items-center gap-2 text-xs font-medium text-foreground">
+                  <Activity className="h-3.5 w-3.5" /> Últimos eventos recebidos
+                </div>
+                <div className="space-y-1 text-xs text-muted-foreground">
+                  {webhookEvents.map(event => {
+                    const action = event.payload?.action || '—';
+                    const participants = (event.payload?.participants || []).slice(0, 2).join(', ');
+                    const moved = (event.payload?.moved_in_count || 0) + (event.payload?.moved_out_count || 0);
+                    const ago = formatDistanceToNow(new Date(event.created_at), { addSuffix: true, locale: ptBR });
+                    return (
+                      <div key={event.id} className="flex items-center justify-between gap-2">
+                        <span className="truncate">
+                          <Badge variant={event.status === 'success' ? 'default' : 'secondary'} className="mr-2">{action}</Badge>
+                          {participants || 'sem participante'} · {ago}
+                        </span>
+                        <span className="text-foreground">{moved > 0 ? `+${moved} movido(s)` : event.error_message || event.status}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" className="gap-2" onClick={handleSave} disabled={saveConfig.isPending || !config.instance_id}>

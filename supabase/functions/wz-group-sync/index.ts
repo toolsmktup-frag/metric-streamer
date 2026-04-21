@@ -7,7 +7,7 @@ const corsHeaders = {
 }
 
 const BodySchema = z.object({
-  mode: z.enum(['list_groups', 'get_config', 'save_config', 'preview', 'apply', 'invite_missing', 'enable_webhook', 'webhook_event']),
+  mode: z.enum(['list_groups', 'get_config', 'save_config', 'preview', 'apply', 'invite_missing', 'enable_webhook', 'webhook_event', 'list_runs', 'webhook_status']),
   funnel_id: z.string().uuid().optional(),
   instance_id: z.string().uuid().nullable().optional(),
   group_ids: z.array(z.string()).optional().default([]),
@@ -298,14 +298,64 @@ async function logRun(admin: SupabaseClient, body: Body, result: any, userId: st
   })
 }
 
+async function findPositionsByPhones(admin: SupabaseClient, funnelId: string, participantPhones: string[]): Promise<PositionRow[]> {
+  const variants = new Set<string>()
+  for (const phone of participantPhones) for (const v of phoneVariations(phone)) variants.add(cleanPhone(v))
+  if (variants.size === 0) return []
+
+  const positions = await fetchPositions(admin, funnelId)
+  if (positions.length === 0) return []
+
+  const direct = positions.filter(row => phoneVariations(row.lead?.phone || '').map(cleanPhone).some(v => variants.has(v)))
+  const directIds = new Set(direct.map(p => p.id))
+
+  const remainingLeadIds = positions.filter(p => !directIds.has(p.id)).map(p => p.lead_id)
+  if (remainingLeadIds.length > 0) {
+    const { data: leadsWithUC } = await admin
+      .from('leads')
+      .select('id, unified_customer_id')
+      .in('id', remainingLeadIds)
+    const ucIds = (leadsWithUC || []).map((l: any) => l.unified_customer_id).filter(Boolean)
+    if (ucIds.length > 0) {
+      const { data: ucs } = await admin
+        .from('unified_customers')
+        .select('id, primary_phone')
+        .in('id', ucIds)
+      const matchingUcIds = new Set(
+        (ucs || [])
+          .filter((u: any) => phoneVariations(u.primary_phone || '').map(cleanPhone).some(v => variants.has(v)))
+          .map((u: any) => u.id)
+      )
+      const matchingLeadIds = new Set(
+        (leadsWithUC || []).filter((l: any) => matchingUcIds.has(l.unified_customer_id)).map((l: any) => l.id)
+      )
+      for (const p of positions) {
+        if (!directIds.has(p.id) && matchingLeadIds.has(p.lead_id)) direct.push(p)
+      }
+    }
+  }
+  return direct
+}
+
 async function handleWebhookEvent(admin: SupabaseClient, payload: any) {
   const eventType = payload.EventType || payload.event || payload.type || ''
   const groupIds = extractGroupIds(payload)
   const participants = extractParticipants(payload)
-  const actionRaw = String(payload.action || payload.Action || payload.eventAction || payload.data?.action || eventType).toLowerCase()
-  const isJoin = ['add', 'join', 'joined', 'participant_add', 'group_join', 'groups'].some(v => actionRaw.includes(v))
-  const isLeave = ['remove', 'leave', 'left', 'participant_remove', 'group_leave'].some(v => actionRaw.includes(v))
-  if (groupIds.length === 0 || participants.length === 0 || (!isJoin && !isLeave)) return { handled: false, eventType, groupIds, participants }
+  const actionRaw = String(
+    payload.action || payload.Action || payload.eventAction || payload.EventAction ||
+    payload.data?.action || payload.data?.Action || eventType
+  ).toLowerCase()
+
+  const joinKeywords = ['add', 'join', 'joined', 'participant_add', 'group_join', 'invite', 'request']
+  const leaveKeywords = ['remove', 'leave', 'left', 'participant_remove', 'group_leave', 'kick']
+  const isJoin = joinKeywords.some(v => actionRaw.includes(v))
+  const isLeave = !isJoin && leaveKeywords.some(v => actionRaw.includes(v))
+
+  console.log('[wz-group-sync] webhook_event', { eventType, actionRaw, groupIds, participants, isJoin, isLeave })
+
+  if (groupIds.length === 0 || participants.length === 0 || (!isJoin && !isLeave)) {
+    return { handled: false, reason: 'missing_group_or_participants_or_action', eventType, actionRaw, groupIds, participants }
+  }
 
   const { data: configs, error } = await admin
     .from('lead_funnel_group_sync_configs')
@@ -313,29 +363,46 @@ async function handleWebhookEvent(admin: SupabaseClient, payload: any) {
     .eq('is_active', true)
   if (error) throw error
 
-  let moved = 0
+  let movedTotal = 0
+  const summaries: any[] = []
   for (const config of configs || []) {
     const watchedGroupIds = (config.group_ids || []).filter((groupId: string) => groupIds.includes(groupId))
     if (watchedGroupIds.length === 0) continue
-    const targetStage = isJoin && config.auto_move_on_join ? config.in_group_stage_id : isLeave && config.auto_move_on_leave ? config.left_group_stage_id : null
-    if (!targetStage) continue
-    const positions = await fetchPositions(admin, config.funnel_id)
-    const participantVariants = new Set(participants.flatMap(phone => phoneVariations(phone).map(cleanPhone)))
-    const targets = positions.filter(row => phoneVariations(row.lead?.phone || '').map(cleanPhone).some(v => participantVariants.has(v)))
-    const movedForConfig = await movePositions(admin, targets, targetStage, { ...config, mode: 'webhook_event', group_ids: watchedGroupIds }, isJoin)
-    moved += movedForConfig
+    const targetStage = isJoin && config.auto_move_on_join
+      ? config.in_group_stage_id
+      : isLeave && config.auto_move_on_leave
+        ? config.left_group_stage_id
+        : null
+
+    const targets = await findPositionsByPhones(admin, config.funnel_id, participants)
+    const movedForConfig = targetStage
+      ? await movePositions(admin, targets, targetStage, { ...config, mode: 'webhook_event', group_ids: watchedGroupIds }, isJoin)
+      : 0
+    movedTotal += movedForConfig
+
+    const status = movedForConfig > 0 ? 'success' : (targets.length > 0 ? 'ignored' : 'no_match')
+    const errorMessage = movedForConfig > 0
+      ? null
+      : targets.length === 0
+        ? `Nenhum lead encontrado no funil para os telefones: ${participants.join(', ')}`
+        : !targetStage
+          ? `Sem etapa de destino para ação ${isJoin ? 'join' : 'leave'}`
+          : 'Leads já estavam na etapa de destino'
 
     await logRun(admin, { ...config, mode: 'webhook_event', group_ids: watchedGroupIds }, {
       event_type: eventType,
       action: isJoin ? 'join' : 'leave',
       participants,
-      total_positions: positions.length,
+      group_ids: watchedGroupIds,
+      total_positions: targets.length,
       matched_count: targets.length,
       moved_in_count: isJoin ? movedForConfig : 0,
       moved_out_count: isLeave ? movedForConfig : 0,
-    }, null, movedForConfig > 0 ? 'success' : 'ignored', movedForConfig > 0 ? null : 'Nenhum lead correspondente encontrado ou já estava na etapa')
+    }, null, status, errorMessage)
+
+    summaries.push({ funnel_id: config.funnel_id, targets: targets.length, moved: movedForConfig, status })
   }
-  return { handled: true, eventType, action: isJoin ? 'join' : 'leave', groupIds, participants, moved }
+  return { handled: true, eventType, action: isJoin ? 'join' : 'leave', groupIds, participants, moved: movedTotal, summaries }
 }
 
 Deno.serve(async (req) => {
@@ -372,10 +439,35 @@ Deno.serve(async (req) => {
       return json({ config: data })
     }
 
+    if (body.mode === 'list_runs') {
+      const { data, error } = await admin
+        .from('lead_funnel_group_sync_runs')
+        .select('id, mode, status, error_message, group_ids, payload, created_at')
+        .eq('funnel_id', body.funnel_id)
+        .order('created_at', { ascending: false })
+        .limit(15)
+      if (error) throw error
+      return json({ runs: data || [] })
+    }
+
     if (!body.instance_id) return json({ error: 'instance_id é obrigatório' }, 400)
     const instance = await getInstance(admin, body.instance_id)
 
     if (body.mode === 'list_groups') return json({ groups: await listGroups(instance) })
+
+    if (body.mode === 'webhook_status') {
+      try {
+        const data = await uazapi(instance, '/webhook')
+        const url = `${supabaseUrl}/functions/v1/uazapi-webhook`
+        const registeredUrls: string[] = (data?.urls || data?.URLs || []).map((u: any) => u?.url || u?.URL || u).filter(Boolean)
+        const events: string[] = data?.events || data?.Events || []
+        const isRegistered = registeredUrls.some(u => u?.includes('uazapi-webhook'))
+        const hasGroups = events.map((e: string) => String(e).toLowerCase()).includes('groups')
+        return json({ status: { registered: isRegistered, hasGroups, expectedUrl: url, raw: data } })
+      } catch (err) {
+        return json({ status: { registered: false, hasGroups: false, error: err instanceof Error ? err.message : 'Falha ao consultar webhook' } })
+      }
+    }
 
     if (body.mode === 'save_config') {
       const payload = {
@@ -398,11 +490,27 @@ Deno.serve(async (req) => {
 
     if (body.mode === 'enable_webhook') {
       const url = `${supabaseUrl}/functions/v1/uazapi-webhook`
-      await uazapi(instance, '/webhook', {
-        method: 'POST',
-        body: JSON.stringify({ url, enabled: true, events: ['messages', 'messages_update', 'connection', 'groups'] }),
-      })
-      return json({ ok: true })
+      const events = ['messages', 'messages_update', 'connection', 'groups', 'presence', 'chats']
+
+      // UAZAPI v2 official endpoint: POST /instance/updatewebhook with addUrl + events
+      let lastError: any = null
+      const attempts: Array<{ path: string; body: any }> = [
+        { path: '/instance/updatewebhook', body: { addUrl: url, events, enabled: true, excludeMessages: [] } },
+        { path: '/webhook', body: { url, enabled: true, events } },
+      ]
+      let success = false
+      let response: any = null
+      for (const attempt of attempts) {
+        try {
+          response = await uazapi(instance, attempt.path, { method: 'POST', body: JSON.stringify(attempt.body) })
+          success = true
+          break
+        } catch (err) {
+          lastError = err
+        }
+      }
+      if (!success) throw lastError || new Error('Falha ao registrar webhook na UAZAPI')
+      return json({ ok: true, response, eventsRegistered: events })
     }
 
     const comparison = await buildComparison(admin, instance, body)

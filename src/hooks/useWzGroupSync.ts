@@ -40,10 +40,28 @@ export interface WzGroupSyncResult {
 }
 
 type InvokeBody = Partial<WzGroupSyncConfig> & {
-  mode: 'list_groups' | 'get_config' | 'save_config' | 'preview' | 'apply' | 'invite_missing' | 'enable_webhook';
+  mode: 'list_groups' | 'get_config' | 'save_config' | 'preview' | 'apply' | 'invite_missing' | 'enable_webhook' | 'list_runs' | 'webhook_status';
   funnel_id: string;
   invite_group_id?: string | null;
 };
+
+export interface WzGroupSyncRun {
+  id: string;
+  mode: string;
+  status: string;
+  error_message: string | null;
+  group_ids: string[];
+  payload: any;
+  created_at: string;
+}
+
+export interface WzWebhookStatus {
+  registered: boolean;
+  hasGroups: boolean;
+  expectedUrl?: string;
+  raw?: any;
+  error?: string;
+}
 
 async function invokeGroupSync<T>(body: InvokeBody): Promise<T> {
   const { data, error } = await supabase.functions.invoke('wz-group-sync', { body });
@@ -127,10 +145,40 @@ export function useInviteMissingWzGroupSync() {
 }
 
 export function useEnableWzGroupWebhook() {
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: async (config: WzGroupSyncConfig) => {
       await invokeGroupSync<{ ok: boolean }>({ mode: 'enable_webhook', ...config });
     },
-    onSuccess: () => toast.success('Monitoramento de grupos ativado'),
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: ['wz-group-webhook-status', vars.funnel_id, vars.instance_id] });
+      toast.success('Monitoramento de grupos ativado');
+    },
+  });
+}
+
+export function useWzGroupSyncRuns(funnelId: string | null) {
+  return useQuery({
+    queryKey: ['wz-group-sync-runs', funnelId],
+    queryFn: async () => {
+      if (!funnelId) return [];
+      const result = await invokeGroupSync<{ runs: WzGroupSyncRun[] }>({ mode: 'list_runs', funnel_id: funnelId });
+      return result.runs || [];
+    },
+    enabled: !!funnelId,
+    refetchInterval: 15000,
+  });
+}
+
+export function useWzWebhookStatus(funnelId: string | null, instanceId: string | null) {
+  return useQuery({
+    queryKey: ['wz-group-webhook-status', funnelId, instanceId],
+    queryFn: async () => {
+      if (!funnelId || !instanceId) return null;
+      const result = await invokeGroupSync<{ status: WzWebhookStatus }>({ mode: 'webhook_status', funnel_id: funnelId, instance_id: instanceId });
+      return result.status;
+    },
+    enabled: !!funnelId && !!instanceId,
+    refetchInterval: 30000,
   });
 }
