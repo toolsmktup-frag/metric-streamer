@@ -163,7 +163,7 @@ const FunnelMetricsTab: React.FC<Props> = ({ stages, positions, funnelId, histor
       <div className="rounded-xl border border-border bg-card p-5">
         <h3 className="text-sm font-semibold text-foreground mb-4">Distribuição por Etapa</h3>
         <div className="space-y-3">
-          {stageStats.map(({ stage, count, revenue, isRevenue }) => (
+          {stageStats.map(({ stage, count, passedCount, revenue, isRevenue }) => (
             <div key={stage.id} className="flex items-center gap-3">
               <span
                 className="h-3 w-3 rounded-full shrink-0"
@@ -174,13 +174,16 @@ const FunnelMetricsTab: React.FC<Props> = ({ stages, positions, funnelId, histor
                 <div
                   className="h-full rounded-full transition-all"
                   style={{
-                    width: `${(count / maxCount) * 100}%`,
+                    width: `${(passedCount / maxCount) * 100}%`,
                     backgroundColor: stage.color,
-                    minWidth: count > 0 ? '8px' : '0',
+                    minWidth: passedCount > 0 ? '8px' : '0',
                   }}
                 />
               </div>
-              <span className="text-sm font-mono text-foreground w-12 text-right">{count}</span>
+              <div className="w-28 text-right text-xs leading-tight">
+                <div className="font-mono text-foreground">Atual: {count}</div>
+                <div className="font-mono text-muted-foreground">Passaram: {passedCount}</div>
+              </div>
               {trackingMetrics?.stageViews?.get(stage.id) != null && (
                 <span className="text-[11px] text-muted-foreground w-16 text-right" title="Pageviews do tracking">
                   <Eye className="inline h-3 w-3 mr-0.5" />{trackingMetrics.stageViews.get(stage.id)}
