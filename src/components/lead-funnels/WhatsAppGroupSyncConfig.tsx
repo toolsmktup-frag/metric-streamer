@@ -248,7 +248,7 @@ const WhatsAppGroupSyncConfig: React.FC<WhatsAppGroupSyncConfigProps> = ({ funne
 
         {!canRun && (
           <Alert>
-            <AlertDescription>Escolha instância, pelo menos um grupo e a etapa para quem está no grupo.</AlertDescription>
+            <AlertDescription>Escolha a instância, pelo menos um grupo e a etapa de destino para quem entrou no grupo.</AlertDescription>
           </Alert>
         )}
 
