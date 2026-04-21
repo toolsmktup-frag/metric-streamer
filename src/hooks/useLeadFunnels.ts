@@ -143,6 +143,7 @@ export function useUpsertStages() {
             page_type: s.page_type || null,
             hide_values: !!s.hide_values,
             conversion_base_stage_id: s.conversion_base_stage_id || null,
+            visual_parent_stage_id: s.visual_parent_stage_id || null,
           })
           .eq('id', s.id);
       }
@@ -159,6 +160,7 @@ export function useUpsertStages() {
             page_type: s.page_type || null,
             hide_values: !!s.hide_values,
             conversion_base_stage_id: s.conversion_base_stage_id || null,
+            visual_parent_stage_id: s.visual_parent_stage_id || null,
           })));
         if (error) throw error;
       }
