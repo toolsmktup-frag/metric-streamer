@@ -16,7 +16,6 @@ interface Props {
 }
 
 const FunnelMetricsTab: React.FC<Props> = ({ stages, positions, funnelId, historicalCounts = {} }) => {
-  const [metricsView, setMetricsView] = React.useState<'sales' | 'leads'>('sales');
   const sortedStages = useMemo(() => [...stages].sort((a, b) => a.sort_order - b.sort_order), [stages]);
   const stageById = useMemo(() => new Map(sortedStages.map(stage => [stage.id, stage])), [sortedStages]);
 
@@ -108,48 +107,7 @@ const FunnelMetricsTab: React.FC<Props> = ({ stages, positions, funnelId, histor
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card p-2">
-        <Button
-          type="button"
-          variant={metricsView === 'sales' ? 'default' : 'ghost'}
-          size="sm"
-          onClick={() => setMetricsView('sales')}
-        >
-          Métricas de vendas
-        </Button>
-        <Button
-          type="button"
-          variant={metricsView === 'leads' ? 'default' : 'ghost'}
-          size="sm"
-          onClick={() => setMetricsView('leads')}
-        >
-          Métricas de leads
-        </Button>
-      </div>
-
-      {metricsView === 'sales' ? (
-        <SalesMetricsView metrics={metrics} positions={positions} stages={stages} />
-      ) : (
-        <LeadMetricsView
-          trackingMetrics={trackingMetrics}
-          stageStats={stageStats}
-          conversionRates={conversionRates}
-          maxCount={maxCount}
-          positions={positions}
-          stages={stages}
-        />
-      )}
-    </div>
-  );
-};
-
-const SalesMetricsView: React.FC<{
-  metrics: { confirmedRevenue: number; lostRevenue: number; avgTicket: number; revenueLeadCount: number; totalLeads: number };
-  positions: (LeadStagePosition & { lead: Lead })[];
-  stages: LeadFunnelStage[];
-}> = ({ metrics, positions, stages }) => (
-  <div className="space-y-6">
-    {/* KPI Cards */}
+      {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <MetricCard
           label="Total de Leads"
@@ -177,20 +135,6 @@ const SalesMetricsView: React.FC<{
           color="bg-amber-500/10 text-amber-600"
         />
       </div>
-
-      <ProductsRanking positions={positions} stages={stages} mode="sales" />
-  </div>
-);
-
-const LeadMetricsView: React.FC<{
-  trackingMetrics?: { pageviews: number; uniqueVisitors: number; emailCaptures: number; uniquePages: number; stageViews: Map<string, number> };
-  stageStats: { stage: LeadFunnelStage; count: number; passedCount: number; revenue: number; isRevenue: boolean }[];
-  conversionRates: { from: string; base: string; to: string; rate: number }[];
-  maxCount: number;
-  positions: (LeadStagePosition & { lead: Lead })[];
-  stages: LeadFunnelStage[];
-}> = ({ trackingMetrics, stageStats, conversionRates, maxCount, positions, stages }) => (
-  <div className="space-y-6">
 
       {/* Tracking Metrics */}
       {trackingMetrics && trackingMetrics.pageviews > 0 && (
@@ -288,15 +232,15 @@ const LeadMetricsView: React.FC<{
       <UtmBreakdown positions={positions} field="utm_medium" label="Mídia (utm_medium)" icon={MousePointerClick} />
       <UtmBreakdown positions={positions} field="utm_campaign" label="Campanhas (utm_campaign)" icon={Package} />
       <UtmBreakdown positions={positions} field="utm_content" label="Criativos (utm_content)" icon={Eye} />
-      <CreativePathBreakdown positions={positions} />
 
       {/* Export all UTMs button */}
       <ExportAllUtmsButton positions={positions} />
 
       {/* Top Products */}
-      <ProductsRanking positions={positions} stages={stages} mode="leads" />
+      <ProductsRanking positions={positions} stages={stages} />
     </div>
-);
+  );
+};
 
 /* ---- UTM Breakdown Sub-component ---- */
 const UtmBreakdown: React.FC<{
@@ -370,48 +314,6 @@ const UtmBreakdown: React.FC<{
   );
 };
 
-const CreativePathBreakdown: React.FC<{ positions: (LeadStagePosition & { lead: Lead })[] }> = ({ positions }) => {
-  const items = useMemo(() => {
-    const map = new Map<string, { source: string; campaign: string; creative: string; count: number }>();
-
-    for (const pos of positions) {
-      const source = pos.lead.utm_source?.trim() || 'Sem fonte';
-      const campaign = pos.lead.utm_campaign?.trim() || 'Sem campanha';
-      const creative = pos.lead.utm_content?.trim() || 'Sem criativo';
-      if (source === 'Sem fonte' && campaign === 'Sem campanha' && creative === 'Sem criativo') continue;
-
-      const key = `${source}||${campaign}||${creative}`;
-      const current = map.get(key) || { source, campaign, creative, count: 0 };
-      current.count += 1;
-      map.set(key, current);
-    }
-
-    return Array.from(map.values()).sort((a, b) => b.count - a.count).slice(0, 20);
-  }, [positions]);
-
-  if (items.length === 0) return null;
-
-  return (
-    <div className="rounded-xl border border-border bg-card p-5">
-      <div className="flex items-center gap-2 mb-4">
-        <Eye className="h-4 w-4 text-foreground" />
-        <h3 className="text-sm font-semibold text-foreground">Caminho até o criativo</h3>
-        <span className="text-xs text-muted-foreground ml-auto">Top {items.length}</span>
-      </div>
-      <div className="space-y-2">
-        {items.map((item) => (
-          <div key={`${item.source}-${item.campaign}-${item.creative}`} className="grid grid-cols-[1fr_1fr_1fr_auto] items-center gap-3 rounded-lg bg-muted/40 px-3 py-2 text-sm">
-            <span className="truncate text-muted-foreground" title={item.source}>{item.source}</span>
-            <span className="truncate text-foreground" title={item.campaign}>{item.campaign}</span>
-            <span className="truncate font-medium text-foreground" title={item.creative}>{item.creative}</span>
-            <span className="font-mono text-foreground">{item.count}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
-
 /* ---- Export All UTMs Button ---- */
 const ExportAllUtmsButton: React.FC<{ positions: (LeadStagePosition & { lead: Lead })[] }> = ({ positions }) => {
   const hasAnyUtm = positions.some(p => p.lead.utm_source || p.lead.utm_medium || p.lead.utm_campaign || p.lead.utm_content || p.lead.utm_term);
@@ -450,11 +352,7 @@ interface ProductStat {
   revenue: number;
 }
 
-const ProductsRanking: React.FC<{
-  positions: (LeadStagePosition & { lead: Lead })[];
-  stages: LeadFunnelStage[];
-  mode?: 'sales' | 'leads';
-}> = ({ positions, stages, mode = 'sales' }) => {
+const ProductsRanking: React.FC<{ positions: (LeadStagePosition & { lead: Lead })[]; stages: LeadFunnelStage[] }> = ({ positions, stages }) => {
   const stageMap = useMemo(() => new Map(stages.map(s => [s.id, s])), [stages]);
 
   const products = useMemo(() => {
@@ -484,9 +382,7 @@ const ProductsRanking: React.FC<{
     <div className="rounded-xl border border-border bg-card p-5">
       <div className="flex items-center gap-2 mb-4">
         <Package className="h-4 w-4 text-foreground" />
-        <h3 className="text-sm font-semibold text-foreground">
-          {mode === 'leads' ? 'Produtos de interesse' : 'Produtos mais vendidos'}
-        </h3>
+        <h3 className="text-sm font-semibold text-foreground">Produtos Mais Vendidos</h3>
       </div>
       <div className="space-y-3">
         {products.map((p) => (
@@ -499,7 +395,7 @@ const ProductsRanking: React.FC<{
               />
             </div>
             <span className="text-sm font-mono text-foreground w-10 text-right">{p.count}</span>
-            {mode === 'sales' && p.revenue > 0 && (
+            {p.revenue > 0 && (
               <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 w-28 text-right">
                 {formatCurrency(p.revenue)}
               </span>
