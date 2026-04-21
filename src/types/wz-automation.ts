@@ -10,6 +10,12 @@ export interface WzInstance {
   updated_at: string;
 }
 
+export interface WzGroup {
+  id: string;
+  name: string;
+  participants_count?: number;
+}
+
 export interface WzFlow {
   id: string;
   name: string;
