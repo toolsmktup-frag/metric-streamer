@@ -288,6 +288,7 @@ const LeadMetricsView: React.FC<{
       <UtmBreakdown positions={positions} field="utm_medium" label="Mídia (utm_medium)" icon={MousePointerClick} />
       <UtmBreakdown positions={positions} field="utm_campaign" label="Campanhas (utm_campaign)" icon={Package} />
       <UtmBreakdown positions={positions} field="utm_content" label="Criativos (utm_content)" icon={Eye} />
+      <CreativePathBreakdown positions={positions} />
 
       {/* Export all UTMs button */}
       <ExportAllUtmsButton positions={positions} />
@@ -362,6 +363,48 @@ const UtmBreakdown: React.FC<{
             <span className="text-xs text-muted-foreground w-12 text-right">
               {total > 0 ? `${((item.count / total) * 100).toFixed(0)}%` : '0%'}
             </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const CreativePathBreakdown: React.FC<{ positions: (LeadStagePosition & { lead: Lead })[] }> = ({ positions }) => {
+  const items = useMemo(() => {
+    const map = new Map<string, { source: string; campaign: string; creative: string; count: number }>();
+
+    for (const pos of positions) {
+      const source = pos.lead.utm_source?.trim() || 'Sem fonte';
+      const campaign = pos.lead.utm_campaign?.trim() || 'Sem campanha';
+      const creative = pos.lead.utm_content?.trim() || 'Sem criativo';
+      if (source === 'Sem fonte' && campaign === 'Sem campanha' && creative === 'Sem criativo') continue;
+
+      const key = `${source}||${campaign}||${creative}`;
+      const current = map.get(key) || { source, campaign, creative, count: 0 };
+      current.count += 1;
+      map.set(key, current);
+    }
+
+    return Array.from(map.values()).sort((a, b) => b.count - a.count).slice(0, 20);
+  }, [positions]);
+
+  if (items.length === 0) return null;
+
+  return (
+    <div className="rounded-xl border border-border bg-card p-5">
+      <div className="flex items-center gap-2 mb-4">
+        <Eye className="h-4 w-4 text-foreground" />
+        <h3 className="text-sm font-semibold text-foreground">Caminho até o criativo</h3>
+        <span className="text-xs text-muted-foreground ml-auto">Top {items.length}</span>
+      </div>
+      <div className="space-y-2">
+        {items.map((item) => (
+          <div key={`${item.source}-${item.campaign}-${item.creative}`} className="grid grid-cols-[1fr_1fr_1fr_auto] items-center gap-3 rounded-lg bg-muted/40 px-3 py-2 text-sm">
+            <span className="truncate text-muted-foreground" title={item.source}>{item.source}</span>
+            <span className="truncate text-foreground" title={item.campaign}>{item.campaign}</span>
+            <span className="truncate font-medium text-foreground" title={item.creative}>{item.creative}</span>
+            <span className="font-mono text-foreground">{item.count}</span>
           </div>
         ))}
       </div>
