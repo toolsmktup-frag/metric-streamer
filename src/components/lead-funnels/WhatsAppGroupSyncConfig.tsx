@@ -259,13 +259,13 @@ const WhatsAppGroupSyncConfig: React.FC<WhatsAppGroupSyncConfigProps> = ({ funne
             <div className="flex items-center gap-2 text-sm">
               {webhookStatus?.registered && webhookStatus?.hasGroups ? (
                 <>
-                  <CheckCircle2 className="h-4 w-4 text-success" />
+                  <CheckCircle2 className="h-4 w-4 text-primary" />
                   <span className="font-medium text-foreground">Monitoramento ativo</span>
                   <span className="text-muted-foreground">— a UAZAPI vai notificar entradas e saídas em tempo real.</span>
                 </>
               ) : webhookStatus ? (
                 <>
-                  <AlertCircle className="h-4 w-4 text-warning" />
+                  <AlertCircle className="h-4 w-4 text-destructive" />
                   <span className="font-medium text-foreground">Monitoramento não está completo</span>
                   <span className="text-muted-foreground">
                     {webhookStatus.error
