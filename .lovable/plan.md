@@ -1,26 +1,32 @@
 
 
-## Corrigir bug de schema + colar conteúdo das edge functions
+## Corrigir detecção de `webhook_status` (false negativo)
 
-### Bug identificado
-O frontend chama `mode: 'list_runs'` e `mode: 'webhook_status'` no `wz-group-sync`, mas o Zod schema dessa função só aceita até `'webhook_event'`. Por isso a UI quebra com erro 400 na tela de configuração de grupos.
+### Diagnóstico
+O webhook **ESTÁ registrado** corretamente na UAZAPI:
+- URL: `https://emfbocpmphtftqcezaib.supabase.co/functions/v1/uazapi-webhook` ✅
+- Eventos: `["messages","messages_update","connection","groups"]` ✅ (inclui `groups`)
+- `enabled: true` ✅
+
+Mas o `wz-group-sync` está retornando `registered: false, hasGroups: false`. A lógica de avaliação está olhando os campos errados (`addUrlEvents` / `addUrlTypesMessages`), que são flags secundárias da UAZAPI v2 que vêm `false` por padrão e não indicam se o webhook está ativo.
 
 ### O que vou fazer
 
-**1. Corrigir o Zod schema em `supabase/functions/wz-group-sync/index.ts`**
-- Adicionar `'list_runs'` e `'webhook_status'` ao enum de `mode`.
-- Confirmar que os handlers desses dois modos existem (eles já são chamados pelos hooks `useWzGroupSyncRuns` e `useWzWebhookStatus`); se algum não existir, implementar:
-  - `list_runs`: retorna últimas 20 linhas de `lead_funnel_group_sync_runs` filtradas pelo `funnel_id`.
-  - `webhook_status`: chama `GET /instance/webhook` (ou equivalente UAZAPI v2) e retorna `{ registered, hasGroups, expectedUrl, raw }`.
+**1. Corrigir handler `webhook_status` em `supabase/functions/wz-group-sync/index.ts`**
+- Trocar a lógica de avaliação para:
+  - `registered = true` se existir algum item em `raw[]` com `enabled: true` E `url === expectedUrl`
+  - `hasGroups = true` se esse mesmo item tiver `"groups"` no array `events[]`
+- Ignorar `addUrlEvents` / `addUrlTypesMessages` (não são indicadores de status, e sim toggles de comportamento).
 
-**2. Colar no chat o conteúdo final completo dos dois arquivos**
-- `supabase/functions/wz-group-sync/index.ts` (573 linhas, já com a correção)
-- `supabase/functions/uazapi-webhook/index.ts` (541 linhas)
+**2. Validar fim a fim**
+- Após o fix, o card "Monitoramento ativo" deve ficar verde na UI.
+- Para confirmar que eventos reais de entrada em grupo estão chegando, você adiciona alguém no grupo do WhatsApp e a gente verifica `lead_funnel_group_sync_runs` por linhas com `mode='webhook_event'`.
 
-Vou colar em dois blocos ```ts separados, sem cortes, pra você copiar direto.
+### Por que isso resolve
+A UAZAPI já está mandando os eventos (registro está ok). O problema visual de "não registrado" é só leitura errada do retorno. Depois do fix, se ainda não mover automaticamente, aí o problema é em `handleWebhookEvent` (parsing do payload PascalCase) — mas primeiro precisamos confirmar visualmente que o monitoramento está ativo.
 
 ### Detalhes técnicos
-- **Arquivos editados:** `supabase/functions/wz-group-sync/index.ts`
+- **Arquivo editado:** `supabase/functions/wz-group-sync/index.ts` (apenas o handler `webhook_status`).
 - **Sem migration, sem mudança de UI.**
-- **Deploy necessário:** `wz-group-sync` (Edge Function).
+- **Deploy necessário:** `wz-group-sync`.
 
