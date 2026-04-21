@@ -22,7 +22,7 @@ const BodySchema = z.object({
   payload: z.any().optional(),
 })
 
-type SupabaseClient = ReturnType<typeof createClient>
+type SupabaseClient = any
 type Body = z.infer<typeof BodySchema>
 
 type PositionRow = {
