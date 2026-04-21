@@ -6,9 +6,11 @@ import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useWzFlows, useDeleteWzFlow, useToggleWzFlow, useDuplicateWzFlow } from '@/hooks/useWzFlows';
+import { useLeadFunnels } from '@/hooks/useLeadFunnels';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { WzFlow } from '@/types/wz-automation';
@@ -45,7 +47,11 @@ export default function WzFlowList({ embedded = false }: { embedded?: boolean })
   const deleteFlow = useDeleteWzFlow();
   const toggleFlow = useToggleWzFlow();
   const duplicateFlow = useDuplicateWzFlow();
+  const { data: leadFunnels = [] } = useLeadFunnels();
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [duplicateTarget, setDuplicateTarget] = useState<WzFlow | null>(null);
+  const [duplicateMode, setDuplicateMode] = useState<'standalone' | 'funnel'>('standalone');
+  const [targetFunnelId, setTargetFunnelId] = useState<string>('');
   const [funnelFilter, setFunnelFilter] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'grouped' | 'flat'>('grouped');
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
@@ -139,6 +145,30 @@ export default function WzFlowList({ embedded = false }: { embedded?: boolean })
     });
   };
 
+  const openDuplicateDialog = (flow: WzFlow) => {
+    setDuplicateTarget(flow);
+    setDuplicateMode('standalone');
+    setTargetFunnelId('');
+  };
+
+  const confirmDuplicate = () => {
+    if (!duplicateTarget) return;
+    duplicateFlow.mutate(
+      {
+        id: duplicateTarget.id,
+        targetFunnelId: duplicateMode === 'funnel' ? targetFunnelId : null,
+        showInAutomations: true,
+      },
+      {
+        onSuccess: () => {
+          setDuplicateTarget(null);
+          setDuplicateMode('standalone');
+          setTargetFunnelId('');
+        },
+      },
+    );
+  };
+
   const renderFlowGrid = (flowList: WzFlow[]) => (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
       {flowList.map((flow) => (
@@ -147,7 +177,7 @@ export default function WzFlowList({ embedded = false }: { embedded?: boolean })
           flow={flow}
           onEdit={() => navigate(`/ferramentas/automacoes/${flow.id}`)}
           onDelete={() => setDeleteTarget(flow.id)}
-          onDuplicate={() => duplicateFlow.mutate(flow.id)}
+          onDuplicate={() => openDuplicateDialog(flow)}
           onToggle={(active) => toggleFlow.mutate({ id: flow.id, is_active: active })}
         />
       ))}
