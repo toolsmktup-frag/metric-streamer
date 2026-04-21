@@ -92,8 +92,9 @@ function groupNameFrom(group: any): string {
 async function requireUser(req: Request, supabaseUrl: string, anonKey: string) {
   const authHeader = req.headers.get('Authorization') || ''
   if (!authHeader.startsWith('Bearer ')) throw new Error('Usuário não autenticado')
+  const token = authHeader.replace('Bearer ', '').trim()
   const userClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authHeader } } })
-  const { data: claimsData, error: claimsError } = await userClient.auth.getClaims()
+  const { data: claimsData, error: claimsError } = await userClient.auth.getClaims(token)
   const userId = claimsData?.claims?.sub
   if (claimsError || !userId) throw new Error('Sessão inválida')
   const { data: orgId, error: orgErr } = await userClient.rpc('get_user_org_id')
