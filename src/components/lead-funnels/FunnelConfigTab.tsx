@@ -13,7 +13,6 @@ import { toast } from 'sonner';
 import FunnelProductsConfig from './FunnelProductsConfig';
 import FunnelAutomationsConfig from './FunnelAutomationsConfig';
 import WhatsAppGroupSyncConfig from './WhatsAppGroupSyncConfig';
-import TrackingSnippetPopover from './TrackingSnippetPopover';
 import RedistributeLeadsDialog from './RedistributeLeadsDialog';
 import ProductMappingConfig from './ProductMappingConfig';
 import { getDefaultClassification, classificationLabel } from '@/lib/valueClassification';
@@ -223,6 +222,10 @@ const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSave
           <Button variant="outline" size="sm" onClick={addStage}>
             <Plus className="h-4 w-4 mr-1" /> Etapa
           </Button>
+        </div>
+        <div className="mb-3 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+          <span className="font-medium text-foreground">Desenho:</span> onde a etapa aparece no funil.{' '}
+          <span className="font-medium text-foreground">Conversão:</span> qual etapa serve de base para calcular a taxa.
         </div>
 
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
