@@ -38,7 +38,10 @@ export function useWzInstanceProfiles(instances: WzInstance[]) {
                 api_key: inst.api_key,
               },
             });
-            if (error) return;
+            if (error) {
+              profiles[inst.id] = { status: inst.status };
+              return;
+            }
             const processed = data?.processed || data;
             profiles[inst.id] = {
               phone_number: processed?.phone_number || data?.raw?.phone || data?.raw?.number || data?.raw?.instance?.phone || data?.raw?.user?.id?.replace('@s.whatsapp.net', ''),
