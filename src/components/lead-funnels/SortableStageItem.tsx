@@ -101,7 +101,7 @@ const SortableStageItem: React.FC<SortableStageItemProps> = ({
         <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
         <Switch
           checked={!!stage.hide_values}
-          onCheckedChange={checked => onUpdate(idx, 'hide_values', checked as any)}
+          onCheckedChange={checked => onUpdate(idx, 'hide_values', checked)}
         />
       </div>
       <Button variant="ghost" size="icon" onClick={() => onRemove(idx)} className="shrink-0">
