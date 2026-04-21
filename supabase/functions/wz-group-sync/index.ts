@@ -278,7 +278,7 @@ async function handleWebhookEvent(admin: SupabaseClient, payload: any) {
     .from('lead_funnel_group_sync_configs')
     .select('*')
     .eq('is_active', true)
-    .contains('group_ids', JSON.stringify([groupId]))
+    .contains('group_ids', [groupId])
   if (error) throw error
 
   let moved = 0
