@@ -110,3 +110,41 @@ export interface FunnelEdge {
   source_type: string;
   created_at: string;
 }
+
+export interface LeadFunnelGroupSyncConfig {
+  id: string;
+  funnel_id: string;
+  instance_id: string;
+  group_ids: string[];
+  in_group_stage_id: string | null;
+  not_in_group_stage_id: string | null;
+  invited_stage_id: string | null;
+  left_group_stage_id: string | null;
+  auto_move_on_join: boolean;
+  auto_move_on_leave: boolean;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LeadFunnelGroupSyncRun {
+  id: string;
+  config_id: string | null;
+  funnel_id: string;
+  instance_id: string | null;
+  mode: string;
+  group_ids: string[];
+  total_positions: number;
+  matched_count: number;
+  missing_count: number;
+  invalid_phone_count: number;
+  moved_in_count: number;
+  moved_out_count: number;
+  invited_count: number;
+  failed_invite_count: number;
+  status: string;
+  error_message: string | null;
+  payload: Record<string, unknown>;
+  created_at: string;
+  created_by: string | null;
+}
