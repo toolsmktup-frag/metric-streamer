@@ -1,40 +1,127 @@
 
+## Duplicar automação escolhendo vincular ou não a um Funil de Leads
 
-## Transferir leads de um vendedor específico (ex: Dani → Luísa)
+Sim, dá pra fazer. A ideia é trocar o “Duplicar” direto por um pequeno diálogo antes de criar a cópia, onde você escolhe o destino:
 
-Hoje a redistribuição funciona em 3 escopos: leads sem vendedor, com vendedor, ou todos. **Falta o caso "leads de UM vendedor específico"** — que é exatamente quando alguém sai do time.
+```text
+Duplicar automação
+├─ Deixar avulsa / sem funil
+└─ Vincular a um Funil de Leads
+   └─ Select: escolher o funil
+```
 
-### O que vai mudar
+## Como vai funcionar
 
-Adicionar um novo escopo no diálogo "Redistribuir Leads": **"Leads de um vendedor específico"**. Quando selecionado, aparece um seletor pra escolher QUAL vendedor é a origem (Dani), e os checkboxes embaixo viram os vendedores DESTINO (Luísa, ou Luísa + Matheus + Gabriela em round-robin).
+Na tela `/ferramentas/automacoes`, ao clicar em **Duplicar**:
 
-### Mudanças na UI (`RedistributeLeadsDialog.tsx`)
+1. Abre um modal “Duplicar automação”.
+2. Mostra o nome da automação original.
+3. Você escolhe:
+   - **Avulsa / sem funil**: cria a cópia sem vínculo com nenhum funil de leads.
+   - **Vincular a um funil**: cria a cópia e já insere o vínculo em `lead_funnel_automations`.
+4. A cópia sempre nasce **inativa**, como já acontece hoje.
+5. Depois de duplicar, a listagem atualiza e mostra a automação no lugar certo:
+   - Em **Avulsos**, se não tiver funil.
+   - Dentro do grupo do funil escolhido, se tiver vínculo.
+6. Exibir toast claro:
+   - `Automação duplicada como avulsa`
+   - `Automação duplicada e vinculada ao funil`
 
-1. **Novo item no select de Escopo**: "Leads de um vendedor específico"
-2. **Quando esse escopo está ativo**:
-   - Mostra um campo "Vendedor de origem" com dropdown listando todos os vendedores que TÊM leads no funil (inclusive inativos/removidos, pra cobrir o caso da Dani que saiu)
-   - O bloco "Vendedores" embaixo passa a se chamar **"Distribuir para"** (deixa claro que são os destinos)
-   - Filtra automaticamente o vendedor de origem da lista de destinos (não faz sentido transferir pra ela mesma)
-3. **Preview** continua igual: mostra "200 leads de Dani serão redistribuídos: Luísa 200"
+## Comportamento importante
 
-### Mudanças no hook (`useRedistributeLeads.ts`)
+Hoje o `useDuplicateWzFlow()` só duplica a linha em `wz_flows`.
 
-1. Aceitar novo `scope: 'from_seller'` + parâmetro novo `fromSellerId: string`
-2. No filtro por escopo, quando for `from_seller`: filtrar leads onde `assigned_to === fromSellerId`
-3. Resto da lógica (round-robin, batches de 500, update em chunks de 100) fica idêntico
+A mudança vai permitir passar opções:
 
-### Buscar vendedores que têm leads (incluindo inativos)
+```ts
+{
+  id: flowId,
+  targetFunnelId?: string | null,
+  showInAutomations?: boolean
+}
+```
 
-Hoje o hook só lista vendedores **ativos com acesso ao funil**. Pra o caso "Dani saiu", preciso uma fonte adicional: query `SELECT DISTINCT assigned_to` direto em `leads` filtrado pelo funil + join em `user_profiles` pra pegar o nome — mesmo que o status seja `inactive` ou `removed`. Isso garante que a Dani aparece no dropdown de origem mesmo depois de desativada.
+Se `targetFunnelId` vier preenchido, depois de criar o novo `wz_flow`, o sistema também cria:
 
-### Permissão
+```ts
+lead_funnel_automations {
+  funnel_id: targetFunnelId,
+  wz_flow_id: duplicatedFlow.id,
+  trigger_events: [],
+  show_in_automations: true
+}
+```
 
-Já está protegido: o botão "Redistribuir Leads" só aparece em `FunnelConfigTab.tsx` (aba de configuração do funil), que é restrita a admin/gestor. Nada novo a fazer aqui.
+Se não escolher funil, não cria vínculo nenhum.
 
-### Arquivos impactados
-- `src/components/lead-funnels/RedistributeLeadsDialog.tsx` — novo escopo + seletor de origem + nova query de "vendedores com leads"
-- `src/hooks/useRedistributeLeads.ts` — suporte ao escopo `from_seller`
+## UI proposta
 
-### Esforço
-~20 min, ~2 créditos. É uma extensão limpa do que já existe.
+No dropdown do card continua igual:
 
+```text
+Editar
+Duplicar
+Remover
+```
+
+Mas ao clicar em **Duplicar**, em vez de duplicar imediatamente, abre:
+
+```text
+Duplicar automação
+
+Como você quer salvar a cópia?
+
+( ) Avulsa / sem funil
+    A cópia aparece em "Avulsos" e não fica presa a nenhum CRM.
+
+( ) Vincular a um Funil de Leads
+    Escolha em qual funil essa automação deve aparecer.
+
+[ Select: Funil de Leads ]
+
+[Cancelar] [Duplicar]
+```
+
+## Arquivos impactados
+
+### `src/components/wz-automation/WzFlowList.tsx`
+
+- Adicionar estado para controlar o fluxo selecionado para duplicação.
+- Buscar lista de funis de leads disponíveis.
+- Adicionar modal de duplicação.
+- Trocar `onDuplicate={() => duplicateFlow.mutate(flow.id)}` por abertura do modal.
+- Ao confirmar, chamar a mutation com as opções escolhidas.
+- Invalidar/atualizar a listagem para o agrupamento refletir o destino.
+
+### `src/hooks/useWzFlows.ts`
+
+- Atualizar `useDuplicateWzFlow()` para aceitar:
+  - `id`
+  - `targetFunnelId`
+  - `showInAutomations`
+- Manter compatibilidade com duplicação avulsa.
+- Criar vínculo em `lead_funnel_automations` quando houver funil escolhido.
+- Invalidar:
+  - `wz-flows`
+  - `lead-funnel-automations-visibility`
+  - `lead-funnel-automations` do funil escolhido
+
+## Regras de segurança/consistência
+
+- A automação duplicada continuará nascendo com `is_active: false`.
+- Não copiar histórico de execuções.
+- Não copiar agendamentos pendentes.
+- Copiar apenas estrutura do fluxo: `nodes`, `edges`, `platform`, filtros e configurações salvas.
+- Se houver erro ao vincular ao funil, mostrar erro e não deixar a UI parecer que deu certo.
+
+## Resultado esperado
+
+Você vai conseguir duplicar uma automação e decidir na hora:
+
+```text
+Quero essa cópia solta
+ou
+Quero essa cópia já dentro do funil X
+```
+
+Isso resolve o caso de criar variações por produto/funil sem precisar duplicar e depois ficar caçando onde vincular manualmente.
