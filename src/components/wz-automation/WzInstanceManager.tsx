@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Wifi, Smartphone, Settings, Plus, Pencil, Trash2, Server } from 'lucide-react';
+import { Wifi, Smartphone, Settings, Plus, Pencil, Trash2, Server, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -13,8 +13,8 @@ import {
 
 export default function WzInstanceManager({ embedded = false }: { embedded?: boolean }) {
   const { instances: chatInstances, loading: chatLoading, refetch } = useWhatsAppInstances();
-  const { data: manualInstances = [], isLoading: manualLoading } = useWzInstances();
-  const { data: manualProfiles = {} } = useWzInstanceProfiles(manualInstances);
+  const { data: manualInstances = [], isLoading: manualLoading, refetch: refetchManualInstances } = useWzInstances();
+  const { data: manualProfiles = {}, refetch: refetchManualProfiles, isFetching: refreshingManualProfiles } = useWzInstanceProfiles(manualInstances);
   const createMutation = useCreateWzInstance();
   const updateMutation = useUpdateWzInstance();
   const deleteMutation = useDeleteWzInstance();
@@ -30,6 +30,11 @@ export default function WzInstanceManager({ embedded = false }: { embedded?: boo
 
   const openNew = () => { setEditingId(null); setFormName(''); setFormUrl(''); setFormKey(''); setFormOpen(true); };
   const openEdit = (inst: any) => { setEditingId(inst.id); setFormName(inst.name); setFormUrl(inst.api_url); setFormKey(inst.api_key); setFormOpen(true); };
+
+  const refreshManualInstances = async () => {
+    await refetchManualInstances();
+    await refetchManualProfiles();
+  };
 
   const handleSave = async () => {
     if (editingId) {
@@ -132,7 +137,19 @@ export default function WzInstanceManager({ embedded = false }: { embedded?: boo
           {/* Manual Instances */}
           {manualInstances.length > 0 && (
             <div className="space-y-3">
-              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Instâncias Manuais</h2>
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Instâncias Manuais</h2>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={refreshManualInstances}
+                  disabled={refreshingManualProfiles}
+                  className="gap-2"
+                >
+                  <RefreshCw className={`h-4 w-4 ${refreshingManualProfiles ? 'animate-spin' : ''}`} />
+                  Atualizar
+                </Button>
+              </div>
               {manualInstances.map(inst => {
                 const profile = manualProfiles[inst.id];
                 const isConnected = profile?.status === 'open' || profile?.status === 'connected';
