@@ -221,6 +221,7 @@ const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSave
                   sortableId={stage.id || `temp-${idx}`}
                   funnelId={funnelId}
                   defaultColor={COLORS[idx % COLORS.length]}
+                  stageOptions={stageOptions}
                   onUpdate={updateStage}
                   onRemove={removeStage}
                 />

@@ -17,6 +17,7 @@ interface Props {
 
 const FunnelMetricsTab: React.FC<Props> = ({ stages, positions, funnelId, historicalCounts = {} }) => {
   const sortedStages = useMemo(() => [...stages].sort((a, b) => a.sort_order - b.sort_order), [stages]);
+  const stageById = useMemo(() => new Map(sortedStages.map(stage => [stage.id, stage])), [sortedStages]);
 
   // Fetch tracking metrics from clicks table
   const { data: trackingMetrics } = useQuery({
@@ -91,11 +92,13 @@ const FunnelMetricsTab: React.FC<Props> = ({ stages, positions, funnelId, histor
   const conversionRates = useMemo(() => {
     if (stageStats.length < 2) return [];
     return stageStats.slice(1).map((curr, i) => {
-      const prev = stageStats[i];
-      const rate = prev.passedCount > 0 ? (curr.passedCount / prev.passedCount) * 100 : 0;
-      return { from: prev.stage.name, to: curr.stage.name, rate };
+      const fallbackBase = stageStats[i]?.stage;
+      const baseStage = curr.stage.conversion_base_stage_id ? stageById.get(curr.stage.conversion_base_stage_id) : fallbackBase;
+      const baseCount = baseStage ? (historicalCounts[baseStage.id] || positions.filter(p => p.stage_id === baseStage.id).length) : 0;
+      const rate = baseCount > 0 ? (curr.passedCount / baseCount) * 100 : 0;
+      return { from: baseStage?.name || fallbackBase?.name || 'Base', to: curr.stage.name, rate };
     });
-  }, [stageStats]);
+  }, [stageStats, stageById, historicalCounts, positions]);
 
   return (
     <div className="space-y-6">

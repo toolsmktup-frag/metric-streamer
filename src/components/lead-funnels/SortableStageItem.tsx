@@ -5,6 +5,7 @@ import { GripVertical, Trash2, EyeOff } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { LeadFunnelStage } from '@/types/leadFunnels';
 import TrackingSnippetPopover from './TrackingSnippetPopover';
 
@@ -14,12 +15,13 @@ interface SortableStageItemProps {
   sortableId: string;
   funnelId?: string;
   defaultColor: string;
+  stageOptions?: { id: string; name: string }[];
   onUpdate: (idx: number, field: string, value: string | boolean) => void;
   onRemove: (idx: number) => void;
 }
 
 const SortableStageItem: React.FC<SortableStageItemProps> = ({
-  stage, idx, sortableId, funnelId, defaultColor, onUpdate, onRemove,
+  stage, idx, sortableId, funnelId, defaultColor, stageOptions = [], onUpdate, onRemove,
 }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: sortableId });
 
@@ -31,7 +33,7 @@ const SortableStageItem: React.FC<SortableStageItemProps> = ({
   };
 
   return (
-    <div ref={setNodeRef} style={style} className="flex items-center gap-2 bg-muted/50 rounded-lg p-2">
+    <div ref={setNodeRef} style={style} className="flex flex-wrap items-center gap-2 bg-muted/50 rounded-lg p-2">
       <button type="button" {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing touch-none">
         <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
       </button>
@@ -53,6 +55,23 @@ const SortableStageItem: React.FC<SortableStageItemProps> = ({
         placeholder="URL da página (opcional)"
         className="flex-1"
       />
+      <Select
+        value={stage.conversion_base_stage_id || 'previous'}
+        onValueChange={value => onUpdate(idx, 'conversion_base_stage_id', value === 'previous' ? '' : value)}
+        disabled={!stage.id}
+      >
+        <SelectTrigger className="w-[220px] shrink-0">
+          <SelectValue placeholder="Base de conversão" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="previous">Base automática</SelectItem>
+          {stageOptions
+            .filter(option => option.id !== stage.id && !option.id.startsWith('temp-'))
+            .map(option => (
+              <SelectItem key={option.id} value={option.id}>{option.name}</SelectItem>
+            ))}
+        </SelectContent>
+      </Select>
       {stage.page_url && funnelId && stage.id && (
         <TrackingSnippetPopover
           funnelId={funnelId}

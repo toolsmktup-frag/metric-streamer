@@ -142,6 +142,7 @@ export function useUpsertStages() {
             page_url: s.page_url || null,
             page_type: s.page_type || null,
             hide_values: !!s.hide_values,
+            conversion_base_stage_id: s.conversion_base_stage_id || null,
           })
           .eq('id', s.id);
       }
@@ -157,6 +158,7 @@ export function useUpsertStages() {
             page_url: s.page_url || null,
             page_type: s.page_type || null,
             hide_values: !!s.hide_values,
+            conversion_base_stage_id: s.conversion_base_stage_id || null,
           })));
         if (error) throw error;
       }

@@ -42,6 +42,7 @@ export interface LeadFunnelStage {
   position_x: number;
   position_y: number;
   hide_values: boolean;
+  conversion_base_stage_id: string | null;
   created_at: string;
 }
 
