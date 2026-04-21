@@ -40,10 +40,28 @@ export interface WzGroupSyncResult {
 }
 
 type InvokeBody = Partial<WzGroupSyncConfig> & {
-  mode: 'list_groups' | 'get_config' | 'save_config' | 'preview' | 'apply' | 'invite_missing' | 'enable_webhook';
+  mode: 'list_groups' | 'get_config' | 'save_config' | 'preview' | 'apply' | 'invite_missing' | 'enable_webhook' | 'list_runs' | 'webhook_status';
   funnel_id: string;
   invite_group_id?: string | null;
 };
+
+export interface WzGroupSyncRun {
+  id: string;
+  mode: string;
+  status: string;
+  error_message: string | null;
+  group_ids: string[];
+  payload: any;
+  created_at: string;
+}
+
+export interface WzWebhookStatus {
+  registered: boolean;
+  hasGroups: boolean;
+  expectedUrl?: string;
+  raw?: any;
+  error?: string;
+}
 
 async function invokeGroupSync<T>(body: InvokeBody): Promise<T> {
   const { data, error } = await supabase.functions.invoke('wz-group-sync', { body });
