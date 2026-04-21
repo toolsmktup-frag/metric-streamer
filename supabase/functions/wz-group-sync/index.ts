@@ -89,6 +89,29 @@ function groupNameFrom(group: any): string {
   return group?.Name || group?.name || group?.Subject || group?.subject || groupIdFrom(group)
 }
 
+function valuesFrom(value: any): any[] {
+  if (!value) return []
+  return Array.isArray(value) ? value : [value]
+}
+
+function extractGroupIds(payload: any): string[] {
+  const candidates = [
+    payload.groupjid, payload.groupJid, payload.GroupJID, payload.chatid, payload.chatId,
+    payload.chat?.wa_chatid, payload.chat?.jid, payload.group?.jid, payload.group?.JID,
+    payload.data?.groupjid, payload.data?.groupJid, payload.data?.GroupJID, payload.data?.chatid,
+  ]
+  return [...new Set(candidates.map(groupIdFrom).filter(Boolean))]
+}
+
+function extractParticipants(payload: any): string[] {
+  const candidates = [
+    payload.participant, payload.Participant, payload.participants, payload.Participants,
+    payload.phone, payload.jid, payload.JID, payload.data?.participant, payload.data?.Participant,
+    payload.data?.participants, payload.data?.Participants, payload.message?.sender_pn,
+  ].flatMap(valuesFrom)
+  return [...new Set(candidates.map(participantPhone).filter(Boolean))]
+}
+
 async function requireUser(req: Request, supabaseUrl: string, anonKey: string) {
   const authHeader = req.headers.get('Authorization') || ''
   if (!authHeader.startsWith('Bearer ')) throw new Error('Usuário não autenticado')
@@ -277,31 +300,42 @@ async function logRun(admin: SupabaseClient, body: Body, result: any, userId: st
 
 async function handleWebhookEvent(admin: SupabaseClient, payload: any) {
   const eventType = payload.EventType || payload.event || payload.type || ''
-  const groupId = payload.groupjid || payload.groupJid || payload.GroupJID || payload.chatid || payload.chat?.wa_chatid || payload.group?.jid || ''
-  const participant = cleanPhone(payload.participant || payload.Participant || payload.phone || payload.jid || payload.data?.participant || payload.message?.sender_pn)
+  const groupIds = extractGroupIds(payload)
+  const participants = extractParticipants(payload)
   const actionRaw = String(payload.action || payload.Action || payload.eventAction || payload.data?.action || eventType).toLowerCase()
   const isJoin = ['add', 'join', 'joined', 'participant_add', 'group_join', 'groups'].some(v => actionRaw.includes(v))
   const isLeave = ['remove', 'leave', 'left', 'participant_remove', 'group_leave'].some(v => actionRaw.includes(v))
-  if (!groupId || !participant || (!isJoin && !isLeave)) return { handled: false }
+  if (groupIds.length === 0 || participants.length === 0 || (!isJoin && !isLeave)) return { handled: false, eventType, groupIds, participants }
 
   const { data: configs, error } = await admin
     .from('lead_funnel_group_sync_configs')
     .select('*')
     .eq('is_active', true)
-    .contains('group_ids', [groupId])
   if (error) throw error
 
   let moved = 0
   for (const config of configs || []) {
+    const watchedGroupIds = (config.group_ids || []).filter((groupId: string) => groupIds.includes(groupId))
+    if (watchedGroupIds.length === 0) continue
     const targetStage = isJoin && config.auto_move_on_join ? config.in_group_stage_id : isLeave && config.auto_move_on_leave ? config.left_group_stage_id : null
     if (!targetStage) continue
     const positions = await fetchPositions(admin, config.funnel_id)
-    const target = positions.find(row => phoneVariations(row.lead?.phone || '').map(cleanPhone).some(v => phoneVariations(participant).map(cleanPhone).includes(v)))
-    if (!target || target.stage_id === targetStage) continue
-    await movePositions(admin, [target], targetStage, { ...config, mode: 'webhook_event', group_ids: [groupId] }, isJoin)
-    moved++
+    const participantVariants = new Set(participants.flatMap(phone => phoneVariations(phone).map(cleanPhone)))
+    const targets = positions.filter(row => phoneVariations(row.lead?.phone || '').map(cleanPhone).some(v => participantVariants.has(v)))
+    const movedForConfig = await movePositions(admin, targets, targetStage, { ...config, mode: 'webhook_event', group_ids: watchedGroupIds }, isJoin)
+    moved += movedForConfig
+
+    await logRun(admin, { ...config, mode: 'webhook_event', group_ids: watchedGroupIds }, {
+      event_type: eventType,
+      action: isJoin ? 'join' : 'leave',
+      participants,
+      total_positions: positions.length,
+      matched_count: targets.length,
+      moved_in_count: isJoin ? movedForConfig : 0,
+      moved_out_count: isLeave ? movedForConfig : 0,
+    }, null, movedForConfig > 0 ? 'success' : 'ignored', movedForConfig > 0 ? null : 'Nenhum lead correspondente encontrado ou já estava na etapa')
   }
-  return { handled: true, moved }
+  return { handled: true, eventType, action: isJoin ? 'join' : 'leave', groupIds, participants, moved }
 }
 
 Deno.serve(async (req) => {
