@@ -1,201 +1,208 @@
 
-## Sugestão: separar “estoque atual” de “histórico de passagem”
+## Plano de execução: desenhar o Funil com pernas separadas
 
-Sim, amiga: hoje o funil está misturando conceitos.
+O SQL da coluna `visual_parent_stage_id` já foi rodado, então não vou incluir nova alteração de banco. A implementação será só no código.
 
-O número que aparece agora é “leads atuais em cada etapa”, vindo da tabela `lead_stage_positions`. Isso responde:
+## Objetivo
 
-> “Quantos leads estão parados aqui agora?”
+Transformar a aba `Funil` de uma lista vertical linear para uma visualização em árvore, onde cada etapa pode escolher onde aparece visualmente.
 
-Mas para conversão real, principalmente nesse caso:
-
-```text
-Novo Lead: 5 atuais
-Entrou no Grupo: 513 atuais
-```
-
-isso quebra a leitura, porque a etapa anterior deixou de ter os leads depois que eles avançaram. A conversão não deveria usar o estoque atual da etapa anterior, e sim o total histórico que passou por ela.
-
-O ideal é ter dois tipos de métrica:
-
-```text
-1. Atual
-   Leads que estão nessa etapa agora.
-
-2. Passaram
-   Leads únicos que já passaram por essa etapa em algum momento.
-```
-
-## Como ficaria na tela
-
-Na aba “Funil”, cada etapa poderia mostrar:
+Exemplo esperado:
 
 ```text
 Novo Lead
-Atual: 5
-Passaram: 708
+├── Entrou no Grupo
+│   └── Dia 01
+│       └── Dia 02
+│           └── Dia 03
+└── Não entrou no grupo
+    └── Saiu do Grupo
+```
+
+A conversão continua usando a configuração já criada:
+
+```text
+Base de conversão
+```
+
+E o desenho passa a usar a nova configuração:
+
+```text
+Aparece depois de
+```
+
+## Alterações que vou fazer
+
+### 1. Atualizar o tipo da etapa
+
+Em `src/types/leadFunnels.ts`, adicionar:
+
+```ts
+visual_parent_stage_id: string | null;
+```
+
+Isso permite o frontend reconhecer a nova coluna do Supabase.
+
+### 2. Salvar o pai visual no Supabase
+
+Em `src/hooks/useLeadFunnels.ts`, atualizar o salvamento das etapas para persistir:
+
+```ts
+visual_parent_stage_id: s.visual_parent_stage_id || null
+```
+
+Tanto no `update` de etapas existentes quanto no `insert` de novas etapas.
+
+### 3. Adicionar seletor “Aparece depois de”
+
+Em `src/components/lead-funnels/SortableStageItem.tsx`, adicionar um segundo seletor além do atual “Base de conversão”.
+
+Ficará assim:
+
+```text
+Base de conversão
+- define o cálculo da porcentagem
+
+Aparece depois de
+- define onde a etapa entra no desenho
+```
+
+Opções:
+
+```text
+Raiz / sem pai
+Novo Lead
+Entrou no Grupo
+Não entrou no grupo
+Saiu do Grupo
+Dia 01
+Dia 02
+...
+```
+
+Com proteções:
+
+- não permitir uma etapa apontar para ela mesma;
+- não listar etapas temporárias ainda não salvas;
+- se a etapa ainda não tiver ID, deixar o seletor desabilitado até salvar.
+
+### 4. Refatorar o desenho do `FunnelVisual`
+
+Em `src/components/lead-funnels/FunnelVisual.tsx`, trocar o render linear atual por uma árvore.
+
+Nova lógica:
+
+```text
+1. Ordenar etapas por sort_order.
+2. Criar mapa de stage_id → etapa.
+3. Criar mapa de parent_id → filhos.
+4. Usar visual_parent_stage_id como conexão principal.
+5. Etapas sem pai viram raízes.
+6. Se não houver nenhuma configuração visual ainda, manter fallback linear para não quebrar funis antigos.
+7. Renderizar filhos lado a lado quando uma etapa tiver mais de um caminho.
+```
+
+A largura das caixas continua baseada em `Passaram`.
+
+A porcentagem continua baseada em:
+
+```ts
+conversion_base_stage_id || etapa anterior
+```
+
+Ou seja:
+
+```text
+visual_parent_stage_id = desenho
+conversion_base_stage_id = cálculo
+```
+
+### 5. Melhorar a leitura visual
+
+No card de cada etapa, manter:
+
+```text
+Nome da etapa
+Atual: X
+Passaram: Y
+```
+
+E exibir a conversão com tooltip indicando a base:
+
+```text
+72,5%
+Base: Entrou no Grupo
+```
+
+Para ramificações, o layout será responsivo:
+
+- desktop: ramos lado a lado;
+- telas menores: ramos quebram em coluna para não estourar a tela.
+
+### 6. Ajustar a aba Métricas
+
+Em `src/components/lead-funnels/FunnelMetricsTab.tsx`, manter o cálculo pela base de conversão, mas deixar mais explícito:
+
+```text
+Entrou no Grupo → Dia 01
+Base: Entrou no Grupo
+Taxa: 35,2%
+```
+
+Assim fica claro que a árvore visual e a base matemática são coisas diferentes.
+
+## Como você vai configurar depois
+
+Depois da implementação, na aba `Configuração`, para o seu caso:
+
+```text
+Novo Lead
+Aparece depois de: Raiz
 
 Entrou no Grupo
-Atual: 513
-Passaram: 513
-Conversão histórica: 72,5%
+Aparece depois de: Novo Lead
+Base de conversão: Novo Lead
 
 Não entrou no grupo
-Atual: 190
-Passaram: 190
-Conversão histórica: 26,8%
+Aparece depois de: Novo Lead
+Base de conversão: Novo Lead
+
+Saiu do Grupo
+Aparece depois de: Não entrou no grupo ou Entrou no Grupo
+Base de conversão: Novo Lead ou Entrou no Grupo
+
+Dia 01
+Aparece depois de: Entrou no Grupo
+Base de conversão: Entrou no Grupo
+
+Dia 02
+Aparece depois de: Dia 01
+Base de conversão: Entrou no Grupo
+
+Dia 03
+Aparece depois de: Dia 02
+Base de conversão: Entrou no Grupo
 ```
 
-Assim você mantém a visão operacional do Kanban e ganha uma visão de performance real.
+## Validação
 
-## Regra de cálculo proposta
-
-### Leads atuais
-
-Continua igual:
+Depois de implementar, vou validar:
 
 ```text
-lead_stage_positions.stage_id = etapa atual
+1. Build/TypeScript sem erro.
+2. O seletor “Aparece depois de” aparece na configuração.
+3. O valor é salvo e recarrega corretamente.
+4. A aba Funil abre em pernas separadas.
+5. A porcentagem continua usando “Base de conversão”.
+6. Funis antigos sem visual_parent_stage_id continuam funcionando em modo linear.
 ```
 
-### Leads que passaram
-
-Calcular a partir de eventos de movimentação em `lead_events`, usando:
+## Arquivos que serão alterados
 
 ```text
-metadata.to_stage_id
-metadata.from_stage_id
-event_name = 'stage_change'
-event_name = 'whatsapp_group_sync'
+src/types/leadFunnels.ts
+src/hooks/useLeadFunnels.ts
+src/components/lead-funnels/SortableStageItem.tsx
+src/components/lead-funnels/FunnelVisual.tsx
+src/components/lead-funnels/FunnelMetricsTab.tsx
 ```
-
-Além disso, para garantir que o histórico não fique incompleto, também considerar a posição atual como passagem pela etapa atual.
-
-### Conversão histórica
-
-A conversão entre etapas deve usar:
-
-```text
-passaram_na_etapa_atual / passaram_na_etapa_anterior
-```
-
-Não mais:
-
-```text
-leads_atuais_na_etapa_atual / leads_atuais_na_etapa_anterior
-```
-
-Isso evita conversões absurdas tipo 10.000%.
-
-## Ajustes técnicos
-
-### 1. Criar hook para métricas históricas
-
-Criar algo como:
-
-```text
-useFunnelStageHistoryCounts(funnelId)
-```
-
-Ele vai buscar eventos do funil em `lead_events` e montar:
-
-```ts
-{
-  currentCounts: Record<string, number>;
-  historicalCounts: Record<string, number>;
-}
-```
-
-Com deduplicação por lead, para um lead que passou 3 vezes pela mesma etapa contar só 1 vez naquela etapa.
-
-### 2. Atualizar `FunnelVisual`
-
-Hoje o componente recebe só:
-
-```ts
-leadCounts
-```
-
-Vou alterar para receber também:
-
-```ts
-historicalCounts
-metricMode
-```
-
-E exibir os dois números dentro do card da etapa.
-
-Exemplo visual:
-
-```text
-┌─────────────────────────────┐
-│ Entrou no Grupo             │
-│ Atual: 513                  │
-│ Passaram: 513               │
-└─────────────────────────────┘
-          72,5%
-```
-
-### 3. Usar histórico para largura e conversão
-
-Na visualização do funil:
-
-- a largura das barras deve usar “Passaram”
-- a conversão lateral deve usar “Passaram”
-- o número “Atual” aparece como informação complementar
-
-Isso transforma a aba “Funil” em leitura de performance, não só de estoque.
-
-### 4. Manter Kanban como visão operacional
-
-O Kanban continua mostrando apenas leads atuais em cada etapa.
-
-Não mudaria isso, porque no Kanban o importante é:
-
-> “Onde estão os leads agora?”
-
-### 5. Melhorar a aba “Métricas”
-
-Na aba “Métricas”, atualizar “Distribuição por Etapa” para diferenciar:
-
-```text
-Atual na etapa
-Passaram pela etapa
-Conversão histórica
-```
-
-Assim a mesma lógica aparece tanto no gráfico de funil quanto no relatório.
-
-## Atenção importante
-
-O histórico depende da qualidade dos eventos já gravados.
-
-Pelo código atual, movimentações manuais e sincronização de grupo já gravam `to_stage_id` em `lead_events`.
-
-Mas alguns fluxos antigos ou webhooks podem ter movimentado leads sem gravar evento completo. Para evitar buraco, o cálculo vai sempre incluir também a posição atual.
-
-Se quiser 100% de precisão retroativa, depois dá para criar uma rotina de backfill para gerar eventos históricos faltantes a partir de dados existentes, mas eu começaria sem isso.
-
-## Resultado esperado
-
-Depois do ajuste, você terá:
-
-```text
-Kanban = operação atual
-Funil = performance histórica
-Métricas = comparação entre atual, passaram e conversão real
-```
-
-E o exemplo que hoje parece quebrado deixa de ser interpretado como:
-
-```text
-513 / 5 = 10.260%
-```
-
-e passa a ser algo do tipo:
-
-```text
-513 / 708 = 72,5%
-```
-
-que é a informação correta para tomada de decisão.
