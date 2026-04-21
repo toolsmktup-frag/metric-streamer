@@ -33,8 +33,8 @@ const SortableStageItem: React.FC<SortableStageItemProps> = ({
   };
 
   return (
-    <div ref={setNodeRef} style={style} className="flex flex-wrap items-center gap-2 bg-muted/50 rounded-lg p-2">
-      <button type="button" {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing touch-none">
+    <div ref={setNodeRef} style={style} className="grid grid-cols-[auto_auto_minmax(10rem,1fr)_minmax(10rem,1fr)_minmax(12rem,0.9fr)_minmax(12rem,0.9fr)_auto_auto] items-center gap-2 rounded-lg bg-muted/50 p-2 max-xl:grid-cols-[auto_auto_minmax(12rem,1fr)_minmax(12rem,1fr)_auto_auto] max-lg:grid-cols-[auto_auto_1fr_auto]">
+      <button type="button" {...attributes} {...listeners} className="cursor-grab touch-none active:cursor-grabbing">
         <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
       </button>
       <input
@@ -47,20 +47,20 @@ const SortableStageItem: React.FC<SortableStageItemProps> = ({
         value={stage.name || ''}
         onChange={e => onUpdate(idx, 'name', e.target.value)}
         placeholder="Nome da etapa"
-        className="flex-1"
+        className="min-w-0 max-lg:col-span-2"
       />
       <Input
         value={stage.page_url || ''}
         onChange={e => onUpdate(idx, 'page_url', e.target.value)}
         placeholder="URL da página (opcional)"
-        className="flex-1"
+        className="min-w-0 max-xl:col-span-3 max-lg:col-span-4"
       />
       <Select
         value={stage.conversion_base_stage_id || 'previous'}
         onValueChange={value => onUpdate(idx, 'conversion_base_stage_id', value === 'previous' ? '' : value)}
         disabled={!stage.id}
       >
-        <SelectTrigger className="w-[220px] shrink-0">
+        <SelectTrigger className="w-full min-w-0 max-lg:col-span-2">
           <SelectValue placeholder="Base de conversão" />
         </SelectTrigger>
         <SelectContent>
@@ -77,7 +77,7 @@ const SortableStageItem: React.FC<SortableStageItemProps> = ({
         onValueChange={value => onUpdate(idx, 'visual_parent_stage_id', value === 'root' ? '' : value)}
         disabled={!stage.id}
       >
-        <SelectTrigger className="w-[220px] shrink-0">
+        <SelectTrigger className="w-full min-w-0 max-lg:col-span-2">
           <SelectValue placeholder="Aparece depois de" />
         </SelectTrigger>
         <SelectContent>
@@ -97,7 +97,7 @@ const SortableStageItem: React.FC<SortableStageItemProps> = ({
           pageUrl={stage.page_url}
         />
       )}
-      <div className="flex items-center gap-1.5 shrink-0" title="Ocultar valores para vendedores">
+      <div className="flex items-center justify-end gap-1.5 shrink-0" title="Ocultar valores para vendedores">
         <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
         <Switch
           checked={!!stage.hide_values}

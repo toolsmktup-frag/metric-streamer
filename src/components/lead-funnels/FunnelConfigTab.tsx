@@ -194,7 +194,7 @@ const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSave
   }));
 
   return (
-    <div className="space-y-8 max-w-2xl">
+    <div className="space-y-8 max-w-6xl">
       {/* Traffic Funnel Association */}
       {onTrafficFunnelChange && trafficFunnels.length > 0 && (
         <div>
