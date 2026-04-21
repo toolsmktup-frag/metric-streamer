@@ -1,127 +1,438 @@
 
-## Duplicar automação escolhendo vincular ou não a um Funil de Leads
+## Sincronização de Grupos WhatsApp com etapas do CRM
 
-Sim, dá pra fazer. A ideia é trocar o “Duplicar” direto por um pequeno diálogo antes de criar a cópia, onde você escolhe o destino:
+Sim, faz sentido. A melhor prática aqui é separar em 3 movimentos:
 
 ```text
-Duplicar automação
-├─ Deixar avulsa / sem funil
-└─ Vincular a um Funil de Leads
-   └─ Select: escolher o funil
+1. Sincronização manual/assistida
+   Ver quem está no grupo agora e mover no Kanban
+
+2. Convite assistido
+   Convidar quem não está no grupo e mover para uma etapa escolhida
+
+3. Monitoramento por webhook
+   Quando a UAZAPI avisar entrada/saída do grupo, atualizar a etapa automaticamente
 ```
 
-## Como vai funcionar
+Ou seja: o grupo não vira a fonte principal do lead. O CRM continua mandando. O grupo vira um “validador de presença”.
 
-Na tela `/ferramentas/automacoes`, ao clicar em **Duplicar**:
+## Fluxo final desejado
 
-1. Abre um modal “Duplicar automação”.
-2. Mostra o nome da automação original.
-3. Você escolhe:
-   - **Avulsa / sem funil**: cria a cópia sem vínculo com nenhum funil de leads.
-   - **Vincular a um funil**: cria a cópia e já insere o vínculo em `lead_funnel_automations`.
-4. A cópia sempre nasce **inativa**, como já acontece hoje.
-5. Depois de duplicar, a listagem atualiza e mostra a automação no lugar certo:
-   - Em **Avulsos**, se não tiver funil.
-   - Dentro do grupo do funil escolhido, se tiver vínculo.
-6. Exibir toast claro:
-   - `Automação duplicada como avulsa`
-   - `Automação duplicada e vinculada ao funil`
+Dentro do funil de leads, na aba de configuração:
 
-## Comportamento importante
+```text
+Instância manual UAZAPI administradora do grupo
+        ↓
+Buscar grupos disponíveis
+        ↓
+Escolher quais grupos monitorar
+        ↓
+Escolher etapa para quem ESTÁ no grupo
+        ↓
+Opcional: escolher etapa para quem NÃO está no grupo
+        ↓
+Opcional: escolher etapa para quem FOI CONVIDADO
+        ↓
+Simular
+        ↓
+Aplicar movimentação
+        ↓
+Opcional: convidar ausentes
+        ↓
+Monitorar entrada/saída via webhook
+```
 
-Hoje o `useDuplicateWzFlow()` só duplica a linha em `wz_flows`.
+## Como vai ficar na interface
 
-A mudança vai permitir passar opções:
+Criar uma seção nova no funil:
 
-```ts
+```text
+Grupos WhatsApp
+
+Instância:
+[ Wasap - d6210ceb-af74-4cda-929a-0b5c079dfd96 ]
+
+Grupos monitorados:
+[ ] Grupo Produto A
+[ ] Grupo VIP
+[ ] Grupo Aquecimento
+
+Quando o lead ESTÁ no grupo:
+Mover para: [ Entrou no Grupo ]
+
+Quando o lead NÃO está no grupo:
+[ ] Mover ausentes para uma etapa
+Mover para: [ Não entrou no Grupo ]
+
+Quando eu CONVIDAR o lead para o grupo:
+[ ] Mover convidados para uma etapa
+Mover para: [ Convite enviado / Aguardando entrada ]
+
+Webhook de entrada/saída:
+[ ] Atualizar automaticamente quando entrar no grupo
+Ao entrar: [ Entrou no Grupo ]
+
+[ ] Atualizar automaticamente quando sair do grupo
+Ao sair: [ Saiu do Grupo / Não está no grupo ]
+
+[Buscar grupos]
+[Simular sincronização]
+[Aplicar movimentação]
+[Convidar ausentes]
+```
+
+## Comportamento de cada ação
+
+### 1. Buscar grupos disponíveis
+
+Usar a instância manual salva em `wz_instances`.
+
+Endpoint UAZAPI confirmado pelo arquivo enviado:
+
+```text
+GET /group/list?force=true&noparticipants=true
+```
+
+Isso lista os grupos sem puxar todos os membros ainda, deixando a tela leve.
+
+### 2. Simular sincronização
+
+Ao clicar em **Simular**, o sistema:
+
+1. Busca os grupos selecionados.
+2. Para cada grupo, busca participantes com:
+
+```text
+POST /group/info
 {
-  id: flowId,
-  targetFunnelId?: string | null,
-  showInAutomations?: boolean
+  "groupjid": "120363...@g.us",
+  "force": true,
+  "getInviteLink": true,
+  "getRequestsParticipants": true
 }
 ```
 
-Se `targetFunnelId` vier preenchido, depois de criar o novo `wz_flow`, o sistema também cria:
+3. Pega os participantes em `Participants`.
+4. Normaliza os telefones:
+   - `JID`
+   - `PhoneNumber`
+   - `LID`, quando aplicável
+5. Busca os contatos atuais do Kanban pelo `funnel_id`.
+6. Compara por variações de telefone, seguindo a regra já usada no projeto:
+   - com/sem `+`
+   - com/sem DDI `55`
+   - apenas dígitos
+   - variações comuns de WhatsApp
 
-```ts
-lead_funnel_automations {
-  funnel_id: targetFunnelId,
-  wz_flow_id: duplicatedFlow.id,
-  trigger_events: [],
-  show_in_automations: true
+Mostra uma prévia:
+
+```text
+Resultado da simulação
+
+Leads no Kanban: 842
+Encontrados no grupo: 613
+Não encontrados no grupo: 229
+Sem telefone válido: 18
+Já estavam na etapa correta: 401
+
+Vai mover para "Entrou no Grupo": 212
+Vai mover para "Não entrou no Grupo": 229
+Pode convidar: 211
+Não pode convidar / telefone inválido: 18
+```
+
+Nenhum lead é movido nessa etapa.
+
+### 3. Aplicar movimentação
+
+Ao clicar em **Aplicar movimentação**, o sistema move:
+
+```text
+Quem está no grupo
+→ etapa escolhida em "Quando o lead ESTÁ no grupo"
+
+Quem não está no grupo
+→ etapa escolhida em "Quando o lead NÃO está no grupo"
+```
+
+A etapa “não está no grupo” é opcional. Se não escolher, o sistema só move os encontrados.
+
+Para cada lead movido:
+
+- Atualiza `lead_stage_positions.stage_id`
+- Atualiza `lead_stage_positions.entered_at`
+- Cria evento em `lead_events`
+
+Evento sugerido:
+
+```json
+{
+  "event_name": "whatsapp_group_sync",
+  "metadata": {
+    "mode": "manual_sync",
+    "matched": true,
+    "group_ids": ["120363...@g.us"],
+    "instance_id": "d6210ceb-af74-4cda-929a-0b5c079dfd96",
+    "from_stage_id": "...",
+    "to_stage_id": "..."
+  }
 }
 ```
 
-Se não escolher funil, não cria vínculo nenhum.
+### 4. Convidar ausentes
 
-## UI proposta
+A ação **Convidar ausentes** será separada da movimentação, para evitar convite automático sem querer.
 
-No dropdown do card continua igual:
-
-```text
-Editar
-Duplicar
-Remover
-```
-
-Mas ao clicar em **Duplicar**, em vez de duplicar imediatamente, abre:
+Endpoint UAZAPI confirmado pelo arquivo enviado:
 
 ```text
-Duplicar automação
-
-Como você quer salvar a cópia?
-
-( ) Avulsa / sem funil
-    A cópia aparece em "Avulsos" e não fica presa a nenhum CRM.
-
-( ) Vincular a um Funil de Leads
-    Escolha em qual funil essa automação deve aparecer.
-
-[ Select: Funil de Leads ]
-
-[Cancelar] [Duplicar]
+POST /group/updateParticipants
+{
+  "groupjid": "120363...@g.us",
+  "action": "add",
+  "participants": ["5511999999999"]
+}
 ```
 
-## Arquivos impactados
-
-### `src/components/wz-automation/WzFlowList.tsx`
-
-- Adicionar estado para controlar o fluxo selecionado para duplicação.
-- Buscar lista de funis de leads disponíveis.
-- Adicionar modal de duplicação.
-- Trocar `onDuplicate={() => duplicateFlow.mutate(flow.id)}` por abertura do modal.
-- Ao confirmar, chamar a mutation com as opções escolhidas.
-- Invalidar/atualizar a listagem para o agrupamento refletir o destino.
-
-### `src/hooks/useWzFlows.ts`
-
-- Atualizar `useDuplicateWzFlow()` para aceitar:
-  - `id`
-  - `targetFunnelId`
-  - `showInAutomations`
-- Manter compatibilidade com duplicação avulsa.
-- Criar vínculo em `lead_funnel_automations` quando houver funil escolhido.
-- Invalidar:
-  - `wz-flows`
-  - `lead-funnel-automations-visibility`
-  - `lead-funnel-automations` do funil escolhido
-
-## Regras de segurança/consistência
-
-- A automação duplicada continuará nascendo com `is_active: false`.
-- Não copiar histórico de execuções.
-- Não copiar agendamentos pendentes.
-- Copiar apenas estrutura do fluxo: `nodes`, `edges`, `platform`, filtros e configurações salvas.
-- Se houver erro ao vincular ao funil, mostrar erro e não deixar a UI parecer que deu certo.
-
-## Resultado esperado
-
-Você vai conseguir duplicar uma automação e decidir na hora:
+Depois de convidar/adicionar:
 
 ```text
-Quero essa cópia solta
-ou
-Quero essa cópia já dentro do funil X
+Se sucesso:
+  mover para etapa escolhida em "Quando eu CONVIDAR"
+
+Se falhar:
+  não mover automaticamente, mas registrar erro no log
+
+Se privacidade impedir entrada:
+  registrar como falha/pendente
 ```
 
-Isso resolve o caso de criar variações por produto/funil sem precisar duplicar e depois ficar caçando onde vincular manualmente.
+A etapa de convidado pode ser algo como:
+
+```text
+Convite enviado
+Aguardando entrar no grupo
+Chamando para grupo
+```
+
+Isso é melhor do que mandar direto para “Entrou no Grupo”, porque o WhatsApp pode não adicionar a pessoa na hora por privacidade/limite.
+
+### 5. Monitorar via webhook quem entrou/saiu do grupo
+
+Sim, dá para monitorar, mas eu faria como complemento, não como única fonte de verdade.
+
+O arquivo da UAZAPI mostra que o webhook suporta evento:
+
+```text
+groups
+```
+
+Hoje o webhook principal `uazapi-webhook` trata principalmente mensagens/status. A implementação vai adicionar tratamento para eventos de grupo.
+
+Quando a UAZAPI enviar evento de entrada/saída:
+
+```text
+Lead entrou no grupo
+→ mover para etapa "Entrou no Grupo"
+
+Lead saiu/removido do grupo
+→ mover para etapa "Saiu do Grupo" ou "Não está no grupo", se configurada
+```
+
+Se o payload da UAZAPI vier com estrutura diferente dependendo do evento, a função vai salvar o payload bruto no log e tentar extrair:
+
+```text
+groupjid
+participant phone/JID
+action: add/remove/join/leave
+```
+
+## Banco de dados
+
+Criar migration com duas tabelas.
+
+### `lead_funnel_group_sync_configs`
+
+Guarda a configuração por funil:
+
+```text
+id
+funnel_id
+instance_id
+group_ids jsonb
+in_group_stage_id
+not_in_group_stage_id nullable
+invited_stage_id nullable
+left_group_stage_id nullable
+auto_move_on_join boolean
+auto_move_on_leave boolean
+is_active
+created_at
+updated_at
+```
+
+### `lead_funnel_group_sync_runs`
+
+Guarda histórico das execuções:
+
+```text
+id
+config_id
+funnel_id
+instance_id
+mode
+group_ids jsonb
+total_positions
+matched_count
+missing_count
+invalid_phone_count
+moved_in_count
+moved_out_count
+invited_count
+failed_invite_count
+status
+error_message
+payload jsonb
+created_at
+created_by
+```
+
+## Edge Function
+
+Criar função nova:
+
+```text
+supabase/functions/wz-group-sync/index.ts
+```
+
+Ela terá modos:
+
+```text
+list_groups
+save_config
+get_config
+preview
+apply
+invite_missing
+webhook_event
+```
+
+### Payload base
+
+```json
+{
+  "mode": "preview",
+  "funnel_id": "f0bff5cf-e956-4b00-b5a8-f60be742e028",
+  "instance_id": "d6210ceb-af74-4cda-929a-0b5c079dfd96",
+  "group_ids": ["120363...@g.us"],
+  "in_group_stage_id": "...",
+  "not_in_group_stage_id": "...",
+  "invited_stage_id": "...",
+  "left_group_stage_id": "..."
+}
+```
+
+## Segurança
+
+- Ações manuais exigem usuário logado.
+- Apenas admin/gestor poderá aplicar movimentação em massa e convidar pessoas.
+- A função valida se o funil existe antes de movimentar leads.
+- Não move lead sem telefone válido.
+- Não cria lead novo por causa do grupo.
+- Não duplica posição no funil, respeitando a regra de `lead_stage_positions` única por lead/funil.
+- Não remove lead do funil.
+- Não convida automaticamente sem clique explícito.
+- Webhook registra log mesmo quando não consegue identificar lead.
+- Processamento em lotes para evitar timeout.
+
+## Arquivos a criar
+
+```text
+src/components/lead-funnels/WhatsAppGroupSyncConfig.tsx
+src/hooks/useWzGroupSync.ts
+supabase/functions/wz-group-sync/index.ts
+supabase/migrations/<timestamp>_create_lead_funnel_group_sync.sql
+```
+
+## Arquivos a alterar
+
+```text
+src/components/lead-funnels/FunnelConfigTab.tsx
+src/types/leadFunnels.ts
+src/types/wz-automation.ts
+supabase/functions/uazapi-webhook/index.ts
+```
+
+## Ajuste no webhook da UAZAPI
+
+Além da nova função, será necessário garantir que a instância monitore eventos de grupo.
+
+Hoje a configuração de webhook usa eventos como:
+
+```text
+messages
+messages_update
+connection
+```
+
+Vamos incluir:
+
+```text
+groups
+```
+
+Para a instância manual, a configuração pode ser feita pela própria tela nova, com um botão:
+
+```text
+Ativar monitoramento de grupos nesta instância
+```
+
+Esse botão chamará a UAZAPI:
+
+```text
+POST /webhook
+{
+  "url": "<supabase>/functions/v1/uazapi-webhook",
+  "enabled": true,
+  "events": ["messages", "messages_update", "connection", "groups"]
+}
+```
+
+## Resultado final
+
+Você vai conseguir:
+
+```text
+1. Escolher a instância administradora do grupo.
+2. Listar os grupos dela.
+3. Escolher quais grupos fazem parte daquele funil.
+4. Escolher a etapa para quem entrou.
+5. Escolher a etapa para quem não entrou.
+6. Escolher a etapa para quem foi convidado.
+7. Simular antes de mexer no Kanban.
+8. Aplicar a movimentação.
+9. Convidar ausentes.
+10. Monitorar entrada/saída por webhook e mover automaticamente.
+```
+
+## Melhor prática recomendada
+
+O fluxo mais seguro para lançamento/grupo VIP/desafio é:
+
+```text
+Lead comprou / se cadastrou
+        ↓
+CRM coloca no Kanban
+        ↓
+Equipe convida para grupo
+        ↓
+Move para "Convite enviado"
+        ↓
+Webhook ou sincronização confirma entrada
+        ↓
+Move para "Entrou no Grupo"
+        ↓
+Se não entrou, fica em "Não entrou no Grupo" / "Aguardando entrada"
+```
+
+Isso evita bagunçar o Kanban e cria uma operação muito clara para a equipe.
