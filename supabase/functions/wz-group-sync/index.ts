@@ -95,8 +95,12 @@ async function requireUser(req: Request, supabaseUrl: string, anonKey: string) {
   const token = authHeader.replace('Bearer ', '').trim()
   const userClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authHeader } } })
   const { data: claimsData, error: claimsError } = await userClient.auth.getClaims(token)
-  const userId = claimsData?.claims?.sub
-  if (claimsError || !userId) throw new Error('Sessão inválida')
+  let userId = claimsData?.claims?.sub
+  if (claimsError || !userId) {
+    const { data: userData, error: userError } = await userClient.auth.getUser(token)
+    userId = userData?.user?.id
+    if (userError || !userId) throw new Error('Sessão inválida')
+  }
   const { data: orgId, error: orgErr } = await userClient.rpc('get_user_org_id')
   if (orgErr || !orgId) throw new Error('Organização não encontrada')
   return { userId, orgId: orgId as string }
@@ -315,7 +319,12 @@ Deno.serve(async (req) => {
     }
 
     if (!body.funnel_id) return json({ error: 'funnel_id é obrigatório' }, 400)
-    const user = await requireUser(req, supabaseUrl, anonKey)
+    let user: { userId: string; orgId: string }
+    try {
+      user = await requireUser(req, supabaseUrl, anonKey)
+    } catch (authErr) {
+      return json({ error: authErr instanceof Error ? authErr.message : 'Sessão inválida' }, 401)
+    }
     await ensureFunnelAccess(admin, body.funnel_id, user.orgId)
 
     if (body.mode === 'get_config') {
