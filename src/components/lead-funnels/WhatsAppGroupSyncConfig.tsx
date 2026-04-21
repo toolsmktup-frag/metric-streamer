@@ -6,7 +6,7 @@ import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, RefreshCw, Send, Users, Webhook, Save } from 'lucide-react';
+import { CheckCircle2, Loader2, RefreshCw, Send, Users, Webhook, Save, AlertCircle, Activity } from 'lucide-react';
 import { useWzInstances } from '@/hooks/useWzInstances';
 import {
   useApplyWzGroupSync,
@@ -16,12 +16,16 @@ import {
   useSaveWzGroupSyncConfig,
   useWzGroupList,
   useWzGroupSyncConfig,
+  useWzGroupSyncRuns,
+  useWzWebhookStatus,
   type WzGroupOption,
   type WzGroupSyncConfig,
   type WzGroupSyncResult,
 } from '@/hooks/useWzGroupSync';
 import type { LeadFunnelStage } from '@/types/leadFunnels';
 import { toast } from 'sonner';
+import { formatDistanceToNow } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 interface WhatsAppGroupSyncConfigProps {
   funnelId: string;
