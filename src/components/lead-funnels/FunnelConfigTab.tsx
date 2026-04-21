@@ -12,6 +12,7 @@ import SortableStageItem from './SortableStageItem';
 import { toast } from 'sonner';
 import FunnelProductsConfig from './FunnelProductsConfig';
 import FunnelAutomationsConfig from './FunnelAutomationsConfig';
+import WhatsAppGroupSyncConfig from './WhatsAppGroupSyncConfig';
 import TrackingSnippetPopover from './TrackingSnippetPopover';
 import RedistributeLeadsDialog from './RedistributeLeadsDialog';
 import ProductMappingConfig from './ProductMappingConfig';
@@ -446,6 +447,11 @@ const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSave
       {/* Automações Vinculadas */}
       {funnelId && (
         <FunnelAutomationsConfig funnelId={funnelId} funnelName={funnelName} />
+      )}
+
+      {/* WhatsApp Groups */}
+      {funnelId && stages.length > 0 && (
+        <WhatsAppGroupSyncConfig funnelId={funnelId} stages={stages} />
       )}
 
       {/* Redistribute Leads */}
