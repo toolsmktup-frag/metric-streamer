@@ -1,208 +1,56 @@
 
-## Plano de execução: desenhar o Funil com pernas separadas
 
-O SQL da coluna `visual_parent_stage_id` já foi rodado, então não vou incluir nova alteração de banco. A implementação será só no código.
+## Sincronização automática de entrada em grupo (UAZAPI → Funil)
 
-## Objetivo
+Hoje, quando alguém entra no grupo após o convite, o card do lead não muda de etapa automaticamente — você está fazendo no botão "Aplicar movimentação". Isso acontece porque o webhook de eventos de grupo da UAZAPI não está chegando ou não está sendo interpretado corretamente. Vou consertar a ponta a ponta.
 
-Transformar a aba `Funil` de uma lista vertical linear para uma visualização em árvore, onde cada etapa pode escolher onde aparece visualmente.
+### O que está quebrado
 
-Exemplo esperado:
+1. **Webhook da UAZAPI não está cadastrado para eventos de grupo.** A função `enable_webhook` envia um body que a UAZAPI v2 não respeita totalmente — só registra `messages`. Eventos `groups` ficam silenciosos.
+2. **Roteamento no `uazapi-webhook` é frágil.** Só encaminha para `wz-group-sync` se `eventType` contiver a string "group", mas a UAZAPI também manda eventos relevantes como `presence`, `chats` e payloads com `EventType: "groups"` em PascalCase que estão sendo ignorados em alguns casos.
+3. **`handleWebhookEvent` não reconhece o formato real da UAZAPI v2.** Ele procura `payload.action` em lowercase, mas a UAZAPI manda `Action: "add"`, `Participants: [...]` em PascalCase, e às vezes o participante vem em `payload.message.sender_pn` quando é o próprio bot que adicionou. Também procura match por telefone só em `leads.phone`, ignorando `unified_customers.primary_phone` (que é o que o webhook de mensagens usa).
+4. **Sem rastreabilidade.** Quando o webhook chega e não casa, não dá pra saber se foi a UAZAPI que não mandou, se o telefone não bateu ou se a config estava desligada.
 
-```text
-Novo Lead
-├── Entrou no Grupo
-│   └── Dia 01
-│       └── Dia 02
-│           └── Dia 03
-└── Não entrou no grupo
-    └── Saiu do Grupo
-```
+### O que vou implementar
 
-A conversão continua usando a configuração já criada:
+**1. Corrigir o registro do webhook na UAZAPI (`wz-group-sync` → `enable_webhook`)**
+- Trocar a chamada para o formato correto da UAZAPI v2 (`POST /instance/updateWebhook` com `addUrl`, `events: ["messages","messages_update","connection","groups","presence","chats"]`).
+- Garantir que `groups` esteja sempre incluído quando a config tem `auto_move_on_join` ou `auto_move_on_leave`.
+- Chamar `enable_webhook` automaticamente quando o usuário salvar a config com automação ligada (hoje é manual).
 
-```text
-Base de conversão
-```
+**2. Reescrever o roteamento no `uazapi-webhook`**
+- Detectar evento de grupo por múltiplos sinais: `EventType` em `["groups","group_participants","group.participants.update","presence"]`, presença de `payload.groupjid/GroupJID/chatid` terminando em `@g.us`, ou `payload.Participants`.
+- Encaminhar para `wz-group-sync` em modo `webhook_event` mantendo o payload original.
+- Logar no `webhook_audit` (já existente) o tipo detectado, para diagnóstico.
 
-E o desenho passa a usar a nova configuração:
+**3. Reescrever `handleWebhookEvent` no `wz-group-sync`**
+- Extrair ação do payload tratando PascalCase (`Action`, `EventAction`) e os valores reais da UAZAPI: `add`, `remove`, `promote`, `demote`, `invite`, `request`.
+- Extrair participantes de `Participants[]`, `participant`, `data.Participants[]` e `message.sender_pn`.
+- Fazer match de telefone em duas fontes: `leads.phone` (atual) e `unified_customers.primary_phone` via `lead_stage_positions → leads.unified_customer_id`. Usar `phoneVariations` em ambas.
+- Quando for `add/join`: mover para `in_group_stage_id` se `auto_move_on_join = true`.
+- Quando for `remove/leave`: mover para `left_group_stage_id` se `auto_move_on_leave = true`.
+- Sempre gravar em `lead_funnel_group_sync_runs` com `mode='webhook_event'`, mesmo quando não casar — incluindo os telefones recebidos no `payload`, para você diagnosticar.
 
-```text
-Aparece depois de
-```
+**4. UI: aviso de status do webhook**
+- Em `WhatsAppGroupSyncConfig.tsx`, adicionar um indicador "Monitoramento ativo" verde quando o webhook estiver registrado, e botão "Reativar monitoramento" se a UAZAPI rejeitar.
+- Mostrar últimas 5 execuções do tipo `webhook_event` (já existem na tabela `lead_funnel_group_sync_runs`) com participante, ação e resultado, para você ver em tempo real se está chegando.
 
-## Alterações que vou fazer
+### Análise específica do funil "[LANC] O Poder Holistico das Ervas"
 
-### 1. Atualizar o tipo da etapa
+Junto com as mudanças, vou verificar:
+- Se a config de sincronização desse funil tem `auto_move_on_join = true` e `in_group_stage_id` apontando para a etapa correta.
+- Se o webhook da UAZAPI está realmente registrado na instância usada (chamando `GET /webhook` para listar).
+- Se há registros recentes em `webhook_audit` com payloads de grupo para essa instância (confirma se a UAZAPI está mandando ou não).
 
-Em `src/types/leadFunnels.ts`, adicionar:
+Faço esse diagnóstico antes de aplicar, e te mostro o que encontrei junto com a correção.
 
-```ts
-visual_parent_stage_id: string | null;
-```
+### Detalhes técnicos
 
-Isso permite o frontend reconhecer a nova coluna do Supabase.
+- **Arquivos editados:**
+  - `supabase/functions/uazapi-webhook/index.ts` — detecção robusta de eventos de grupo + audit log.
+  - `supabase/functions/wz-group-sync/index.ts` — `handleWebhookEvent` reescrito + `enable_webhook` corrigido + match via `unified_customers`.
+  - `src/components/lead-funnels/WhatsAppGroupSyncConfig.tsx` — chamar `enable_webhook` no save + bloco de status/últimos eventos.
+  - `src/hooks/useWzGroupSync.ts` — novo hook `useWzGroupSyncRuns(funnelId)` para listar execuções recentes.
+- **Sem migration nova** — `lead_funnel_group_sync_runs` já tem todas as colunas necessárias.
+- **Deploy:** `wz-group-sync` e `uazapi-webhook` (ambas Edge Functions).
 
-### 2. Salvar o pai visual no Supabase
-
-Em `src/hooks/useLeadFunnels.ts`, atualizar o salvamento das etapas para persistir:
-
-```ts
-visual_parent_stage_id: s.visual_parent_stage_id || null
-```
-
-Tanto no `update` de etapas existentes quanto no `insert` de novas etapas.
-
-### 3. Adicionar seletor “Aparece depois de”
-
-Em `src/components/lead-funnels/SortableStageItem.tsx`, adicionar um segundo seletor além do atual “Base de conversão”.
-
-Ficará assim:
-
-```text
-Base de conversão
-- define o cálculo da porcentagem
-
-Aparece depois de
-- define onde a etapa entra no desenho
-```
-
-Opções:
-
-```text
-Raiz / sem pai
-Novo Lead
-Entrou no Grupo
-Não entrou no grupo
-Saiu do Grupo
-Dia 01
-Dia 02
-...
-```
-
-Com proteções:
-
-- não permitir uma etapa apontar para ela mesma;
-- não listar etapas temporárias ainda não salvas;
-- se a etapa ainda não tiver ID, deixar o seletor desabilitado até salvar.
-
-### 4. Refatorar o desenho do `FunnelVisual`
-
-Em `src/components/lead-funnels/FunnelVisual.tsx`, trocar o render linear atual por uma árvore.
-
-Nova lógica:
-
-```text
-1. Ordenar etapas por sort_order.
-2. Criar mapa de stage_id → etapa.
-3. Criar mapa de parent_id → filhos.
-4. Usar visual_parent_stage_id como conexão principal.
-5. Etapas sem pai viram raízes.
-6. Se não houver nenhuma configuração visual ainda, manter fallback linear para não quebrar funis antigos.
-7. Renderizar filhos lado a lado quando uma etapa tiver mais de um caminho.
-```
-
-A largura das caixas continua baseada em `Passaram`.
-
-A porcentagem continua baseada em:
-
-```ts
-conversion_base_stage_id || etapa anterior
-```
-
-Ou seja:
-
-```text
-visual_parent_stage_id = desenho
-conversion_base_stage_id = cálculo
-```
-
-### 5. Melhorar a leitura visual
-
-No card de cada etapa, manter:
-
-```text
-Nome da etapa
-Atual: X
-Passaram: Y
-```
-
-E exibir a conversão com tooltip indicando a base:
-
-```text
-72,5%
-Base: Entrou no Grupo
-```
-
-Para ramificações, o layout será responsivo:
-
-- desktop: ramos lado a lado;
-- telas menores: ramos quebram em coluna para não estourar a tela.
-
-### 6. Ajustar a aba Métricas
-
-Em `src/components/lead-funnels/FunnelMetricsTab.tsx`, manter o cálculo pela base de conversão, mas deixar mais explícito:
-
-```text
-Entrou no Grupo → Dia 01
-Base: Entrou no Grupo
-Taxa: 35,2%
-```
-
-Assim fica claro que a árvore visual e a base matemática são coisas diferentes.
-
-## Como você vai configurar depois
-
-Depois da implementação, na aba `Configuração`, para o seu caso:
-
-```text
-Novo Lead
-Aparece depois de: Raiz
-
-Entrou no Grupo
-Aparece depois de: Novo Lead
-Base de conversão: Novo Lead
-
-Não entrou no grupo
-Aparece depois de: Novo Lead
-Base de conversão: Novo Lead
-
-Saiu do Grupo
-Aparece depois de: Não entrou no grupo ou Entrou no Grupo
-Base de conversão: Novo Lead ou Entrou no Grupo
-
-Dia 01
-Aparece depois de: Entrou no Grupo
-Base de conversão: Entrou no Grupo
-
-Dia 02
-Aparece depois de: Dia 01
-Base de conversão: Entrou no Grupo
-
-Dia 03
-Aparece depois de: Dia 02
-Base de conversão: Entrou no Grupo
-```
-
-## Validação
-
-Depois de implementar, vou validar:
-
-```text
-1. Build/TypeScript sem erro.
-2. O seletor “Aparece depois de” aparece na configuração.
-3. O valor é salvo e recarrega corretamente.
-4. A aba Funil abre em pernas separadas.
-5. A porcentagem continua usando “Base de conversão”.
-6. Funis antigos sem visual_parent_stage_id continuam funcionando em modo linear.
-```
-
-## Arquivos que serão alterados
-
-```text
-src/types/leadFunnels.ts
-src/hooks/useLeadFunnels.ts
-src/components/lead-funnels/SortableStageItem.tsx
-src/components/lead-funnels/FunnelVisual.tsx
-src/components/lead-funnels/FunnelMetricsTab.tsx
-```
