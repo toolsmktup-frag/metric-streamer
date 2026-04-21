@@ -218,20 +218,20 @@ const WhatsAppGroupSyncConfig: React.FC<WhatsAppGroupSyncConfigProps> = ({ funne
 
         <div className="grid gap-4 md:grid-cols-2">
           <div>
-            <label className="mb-1 block text-sm font-medium text-foreground">Quem está na etapa</label>
-            <StageSelect value={config.in_group_stage_id} onChange={value => update('in_group_stage_id', value)} stages={stages} placeholder="Mover para..." allowNone={false} />
+            <label className="mb-1 block text-sm font-medium text-foreground">Quem entrou no grupo → mover para</label>
+            <StageSelect value={config.in_group_stage_id} onChange={value => update('in_group_stage_id', value)} stages={stages} placeholder="Selecionar etapa..." allowNone={false} />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-foreground">Mas não está na etapa</label>
-            <StageSelect value={config.not_in_group_stage_id} onChange={value => update('not_in_group_stage_id', value)} stages={stages} placeholder="Mover para..." />
+            <label className="mb-1 block text-sm font-medium text-foreground">Quem não está no grupo → mover para</label>
+            <StageSelect value={config.not_in_group_stage_id} onChange={value => update('not_in_group_stage_id', value)} stages={stages} placeholder="Selecionar etapa..." />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-foreground">Depois de convidar</label>
-            <StageSelect value={config.invited_stage_id} onChange={value => update('invited_stage_id', value)} stages={stages} placeholder="Mover para..." />
+            <label className="mb-1 block text-sm font-medium text-foreground">Depois de convidar → mover para</label>
+            <StageSelect value={config.invited_stage_id} onChange={value => update('invited_stage_id', value)} stages={stages} placeholder="Selecionar etapa..." />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-foreground">Quando sair do grupo</label>
-            <StageSelect value={config.left_group_stage_id} onChange={value => update('left_group_stage_id', value)} stages={stages} placeholder="Mover para..." />
+            <label className="mb-1 block text-sm font-medium text-foreground">Quando sair do grupo → mover para</label>
+            <StageSelect value={config.left_group_stage_id} onChange={value => update('left_group_stage_id', value)} stages={stages} placeholder="Selecionar etapa..." />
           </div>
         </div>
 
@@ -248,7 +248,7 @@ const WhatsAppGroupSyncConfig: React.FC<WhatsAppGroupSyncConfigProps> = ({ funne
 
         {!canRun && (
           <Alert>
-            <AlertDescription>Escolha instância, pelo menos um grupo e a etapa para quem está no grupo.</AlertDescription>
+            <AlertDescription>Escolha a instância, pelo menos um grupo e a etapa de destino para quem entrou no grupo.</AlertDescription>
           </Alert>
         )}
 
