@@ -145,10 +145,40 @@ export function useInviteMissingWzGroupSync() {
 }
 
 export function useEnableWzGroupWebhook() {
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: async (config: WzGroupSyncConfig) => {
       await invokeGroupSync<{ ok: boolean }>({ mode: 'enable_webhook', ...config });
     },
-    onSuccess: () => toast.success('Monitoramento de grupos ativado'),
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: ['wz-group-webhook-status', vars.funnel_id, vars.instance_id] });
+      toast.success('Monitoramento de grupos ativado');
+    },
+  });
+}
+
+export function useWzGroupSyncRuns(funnelId: string | null) {
+  return useQuery({
+    queryKey: ['wz-group-sync-runs', funnelId],
+    queryFn: async () => {
+      if (!funnelId) return [];
+      const result = await invokeGroupSync<{ runs: WzGroupSyncRun[] }>({ mode: 'list_runs', funnel_id: funnelId });
+      return result.runs || [];
+    },
+    enabled: !!funnelId,
+    refetchInterval: 15000,
+  });
+}
+
+export function useWzWebhookStatus(funnelId: string | null, instanceId: string | null) {
+  return useQuery({
+    queryKey: ['wz-group-webhook-status', funnelId, instanceId],
+    queryFn: async () => {
+      if (!funnelId || !instanceId) return null;
+      const result = await invokeGroupSync<{ status: WzWebhookStatus }>({ mode: 'webhook_status', funnel_id: funnelId, instance_id: instanceId });
+      return result.status;
+    },
+    enabled: !!funnelId && !!instanceId,
+    refetchInterval: 30000,
   });
 }
