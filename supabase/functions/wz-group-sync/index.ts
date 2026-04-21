@@ -216,29 +216,34 @@ function sample(rows: PositionRow[]) {
 
 async function movePositions(admin: SupabaseClient, rows: PositionRow[], stageId: string | null | undefined, body: Body, matched: boolean) {
   if (!stageId) return 0
+  const targets = rows.filter(row => row.stage_id !== stageId)
   let moved = 0
-  for (const row of rows) {
-    if (row.stage_id === stageId) continue
-    const fromStageId = row.stage_id
-    const { error } = await admin
+  const batchSize = 100
+  for (let i = 0; i < targets.length; i += batchSize) {
+    const batch = targets.slice(i, i + batchSize)
+    const enteredAt = new Date().toISOString()
+    const { error: updateError } = await admin
       .from('lead_stage_positions')
-      .update({ stage_id: stageId, entered_at: new Date().toISOString() })
-      .eq('id', row.id)
-    if (error) throw error
-    await admin.from('lead_events').insert({
+      .update({ stage_id: stageId, entered_at: enteredAt })
+      .in('id', batch.map(row => row.id))
+    if (updateError) throw updateError
+
+    const events = batch.map(row => ({
       lead_id: row.lead_id,
       funnel_id: body.funnel_id,
       event_name: 'whatsapp_group_sync',
       metadata: {
-        mode: 'manual_sync',
+        mode: body.mode === 'webhook_event' ? 'webhook_event' : 'manual_sync',
         matched,
         group_ids: body.group_ids,
         instance_id: body.instance_id,
-        from_stage_id: fromStageId,
+        from_stage_id: row.stage_id,
         to_stage_id: stageId,
       },
-    })
-    moved++
+    }))
+    const { error: eventError } = await admin.from('lead_events').insert(events)
+    if (eventError) throw eventError
+    moved += batch.length
   }
   return moved
 }
