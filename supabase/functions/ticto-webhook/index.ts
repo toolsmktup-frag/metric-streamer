@@ -61,11 +61,36 @@ function extractProductName(payload: any, item: any, invoice: any): string {
   return "";
 }
 
-/** Safe date parse — returns ISO string or null, never throws */
+/**
+ * Safe date parse — returns ISO string or null, never throws.
+ *
+ * IMPORTANT: A Ticto envia datas no formato "YYYY-MM-DD HH:mm:ss" SEM timezone,
+ * representando o horário local de Brasília (BRT, UTC-3). Se interpretarmos
+ * como UTC (comportamento default do `new Date`), a venda fica 3h adiantada e
+ * cai no dia errado nas views que filtram por timezone local (Resumo Geral,
+ * Campanhas, Resumo do Funil que usam v_all_sales).
+ *
+ * Tratamos datas "naive" (sem TZ explícito) como BRT (-03:00).
+ */
+const TICTO_TZ_OFFSET = "-03:00";
+
 function safeISO(raw: unknown): string | null {
   if (!raw) return null;
   try {
-    const d = new Date(String(raw));
+    let s = String(raw).trim();
+    if (!s) return null;
+
+    // Detectar se já tem timezone: 'Z', '+HH:MM', '-HH:MM' (após o 'T'/espaço de hora)
+    const hasTz = /[zZ]$|[+\-]\d{2}:?\d{2}$/.test(s);
+
+    if (!hasTz) {
+      // Normalizar separador: "2026-04-21 01:10:54" → "2026-04-21T01:10:54"
+      s = s.replace(" ", "T");
+      // Anexar offset BRT para que o JS interprete corretamente
+      s = `${s}${TICTO_TZ_OFFSET}`;
+    }
+
+    const d = new Date(s);
     if (isNaN(d.getTime())) return null;
     return d.toISOString();
   } catch {
