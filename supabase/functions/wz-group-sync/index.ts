@@ -439,10 +439,35 @@ Deno.serve(async (req) => {
       return json({ config: data })
     }
 
+    if (body.mode === 'list_runs') {
+      const { data, error } = await admin
+        .from('lead_funnel_group_sync_runs')
+        .select('id, mode, status, error_message, group_ids, payload, created_at')
+        .eq('funnel_id', body.funnel_id)
+        .order('created_at', { ascending: false })
+        .limit(15)
+      if (error) throw error
+      return json({ runs: data || [] })
+    }
+
     if (!body.instance_id) return json({ error: 'instance_id é obrigatório' }, 400)
     const instance = await getInstance(admin, body.instance_id)
 
     if (body.mode === 'list_groups') return json({ groups: await listGroups(instance) })
+
+    if (body.mode === 'webhook_status') {
+      try {
+        const data = await uazapi(instance, '/webhook')
+        const url = `${supabaseUrl}/functions/v1/uazapi-webhook`
+        const registeredUrls: string[] = (data?.urls || data?.URLs || []).map((u: any) => u?.url || u?.URL || u).filter(Boolean)
+        const events: string[] = data?.events || data?.Events || []
+        const isRegistered = registeredUrls.some(u => u?.includes('uazapi-webhook'))
+        const hasGroups = events.map((e: string) => String(e).toLowerCase()).includes('groups')
+        return json({ status: { registered: isRegistered, hasGroups, expectedUrl: url, raw: data } })
+      } catch (err) {
+        return json({ status: { registered: false, hasGroups: false, error: err instanceof Error ? err.message : 'Falha ao consultar webhook' } })
+      }
+    }
 
     if (body.mode === 'save_config') {
       const payload = {
@@ -465,11 +490,27 @@ Deno.serve(async (req) => {
 
     if (body.mode === 'enable_webhook') {
       const url = `${supabaseUrl}/functions/v1/uazapi-webhook`
-      await uazapi(instance, '/webhook', {
-        method: 'POST',
-        body: JSON.stringify({ url, enabled: true, events: ['messages', 'messages_update', 'connection', 'groups'] }),
-      })
-      return json({ ok: true })
+      const events = ['messages', 'messages_update', 'connection', 'groups', 'presence', 'chats']
+
+      // UAZAPI v2 official endpoint: POST /instance/updatewebhook with addUrl + events
+      let lastError: any = null
+      const attempts: Array<{ path: string; body: any }> = [
+        { path: '/instance/updatewebhook', body: { addUrl: url, events, enabled: true, excludeMessages: [] } },
+        { path: '/webhook', body: { url, enabled: true, events } },
+      ]
+      let success = false
+      let response: any = null
+      for (const attempt of attempts) {
+        try {
+          response = await uazapi(instance, attempt.path, { method: 'POST', body: JSON.stringify(attempt.body) })
+          success = true
+          break
+        } catch (err) {
+          lastError = err
+        }
+      }
+      if (!success) throw lastError || new Error('Falha ao registrar webhook na UAZAPI')
+      return json({ ok: true, response, eventsRegistered: events })
     }
 
     const comparison = await buildComparison(admin, instance, body)
