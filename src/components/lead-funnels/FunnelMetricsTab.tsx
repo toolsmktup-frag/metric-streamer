@@ -16,6 +16,7 @@ interface Props {
 }
 
 const FunnelMetricsTab: React.FC<Props> = ({ stages, positions, funnelId, historicalCounts = {} }) => {
+  const [metricsView, setMetricsView] = React.useState<'sales' | 'leads'>('sales');
   const sortedStages = useMemo(() => [...stages].sort((a, b) => a.sort_order - b.sort_order), [stages]);
   const stageById = useMemo(() => new Map(sortedStages.map(stage => [stage.id, stage])), [sortedStages]);
 
@@ -107,7 +108,48 @@ const FunnelMetricsTab: React.FC<Props> = ({ stages, positions, funnelId, histor
 
   return (
     <div className="space-y-6">
-      {/* KPI Cards */}
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card p-2">
+        <Button
+          type="button"
+          variant={metricsView === 'sales' ? 'default' : 'ghost'}
+          size="sm"
+          onClick={() => setMetricsView('sales')}
+        >
+          Métricas de vendas
+        </Button>
+        <Button
+          type="button"
+          variant={metricsView === 'leads' ? 'default' : 'ghost'}
+          size="sm"
+          onClick={() => setMetricsView('leads')}
+        >
+          Métricas de leads
+        </Button>
+      </div>
+
+      {metricsView === 'sales' ? (
+        <SalesMetricsView metrics={metrics} positions={positions} stages={stages} />
+      ) : (
+        <LeadMetricsView
+          trackingMetrics={trackingMetrics}
+          stageStats={stageStats}
+          conversionRates={conversionRates}
+          maxCount={maxCount}
+          positions={positions}
+          stages={stages}
+        />
+      )}
+    </div>
+  );
+};
+
+const SalesMetricsView: React.FC<{
+  metrics: { confirmedRevenue: number; lostRevenue: number; avgTicket: number; revenueLeadCount: number; totalLeads: number };
+  positions: (LeadStagePosition & { lead: Lead })[];
+  stages: LeadFunnelStage[];
+}> = ({ metrics, positions, stages }) => (
+  <div className="space-y-6">
+    {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <MetricCard
           label="Total de Leads"
@@ -135,6 +177,20 @@ const FunnelMetricsTab: React.FC<Props> = ({ stages, positions, funnelId, histor
           color="bg-amber-500/10 text-amber-600"
         />
       </div>
+
+      <ProductsRanking positions={positions} stages={stages} mode="sales" />
+  </div>
+);
+
+const LeadMetricsView: React.FC<{
+  trackingMetrics?: { pageviews: number; uniqueVisitors: number; emailCaptures: number; uniquePages: number; stageViews: Map<string, number> };
+  stageStats: { stage: LeadFunnelStage; count: number; passedCount: number; revenue: number; isRevenue: boolean }[];
+  conversionRates: { from: string; base: string; to: string; rate: number }[];
+  maxCount: number;
+  positions: (LeadStagePosition & { lead: Lead })[];
+  stages: LeadFunnelStage[];
+}> = ({ trackingMetrics, stageStats, conversionRates, maxCount, positions, stages }) => (
+  <div className="space-y-6">
 
       {/* Tracking Metrics */}
       {trackingMetrics && trackingMetrics.pageviews > 0 && (
@@ -237,10 +293,9 @@ const FunnelMetricsTab: React.FC<Props> = ({ stages, positions, funnelId, histor
       <ExportAllUtmsButton positions={positions} />
 
       {/* Top Products */}
-      <ProductsRanking positions={positions} stages={stages} />
+      <ProductsRanking positions={positions} stages={stages} mode="leads" />
     </div>
-  );
-};
+);
 
 /* ---- UTM Breakdown Sub-component ---- */
 const UtmBreakdown: React.FC<{
@@ -352,7 +407,11 @@ interface ProductStat {
   revenue: number;
 }
 
-const ProductsRanking: React.FC<{ positions: (LeadStagePosition & { lead: Lead })[]; stages: LeadFunnelStage[] }> = ({ positions, stages }) => {
+const ProductsRanking: React.FC<{
+  positions: (LeadStagePosition & { lead: Lead })[];
+  stages: LeadFunnelStage[];
+  mode?: 'sales' | 'leads';
+}> = ({ positions, stages, mode = 'sales' }) => {
   const stageMap = useMemo(() => new Map(stages.map(s => [s.id, s])), [stages]);
 
   const products = useMemo(() => {
@@ -382,7 +441,9 @@ const ProductsRanking: React.FC<{ positions: (LeadStagePosition & { lead: Lead }
     <div className="rounded-xl border border-border bg-card p-5">
       <div className="flex items-center gap-2 mb-4">
         <Package className="h-4 w-4 text-foreground" />
-        <h3 className="text-sm font-semibold text-foreground">Produtos Mais Vendidos</h3>
+        <h3 className="text-sm font-semibold text-foreground">
+          {mode === 'leads' ? 'Produtos de interesse' : 'Produtos mais vendidos'}
+        </h3>
       </div>
       <div className="space-y-3">
         {products.map((p) => (
@@ -395,7 +456,7 @@ const ProductsRanking: React.FC<{ positions: (LeadStagePosition & { lead: Lead }
               />
             </div>
             <span className="text-sm font-mono text-foreground w-10 text-right">{p.count}</span>
-            {p.revenue > 0 && (
+            {mode === 'sales' && p.revenue > 0 && (
               <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 w-28 text-right">
                 {formatCurrency(p.revenue)}
               </span>
