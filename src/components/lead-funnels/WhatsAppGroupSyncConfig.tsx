@@ -119,6 +119,10 @@ const WhatsAppGroupSyncConfig: React.FC<WhatsAppGroupSyncConfigProps> = ({ funne
   const [inviteGroupId, setInviteGroupId] = useState<string | null>(null);
   const [lastResult, setLastResult] = useState<WzGroupSyncResult | null>(null);
 
+  const { data: webhookStatus } = useWzWebhookStatus(funnelId, config.instance_id);
+  const { data: runs = [] } = useWzGroupSyncRuns(funnelId);
+  const webhookEvents = useMemo(() => runs.filter(r => r.mode === 'webhook_event').slice(0, 5), [runs]);
+
   useEffect(() => {
     if (savedConfig) {
       setConfig({ ...emptyConfig(funnelId), ...savedConfig, group_ids: savedConfig.group_ids || [] });
@@ -128,6 +132,7 @@ const WhatsAppGroupSyncConfig: React.FC<WhatsAppGroupSyncConfigProps> = ({ funne
 
   const selectedGroups = useMemo(() => new Set(config.group_ids), [config.group_ids]);
   const canRun = !!config.instance_id && config.group_ids.length > 0 && !!config.in_group_stage_id;
+  const automationOn = config.auto_move_on_join || config.auto_move_on_leave;
 
   const update = <K extends keyof WzGroupSyncConfig>(key: K, value: WzGroupSyncConfig[K]) => {
     setConfig(prev => ({ ...prev, [key]: value }));
@@ -149,7 +154,13 @@ const WhatsAppGroupSyncConfig: React.FC<WhatsAppGroupSyncConfigProps> = ({ funne
     if (!inviteGroupId && next[0]) setInviteGroupId(next[0]);
   };
 
-  const handleSave = () => saveConfig.mutate(config);
+  const handleSave = async () => {
+    await saveConfig.mutateAsync(config);
+    // Auto-register webhook when automation is on
+    if (config.instance_id && (config.auto_move_on_join || config.auto_move_on_leave)) {
+      try { await enableWebhook.mutateAsync(config); } catch (e) { /* surfaced by toast */ }
+    }
+  };
   const handlePreview = async () => setLastResult(await previewSync.mutateAsync(config));
   const handleApply = async () => setLastResult(await applySync.mutateAsync(config));
   const handleInvite = async () => setLastResult(await inviteMissing.mutateAsync({ ...config, invite_group_id: inviteGroupId }));
