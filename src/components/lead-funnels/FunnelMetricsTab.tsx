@@ -96,7 +96,12 @@ const FunnelMetricsTab: React.FC<Props> = ({ stages, positions, funnelId, histor
       const baseStage = curr.stage.conversion_base_stage_id ? stageById.get(curr.stage.conversion_base_stage_id) : fallbackBase;
       const baseCount = baseStage ? (historicalCounts[baseStage.id] || positions.filter(p => p.stage_id === baseStage.id).length) : 0;
       const rate = baseCount > 0 ? (curr.passedCount / baseCount) * 100 : 0;
-      return { from: baseStage?.name || fallbackBase?.name || 'Base', to: curr.stage.name, rate };
+      return {
+        from: baseStage?.name || fallbackBase?.name || 'Base',
+        base: baseStage?.name || fallbackBase?.name || 'Base automática',
+        to: curr.stage.name,
+        rate,
+      };
     });
   }, [stageStats, stageById, historicalCounts, positions]);
 
@@ -212,6 +217,7 @@ const FunnelMetricsTab: React.FC<Props> = ({ stages, positions, funnelId, histor
                 <span className="text-muted-foreground">{cr.from}</span>
                 <span className="text-muted-foreground">→</span>
                 <span className="text-foreground font-medium">{cr.to}</span>
+                <span className="rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground">Base: {cr.base}</span>
                 <span className={`ml-auto font-bold font-mono ${cr.rate >= 50 ? 'text-emerald-600 dark:text-emerald-400' : cr.rate >= 20 ? 'text-amber-600 dark:text-amber-400' : 'text-destructive'}`}>
                   {formatPercent(cr.rate)}
                 </span>

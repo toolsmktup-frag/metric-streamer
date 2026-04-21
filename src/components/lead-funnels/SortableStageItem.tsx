@@ -72,6 +72,23 @@ const SortableStageItem: React.FC<SortableStageItemProps> = ({
             ))}
         </SelectContent>
       </Select>
+      <Select
+        value={stage.visual_parent_stage_id || 'root'}
+        onValueChange={value => onUpdate(idx, 'visual_parent_stage_id', value === 'root' ? '' : value)}
+        disabled={!stage.id}
+      >
+        <SelectTrigger className="w-[220px] shrink-0">
+          <SelectValue placeholder="Aparece depois de" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="root">Raiz / sem pai</SelectItem>
+          {stageOptions
+            .filter(option => option.id !== stage.id && !option.id.startsWith('temp-'))
+            .map(option => (
+              <SelectItem key={option.id} value={option.id}>{option.name}</SelectItem>
+            ))}
+        </SelectContent>
+      </Select>
       {stage.page_url && funnelId && stage.id && (
         <TrackingSnippetPopover
           funnelId={funnelId}
@@ -84,7 +101,7 @@ const SortableStageItem: React.FC<SortableStageItemProps> = ({
         <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
         <Switch
           checked={!!stage.hide_values}
-          onCheckedChange={checked => onUpdate(idx, 'hide_values', checked as any)}
+          onCheckedChange={checked => onUpdate(idx, 'hide_values', checked)}
         />
       </div>
       <Button variant="ghost" size="icon" onClick={() => onRemove(idx)} className="shrink-0">
