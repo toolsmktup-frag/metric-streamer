@@ -254,6 +254,62 @@ const WhatsAppGroupSyncConfig: React.FC<WhatsAppGroupSyncConfigProps> = ({ funne
 
         {lastResult && <ResultPanel result={lastResult} stages={stages} config={config} />}
 
+        {automationOn && config.instance_id && (
+          <div className="rounded-md border border-border bg-muted/20 p-3 space-y-2">
+            <div className="flex items-center gap-2 text-sm">
+              {webhookStatus?.registered && webhookStatus?.hasGroups ? (
+                <>
+                  <CheckCircle2 className="h-4 w-4 text-green-600" />
+                  <span className="font-medium text-foreground">Monitoramento ativo</span>
+                  <span className="text-muted-foreground">— a UAZAPI vai notificar entradas e saídas em tempo real.</span>
+                </>
+              ) : webhookStatus ? (
+                <>
+                  <AlertCircle className="h-4 w-4 text-amber-600" />
+                  <span className="font-medium text-foreground">Monitoramento não está completo</span>
+                  <span className="text-muted-foreground">
+                    {webhookStatus.error
+                      ? `— ${webhookStatus.error}`
+                      : webhookStatus.registered
+                        ? '— webhook registrado mas sem evento "groups". Clique em "Ativar webhook".'
+                        : '— webhook não registrado nesta instância. Clique em "Ativar webhook".'}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                  <span className="text-muted-foreground">Verificando status do webhook...</span>
+                </>
+              )}
+            </div>
+
+            {webhookEvents.length > 0 && (
+              <div className="pt-2 border-t border-border">
+                <div className="mb-1 flex items-center gap-2 text-xs font-medium text-foreground">
+                  <Activity className="h-3.5 w-3.5" /> Últimos eventos recebidos
+                </div>
+                <div className="space-y-1 text-xs text-muted-foreground">
+                  {webhookEvents.map(event => {
+                    const action = event.payload?.action || '—';
+                    const participants = (event.payload?.participants || []).slice(0, 2).join(', ');
+                    const moved = (event.payload?.moved_in_count || 0) + (event.payload?.moved_out_count || 0);
+                    const ago = formatDistanceToNow(new Date(event.created_at), { addSuffix: true, locale: ptBR });
+                    return (
+                      <div key={event.id} className="flex items-center justify-between gap-2">
+                        <span className="truncate">
+                          <Badge variant={event.status === 'success' ? 'default' : 'secondary'} className="mr-2">{action}</Badge>
+                          {participants || 'sem participante'} · {ago}
+                        </span>
+                        <span className="text-foreground">{moved > 0 ? `+${moved} movido(s)` : event.error_message || event.status}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" className="gap-2" onClick={handleSave} disabled={saveConfig.isPending || !config.instance_id}>
             {saveConfig.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
