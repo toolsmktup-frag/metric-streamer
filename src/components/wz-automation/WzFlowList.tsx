@@ -313,6 +313,60 @@ export default function WzFlowList({ embedded = false }: { embedded?: boolean })
         </div>
       )}
 
+      <Dialog open={!!duplicateTarget} onOpenChange={(open) => !open && setDuplicateTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Duplicar automação</DialogTitle>
+            <DialogDescription>
+              Escolha como salvar a cópia de “{duplicateTarget?.name}”.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <button
+              type="button"
+              onClick={() => setDuplicateMode('standalone')}
+              className={`w-full rounded-lg border p-4 text-left transition-colors ${duplicateMode === 'standalone' ? 'border-primary bg-primary/10' : 'border-border bg-background hover:bg-muted/50'}`}
+            >
+              <span className="block text-sm font-medium text-foreground">Avulsa / sem funil</span>
+              <span className="block text-xs text-muted-foreground mt-1">A cópia aparece em Avulsos e não fica presa a nenhum CRM.</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setDuplicateMode('funnel')}
+              className={`w-full rounded-lg border p-4 text-left transition-colors ${duplicateMode === 'funnel' ? 'border-primary bg-primary/10' : 'border-border bg-background hover:bg-muted/50'}`}
+            >
+              <span className="block text-sm font-medium text-foreground">Vincular a um Funil de Leads</span>
+              <span className="block text-xs text-muted-foreground mt-1">A cópia já aparece dentro do funil escolhido.</span>
+            </button>
+
+            {duplicateMode === 'funnel' && (
+              <Select value={targetFunnelId} onValueChange={setTargetFunnelId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Escolha o funil de leads" />
+                </SelectTrigger>
+                <SelectContent>
+                  {leadFunnels.map((funnel: any) => (
+                    <SelectItem key={funnel.id} value={funnel.id}>{funnel.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDuplicateTarget(null)}>Cancelar</Button>
+            <Button
+              onClick={confirmDuplicate}
+              disabled={duplicateFlow.isPending || (duplicateMode === 'funnel' && !targetFunnelId)}
+            >
+              {duplicateFlow.isPending ? 'Duplicando...' : 'Duplicar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Delete Dialog */}
       <AlertDialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
         <AlertDialogContent>
