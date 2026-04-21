@@ -9,6 +9,14 @@ export interface WzInstanceProfile {
   status?: string;
 }
 
+function normalizeWzStatus(data: any, fallbackStatus?: string) {
+  const rawStatus = data?.status || data?.state || data?.instance?.status || data?.instance?.state || data?.data?.status || data?.data?.state;
+  if (rawStatus === 'connected' || rawStatus === 'open' || data?.connected === true || data?.status?.connected === true) {
+    return 'connected';
+  }
+  return rawStatus || fallbackStatus || 'disconnected';
+}
+
 export function useWzInstances() {
   return useQuery({
     queryKey: ['wz-instances'],
@@ -31,25 +39,22 @@ export function useWzInstanceProfiles(instances: WzInstance[]) {
       await Promise.all(
         instances.map(async (inst) => {
           try {
-            const { data, error } = await supabase.functions.invoke('whatsapp-instance', {
-              body: {
-                action: 'manual_status',
-                api_url: inst.api_url,
-                api_key: inst.api_key,
-              },
+            const url = inst.api_url.replace(/\/+$/, '');
+            const res = await fetch(`${url}/instance/status`, {
+              headers: { token: inst.api_key },
             });
-            if (error) {
+            if (!res.ok) {
               profiles[inst.id] = { status: inst.status };
               return;
             }
-            const processed = data?.processed || data;
+            const data = await res.json();
             profiles[inst.id] = {
-              phone_number: processed?.phone_number || data?.raw?.phone || data?.raw?.number || data?.raw?.instance?.phone || data?.raw?.user?.id?.replace('@s.whatsapp.net', ''),
-              profile_pic_url: processed?.profile_pic_url || data?.raw?.profilePicUrl || data?.raw?.instance?.profilePicUrl || data?.raw?.user?.profilePictureUrl,
-              status: processed?.status || data?.raw?.state || data?.raw?.status || data?.raw?.instance?.state,
+              phone_number: data?.phone || data?.number || data?.instance?.phone || data?.user?.id?.replace('@s.whatsapp.net', ''),
+              profile_pic_url: data?.profilePicUrl || data?.instance?.profilePicUrl || data?.user?.profilePictureUrl,
+              status: normalizeWzStatus(data, inst.status),
             };
           } catch {
-            // ignore
+            profiles[inst.id] = { status: inst.status };
           }
         })
       );
@@ -115,11 +120,13 @@ export function useDeleteWzInstance() {
 
 export async function testWzInstanceConnection(apiUrl: string, apiKey: string): Promise<boolean> {
   try {
-    const { data, error } = await supabase.functions.invoke('whatsapp-instance', {
-      body: { action: 'manual_status', api_url: apiUrl, api_key: apiKey },
+    const url = apiUrl.replace(/\/+$/, '');
+    const res = await fetch(`${url}/instance/status`, {
+      headers: { token: apiKey },
     });
-    if (error) return false;
-    return data?.processed?.status === 'connected' || data?.processed?.status === 'open';
+    if (!res.ok) return false;
+    const data = await res.json();
+    return normalizeWzStatus(data) === 'connected';
   } catch {
     return false;
   }
