@@ -124,7 +124,16 @@ const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSave
   };
 
   const removeStage = (idx: number) => {
-    setLocalStages(prev => prev.filter((_, i) => i !== idx));
+    setLocalStages(prev => {
+      const removedId = prev[idx]?.id;
+      return prev
+        .filter((_, i) => i !== idx)
+        .map(stage => removedId ? {
+          ...stage,
+          conversion_base_stage_id: stage.conversion_base_stage_id === removedId ? null : stage.conversion_base_stage_id,
+          visual_parent_stage_id: stage.visual_parent_stage_id === removedId ? null : stage.visual_parent_stage_id,
+        } : stage);
+    });
   };
 
   const updateStage = (idx: number, field: string, value: string | boolean) => {
@@ -151,7 +160,13 @@ const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSave
       toast.error('Todas as etapas precisam ter um nome');
       return;
     }
-    onSaveStages(localStages.map((s, i) => ({ ...s, sort_order: i })));
+    const validIds = new Set(localStages.map(stage => stage.id).filter(Boolean));
+    onSaveStages(localStages.map((s, i) => ({
+      ...s,
+      sort_order: i,
+      conversion_base_stage_id: s.conversion_base_stage_id && s.conversion_base_stage_id !== s.id && validIds.has(s.conversion_base_stage_id) ? s.conversion_base_stage_id : null,
+      visual_parent_stage_id: s.visual_parent_stage_id && s.visual_parent_stage_id !== s.id && validIds.has(s.visual_parent_stage_id) ? s.visual_parent_stage_id : null,
+    })));
   };
 
   const handleSaveRules = () => {
