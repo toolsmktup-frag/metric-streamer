@@ -7,7 +7,7 @@ const corsHeaders = {
 }
 
 const BodySchema = z.object({
-  mode: z.enum(['list_groups', 'get_config', 'save_config', 'preview', 'apply', 'invite_missing', 'enable_webhook', 'webhook_event']),
+  mode: z.enum(['list_groups', 'get_config', 'save_config', 'preview', 'apply', 'invite_missing', 'enable_webhook', 'webhook_event', 'list_runs', 'webhook_status']),
   funnel_id: z.string().uuid().optional(),
   instance_id: z.string().uuid().nullable().optional(),
   group_ids: z.array(z.string()).optional().default([]),
