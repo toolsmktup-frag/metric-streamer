@@ -6,9 +6,11 @@ import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useWzFlows, useDeleteWzFlow, useToggleWzFlow, useDuplicateWzFlow } from '@/hooks/useWzFlows';
+import { useLeadFunnels } from '@/hooks/useLeadFunnels';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { WzFlow } from '@/types/wz-automation';
@@ -45,7 +47,11 @@ export default function WzFlowList({ embedded = false }: { embedded?: boolean })
   const deleteFlow = useDeleteWzFlow();
   const toggleFlow = useToggleWzFlow();
   const duplicateFlow = useDuplicateWzFlow();
+  const { data: leadFunnels = [] } = useLeadFunnels();
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [duplicateTarget, setDuplicateTarget] = useState<WzFlow | null>(null);
+  const [duplicateMode, setDuplicateMode] = useState<'standalone' | 'funnel'>('standalone');
+  const [targetFunnelId, setTargetFunnelId] = useState<string>('');
   const [funnelFilter, setFunnelFilter] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'grouped' | 'flat'>('grouped');
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
@@ -139,6 +145,30 @@ export default function WzFlowList({ embedded = false }: { embedded?: boolean })
     });
   };
 
+  const openDuplicateDialog = (flow: WzFlow) => {
+    setDuplicateTarget(flow);
+    setDuplicateMode('standalone');
+    setTargetFunnelId('');
+  };
+
+  const confirmDuplicate = () => {
+    if (!duplicateTarget) return;
+    duplicateFlow.mutate(
+      {
+        id: duplicateTarget.id,
+        targetFunnelId: duplicateMode === 'funnel' ? targetFunnelId : null,
+        showInAutomations: true,
+      },
+      {
+        onSuccess: () => {
+          setDuplicateTarget(null);
+          setDuplicateMode('standalone');
+          setTargetFunnelId('');
+        },
+      },
+    );
+  };
+
   const renderFlowGrid = (flowList: WzFlow[]) => (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
       {flowList.map((flow) => (
@@ -147,7 +177,7 @@ export default function WzFlowList({ embedded = false }: { embedded?: boolean })
           flow={flow}
           onEdit={() => navigate(`/ferramentas/automacoes/${flow.id}`)}
           onDelete={() => setDeleteTarget(flow.id)}
-          onDuplicate={() => duplicateFlow.mutate(flow.id)}
+          onDuplicate={() => openDuplicateDialog(flow)}
           onToggle={(active) => toggleFlow.mutate({ id: flow.id, is_active: active })}
         />
       ))}
@@ -282,6 +312,60 @@ export default function WzFlowList({ embedded = false }: { embedded?: boolean })
           ))}
         </div>
       )}
+
+      <Dialog open={!!duplicateTarget} onOpenChange={(open) => !open && setDuplicateTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Duplicar automação</DialogTitle>
+            <DialogDescription>
+              Escolha como salvar a cópia de “{duplicateTarget?.name}”.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <button
+              type="button"
+              onClick={() => setDuplicateMode('standalone')}
+              className={`w-full rounded-lg border p-4 text-left transition-colors ${duplicateMode === 'standalone' ? 'border-primary bg-primary/10' : 'border-border bg-background hover:bg-muted/50'}`}
+            >
+              <span className="block text-sm font-medium text-foreground">Avulsa / sem funil</span>
+              <span className="block text-xs text-muted-foreground mt-1">A cópia aparece em Avulsos e não fica presa a nenhum CRM.</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setDuplicateMode('funnel')}
+              className={`w-full rounded-lg border p-4 text-left transition-colors ${duplicateMode === 'funnel' ? 'border-primary bg-primary/10' : 'border-border bg-background hover:bg-muted/50'}`}
+            >
+              <span className="block text-sm font-medium text-foreground">Vincular a um Funil de Leads</span>
+              <span className="block text-xs text-muted-foreground mt-1">A cópia já aparece dentro do funil escolhido.</span>
+            </button>
+
+            {duplicateMode === 'funnel' && (
+              <Select value={targetFunnelId} onValueChange={setTargetFunnelId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Escolha o funil de leads" />
+                </SelectTrigger>
+                <SelectContent>
+                  {leadFunnels.map((funnel: any) => (
+                    <SelectItem key={funnel.id} value={funnel.id}>{funnel.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDuplicateTarget(null)}>Cancelar</Button>
+            <Button
+              onClick={confirmDuplicate}
+              disabled={duplicateFlow.isPending || (duplicateMode === 'funnel' && !targetFunnelId)}
+            >
+              {duplicateFlow.isPending ? 'Duplicando...' : 'Duplicar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Dialog */}
       <AlertDialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>

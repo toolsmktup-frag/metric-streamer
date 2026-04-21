@@ -104,7 +104,10 @@ export function useToggleWzFlow() {
 export function useDuplicateWzFlow() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => {
+    mutationFn: async (params: string | { id: string; targetFunnelId?: string | null; showInAutomations?: boolean }) => {
+      const id = typeof params === 'string' ? params : params.id;
+      const targetFunnelId = typeof params === 'string' ? null : params.targetFunnelId;
+      const showInAutomations = typeof params === 'string' ? true : params.showInAutomations ?? true;
       const { data: original, error: fetchError } = await supabase
         .from('wz_flows' as any)
         .select('*')
@@ -118,11 +121,33 @@ export function useDuplicateWzFlow() {
         .select()
         .single();
       if (error) throw error;
+
+      if (targetFunnelId) {
+        const { error: linkError } = await (supabase as any)
+          .from('lead_funnel_automations')
+          .insert({
+            funnel_id: targetFunnelId,
+            wz_flow_id: (data as any).id,
+            trigger_events: [],
+            show_in_automations: showInAutomations,
+          });
+
+        if (linkError) {
+          await supabase.from('wz_flows' as any).delete().eq('id', (data as any).id);
+          throw linkError;
+        }
+      }
+
       return data as unknown as WzFlow;
     },
-    onSuccess: () => {
+    onSuccess: (_, vars) => {
+      const targetFunnelId = typeof vars === 'string' ? null : vars.targetFunnelId;
       qc.invalidateQueries({ queryKey: ['wz-flows'] });
-      toast.success('Fluxo duplicado!');
+      qc.invalidateQueries({ queryKey: ['lead-funnel-automations-visibility'] });
+      if (targetFunnelId) {
+        qc.invalidateQueries({ queryKey: ['lead-funnel-automations', targetFunnelId] });
+      }
+      toast.success(targetFunnelId ? 'Automação duplicada e vinculada ao funil' : 'Automação duplicada como avulsa');
     },
   });
 }
