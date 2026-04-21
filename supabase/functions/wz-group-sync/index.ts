@@ -89,6 +89,29 @@ function groupNameFrom(group: any): string {
   return group?.Name || group?.name || group?.Subject || group?.subject || groupIdFrom(group)
 }
 
+function valuesFrom(value: any): any[] {
+  if (!value) return []
+  return Array.isArray(value) ? value : [value]
+}
+
+function extractGroupIds(payload: any): string[] {
+  const candidates = [
+    payload.groupjid, payload.groupJid, payload.GroupJID, payload.chatid, payload.chatId,
+    payload.chat?.wa_chatid, payload.chat?.jid, payload.group?.jid, payload.group?.JID,
+    payload.data?.groupjid, payload.data?.groupJid, payload.data?.GroupJID, payload.data?.chatid,
+  ]
+  return [...new Set(candidates.map(groupIdFrom).filter(Boolean))]
+}
+
+function extractParticipants(payload: any): string[] {
+  const candidates = [
+    payload.participant, payload.Participant, payload.participants, payload.Participants,
+    payload.phone, payload.jid, payload.JID, payload.data?.participant, payload.data?.Participant,
+    payload.data?.participants, payload.data?.Participants, payload.message?.sender_pn,
+  ].flatMap(valuesFrom)
+  return [...new Set(candidates.map(participantPhone).filter(Boolean))]
+}
+
 async function requireUser(req: Request, supabaseUrl: string, anonKey: string) {
   const authHeader = req.headers.get('Authorization') || ''
   if (!authHeader.startsWith('Bearer ')) throw new Error('Usuário não autenticado')
