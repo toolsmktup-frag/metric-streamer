@@ -458,12 +458,29 @@ Deno.serve(async (req) => {
     if (body.mode === 'webhook_status') {
       try {
         const data = await uazapi(instance, '/webhook')
-        const url = `${supabaseUrl}/functions/v1/uazapi-webhook`
-        const registeredUrls: string[] = (data?.urls || data?.URLs || []).map((u: any) => u?.url || u?.URL || u).filter(Boolean)
-        const events: string[] = data?.events || data?.Events || []
-        const isRegistered = registeredUrls.some(u => u?.includes('uazapi-webhook'))
-        const hasGroups = events.map((e: string) => String(e).toLowerCase()).includes('groups')
-        return json({ status: { registered: isRegistered, hasGroups, expectedUrl: url, raw: data } })
+        const expectedUrl = `${supabaseUrl}/functions/v1/uazapi-webhook`
+
+        // Normalize response to array of webhook entries.
+        // UAZAPI v2 may return: array directly, { urls: [...] }, { webhooks: [...] }, or single object.
+        const entries: any[] = Array.isArray(data)
+          ? data
+          : Array.isArray(data?.urls) ? data.urls
+          : Array.isArray(data?.URLs) ? data.URLs
+          : Array.isArray(data?.webhooks) ? data.webhooks
+          : (data && typeof data === 'object') ? [data]
+          : []
+
+        const matching = entries.find((entry: any) => {
+          const url = entry?.url || entry?.URL || ''
+          return typeof url === 'string' && (url === expectedUrl || url.includes('uazapi-webhook'))
+        })
+
+        const isEnabled = matching?.enabled === true || matching?.enabled === 'true' || matching?.Enabled === true
+        const eventsList: string[] = (matching?.events || matching?.Events || []).map((e: any) => String(e).toLowerCase())
+        const hasGroups = eventsList.includes('groups')
+        const isRegistered = !!matching && isEnabled
+
+        return json({ status: { registered: isRegistered, hasGroups, expectedUrl, raw: data } })
       } catch (err) {
         return json({ status: { registered: false, hasGroups: false, error: err instanceof Error ? err.message : 'Falha ao consultar webhook' } })
       }
