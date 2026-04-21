@@ -407,7 +407,11 @@ interface ProductStat {
   revenue: number;
 }
 
-const ProductsRanking: React.FC<{ positions: (LeadStagePosition & { lead: Lead })[]; stages: LeadFunnelStage[] }> = ({ positions, stages }) => {
+const ProductsRanking: React.FC<{
+  positions: (LeadStagePosition & { lead: Lead })[];
+  stages: LeadFunnelStage[];
+  mode?: 'sales' | 'leads';
+}> = ({ positions, stages, mode = 'sales' }) => {
   const stageMap = useMemo(() => new Map(stages.map(s => [s.id, s])), [stages]);
 
   const products = useMemo(() => {
@@ -437,7 +441,9 @@ const ProductsRanking: React.FC<{ positions: (LeadStagePosition & { lead: Lead }
     <div className="rounded-xl border border-border bg-card p-5">
       <div className="flex items-center gap-2 mb-4">
         <Package className="h-4 w-4 text-foreground" />
-        <h3 className="text-sm font-semibold text-foreground">Produtos Mais Vendidos</h3>
+        <h3 className="text-sm font-semibold text-foreground">
+          {mode === 'leads' ? 'Produtos de interesse' : 'Produtos mais vendidos'}
+        </h3>
       </div>
       <div className="space-y-3">
         {products.map((p) => (
@@ -450,7 +456,7 @@ const ProductsRanking: React.FC<{ positions: (LeadStagePosition & { lead: Lead }
               />
             </div>
             <span className="text-sm font-mono text-foreground w-10 text-right">{p.count}</span>
-            {p.revenue > 0 && (
+            {mode === 'sales' && p.revenue > 0 && (
               <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 w-28 text-right">
                 {formatCurrency(p.revenue)}
               </span>
