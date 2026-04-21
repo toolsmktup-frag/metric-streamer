@@ -219,6 +219,19 @@ Deno.serve(async (req) => {
       || payload.data?.key
 
     if (!isMessage) {
+      if (String(eventType).toLowerCase().includes('group')) {
+        const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+        const groupSyncRes = await fetch(`${supabaseUrl}/functions/v1/wz-group-sync`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode: 'webhook_event', payload }),
+        })
+        const groupSyncData = await groupSyncRes.json().catch(() => null)
+        return new Response(JSON.stringify({ ok: true, type: 'groups', groupSync: groupSyncData }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
       // Handle status updates
       if (['messages.update', 'message.update', 'messages_update', 'status'].includes(eventType)) {
         const supabaseAdmin = createClient(
