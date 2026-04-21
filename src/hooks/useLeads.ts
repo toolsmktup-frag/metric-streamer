@@ -97,3 +97,52 @@ export function useFunnelLeadCounts(funnelId: string | null) {
     refetchInterval: 30000,
   });
 }
+
+export function useFunnelStageHistoryCounts(funnelId: string | null) {
+  return useQuery({
+    queryKey: ['funnel-stage-history-counts', funnelId],
+    queryFn: async () => {
+      if (!funnelId) return {};
+
+      const [events, positions] = await Promise.all([
+        fetchAllRows<Pick<LeadEvent, 'lead_id' | 'metadata'>>(
+          'lead_events',
+          'lead_id, metadata',
+          { column: 'funnel_id', value: funnelId },
+        ),
+        fetchAllRows<Pick<LeadStagePosition, 'lead_id' | 'stage_id'>>(
+          'lead_stage_positions',
+          'lead_id, stage_id',
+          { column: 'funnel_id', value: funnelId },
+        ),
+      ]);
+
+      const leadsByStage = new Map<string, Set<string>>();
+      const addLeadToStage = (stageId: unknown, leadId: string) => {
+        if (typeof stageId !== 'string' || !stageId) return;
+        const leadSet = leadsByStage.get(stageId) || new Set<string>();
+        leadSet.add(leadId);
+        leadsByStage.set(stageId, leadSet);
+      };
+
+      events.forEach((event) => {
+        const metadata = event.metadata || {};
+        addLeadToStage(metadata.from_stage_id, event.lead_id);
+        addLeadToStage(metadata.to_stage_id, event.lead_id);
+      });
+
+      positions.forEach((position) => {
+        addLeadToStage(position.stage_id, position.lead_id);
+      });
+
+      const counts: Record<string, number> = {};
+      leadsByStage.forEach((leadSet, stageId) => {
+        counts[stageId] = leadSet.size;
+      });
+
+      return counts;
+    },
+    enabled: !!funnelId,
+    refetchInterval: 30000,
+  });
+}
