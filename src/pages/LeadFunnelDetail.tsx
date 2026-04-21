@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useLeadFunnel, useUpdateLeadFunnel, useUpsertStages, useUpsertTransitionRules, useFunnelSourceNodes, useFunnelEdges, useSaveFunnelSourceNodes, useSaveFunnelEdges } from '@/hooks/useLeadFunnels';
 import { useLeadCampaign } from '@/hooks/useLeadCampaigns';
-import { useLeadsByFunnel, useFunnelLeadCounts } from '@/hooks/useLeads';
+import { useLeadsByFunnel, useFunnelLeadCounts, useFunnelStageHistoryCounts } from '@/hooks/useLeads';
 import { useBulkLeadPurchases } from '@/hooks/useBulkLeadPurchases';
 import { useBulkLeadPurchaseProducts } from '@/hooks/useBulkLeadPurchaseProducts';
 import { useFunnels } from '@/hooks/useFunnels';
@@ -53,6 +53,7 @@ const LeadFunnelDetail: React.FC = () => {
     refetchInterval: isAdmin ? false : 5000,
   });
   const { data: leadCounts = {} } = useFunnelLeadCounts(id ?? null);
+  const { data: historicalLeadCounts = {} } = useFunnelStageHistoryCounts(id ?? null);
   const { data: sourceNodes = [] } = useFunnelSourceNodes(id ?? null);
   const { data: funnelEdges = [] } = useFunnelEdges(id ?? null);
   const { data: paymentFunnels = [] } = useFunnels();
@@ -356,7 +357,7 @@ const LeadFunnelDetail: React.FC = () => {
         )}
 
         <TabsContent value="visual" className="mt-4">
-          <FunnelVisual stages={stages} leadCounts={leadCounts} />
+          <FunnelVisual stages={stages} leadCounts={leadCounts} historicalCounts={historicalLeadCounts} />
         </TabsContent>
 
         {isAdmin && (
@@ -379,7 +380,7 @@ const LeadFunnelDetail: React.FC = () => {
 
         {isAdmin && (
           <TabsContent value="metrics" className="mt-4">
-            <FunnelMetricsTab stages={stages} positions={positions} funnelId={funnel.id} />
+            <FunnelMetricsTab stages={stages} positions={positions} funnelId={funnel.id} historicalCounts={historicalLeadCounts} />
           </TabsContent>
         )}
 

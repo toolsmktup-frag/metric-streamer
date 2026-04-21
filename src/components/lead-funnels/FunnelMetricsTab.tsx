@@ -12,9 +12,10 @@ interface Props {
   stages: LeadFunnelStage[];
   positions: (LeadStagePosition & { lead: Lead })[];
   funnelId: string;
+  historicalCounts?: Record<string, number>;
 }
 
-const FunnelMetricsTab: React.FC<Props> = ({ stages, positions, funnelId }) => {
+const FunnelMetricsTab: React.FC<Props> = ({ stages, positions, funnelId, historicalCounts = {} }) => {
   const sortedStages = useMemo(() => [...stages].sort((a, b) => a.sort_order - b.sort_order), [stages]);
 
   // Fetch tracking metrics from clicks table
@@ -78,18 +79,20 @@ const FunnelMetricsTab: React.FC<Props> = ({ stages, positions, funnelId }) => {
       const stagePositions = positions.filter(p => p.stage_id === stage.id);
       const revenue = stagePositions.reduce((sum, p) => sum + (Number(p.lead.metadata?.amount) || 0), 0);
       const isRevenue = isRevenueStage(stage.name);
-      return { stage, count: stagePositions.length, revenue, isRevenue };
+      const currentCount = stagePositions.length;
+      const passedCount = historicalCounts[stage.id] || currentCount;
+      return { stage, count: currentCount, passedCount, revenue, isRevenue };
     });
-  }, [sortedStages, positions]);
+  }, [sortedStages, positions, historicalCounts]);
 
-  const maxCount = Math.max(...stageStats.map(s => s.count), 1);
+  const maxCount = Math.max(...stageStats.map(s => s.passedCount), 1);
 
   // Conversion rates between adjacent stages
   const conversionRates = useMemo(() => {
     if (stageStats.length < 2) return [];
     return stageStats.slice(1).map((curr, i) => {
       const prev = stageStats[i];
-      const rate = prev.count > 0 ? (curr.count / prev.count) * 100 : 0;
+      const rate = prev.passedCount > 0 ? (curr.passedCount / prev.passedCount) * 100 : 0;
       return { from: prev.stage.name, to: curr.stage.name, rate };
     });
   }, [stageStats]);
