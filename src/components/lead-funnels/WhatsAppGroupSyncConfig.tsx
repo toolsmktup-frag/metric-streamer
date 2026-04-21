@@ -203,11 +203,11 @@ const WhatsAppGroupSyncConfig: React.FC<WhatsAppGroupSyncConfigProps> = ({ funne
 
         <div className="grid gap-4 md:grid-cols-2">
           <div>
-            <label className="mb-1 block text-sm font-medium text-foreground">Quem está no grupo</label>
+            <label className="mb-1 block text-sm font-medium text-foreground">Quem está na etapa</label>
             <StageSelect value={config.in_group_stage_id} onChange={value => update('in_group_stage_id', value)} stages={stages} placeholder="Mover para..." allowNone={false} />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-foreground">Quem não está no grupo</label>
+            <label className="mb-1 block text-sm font-medium text-foreground">Mas não está na etapa</label>
             <StageSelect value={config.not_in_group_stage_id} onChange={value => update('not_in_group_stage_id', value)} stages={stages} placeholder="Mover para..." />
           </div>
           <div>
