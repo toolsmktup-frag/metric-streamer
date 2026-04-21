@@ -31,16 +31,19 @@ export function useWzInstanceProfiles(instances: WzInstance[]) {
       await Promise.all(
         instances.map(async (inst) => {
           try {
-            const url = inst.api_url.replace(/\/+$/, '');
-            const res = await fetch(`${url}/instance/status`, {
-              headers: { token: inst.api_key },
+            const { data, error } = await supabase.functions.invoke('whatsapp-instance', {
+              body: {
+                action: 'manual_status',
+                api_url: inst.api_url,
+                api_key: inst.api_key,
+              },
             });
-            if (!res.ok) return;
-            const data = await res.json();
+            if (error) return;
+            const processed = data?.processed || data;
             profiles[inst.id] = {
-              phone_number: data?.phone || data?.number || data?.instance?.phone || data?.user?.id?.replace('@s.whatsapp.net', ''),
-              profile_pic_url: data?.profilePicUrl || data?.instance?.profilePicUrl || data?.user?.profilePictureUrl,
-              status: data?.state || data?.status || data?.instance?.state,
+              phone_number: processed?.phone_number || data?.raw?.phone || data?.raw?.number || data?.raw?.instance?.phone || data?.raw?.user?.id?.replace('@s.whatsapp.net', ''),
+              profile_pic_url: processed?.profile_pic_url || data?.raw?.profilePicUrl || data?.raw?.instance?.profilePicUrl || data?.raw?.user?.profilePictureUrl,
+              status: processed?.status || data?.raw?.state || data?.raw?.status || data?.raw?.instance?.state,
             };
           } catch {
             // ignore
@@ -109,11 +112,11 @@ export function useDeleteWzInstance() {
 
 export async function testWzInstanceConnection(apiUrl: string, apiKey: string): Promise<boolean> {
   try {
-    const url = apiUrl.replace(/\/+$/, '');
-    const res = await fetch(`${url}/instance/status`, {
-      headers: { token: apiKey },
+    const { data, error } = await supabase.functions.invoke('whatsapp-instance', {
+      body: { action: 'manual_status', api_url: apiUrl, api_key: apiKey },
     });
-    return res.ok;
+    if (error) return false;
+    return data?.processed?.status === 'connected' || data?.processed?.status === 'open';
   } catch {
     return false;
   }

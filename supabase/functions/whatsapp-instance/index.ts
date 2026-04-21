@@ -213,6 +213,36 @@ Deno.serve(async (req) => {
       })
     }
 
+    if (action === 'manual_status') {
+      const manualApiUrl = normalizeBaseUrl(body.api_url)
+      const manualApiToken = body.api_key
+
+      if (!manualApiUrl || !manualApiUrl.startsWith('http') || !manualApiToken) {
+        return new Response(JSON.stringify({ error: 'api_url and api_key required' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      const res = await fetch(buildUazUrl(manualApiUrl, '/instance/status'), {
+        headers: { 'Content-Type': 'application/json', 'token': manualApiToken },
+      })
+      const raw = await readJsonSafely(res)
+      const rawStatus = raw?.status || raw?.state || raw?.instance?.status || raw?.instance?.state || raw?.data?.status || raw?.data?.state
+      const isConnected = rawStatus === 'connected' || rawStatus === 'open' || raw?.connected === true || raw?.status?.connected === true
+
+      return new Response(JSON.stringify({
+        raw,
+        processed: {
+          status: isConnected ? 'connected' : (rawStatus || 'disconnected'),
+          phone_number: raw?.phone || raw?.number || raw?.instance?.phone || raw?.instance?.owner || raw?.user?.id?.replace('@s.whatsapp.net', '') || raw?.status?.jid?.split(':')?.[0] || null,
+          profile_pic_url: raw?.profilePicUrl || raw?.instance?.profilePicUrl || raw?.user?.profilePictureUrl || null,
+        },
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
     if (!instanceId) {
       return new Response(JSON.stringify({ error: 'instance_id required' }), {
         status: 400,
