@@ -10,6 +10,7 @@ interface FunnelVisualProps {
 const FunnelVisual: React.FC<FunnelVisualProps> = ({ stages, leadCounts, historicalCounts = {} }) => {
   const sorted = [...stages].sort((a, b) => a.sort_order - b.sort_order);
   const maxCount = Math.max(1, ...sorted.map(s => historicalCounts[s.id] || leadCounts[s.id] || 0));
+  const stageById = new Map(sorted.map(stage => [stage.id, stage]));
 
   return (
     <div className="flex flex-col items-center gap-1 py-6">
@@ -17,8 +18,9 @@ const FunnelVisual: React.FC<FunnelVisualProps> = ({ stages, leadCounts, histori
         const currentCount = leadCounts[stage.id] || 0;
         const historicalCount = historicalCounts[stage.id] || currentCount;
         const widthPercent = Math.max(20, (historicalCount / maxCount) * 100);
-        const prevCount = i > 0 ? (historicalCounts[sorted[i - 1].id] || leadCounts[sorted[i - 1].id] || 0) : null;
-        const convRate = prevCount && prevCount > 0 ? ((historicalCount / prevCount) * 100).toFixed(1) : null;
+        const baseStage = stage.conversion_base_stage_id ? stageById.get(stage.conversion_base_stage_id) : sorted[i - 1];
+        const baseCount = baseStage ? (historicalCounts[baseStage.id] || leadCounts[baseStage.id] || 0) : null;
+        const convRate = baseCount && baseCount > 0 ? ((historicalCount / baseCount) * 100).toFixed(1) : null;
 
         return (
           <div key={stage.id} className="w-full flex flex-col items-center">
@@ -36,7 +38,7 @@ const FunnelVisual: React.FC<FunnelVisualProps> = ({ stages, leadCounts, histori
                 <span>Passaram: <strong className="text-foreground">{historicalCount}</strong></span>
               </div>
               {convRate && (
-                <span className="absolute -right-16 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                <span className="absolute -right-16 top-1/2 -translate-y-1/2 text-xs text-muted-foreground" title={baseStage ? `Base: ${baseStage.name}` : undefined}>
                   {convRate}%
                 </span>
               )}
