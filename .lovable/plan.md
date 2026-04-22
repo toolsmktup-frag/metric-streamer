@@ -1,78 +1,75 @@
 
 
-## Melhorias no chat: links clicáveis + viewer de mídia
+## Plano: Responder (quote) + Reagir (emoji) no chat WhatsApp
 
-### 1. Links clicáveis nas mensagens
+### 1. Backend — edge function `whatsapp-send` (estender)
 
-**Hoje:** URLs em mensagens de texto renderizam como texto puro (sem `<a>`).
+Hoje (presumido) aceita `{ instance_id, phone, text/media }`. Adicionar dois campos opcionais:
 
-**Mudança:** No componente que renderiza o corpo da mensagem (`src/components/whatsapp/MessageBubble.tsx` — ou equivalente no folder `whatsapp/`), criar um helper `linkify(text)` que:
-- Detecta URLs (`https?://...`) e telefones/emails via regex.
-- Quebra o texto em segmentos e devolve `<a href={url} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:opacity-80">{url}</a>` para os matches.
-- Preserva quebras de linha existentes (`whitespace-pre-wrap`).
-- Funciona pra mensagens enviadas (texto branco no balão roxo) e recebidas — só usa `text-current` pra herdar a cor do balão.
+- **`reply_to: { id: string, text?: string, sender?: string }`** → quando presente, monta payload UAZAPI com `replyid` (ID externo da mensagem citada). Endpoint UAZAPI v2: `POST /send/text` (ou `/send/media`) aceita `replyid` no body.
+- **`reaction: { message_id: string, emoji: string }`** → novo branch que chama `POST /message/react` da UAZAPI com `{ number, id, text: emoji }`. Emoji vazio (`""`) = remover reação.
 
-Aplicado em: balão de texto principal + caption de mídia (imagem/vídeo/documento com legenda).
+Após envio bem-sucedido de reação, fazer **upsert em `whatsapp_messages`** numa coluna nova `reactions jsonb` (ou tabela `whatsapp_message_reactions`) — escolho **coluna `reactions jsonb`** pra simplicidade: array `[{ emoji, from_me, sender, timestamp }]`.
 
-### 2. Viewer inline de mídia + menu de 3 pontos
+### 2. Banco — migration
 
-**Hoje:** documentos/imagens/vídeos têm botão único que baixa direto.
+Adicionar 2 colunas em `whatsapp_messages`:
+- `reactions jsonb DEFAULT '[]'::jsonb` — reações coladas ao balão.
+- `reply_to jsonb` — `{ id, text, sender_name }` da mensagem citada (já populado em outbound; pra inbound, parsear `payload_raw.message.quoted` no `uazapi-webhook`).
 
-**Mudança em `MessageBubble.tsx` (ou `MediaMessage.tsx` se separado):**
+Atualizar `uazapi-webhook` pra:
+- Capturar `message.quoted` (objeto UAZAPI com a mensagem citada) → salvar em `reply_to`.
+- Capturar eventos de reação (`messageType === "ReactionMessage"` ou `message.reaction`) → fazer `UPDATE whatsapp_messages SET reactions = reactions || ...` na mensagem original (matched por `message_id_external`).
 
-**Imagem:**
-- Renderiza thumbnail clicável dentro do balão (já deve renderizar — confirmar).
-- Click no thumb abre **lightbox** (novo componente `MediaLightbox.tsx` usando `Dialog` do shadcn) em fullscreen com a imagem centralizada, fundo escuro, botão fechar (X), botão baixar e setas se houver mais mídia no chat (escopo: só a mídia clicada por enquanto, sem navegação entre mensagens).
+### 3. Frontend — `ChatThread.tsx`
 
-**Vídeo:**
-- Renderiza `<video controls preload="metadata">` inline no balão (player nativo, máx 320px de largura).
-- Click no vídeo OU no botão "expandir" abre o mesmo `MediaLightbox` com player maior.
+**Menu de 3 pontos** (já existe pra mídia — estender pra TODOS os balões):
+- `MoreVertical` no canto superior do balão (esq pra outbound, dir pra inbound — espelhado).
+- `DropdownMenu` com itens:
+  - **Responder** (`Reply` icon) → seta `replyingTo` no estado do componente pai (`WhatsAppChat` ou equivalente).
+  - **Reagir** (`Smile` icon) → abre popover com 6 emojis rápidos (`👍 ❤️ 😂 😮 😢 🙏`) + botão "..." pra picker completo (escopo v1: só os 6 rápidos, picker completo fica pra depois).
+  - **Copiar** (texto, se houver).
+  - Itens existentes de mídia (Visualizar/Baixar) quando aplicável.
 
-**PDF/Documento:**
-- Substitui o botão "Documento" atual por um card com:
-  - Ícone do tipo de arquivo + nome + tamanho (se disponível).
-  - Click no card → abre `MediaLightbox` com `<iframe src={url}>` pra PDF ou ícone grande + "Baixar" pra outros formatos (docx, xlsx, etc — browser não renderiza inline).
-- Menu de **3 pontos** (`MoreVertical` do lucide) no canto do card com `DropdownMenu`:
-  - "Visualizar" (abre lightbox)
-  - "Baixar" (download direto, comportamento atual)
-  - "Copiar link" (copia URL pro clipboard + toast)
+**Reações renderizadas no balão:**
+- Pequena pílula no canto inferior do balão mostrando emoji(s) + count se >1 do mesmo.
+- Click na própria reação (se `from_me`) remove ela.
 
-**Menu de 3 pontos também em imagens e vídeos:** mesmo `DropdownMenu` no canto superior direito do thumb (aparece em hover desktop, sempre visível em mobile).
+**Preview de "respondendo a"** acima do input (`MessageInput.tsx` ou similar):
+- Card cinza com barra colorida lateral, nome do sender + trecho da mensagem citada (max 2 linhas), botão X pra cancelar.
+- Ao enviar, inclui `reply_to: { id, text, sender }` no payload.
 
-### 3. Componente `MediaLightbox.tsx` (novo)
+**Quote renderizado dentro do balão** (quando msg recebida tem `reply_to`):
+- Bloco menor encostado no topo do balão, fundo levemente diferente, barra lateral colorida, sender + texto truncado. Click rola até a mensagem original (best-effort: scroll pra `data-msg-id`).
 
-Localização: `src/components/whatsapp/MediaLightbox.tsx`.
+### 4. Hook `useSendMessage` (ou `useWhatsAppSend`)
 
-Props:
-```ts
-{ open: boolean; onClose: () => void;
-  type: 'image' | 'video' | 'pdf' | 'document';
-  url: string; filename?: string; mimeType?: string; }
-```
-
-Estrutura:
-- `Dialog` do shadcn em modo fullscreen (sem padding padrão).
-- Header com nome do arquivo + botões: baixar, copiar link, fechar.
-- Body:
-  - `image` → `<img>` centralizado com max-h/w 90vh/vw + zoom no click.
-  - `video` → `<video controls autoplay>` 80vh.
-  - `pdf` → `<iframe src={url}>` 100% altura.
-  - `document` (não-PDF) → ícone grande + "Visualização indisponível" + botão "Baixar".
+Estender pra aceitar `replyTo` e ter método separado `reactToMessage(messageId, emoji)`. Optimistic update: insere reação no cache do React Query antes da resposta do servidor.
 
 ### Arquivos editados/criados
 
-- **Criado**: `src/components/whatsapp/MediaLightbox.tsx`
-- **Criado**: `src/lib/linkify.tsx` (helper puro retornando ReactNode[])
-- **Editado**: `src/components/whatsapp/MessageBubble.tsx` (ou arquivo equivalente — confirmar nome no ato da implementação) — usa `linkify` no texto e abre lightbox em mídia
-- **Editado**: o componente que renderiza documento (provável `MessageBubble` mesmo) — adiciona menu de 3 pontos com DropdownMenu
+**Backend:**
+- `supabase/functions/whatsapp-send/index.ts` — branches `reply_to` + `reaction`.
+- `supabase/functions/uazapi-webhook/index.ts` — parse `quoted` e `ReactionMessage`.
+- Migration: `ALTER TABLE whatsapp_messages ADD COLUMN reactions jsonb DEFAULT '[]'::jsonb, ADD COLUMN reply_to jsonb;`
 
-### Sem mudanças em backend
-Tudo client-side. URLs de mídia já vêm do `whatsapp-chats` / payload UAZAPI.
+**Frontend:**
+- `src/components/whatsapp/ChatThread.tsx` — menu 3 pontos universal + render de reações + render de quote.
+- `src/components/whatsapp/MessageInput.tsx` (ou similar) — preview "respondendo a".
+- `src/components/whatsapp/QuickReactionPicker.tsx` (novo) — popover com 6 emojis.
+- Hook de envio — adicionar `reactToMessage` e suporte a `replyTo`.
 
 ### Validação
-1. Mandar mensagem com link `https://...` → vira clicável, abre em nova aba.
-2. Receber/abrir imagem → click no thumb abre lightbox; menu 3 pontos tem baixar/copiar/visualizar.
-3. Receber PDF → card mostra nome; click abre PDF inline no lightbox; 3 pontos baixa.
-4. Receber DOCX → card mostra nome; lightbox mostra "Visualização indisponível" + baixar.
-5. Receber vídeo → toca inline; expandir abre lightbox em player grande.
+
+1. Click ⋮ no balão → menu abre com Responder/Reagir/Copiar.
+2. Click Responder → preview aparece sobre o input; envio inclui citação; mensagem recebida do outro lado mostra como reply.
+3. Click Reagir → emoji escolhido aparece colado no balão; outro WhatsApp recebe a reação.
+4. Reação recebida via webhook aparece automaticamente no balão (realtime).
+5. Reply recebido renderiza quote dentro do balão.
+
+### Fora de escopo (v2)
+- Picker completo de emoji (mil emojis).
+- Múltiplas reações por usuário diferente no mesmo chat (1:1 só tem você + contato, então é trivial).
+- Long-press mobile / swipe-to-reply.
+- Editar/deletar mensagem.
 
