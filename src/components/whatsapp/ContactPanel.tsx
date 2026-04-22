@@ -213,9 +213,11 @@ export default function ContactPanel({ phone, senderName }: ContactPanelProps) {
                   <span className="text-[10px] text-muted-foreground">
                     {format(new Date(note.created_at), 'dd/MM/yy HH:mm')}
                   </span>
-                  <button onClick={() => deleteNote(note.id)} className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive">
-                    <Trash2 className="h-3 w-3" />
-                  </button>
+                  {canEditCrm && (
+                    <button onClick={() => deleteNote(note.id)} className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive">
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
