@@ -67,17 +67,17 @@ export default function ClaimLeadBanner({ leadId, currentOwnerId, currentUserId 
         <div className="flex-1 min-w-0">
           {isUnassigned ? (
             <>
-              <p className="text-[11px] font-medium text-foreground truncate">
-                Lead <span className="text-primary">sem responsável</span>
+              <p className="text-[11px] font-semibold text-foreground leading-tight whitespace-normal">
+                Lead sem responsável
               </p>
-              <p className="text-[10px] text-muted-foreground">Clique para assumir</p>
+              <p className="text-[10px] text-muted-foreground leading-tight">Clique pra assumir</p>
             </>
           ) : (
             <>
-              <p className="text-[11px] font-medium text-foreground truncate">
+              <p className="text-[11px] font-semibold text-foreground leading-tight truncate">
                 Lead de <span className="text-primary">{ownerName}</span>
               </p>
-              <p className="text-[10px] text-muted-foreground">Visualização somente leitura</p>
+              <p className="text-[10px] text-muted-foreground leading-tight">Somente leitura</p>
             </>
           )}
         </div>
