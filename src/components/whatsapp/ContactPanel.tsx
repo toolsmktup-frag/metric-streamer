@@ -273,7 +273,12 @@ export default function ContactPanel({ phone, senderName }: ContactPanelProps) {
           <Tag className="h-3 w-3" /> Tags
         </h4>
         {lead?.id ? (
-          <TagsEditor leadId={lead.id} />
+          <div
+            className={!canEditCrm ? 'pointer-events-none opacity-60' : ''}
+            title={!canEditCrm ? 'Assuma o lead para editar' : undefined}
+          >
+            <TagsEditor leadId={lead.id} />
+          </div>
         ) : ensureLead.isPending || isFetchingLead ? (
           <div className="flex items-center gap-2 text-xs text-muted-foreground italic">
             <Loader2 className="h-3 w-3 animate-spin" /> Preparando lead…
@@ -302,7 +307,12 @@ export default function ContactPanel({ phone, senderName }: ContactPanelProps) {
         </h4>
         {journey.length === 0 ? (
           lead?.id ? (
-            <FunnelLinker leadId={lead.id} />
+            <div
+              className={!canEditCrm ? 'pointer-events-none opacity-60' : ''}
+              title={!canEditCrm ? 'Assuma o lead para editar' : undefined}
+            >
+              <FunnelLinker leadId={lead.id} />
+            </div>
           ) : ensureLead.isPending || isFetchingLead ? (
             <div className="flex items-center gap-2 text-xs text-muted-foreground italic">
               <Loader2 className="h-3 w-3 animate-spin" /> Preparando lead…
