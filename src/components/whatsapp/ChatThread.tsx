@@ -447,17 +447,7 @@ function MediaRenderer({ message }: { message: WhatsAppMessage }) {
     case 'ptt':
       return <AudioPlayer message={message} src={media_url} isOutbound={message.direction === 'outbound'} />;
     case 'document':
-      return (
-        <a
-          href={media_url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-2 text-sm text-primary hover:underline"
-        >
-          <Download className="h-4 w-4" />
-          {message.media_filename || 'Documento'}
-        </a>
-      );
+      return <DocumentCard message={message} url={media_url} />;
     default:
       return null;
   }
