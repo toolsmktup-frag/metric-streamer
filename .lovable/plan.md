@@ -1,88 +1,54 @@
 
-## Corrigir erro do Copiloto no chat WhatsApp
 
-### Diagnóstico provável
-O erro está no fluxo do `sales-copilot`, não no `whatsapp-media`. Pelo código atual, o Copiloto:
-- não chama a UAZAPI diretamente
-- usa só dados persistidos (`whatsapp_messages`, lead, LTV, script)
-- portanto, mesmo se a instância `Gabi 2` estiver desconectada, o Copiloto deveria continuar funcionando para leitura/análise do histórico já salvo
+## Trocar Copiloto para Claude Haiku 4.5
 
-Como o browser mostra `NetworkError when attempting to fetch resource` no POST da função `sales-copilot`, o mais provável é:
-1. falha interna da edge function antes de responder corretamente, ou
-2. stream quebrando no backend/proxy sem retorno JSON útil
+### Decisão
+Usar **Anthropic direto** (não Lovable AI Gateway, não OpenRouter), com o modelo `claude-haiku-4-5` via API oficial da Anthropic.
 
-### O que vou ajustar
+### O que muda na edge function `sales-copilot`
 
-#### 1) Endurecer a edge function `supabase/functions/sales-copilot/index.ts`
-Objetivo: nunca deixar erro interno virar falha opaca de rede.
+1. Trocar endpoint:
+   - de: `https://ai.gateway.lovable.dev/v1/chat/completions`
+   - para: `https://api.anthropic.com/v1/messages`
+2. Trocar autenticação:
+   - de: `Authorization: Bearer ${LOVABLE_API_KEY}`
+   - para: `x-api-key: ${ANTHROPIC_API_KEY}` + `anthropic-version: 2023-06-01`
+3. Trocar formato do payload:
+   - Anthropic usa `system` separado do array `messages` (não vai como role)
+   - Streaming usa SSE com eventos `content_block_delta` (estrutura diferente do OpenAI)
+4. Trocar parser de SSE no frontend (`useSalesCopilot.ts`):
+   - hoje lê `parsed.choices[0].delta.content` (formato OpenAI)
+   - precisa ler `parsed.delta.text` quando `event: content_block_delta` (formato Anthropic)
+5. Modelo: `claude-haiku-4-5` em todas as 4 ações (sugerir, analisar, objeção, perguntar)
 
-Mudanças:
-- trocar a identificação de organização para o mesmo padrão robusto já usado em funções estáveis (`get_user_org_id` / auth validada)
-- envolver cada bloco de contexto em fallback independente:
-  - mensagens
-  - lead
-  - etapa/funil
-  - LTV/compras
-  - script
-- se qualquer parte falhar, continuar com contexto parcial em vez de quebrar a função
-- adicionar logs estruturados com:
-  - `action`
-  - `phone`
-  - `instance_id`
-  - `user_id`
-  - `org_id`
-  - etapa exata onde falhou
-- devolver JSON claro em erros de backend em vez de deixar o fetch cair “mudo”
+### Setup que você precisa fazer
 
-#### 2) Desacoplar o Copiloto do status online da instância
-Objetivo: conversa da `Gabi 2` continuar utilizável no Copiloto mesmo offline.
+1. Pegar sua API key em https://console.anthropic.com/settings/keys (formato `sk-ant-...`)
+2. Adicionar no Supabase como secret de Edge Function:
+   - Painel Supabase → Project Settings → **Edge Functions → Secrets**
+   - Name: `ANTHROPIC_API_KEY`
+   - Value: `sk-ant-...`
+3. Como seu projeto Supabase não está vinculado ao Lovable Cloud, eu te entrego os 2 arquivos prontos pra você colar manual:
+   - `supabase/functions/sales-copilot/index.ts` → cola no editor da função no painel Supabase e clica **Deploy**
+   - `src/hooks/useSalesCopilot.ts` → já fica atualizado aqui no Lovable, deploy automático no frontend
 
-Mudanças:
-- manter a leitura apenas do histórico salvo no banco
-- tratar `instance_id` apenas como filtro de conversa, não como dependência de conexão viva
-- se a instância estiver desconectada, exibir no máximo um aviso não-bloqueante no painel, sem impedir:
-  - Sugerir
-  - Analisar
-  - Objeção
-  - Perguntar
+### Custo estimado (Haiku 4.5)
+- Input: ~$1/M tokens
+- Output: ~$5/M tokens
+- Cada ação do Copiloto gasta ~2-5k tokens → fração de centavo por uso
 
-#### 3) Tornar a coleta de contexto mais resiliente
-Objetivo: evitar que joins mais frágeis derrubem a função.
-
-Mudanças:
-- revisar a parte de `lead_stage_positions` + relações de funil/etapa
-- se necessário, simplificar a consulta em etapas separadas para reduzir chance de erro de relação
-- normalizar campos opcionais antes de montar prompt
-- garantir que corpos de mensagem não-string ou vazios não causem crash na montagem do transcript
-
-#### 4) Melhorar o cliente `src/hooks/useSalesCopilot.ts`
-Objetivo: diferenciar erro HTTP de erro real de rede/stream e não deixar UX quebrada.
-
-Mudanças:
-- separar tratamento de:
-  - `fetch` falhou
-  - resposta não-OK
-  - stream interrompido
-  - JSON parcial/inválido no SSE
-- mostrar toast específico para erro de conectividade do Copiloto
-- preservar o painel aberto e impedir estado inconsistente
-- manter fallback amigável mesmo se a stream abortar no meio
-
-#### 5) Validar o comportamento no WhatsApp
-Arquivos envolvidos:
-- `supabase/functions/sales-copilot/index.ts`
-- `src/hooks/useSalesCopilot.ts`
-- possivelmente `src/components/whatsapp/SalesCopilotPanel.tsx`
-
-### Resultado esperado
-Depois da correção:
-- qualquer botão da aba Copiloto deve funcionar em conversas da `Gabi 2`
-- se faltar contexto, o Copiloto responde com contexto parcial
-- se houver erro real de IA/backend, aparece mensagem clara sem `NetworkError` genérico
-- a tela não quebra e o vendedor continua no chat
+### Trade-offs
+- Haiku 4.5 é o mais rápido e barato da família Claude 4, ótimo pra resposta de copiloto em tempo real
+- Se quiser análise mais profunda em "Analisar conversa", podemos usar `claude-sonnet-4-5` só nessa ação (te aviso e você decide)
+- A `LOVABLE_API_KEY` deixa de ser necessária — não precisa habilitar Lovable Cloud só pra isso
 
 ### Detalhes técnicos
-- foco no endpoint `POST /functions/v1/sales-copilot`
-- sem depender da UAZAPI para as ações do Copiloto
-- manter streaming SSE, mas com fallback seguro
-- seguir o padrão já usado nas funções de WhatsApp mais estáveis para autenticação e organização
+- Manter streaming SSE end-to-end (Anthropic suporta nativo)
+- Manter os `try/catch` granulares por etapa de contexto (mensagens, lead, stage, LTV, script)
+- Manter cancelamento via `AbortController`
+- Headers CORS preservados
+- Sem mudança de schema no banco
+
+### Confirmação necessária
+Me responde só **"vai"** que eu já gero os 2 arquivos prontos pra você colar no Supabase + atualizo o frontend aqui.
+
