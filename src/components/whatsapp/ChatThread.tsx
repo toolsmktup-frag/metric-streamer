@@ -567,7 +567,7 @@ export default function ChatThread({ messages, loading, phone, instances }: Chat
                   return hasMedia && !isDeleted ? (
                     <MediaRenderer message={msg} />
                   ) : (
-                    <p className="whitespace-pre-wrap break-words">{msg.body || ''}</p>
+                    <p className="whitespace-pre-wrap break-words">{linkify(msg.body || '')}</p>
                   );
                 })()}
 
