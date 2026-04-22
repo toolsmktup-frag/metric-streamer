@@ -336,6 +336,7 @@ export default function ContactPanel({ phone, senderName }: ContactPanelProps) {
                   {/* Funnel selector */}
                   <Select
                     value={j.funnel_id}
+                    disabled={!canEditCrm}
                     onValueChange={(newFunnelId) => {
                       if (newFunnelId === j.funnel_id) return;
                       const targetFunnel = allFunnels.find((f: any) => f.id === newFunnelId);
@@ -370,6 +371,7 @@ export default function ContactPanel({ phone, senderName }: ContactPanelProps) {
                   {stages.length > 1 ? (
                     <Select
                       value={j.stage_id}
+                      disabled={!canEditCrm}
                       onValueChange={(newStageId) => {
                         if (newStageId === j.stage_id) return;
                         const targetStage = stages.find((s: any) => s.id === newStageId);
