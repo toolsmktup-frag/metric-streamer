@@ -39,24 +39,40 @@ export function useSalesCopilot() {
         return;
       }
 
-      const resp = await fetch(CHAT_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify(args),
-        signal: controller.signal,
-      });
+      let resp: Response;
+      try {
+        resp = await fetch(CHAT_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify(args),
+          signal: controller.signal,
+        });
+      } catch (netErr: any) {
+        if (netErr?.name === 'AbortError') {
+          setIsStreaming(false);
+          return;
+        }
+        console.error('[useSalesCopilot] network error:', netErr);
+        toast.error('Sem conexão com o copiloto. Tente novamente em alguns segundos.');
+        setIsStreaming(false);
+        return;
+      }
 
       if (!resp.ok) {
         let msg = 'Erro no copiloto';
         try {
           const err = await resp.json();
           msg = err.error || msg;
-        } catch {}
+        } catch {
+          try { msg = (await resp.text()) || msg; } catch {}
+        }
         if (resp.status === 429) toast.error('Limite de uso atingido. Aguarde um instante.');
         else if (resp.status === 402) toast.error('Créditos de IA esgotados.');
+        else if (resp.status === 401) toast.error('Sessão expirada. Faça login de novo.');
+        else if (resp.status === 502) toast.error('Gateway de IA indisponível. Tente de novo.');
         else toast.error(msg);
         setIsStreaming(false);
         return;
