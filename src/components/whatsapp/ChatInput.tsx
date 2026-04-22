@@ -94,6 +94,8 @@ export default function ChatInput({
   onReplyInstanceChange,
   prefillText,
   onPrefillConsumed,
+  replyingTo,
+  onCancelReply,
 }: ChatInputProps) {
   const [text, setText] = useState('');
   const [attachment, setAttachment] = useState<File | null>(null);
