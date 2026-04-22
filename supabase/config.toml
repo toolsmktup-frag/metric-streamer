@@ -65,3 +65,6 @@ verify_jwt = false
 
 [functions.verify-tracking-snippet]
 verify_jwt = false
+
+[functions.sales-copilot]
+verify_jwt = false

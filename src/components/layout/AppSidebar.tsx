@@ -26,6 +26,7 @@ import {
   BarChart3,
   Zap,
   Trophy,
+  Sparkles,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useFunnels } from '@/hooks/useFunnels';
@@ -71,6 +72,7 @@ const CONFIG_ITEMS = [
   { path: '/integracoes',   label: 'Integrações',  icon: Link2 },
   { path: '/importar',      label: 'Importar',     icon: Upload },
   { path: '/agente-ia',     label: 'Agente IA',    icon: Bot },
+  { path: '/configuracoes/copiloto-vendas', label: 'Copiloto de Vendas', icon: Sparkles },
   { path: '/funis/configurar', label: 'Gerenciar Funis', icon: Settings },
 ];
 

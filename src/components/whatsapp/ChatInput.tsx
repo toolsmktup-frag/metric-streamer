@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { Send, Paperclip, X, Smile, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -23,6 +23,10 @@ interface ChatInputProps {
   replyInstanceId?: string;
   /** Callback when user changes reply instance */
   onReplyInstanceChange?: (instanceId: string) => void;
+  /** External text injection (e.g. from Sales Copilot). Updates as the value changes. */
+  prefillText?: string;
+  /** Called once the prefill has been consumed so the parent can clear it */
+  onPrefillConsumed?: () => void;
 }
 
 function InstanceSelector({
@@ -84,6 +88,8 @@ export default function ChatInput({
   instances,
   replyInstanceId,
   onReplyInstanceChange,
+  prefillText,
+  onPrefillConsumed,
 }: ChatInputProps) {
   const [text, setText] = useState('');
   const [attachment, setAttachment] = useState<File | null>(null);
@@ -96,6 +102,25 @@ export default function ChatInput({
 
   // The actual instance to send from: reply selector or prop
   const sendInstanceId = replyInstanceId || instanceId;
+
+  // Consume external prefill (from Sales Copilot)
+  useEffect(() => {
+    if (prefillText && prefillText.trim()) {
+      setText(prefillText);
+      onPrefillConsumed?.();
+      requestAnimationFrame(() => {
+        const el = textareaRef.current;
+        if (el) {
+          el.style.height = 'auto';
+          el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
+          el.focus();
+          el.setSelectionRange(prefillText.length, prefillText.length);
+        }
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefillText]);
+
 
   const autoResize = useCallback(() => {
     const el = textareaRef.current;

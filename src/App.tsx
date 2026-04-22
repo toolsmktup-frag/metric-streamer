@@ -46,6 +46,7 @@ import WzExecucoes from "./pages/WzExecucoes";
 import MinhasMetas from "./pages/MinhasMetas";
 import ConfigMetas from "./pages/ConfigMetas";
 import AutoRules from "./pages/AutoRules";
+import SalesCopilotConfig from "./pages/SalesCopilotConfig";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -117,6 +118,7 @@ const App = () => (
           <Route path="/ferramentas/automacoes/execucoes" element={<Protected><WzExecucoes /></Protected>} />
           {/* Auto-Rules */}
           <Route path="/auto-rules" element={<Protected><AutoRules /></Protected>} />
+          <Route path="/configuracoes/copiloto-vendas" element={<Protected><SalesCopilotConfig /></Protected>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
         </ErrorBoundary>
