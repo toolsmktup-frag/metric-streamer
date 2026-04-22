@@ -80,7 +80,8 @@ export default function ContactPanel({ phone, senderName }: ContactPanelProps) {
     },
     staleTime: 5 * 60 * 1000,
   });
-  const canSeeCrm = isAdmin || (lead?.assigned_to && lead.assigned_to === currentUserId);
+  const canEditCrm = isAdmin || (!!lead?.assigned_to && lead.assigned_to === currentUserId);
+  const showClaimBanner = !!lead?.id && !!lead?.assigned_to && !canEditCrm;
 
   // Auto-cria lead pro chat do WhatsApp quando ainda não existe.
   // Vendedor recebe assigned_to = ele mesmo (libera canSeeCrm na mesma hora).
@@ -112,12 +113,12 @@ export default function ContactPanel({ phone, senderName }: ContactPanelProps) {
     ? ((ensureLead.error as any)?.message || 'Falha ao preparar lead')
     : null;
 
-  const { notes, loading: notesLoading, addNote, deleteNote } = useContactNotes(canSeeCrm ? phone : null);
+  const { notes, loading: notesLoading, addNote, deleteNote } = useContactNotes(phone);
   const [noteText, setNoteText] = useState('');
 
-  const { data: purchaseData } = useLeadPurchases(canSeeCrm ? (lead?.email ?? null) : null, canSeeCrm ? phone : null);
-  const { data: journey = [] } = useLeadFunnelJourney(canSeeCrm ? (lead?.id ?? null) : null);
-  const { data: events = [] } = useLeadEvents(canSeeCrm ? (lead?.id ?? null) : null);
+  const { data: purchaseData } = useLeadPurchases(lead?.email ?? null, phone);
+  const { data: journey = [] } = useLeadFunnelJourney(lead?.id ?? null);
+  const { data: events = [] } = useLeadEvents(lead?.id ?? null);
 
   const funnelIds = useMemo(() => Array.from(new Set<string>(journey.map((j: any) => j.funnel_id))), [journey]);
   const { data: stagesByFunnel = {} } = useLeadFunnelStages(funnelIds);
@@ -146,33 +147,10 @@ export default function ContactPanel({ phone, senderName }: ContactPanelProps) {
   };
 
   const handleAddNote = async () => {
-    if (!noteText.trim()) return;
+    if (!noteText.trim() || !canEditCrm) return;
     await addNote(noteText);
     setNoteText('');
   };
-
-  if (!canSeeCrm) {
-    return (
-      <div className="p-4 space-y-4 overflow-y-auto h-full">
-        <div className="flex flex-col items-center gap-2 pb-4 border-b border-border">
-          <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
-            <User className="h-8 w-8 text-primary" />
-          </div>
-          <h3 className="font-semibold text-foreground text-sm">
-            {senderName || formatPhone(phone)}
-          </h3>
-          <span className="text-xs text-muted-foreground">{formatPhone(phone)}</span>
-        </div>
-        <div className="rounded-lg border border-border bg-muted/30 p-4 flex flex-col items-center text-center gap-2">
-          <Lock className="h-5 w-5 text-muted-foreground" />
-          <p className="text-xs font-medium text-foreground">Lead não atribuído a você</p>
-          <p className="text-[11px] text-muted-foreground">
-            Notas, vendas, funis e timeline ficam visíveis apenas para o vendedor responsável ou para gestores.
-          </p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="p-4 space-y-4 overflow-y-auto h-full">
