@@ -1,5 +1,5 @@
 // Sales Copilot — assists sellers with AI suggestions based on conversation context
-// Streams SSE responses from the Lovable AI Gateway.
+// Streams SSE responses from Anthropic Claude API (Haiku 4.5).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const corsHeaders = {
@@ -19,7 +19,11 @@ interface RequestBody {
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
+
+// Modelo padrão: Claude Haiku 4.5 (rápido + barato). Para "analyze" pode trocar pra sonnet se quiser mais profundidade.
+const MODEL_FAST = "claude-haiku-4-5";
+const MODEL_DEEP = "claude-haiku-4-5"; // troque pra "claude-sonnet-4-5" se quiser análise mais profunda
 
 function jsonError(status: number, error: string, extra?: Record<string, unknown>) {
   return new Response(JSON.stringify({ error, ...(extra || {}) }), {
@@ -96,6 +100,84 @@ function buildUserPrompt(action: Action, messages: any[], customQuestion?: strin
   return user;
 }
 
+/**
+ * Converte stream SSE da Anthropic pra um formato simples consumido pelo frontend.
+ * Frontend espera linhas SSE no formato: `data: {"text":"..."}` + `data: [DONE]` no final.
+ *
+ * Anthropic emite eventos como:
+ *   event: content_block_delta
+ *   data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"olá"}}
+ *
+ *   event: message_stop
+ *   data: {"type":"message_stop"}
+ *
+ * A gente extrai só o `delta.text` e reemite num formato OpenAI-like simplificado.
+ */
+function transformAnthropicStream(upstream: ReadableStream<Uint8Array>): ReadableStream<Uint8Array> {
+  const decoder = new TextDecoder();
+  const encoder = new TextEncoder();
+  let buffer = "";
+
+  return new ReadableStream({
+    async start(controller) {
+      const reader = upstream.getReader();
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+
+          let nl: number;
+          while ((nl = buffer.indexOf("\n")) !== -1) {
+            let line = buffer.slice(0, nl);
+            buffer = buffer.slice(nl + 1);
+            if (line.endsWith("\r")) line = line.slice(0, -1);
+            if (!line.startsWith("data: ")) continue;
+            const jsonStr = line.slice(6).trim();
+            if (!jsonStr) continue;
+
+            try {
+              const parsed = JSON.parse(jsonStr);
+              if (parsed?.type === "content_block_delta") {
+                const text = parsed?.delta?.text;
+                if (typeof text === "string" && text.length) {
+                  // Reemite no formato compatível com o parser do frontend
+                  const payload = JSON.stringify({
+                    choices: [{ delta: { content: text } }],
+                  });
+                  controller.enqueue(encoder.encode(`data: ${payload}\n\n`));
+                }
+              } else if (parsed?.type === "message_stop") {
+                controller.enqueue(encoder.encode(`data: [DONE]\n\n`));
+              } else if (parsed?.type === "error") {
+                const errMsg = parsed?.error?.message || "Erro Anthropic";
+                const payload = JSON.stringify({
+                  choices: [{ delta: { content: `\n\n[Erro: ${errMsg}]` } }],
+                });
+                controller.enqueue(encoder.encode(`data: ${payload}\n\n`));
+              }
+            } catch {
+              // ignora linha parcial / não-JSON
+            }
+          }
+        }
+        // flush final
+        controller.enqueue(encoder.encode(`data: [DONE]\n\n`));
+      } catch (e) {
+        try {
+          const payload = JSON.stringify({
+            choices: [{ delta: { content: `\n\n[Stream interrompido]` } }],
+          });
+          controller.enqueue(encoder.encode(`data: ${payload}\n\n`));
+        } catch {}
+      } finally {
+        try { controller.close(); } catch {}
+        try { reader.releaseLock(); } catch {}
+      }
+    },
+  });
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -104,7 +186,7 @@ Deno.serve(async (req) => {
   };
 
   try {
-    if (!LOVABLE_API_KEY) return jsonError(500, "LOVABLE_API_KEY não configurada");
+    if (!ANTHROPIC_API_KEY) return jsonError(500, "ANTHROPIC_API_KEY não configurada nos secrets da edge function");
 
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) return jsonError(401, "Não autenticado");
@@ -299,22 +381,24 @@ Deno.serve(async (req) => {
     const systemPrompt = buildSystemPrompt(body.action, script, leadCtx);
     const userPrompt = buildUserPrompt(body.action, messages, body.custom_question);
 
-    const model = body.action === "analyze" ? "google/gemini-2.5-pro" : "google/gemini-3-flash-preview";
+    const model = body.action === "analyze" ? MODEL_DEEP : MODEL_FAST;
 
     log("ai_call", { model, msg_count: messages.length, has_lead: !!lead, has_script: !!script });
 
     let aiResp: Response;
     try {
-      aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      aiResp = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          "x-api-key": ANTHROPIC_API_KEY,
+          "anthropic-version": "2023-06-01",
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
           model,
+          max_tokens: 1500,
+          system: systemPrompt,
           messages: [
-            { role: "system", content: systemPrompt },
             { role: "user", content: userPrompt },
           ],
           stream: true,
@@ -322,19 +406,24 @@ Deno.serve(async (req) => {
       });
     } catch (e) {
       log("ai_fetch_throw", { err: String(e) });
-      return jsonError(502, "Falha ao contatar gateway de IA");
+      return jsonError(502, "Falha ao contatar Anthropic");
     }
 
     if (!aiResp.ok) {
-      if (aiResp.status === 429) return jsonError(429, "Limite de uso atingido. Aguarde alguns instantes e tente novamente.");
-      if (aiResp.status === 402) return jsonError(402, "Créditos de IA esgotados. Adicione créditos em Configurações > Workspace > Uso.");
       let errText = "";
       try { errText = await aiResp.text(); } catch {}
-      log("ai_gateway_error", { status: aiResp.status, body: errText.slice(0, 500) });
-      return jsonError(502, "Erro no gateway de IA");
+      log("anthropic_error", { status: aiResp.status, body: errText.slice(0, 500) });
+      if (aiResp.status === 429) return jsonError(429, "Limite de uso da Anthropic atingido. Aguarde alguns instantes.");
+      if (aiResp.status === 401) return jsonError(401, "ANTHROPIC_API_KEY inválida.");
+      if (aiResp.status === 400) return jsonError(400, `Requisição inválida: ${errText.slice(0, 200)}`);
+      return jsonError(502, "Erro na API da Anthropic");
     }
 
-    return new Response(aiResp.body, {
+    if (!aiResp.body) return jsonError(502, "Sem corpo de resposta da Anthropic");
+
+    const transformed = transformAnthropicStream(aiResp.body);
+
+    return new Response(transformed, {
       headers: {
         ...corsHeaders,
         "Content-Type": "text/event-stream",
