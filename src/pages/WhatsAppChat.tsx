@@ -9,6 +9,8 @@ import ChatList from '@/components/whatsapp/ChatList';
 import ChatThread from '@/components/whatsapp/ChatThread';
 import ChatInput from '@/components/whatsapp/ChatInput';
 import ContactPanel from '@/components/whatsapp/ContactPanel';
+import SalesCopilotPanel from '@/components/whatsapp/SalesCopilotPanel';
+import SalesCopilotButton from '@/components/whatsapp/SalesCopilotButton';
 
 import {
   Select,
@@ -36,6 +38,8 @@ export default function WhatsAppChat() {
   const [hubOpen, setHubOpen] = useState(false);
   const [optimisticMessages, setOptimisticMessages] = useState<WhatsAppMessage[]>([]);
   const [replyInstanceId, setReplyInstanceId] = useState<string | null>(null);
+  const [copilotOpen, setCopilotOpen] = useState(false);
+  const [copilotPrefill, setCopilotPrefill] = useState<string>('');
 
   // Auto-select instance: single → that instance, multiple → 'all'
   useEffect(() => {
