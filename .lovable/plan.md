@@ -1,84 +1,88 @@
 
+## Corrigir erro do Copiloto no chat WhatsApp
 
-## Copiloto de Vendas no Chat (IA auxiliar do vendedor)
+### Diagnóstico provável
+O erro está no fluxo do `sales-copilot`, não no `whatsapp-media`. Pelo código atual, o Copiloto:
+- não chama a UAZAPI diretamente
+- usa só dados persistidos (`whatsapp_messages`, lead, LTV, script)
+- portanto, mesmo se a instância `Gabi 2` estiver desconectada, o Copiloto deveria continuar funcionando para leitura/análise do histórico já salvo
 
-Painel lateral no chat WhatsApp que lê o histórico da conversa + contexto do lead (funil, etapa, produtos, LTV) e gera **sugestões pro vendedor** — nunca responde o cliente direto. Vendedor sempre revisa e envia.
+Como o browser mostra `NetworkError when attempting to fetch resource` no POST da função `sales-copilot`, o mais provável é:
+1. falha interna da edge function antes de responder corretamente, ou
+2. stream quebrando no backend/proxy sem retorno JSON útil
 
-### O que o vendedor vê
+### O que vou ajustar
 
-Botão **"✨ Copiloto"** no header do `ChatThread`. Abre drawer lateral (380px) com 4 ações:
+#### 1) Endurecer a edge function `supabase/functions/sales-copilot/index.ts`
+Objetivo: nunca deixar erro interno virar falha opaca de rede.
 
-1. **Sugerir resposta** — 2-3 variações alinhadas ao script de vendas
-2. **Analisar conversa** — temperatura do lead (frio/morno/quente), objeções detectadas, próximo passo
-3. **Responder objeção** — vendedor cola a objeção, IA devolve contornos baseados no script
-4. **Pergunta livre** — "o cliente perguntou sobre parcelamento, o que respondo?"
+Mudanças:
+- trocar a identificação de organização para o mesmo padrão robusto já usado em funções estáveis (`get_user_org_id` / auth validada)
+- envolver cada bloco de contexto em fallback independente:
+  - mensagens
+  - lead
+  - etapa/funil
+  - LTV/compras
+  - script
+- se qualquer parte falhar, continuar com contexto parcial em vez de quebrar a função
+- adicionar logs estruturados com:
+  - `action`
+  - `phone`
+  - `instance_id`
+  - `user_id`
+  - `org_id`
+  - etapa exata onde falhou
+- devolver JSON claro em erros de backend em vez de deixar o fetch cair “mudo”
 
-Cada sugestão tem **"Copiar"** e **"Usar no input"** (pré-preenche o `ChatInput` pra editar antes de mandar).
+#### 2) Desacoplar o Copiloto do status online da instância
+Objetivo: conversa da `Gabi 2` continuar utilizável no Copiloto mesmo offline.
 
-### Contexto enviado pra IA
+Mudanças:
+- manter a leitura apenas do histórico salvo no banco
+- tratar `instance_id` apenas como filtro de conversa, não como dependência de conexão viva
+- se a instância estiver desconectada, exibir no máximo um aviso não-bloqueante no painel, sem impedir:
+  - Sugerir
+  - Analisar
+  - Objeção
+  - Perguntar
 
-- Últimas 30 mensagens da conversa atual (papel cliente/vendedor + texto + timestamp)
-- Lead: nome, telefone, etapa atual, funil, tags
-- LTV e histórico de compras (via `unified_customers`)
-- Script de vendas ativo da organização
+#### 3) Tornar a coleta de contexto mais resiliente
+Objetivo: evitar que joins mais frágeis derrubem a função.
 
-### Script de vendas configurável
+Mudanças:
+- revisar a parte de `lead_stage_positions` + relações de funil/etapa
+- se necessário, simplificar a consulta em etapas separadas para reduzir chance de erro de relação
+- normalizar campos opcionais antes de montar prompt
+- garantir que corpos de mensagem não-string ou vazios não causem crash na montagem do transcript
 
-Nova página `/configuracoes/copiloto-vendas` com editor markdown grande pra cada org definir:
-- Tom de voz
-- Etapas do script (abertura → sondagem → oferta → fechamento)
-- Objeções comuns + respostas modelo
-- Produtos, valores, condições
-- O que NÃO falar
+#### 4) Melhorar o cliente `src/hooks/useSalesCopilot.ts`
+Objetivo: diferenciar erro HTTP de erro real de rede/stream e não deixar UX quebrada.
 
-Tabela `sales_copilot_scripts` (id, organization_id, name, content, is_default, timestamps) com RLS por org. Apenas admin/gestor edita; vendedor consome.
+Mudanças:
+- separar tratamento de:
+  - `fetch` falhou
+  - resposta não-OK
+  - stream interrompido
+  - JSON parcial/inválido no SSE
+- mostrar toast específico para erro de conectividade do Copiloto
+- preservar o painel aberto e impedir estado inconsistente
+- manter fallback amigável mesmo se a stream abortar no meio
 
-### Backend
-
-Edge function `supabase/functions/sales-copilot/index.ts`:
-- Recebe `{ action, phone, instance_id, custom_question? }`
-- Busca histórico (`whatsapp_messages` + joins de lead/LTV)
-- Carrega script ativo da org
-- Chama Lovable AI Gateway:
-  - `google/gemini-3-flash-preview` (default — rápido e barato pra sugestões)
-  - `google/gemini-2.5-pro` na ação "Analisar conversa" (mais profunda)
-- **Streaming SSE** pra renderizar token a token
-- Trata 429 (rate limit) e 402 (créditos) com toast claro
-
-### Arquivos
-
-**Novos:**
+#### 5) Validar o comportamento no WhatsApp
+Arquivos envolvidos:
 - `supabase/functions/sales-copilot/index.ts`
-- `src/components/whatsapp/SalesCopilotPanel.tsx` (drawer com 4 abas)
-- `src/components/whatsapp/SalesCopilotButton.tsx`
-- `src/hooks/useSalesCopilot.ts` (streaming via fetch + SSE)
-- `src/hooks/useSalesScripts.ts` (CRUD do script)
-- `src/pages/SalesCopilotConfig.tsx` (editor markdown)
-- Migration: `sales_copilot_scripts` + RLS por org
+- `src/hooks/useSalesCopilot.ts`
+- possivelmente `src/components/whatsapp/SalesCopilotPanel.tsx`
 
-**Editar:**
-- `src/components/whatsapp/ChatThread.tsx` — adicionar botão Copiloto
-- `src/pages/WhatsAppChat.tsx` — montar drawer + callback `onUseInInput`
-- `src/components/whatsapp/ChatInput.tsx` — aceitar `prefillText`
-- `src/App.tsx` — rota `/configuracoes/copiloto-vendas`
-- Sidebar — link de configuração (admin only)
+### Resultado esperado
+Depois da correção:
+- qualquer botão da aba Copiloto deve funcionar em conversas da `Gabi 2`
+- se faltar contexto, o Copiloto responde com contexto parcial
+- se houver erro real de IA/backend, aparece mensagem clara sem `NetworkError` genérico
+- a tela não quebra e o vendedor continua no chat
 
-### Permissões
-
-- Vendedor usa o copiloto no chat (sem custos visíveis pra ele)
-- Admin/gestor edita o script
-- RLS: `sales_copilot_scripts` filtra por `organization_id` do usuário
-
-### Custos
-
-- Lovable AI já provisionado (sem API key extra)
-- Default Flash é barato; Pro só na análise profunda
-- Stateless: cada chamada monta contexto do zero (sem histórico de conversa com IA)
-
-### Fora de escopo (v1)
-
-- Auto-resposta sem confirmação do vendedor
-- Análise em batch de várias conversas
-- Treinar modelo customizado
-- Métricas de uso do copiloto (fica pra v2)
-
+### Detalhes técnicos
+- foco no endpoint `POST /functions/v1/sales-copilot`
+- sem depender da UAZAPI para as ações do Copiloto
+- manter streaming SSE, mas com fallback seguro
+- seguir o padrão já usado nas funções de WhatsApp mais estáveis para autenticação e organização
