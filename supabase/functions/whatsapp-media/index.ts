@@ -47,6 +47,13 @@ class MediaNotFoundError extends Error {
   }
 }
 
+class MediaUnavailableError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'MediaUnavailableError'
+  }
+}
+
 const MEDIA_BUCKET = 'whatsapp-media'
 
 function extFromMime(mime: string, fallback: string): string {
