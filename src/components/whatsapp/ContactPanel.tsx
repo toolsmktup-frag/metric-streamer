@@ -461,18 +461,6 @@ export default function ContactPanel({ phone, senderName }: ContactPanelProps) {
           </div>
         )}
       </div>
-
-      {/* Tags */}
-      <div>
-        <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
-          <Tag className="h-3 w-3" /> Tags
-        </h4>
-        {lead?.id ? (
-          <TagsEditor leadId={lead.id} />
-        ) : (
-          <p className="text-xs text-muted-foreground italic">Lead não encontrado</p>
-        )}
-      </div>
     </div>
   );
 }
