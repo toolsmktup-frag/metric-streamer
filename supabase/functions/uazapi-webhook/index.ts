@@ -524,6 +524,38 @@ Deno.serve(async (req) => {
     const direction = isFromMe ? 'outbound' : 'inbound'
     const status = isFromMe ? 'sent' : 'delivered'
 
+    // Extract reply/quote context (UAZAPI v2: message.quoted; legacy: contextInfo.quotedMessage)
+    let replyTo: { id: string | null; text: string | null; sender_name: string | null } | null = null
+    const quoted =
+      v2Message?.quoted ||
+      v2Message?.contextInfo?.quotedMessage ||
+      legacyMsg?.message?.extendedTextMessage?.contextInfo?.quotedMessage ||
+      null
+    const quotedKeyId =
+      v2Message?.quoted?.id ||
+      v2Message?.contextInfo?.stanzaId ||
+      legacyMsg?.message?.extendedTextMessage?.contextInfo?.stanzaId ||
+      null
+    if (quoted || quotedKeyId) {
+      const qText =
+        quoted?.text ||
+        quoted?.caption ||
+        quoted?.conversation ||
+        quoted?.extendedTextMessage?.text ||
+        (typeof quoted?.content === 'string' ? quoted.content : '') ||
+        ''
+      const qSender =
+        quoted?.senderName ||
+        quoted?.pushName ||
+        v2Message?.contextInfo?.participant ||
+        null
+      replyTo = {
+        id: quotedKeyId || quoted?.id || null,
+        text: qText ? String(qText).slice(0, 500) : null,
+        sender_name: qSender,
+      }
+    }
+
     const { data: insertedRow, error: insertErr } = await supabaseAdmin
       .from('whatsapp_messages')
       .insert({
@@ -539,6 +571,7 @@ Deno.serve(async (req) => {
         payload_raw: payload,
         sender_name: senderName,
         lead_id: leadId,
+        reply_to: replyTo,
       })
       .select('id')
       .single()
