@@ -1,17 +1,19 @@
 import { useRef, useEffect, useState, useMemo } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Check, CheckCheck, Clock, Ban, Download, Play, Pause, MoreVertical, FileText, Eye, Copy, Maximize2 } from 'lucide-react';
+import { Check, CheckCheck, Clock, Ban, Download, Play, Pause, MoreVertical, FileText, Eye, Copy, Maximize2, Reply, Smile, Copy as CopyIcon } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import type { WhatsAppMessage } from '@/hooks/useWhatsApp';
 import type { WhatsAppInstance } from '@/hooks/useWhatsApp';
-import { getInstanceDisplayName } from '@/hooks/useWhatsApp';
+import { getInstanceDisplayName, reactToWhatsAppMessage } from '@/hooks/useWhatsApp';
 import { format } from 'date-fns';
 import { linkify } from '@/lib/linkify';
 import MediaLightbox, { type MediaType } from './MediaLightbox';
+import QuickReactionPicker from './QuickReactionPicker';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
@@ -73,6 +75,12 @@ interface ChatThreadProps {
   phone: string | null;
   /** Pass instances to show instance badges on outbound messages in unified mode */
   instances?: WhatsAppInstance[];
+  /** Triggered when user picks "Responder" from a message's menu */
+  onReply?: (msg: WhatsAppMessage) => void;
+  /** Effective instance id used for outbound actions (reactions) */
+  instanceId?: string;
+  /** Phone of the open chat — required to send reactions */
+  phoneForActions?: string;
 }
 
 function StatusIcon({ status, direction }: { status: string; direction: string }) {
