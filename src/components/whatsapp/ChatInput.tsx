@@ -313,7 +313,26 @@ export default function ChatInput({
         </div>
       )}
 
-      <div className="flex items-end gap-2">
+      {replyingTo && (
+        <div className="flex items-stretch gap-2 mb-2 rounded-lg bg-muted/60 overflow-hidden text-xs">
+          <div className="w-1 bg-primary shrink-0" />
+          <div className="flex-1 min-w-0 py-1.5 pr-1">
+            <div className="flex items-center gap-1 text-primary font-semibold">
+              <Reply className="h-3 w-3" />
+              <span>{replyingTo.from_me ? 'Você' : (replyingTo.sender_name || 'Mensagem')}</span>
+            </div>
+            <p className="text-muted-foreground truncate">{replyingTo.text || '(mídia)'}</p>
+          </div>
+          <button
+            onClick={() => onCancelReply?.()}
+            className="px-2 text-muted-foreground hover:text-foreground shrink-0"
+            aria-label="Cancelar resposta"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+
         {/* Instance selector for unified mode */}
         {showInstanceSelector && (
           <InstanceSelector
