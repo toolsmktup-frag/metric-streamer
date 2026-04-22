@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import type { WhatsAppMessage } from '@/hooks/useWhatsApp';
+import type { WhatsAppMessage, ReplyContext } from '@/hooks/useWhatsApp';
 import { MessageCircle, Settings, Plus, Wifi, WifiOff, ArrowLeft } from 'lucide-react';
 import { useWhatsAppInstances, useWhatsAppChats, useWhatsAppMessages, getInstanceDisplayName } from '@/hooks/useWhatsApp';
 import { useWhatsAppMultiChats } from '@/hooks/useWhatsAppMultiChat';
@@ -40,6 +40,12 @@ export default function WhatsAppChat() {
   const [replyInstanceId, setReplyInstanceId] = useState<string | null>(null);
   const [copilotOpen, setCopilotOpen] = useState(false);
   const [copilotPrefill, setCopilotPrefill] = useState<string>('');
+  const [replyingTo, setReplyingTo] = useState<ReplyContext | null>(null);
+
+  // Reset reply context when chat changes
+  useEffect(() => {
+    setReplyingTo(null);
+  }, [selectedPhone, selectedChatInstanceId]);
 
   // Auto-select instance: single → that instance, multiple → 'all'
   useEffect(() => {
@@ -353,6 +359,15 @@ export default function WhatsAppChat() {
             loading={loadingMessages}
             phone={selectedPhone}
             instances={isAllMode ? instances : undefined}
+            onReply={(msg) => setReplyingTo({
+              id: msg.id,
+              external_id: msg.message_id_external,
+              text: msg.body || '',
+              sender_name: msg.sender_name,
+              from_me: msg.direction === 'outbound',
+            })}
+            instanceId={effectiveInstanceId || undefined}
+            phoneForActions={selectedPhone || undefined}
           />
           {selectedPhone && effectiveInstanceId && (
             <ChatInput
@@ -365,6 +380,8 @@ export default function WhatsAppChat() {
               onReplyInstanceChange={isAllMode ? (id) => setReplyInstanceId(id) : undefined}
               prefillText={copilotPrefill}
               onPrefillConsumed={() => setCopilotPrefill('')}
+              replyingTo={replyingTo}
+              onCancelReply={() => setReplyingTo(null)}
             />
           )}
         </div>

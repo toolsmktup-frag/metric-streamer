@@ -50,6 +50,16 @@ export interface WhatsAppMessage {
   sender_name: string | null;
   created_at: string;
   updated_at: string;
+  reactions?: Array<{ emoji: string; from_me: boolean; sender?: string | null; timestamp?: string }> | null;
+  reply_to?: { id?: string | null; text?: string | null; sender_name?: string | null } | null;
+}
+
+export interface ReplyContext {
+  id: string;
+  external_id: string | null;
+  text: string;
+  sender_name: string | null;
+  from_me: boolean;
 }
 
 export interface ChatSummary {
@@ -297,11 +307,25 @@ export async function sendWhatsAppMessage(params: {
   media_filename?: string;
   action?: 'send' | 'edit' | 'delete';
   message_id?: string;
+  reply_to?: { id: string; text?: string | null; sender_name?: string | null } | null;
 }) {
   const { data, error } = await supabase.functions.invoke('whatsapp-send', {
     body: params,
   });
   if (error) throw new Error(error.message || 'Failed to send');
+  return data;
+}
+
+export async function reactToWhatsAppMessage(params: {
+  instance_id: string;
+  phone: string;
+  message_id: string;
+  emoji: string; // empty string removes reaction
+}) {
+  const { data, error } = await supabase.functions.invoke('whatsapp-send', {
+    body: { ...params, action: 'react' },
+  });
+  if (error) throw new Error(error.message || 'Failed to react');
   return data;
 }
 

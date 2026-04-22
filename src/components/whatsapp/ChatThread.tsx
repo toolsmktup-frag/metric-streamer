@@ -1,17 +1,19 @@
 import { useRef, useEffect, useState, useMemo } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Check, CheckCheck, Clock, Ban, Download, Play, Pause, MoreVertical, FileText, Eye, Copy, Maximize2 } from 'lucide-react';
+import { Check, CheckCheck, Clock, Ban, Download, Play, Pause, MoreVertical, FileText, Eye, Copy, Maximize2, Reply, Smile, Copy as CopyIcon } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import type { WhatsAppMessage } from '@/hooks/useWhatsApp';
 import type { WhatsAppInstance } from '@/hooks/useWhatsApp';
-import { getInstanceDisplayName } from '@/hooks/useWhatsApp';
+import { getInstanceDisplayName, reactToWhatsAppMessage } from '@/hooks/useWhatsApp';
 import { format } from 'date-fns';
 import { linkify } from '@/lib/linkify';
 import MediaLightbox, { type MediaType } from './MediaLightbox';
+import QuickReactionPicker from './QuickReactionPicker';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
@@ -73,6 +75,12 @@ interface ChatThreadProps {
   phone: string | null;
   /** Pass instances to show instance badges on outbound messages in unified mode */
   instances?: WhatsAppInstance[];
+  /** Triggered when user picks "Responder" from a message's menu */
+  onReply?: (msg: WhatsAppMessage) => void;
+  /** Effective instance id used for outbound actions (reactions) */
+  instanceId?: string;
+  /** Phone of the open chat — required to send reactions */
+  phoneForActions?: string;
 }
 
 function StatusIcon({ status, direction }: { status: string; direction: string }) {
@@ -502,7 +510,154 @@ function InstanceBadge({ instanceName, isOutbound }: { instanceName: string; isO
   );
 }
 
-export default function ChatThread({ messages, loading, phone, instances }: ChatThreadProps) {
+/** Menu of 3 dots universal: Reply / React / Copy */
+function MessageActionsMenu({
+  msg,
+  isOut,
+  onReply,
+  onReact,
+  canReact,
+}: {
+  msg: WhatsAppMessage;
+  isOut: boolean;
+  onReply?: (msg: WhatsAppMessage) => void;
+  onReact?: (msg: WhatsAppMessage, emoji: string) => void;
+  canReact: boolean;
+}) {
+  const [reactionOpen, setReactionOpen] = useState(false);
+  const hasText = !!msg.body && msg.body.trim().length > 0;
+
+  return (
+    <div
+      className={`absolute top-1 ${isOut ? 'left-1' : 'right-1'} opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity [@media(hover:none)]:opacity-100`}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            className={`h-6 w-6 rounded-full flex items-center justify-center transition-colors ${
+              isOut
+                ? 'bg-primary-foreground/15 text-primary-foreground hover:bg-primary-foreground/30'
+                : 'bg-muted text-muted-foreground hover:bg-muted/80'
+            }`}
+            aria-label="Mais opções"
+          >
+            <MoreVertical className="h-3.5 w-3.5" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align={isOut ? 'start' : 'end'}>
+          {onReply && (
+            <DropdownMenuItem onClick={() => onReply(msg)}>
+              <Reply className="h-4 w-4 mr-2" /> Responder
+            </DropdownMenuItem>
+          )}
+          {canReact && onReact && (
+            <QuickReactionPicker
+              open={reactionOpen}
+              onOpenChange={setReactionOpen}
+              onSelect={(emoji) => onReact(msg, emoji)}
+              trigger={
+                <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setReactionOpen(true); }}>
+                  <Smile className="h-4 w-4 mr-2" /> Reagir
+                </DropdownMenuItem>
+              }
+            />
+          )}
+          {hasText && (
+            <DropdownMenuItem onClick={() => {
+              navigator.clipboard.writeText(msg.body || '').then(
+                () => toast.success('Texto copiado'),
+                () => toast.error('Não foi possível copiar')
+              );
+            }}>
+              <CopyIcon className="h-4 w-4 mr-2" /> Copiar texto
+            </DropdownMenuItem>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+}
+
+/** Render reactions pill at the bottom of the bubble */
+function ReactionsBar({
+  msg,
+  isOut,
+  onRemoveOwn,
+}: {
+  msg: WhatsAppMessage;
+  isOut: boolean;
+  onRemoveOwn?: (msg: WhatsAppMessage) => void;
+}) {
+  const reactions = msg.reactions || [];
+  if (!reactions || reactions.length === 0) return null;
+
+  const groups = new Map<string, { count: number; ownReacted: boolean }>();
+  for (const r of reactions) {
+    if (!r?.emoji) continue;
+    const g = groups.get(r.emoji) || { count: 0, ownReacted: false };
+    g.count += 1;
+    if (r.from_me) g.ownReacted = true;
+    groups.set(r.emoji, g);
+  }
+  if (groups.size === 0) return null;
+
+  return (
+    <div className={`flex flex-wrap gap-1 mt-1 ${isOut ? 'justify-end' : 'justify-start'}`}>
+      {Array.from(groups.entries()).map(([emoji, g]) => (
+        <button
+          key={emoji}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (g.ownReacted) onRemoveOwn?.(msg);
+          }}
+          className={`flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[11px] border shadow-sm transition-colors ${
+            g.ownReacted
+              ? 'bg-primary/15 border-primary/30 text-foreground hover:bg-primary/25'
+              : 'bg-card border-border text-foreground'
+          }`}
+          title={g.ownReacted ? 'Clique para remover sua reação' : ''}
+        >
+          <span>{emoji}</span>
+          {g.count > 1 && <span className="text-muted-foreground">{g.count}</span>}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Render quoted message block inside the bubble */
+function QuoteBlock({ replyTo, isOut }: { replyTo: WhatsAppMessage['reply_to']; isOut: boolean }) {
+  if (!replyTo) return null;
+  const text = replyTo.text || '(mídia)';
+  const sender = replyTo.sender_name || 'Mensagem';
+  return (
+    <div
+      className={`flex items-stretch gap-2 mb-1.5 rounded overflow-hidden text-xs cursor-pointer ${
+        isOut ? 'bg-primary-foreground/15' : 'bg-muted'
+      }`}
+      onClick={() => {
+        if (!replyTo.id) return;
+        const el = document.querySelector(`[data-msg-external-id="${CSS.escape(replyTo.id)}"]`);
+        el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }}
+      role="button"
+      tabIndex={0}
+    >
+      <div className={`w-1 shrink-0 ${isOut ? 'bg-primary-foreground/70' : 'bg-primary'}`} />
+      <div className="flex-1 min-w-0 py-1 pr-2">
+        <div className={`font-semibold truncate ${isOut ? 'text-primary-foreground' : 'text-primary'}`}>
+          {sender}
+        </div>
+        <div className={`truncate ${isOut ? 'text-primary-foreground/80' : 'text-muted-foreground'}`}>
+          {text}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function ChatThread({ messages, loading, phone, instances, onReply, instanceId, phoneForActions }: ChatThreadProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const instanceMap = useMemo(() => {
@@ -517,6 +672,31 @@ export default function ChatThread({ messages, loading, phone, instances }: Chat
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages.length]);
+
+  const handleReact = async (msg: WhatsAppMessage, emoji: string) => {
+    if (!instanceId || !phoneForActions) {
+      toast.error('Não foi possível identificar a instância');
+      return;
+    }
+    if (!msg.message_id_external) {
+      toast.error('Mensagem ainda não sincronizada');
+      return;
+    }
+    try {
+      await reactToWhatsAppMessage({
+        instance_id: msg.instance_id || instanceId,
+        phone: phoneForActions,
+        message_id: msg.id,
+        emoji,
+      });
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao reagir');
+    }
+  };
+
+  const handleRemoveReaction = async (msg: WhatsAppMessage) => {
+    await handleReact(msg, '');
+  };
 
   if (!phone) {
     return (
@@ -542,24 +722,40 @@ export default function ChatThread({ messages, loading, phone, instances }: Chat
           const isDeleted = msg.is_deleted;
           const time = format(new Date(msg.created_at), 'HH:mm');
           const instanceName = instanceMap?.get(msg.instance_id);
+          const canReact = !!msg.message_id_external && !!instanceId && !!phoneForActions && !isDeleted;
+          const isOptimistic = msg.id.startsWith('temp-');
 
           return (
             <div
               key={msg.id}
+              data-msg-id={msg.id}
+              data-msg-external-id={msg.message_id_external || ''}
               className={`flex ${isOut ? 'justify-end' : 'justify-start'}`}
             >
               <div
-                className={`max-w-[65%] rounded-2xl px-3 py-2 text-sm shadow-sm ${
+                className={`group relative max-w-[65%] rounded-2xl px-3 py-2 pr-8 text-sm shadow-sm ${
                   isOut
                     ? 'bg-primary text-primary-foreground rounded-br-sm'
                     : 'bg-card border border-border text-foreground rounded-bl-sm'
                 } ${isDeleted ? 'opacity-50 italic' : ''}`}
               >
+                {!isDeleted && !isOptimistic && (
+                  <MessageActionsMenu
+                    msg={msg}
+                    isOut={isOut}
+                    onReply={onReply}
+                    onReact={handleReact}
+                    canReact={canReact}
+                  />
+                )}
+
                 {instanceName && isOut && (
                   <div className="mb-1">
                     <InstanceBadge instanceName={instanceName} isOutbound={isOut} />
                   </div>
                 )}
+
+                <QuoteBlock replyTo={msg.reply_to} isOut={isOut} />
 
                 {(() => {
                   const realType = detectRealMessageType(msg);
@@ -577,6 +773,8 @@ export default function ChatThread({ messages, loading, phone, instances }: Chat
                   </span>
                   <StatusIcon status={msg.status} direction={msg.direction} />
                 </div>
+
+                <ReactionsBar msg={msg} isOut={isOut} onRemoveOwn={handleRemoveReaction} />
               </div>
             </div>
           );

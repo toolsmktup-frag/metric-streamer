@@ -1,9 +1,9 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Send, Paperclip, X, Smile, ChevronDown } from 'lucide-react';
+import { Send, Paperclip, X, Smile, ChevronDown, Reply } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { sendWhatsAppMessage, sendPresence } from '@/hooks/useWhatsApp';
-import type { WhatsAppInstance, WhatsAppMessage } from '@/hooks/useWhatsApp';
+import type { WhatsAppInstance, WhatsAppMessage, ReplyContext } from '@/hooks/useWhatsApp';
 import { getInstanceDisplayName } from '@/hooks/useWhatsApp';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -27,6 +27,10 @@ interface ChatInputProps {
   prefillText?: string;
   /** Called once the prefill has been consumed so the parent can clear it */
   onPrefillConsumed?: () => void;
+  /** Message being quoted (reply) */
+  replyingTo?: ReplyContext | null;
+  /** Cancel the reply quote */
+  onCancelReply?: () => void;
 }
 
 function InstanceSelector({
@@ -90,6 +94,8 @@ export default function ChatInput({
   onReplyInstanceChange,
   prefillText,
   onPrefillConsumed,
+  replyingTo,
+  onCancelReply,
 }: ChatInputProps) {
   const [text, setText] = useState('');
   const [attachment, setAttachment] = useState<File | null>(null);
@@ -120,6 +126,14 @@ export default function ChatInput({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefillText]);
+
+  // Auto-focus textarea when entering reply mode
+  useEffect(() => {
+    if (replyingTo) {
+      requestAnimationFrame(() => textareaRef.current?.focus());
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [replyingTo?.id]);
 
 
   const autoResize = useCallback(() => {
@@ -233,6 +247,10 @@ export default function ChatInput({
         else messageType = 'document';
       }
 
+      const replyForApi = replyingTo?.external_id
+        ? { id: replyingTo.external_id, text: replyingTo.text || null, sender_name: replyingTo.sender_name || null }
+        : null;
+
       await sendWhatsAppMessage({
         instance_id: sendInstanceId,
         phone,
@@ -240,16 +258,18 @@ export default function ChatInput({
         message_type: messageType,
         media_url: mediaUrl,
         media_filename: mediaFilename,
+        reply_to: replyForApi,
       });
 
       onOptimisticUpdate?.(tempId, 'sent');
+      onCancelReply?.();
     } catch (err: any) {
       onOptimisticUpdate?.(tempId, 'failed');
       toast.error(err.message || 'Erro ao enviar mensagem');
     } finally {
       isSending.current = false;
     }
-  }, [text, attachment, sendInstanceId, phone, onOptimisticSend, onOptimisticUpdate]);
+  }, [text, attachment, sendInstanceId, phone, onOptimisticSend, onOptimisticUpdate, replyingTo, onCancelReply]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (showShortcuts) return;
@@ -288,6 +308,26 @@ export default function ChatInput({
           <Paperclip className="h-3.5 w-3.5 text-muted-foreground" />
           <span className="truncate flex-1 text-foreground">{attachment.name}</span>
           <button onClick={() => setAttachment(null)} className="text-muted-foreground hover:text-foreground">
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+
+      {replyingTo && (
+        <div className="flex items-stretch gap-2 mb-2 rounded-lg bg-muted/60 overflow-hidden text-xs">
+          <div className="w-1 bg-primary shrink-0" />
+          <div className="flex-1 min-w-0 py-1.5 pr-1">
+            <div className="flex items-center gap-1 text-primary font-semibold">
+              <Reply className="h-3 w-3" />
+              <span>{replyingTo.from_me ? 'Você' : (replyingTo.sender_name || 'Mensagem')}</span>
+            </div>
+            <p className="text-muted-foreground truncate">{replyingTo.text || '(mídia)'}</p>
+          </div>
+          <button
+            onClick={() => onCancelReply?.()}
+            className="px-2 text-muted-foreground hover:text-foreground shrink-0"
+            aria-label="Cancelar resposta"
+          >
             <X className="h-3.5 w-3.5" />
           </button>
         </div>
