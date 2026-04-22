@@ -352,6 +352,7 @@ function ProxiedVideo({ message, fallbackUrl, caption }: { message: WhatsAppMess
   const [resolvedUrl, setResolvedUrl] = useState<string | null>(() => needsProxyDownload(fallbackUrl) ? null : fallbackUrl);
   const [loading, setLoading] = useState(() => needsProxyDownload(fallbackUrl));
   const [error, setError] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
 
   useEffect(() => {
     if (!needsProxyDownload(fallbackUrl)) {
@@ -376,8 +377,6 @@ function ProxiedVideo({ message, fallbackUrl, caption }: { message: WhatsAppMess
   }, [message.id, fallbackUrl]);
 
   if (error) return <div className="text-xs text-muted-foreground italic">Vídeo expirado no WhatsApp</div>;
-
-  const [lightboxOpen, setLightboxOpen] = useState(false);
 
   return (
     <div className="max-w-[280px]">
