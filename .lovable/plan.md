@@ -1,72 +1,78 @@
 
 
-## Diagnóstico + fix definitivo (2 RPCs faltando/quebradas)
+## Melhorias no chat: links clicáveis + viewer de mídia
 
-### O que tá realmente acontecendo
+### 1. Links clicáveis nas mensagens
 
-1. **Botão "Assumir pra mim" → 404**: a RPC `public.assign_lead_to_seller` não existe no banco (PostgREST devolve `42P01`). O hook `useAssignLead` chama, falha, e a UI mostra a mensagem de erro antiga ("user_roles") que ficou em cache do toast anterior — confundindo o diagnóstico.
-2. **Nome "Equipe Matheus Colombo"**: a UAZAPI grava `senderName` = nome da **instância** (não do contato) no payload de mensagens **outbound**. A edge `whatsapp-chats` propaga isso pra `contact_name`/`sender_name` da listagem, e a UI mostra. O nome real do contato (`wa_name: "Maria Cecilia"`) está no payload mas é ignorado.
+**Hoje:** URLs em mensagens de texto renderizam como texto puro (sem `<a>`).
 
-### Plano de execução
+**Mudança:** No componente que renderiza o corpo da mensagem (`src/components/whatsapp/MessageBubble.tsx` — ou equivalente no folder `whatsapp/`), criar um helper `linkify(text)` que:
+- Detecta URLs (`https?://...`) e telefones/emails via regex.
+- Quebra o texto em segmentos e devolve `<a href={url} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:opacity-80">{url}</a>` para os matches.
+- Preserva quebras de linha existentes (`whitespace-pre-wrap`).
+- Funciona pra mensagens enviadas (texto branco no balão roxo) e recebidas — só usa `text-current` pra herdar a cor do balão.
 
-**Passo 1 — Diagnóstico (eu rodo via tool de DB read-only, você não faz nada):**
-- Listar todas as funções no schema `public` cujo nome contém `assign_lead` → ver se existe e qual assinatura.
-- Listar todas as funções/policies que ainda mencionam `user_roles` → matar referências fantasma de uma vez.
-- Confirmar memória `seller-assignment-logic` vs realidade do banco.
+Aplicado em: balão de texto principal + caption de mídia (imagem/vídeo/documento com legenda).
 
-**Passo 2 — Migration única (via tool oficial, aprovação aparece pra você):**
+### 2. Viewer inline de mídia + menu de 3 pontos
 
-```sql
--- (a) Recriar/criar assign_lead_to_seller limpa
-CREATE OR REPLACE FUNCTION public.assign_lead_to_seller(
-  p_lead_id uuid,
-  p_assigned_to uuid
-) RETURNS void
-LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
-DECLARE
-  v_user_id uuid := auth.uid();
-  v_org_id  uuid := public.get_user_org_id();
-  v_role    text;
-  v_current uuid;
-BEGIN
-  IF v_user_id IS NULL THEN RAISE EXCEPTION 'Não autenticado'; END IF;
+**Hoje:** documentos/imagens/vídeos têm botão único que baixa direto.
 
-  SELECT role::text INTO v_role FROM public.user_profiles WHERE id = v_user_id;
-  v_role := COALESCE(v_role, 'vendedor');
+**Mudança em `MessageBubble.tsx` (ou `MediaMessage.tsx` se separado):**
 
-  SELECT assigned_to INTO v_current
-  FROM public.leads WHERE id = p_lead_id AND organization_id = v_org_id;
+**Imagem:**
+- Renderiza thumbnail clicável dentro do balão (já deve renderizar — confirmar).
+- Click no thumb abre **lightbox** (novo componente `MediaLightbox.tsx` usando `Dialog` do shadcn) em fullscreen com a imagem centralizada, fundo escuro, botão fechar (X), botão baixar e setas se houver mais mídia no chat (escopo: só a mídia clicada por enquanto, sem navegação entre mensagens).
 
-  IF NOT FOUND THEN RAISE EXCEPTION 'Lead não encontrado'; END IF;
+**Vídeo:**
+- Renderiza `<video controls preload="metadata">` inline no balão (player nativo, máx 320px de largura).
+- Click no vídeo OU no botão "expandir" abre o mesmo `MediaLightbox` com player maior.
 
-  -- Vendedor só pode reivindicar lead órfão ou transferir pra si mesmo
-  IF v_role NOT IN ('admin','gestor') THEN
-    IF v_current IS NOT NULL AND v_current <> v_user_id AND p_assigned_to <> v_user_id THEN
-      RAISE EXCEPTION 'Sem permissão para transferir este lead';
-    END IF;
-  END IF;
+**PDF/Documento:**
+- Substitui o botão "Documento" atual por um card com:
+  - Ícone do tipo de arquivo + nome + tamanho (se disponível).
+  - Click no card → abre `MediaLightbox` com `<iframe src={url}>` pra PDF ou ícone grande + "Baixar" pra outros formatos (docx, xlsx, etc — browser não renderiza inline).
+- Menu de **3 pontos** (`MoreVertical` do lucide) no canto do card com `DropdownMenu`:
+  - "Visualizar" (abre lightbox)
+  - "Baixar" (download direto, comportamento atual)
+  - "Copiar link" (copia URL pro clipboard + toast)
 
-  UPDATE public.leads
-     SET assigned_to = p_assigned_to, updated_at = now()
-   WHERE id = p_lead_id;
-END $$;
+**Menu de 3 pontos também em imagens e vídeos:** mesmo `DropdownMenu` no canto superior direito do thumb (aparece em hover desktop, sempre visível em mobile).
 
-GRANT EXECUTE ON FUNCTION public.assign_lead_to_seller(uuid, uuid) TO authenticated;
+### 3. Componente `MediaLightbox.tsx` (novo)
+
+Localização: `src/components/whatsapp/MediaLightbox.tsx`.
+
+Props:
+```ts
+{ open: boolean; onClose: () => void;
+  type: 'image' | 'video' | 'pdf' | 'document';
+  url: string; filename?: string; mimeType?: string; }
 ```
 
-- Se o diagnóstico achar `user_roles` em outras funções/policies, dropar/refatorar no mesmo migration.
+Estrutura:
+- `Dialog` do shadcn em modo fullscreen (sem padding padrão).
+- Header com nome do arquivo + botões: baixar, copiar link, fechar.
+- Body:
+  - `image` → `<img>` centralizado com max-h/w 90vh/vw + zoom no click.
+  - `video` → `<video controls autoplay>` 80vh.
+  - `pdf` → `<iframe src={url}>` 100% altura.
+  - `document` (não-PDF) → ícone grande + "Visualização indisponível" + botão "Baixar".
 
-**Passo 3 — Fix do nome (frontend + edge):**
+### Arquivos editados/criados
 
-- **`supabase/functions/whatsapp-chats/index.ts`**: ao montar `contact_name`, priorizar `payload.chat.wa_name` quando a mensagem é `fromMe: true` (porque `senderName` nesse caso é o nome da própria instância, não do contato). Fallback em ordem: `wa_name` → `contact.name` (se ≠ instância) → telefone formatado.
-- **`src/components/whatsapp/ContactPanel.tsx`**: aplicar mesma lógica defensiva no header (já recebe lead — usar `lead.name` antes de `senderName`).
-- **Migration opcional de limpeza**: `UPDATE leads SET name = NULL WHERE name IN (SELECT label FROM wz_instances WHERE organization_id = leads.organization_id)` — limpa leads já criados com nome poluído.
+- **Criado**: `src/components/whatsapp/MediaLightbox.tsx`
+- **Criado**: `src/lib/linkify.tsx` (helper puro retornando ReactNode[])
+- **Editado**: `src/components/whatsapp/MessageBubble.tsx` (ou arquivo equivalente — confirmar nome no ato da implementação) — usa `linkify` no texto e abre lightbox em mídia
+- **Editado**: o componente que renderiza documento (provável `MessageBubble` mesmo) — adiciona menu de 3 pontos com DropdownMenu
 
-### O que você precisa fazer manualmente
-**Nada.** Tudo via migration tool oficial + edits de arquivo. Aprovação aparece na UI.
+### Sem mudanças em backend
+Tudo client-side. URLs de mídia já vêm do `whatsapp-chats` / payload UAZAPI.
 
-### Validação final
-1. Vendedora clica "Assumir pra mim" → sem 404, lead vira dela.
-2. Header do painel mostra "Maria Cecilia" (do `wa_name`), não "Equipe Matheus Colombo".
-3. Lista lateral também corrige nome em mensagens outbound.
+### Validação
+1. Mandar mensagem com link `https://...` → vira clicável, abre em nova aba.
+2. Receber/abrir imagem → click no thumb abre lightbox; menu 3 pontos tem baixar/copiar/visualizar.
+3. Receber PDF → card mostra nome; click abre PDF inline no lightbox; 3 pontos baixa.
+4. Receber DOCX → card mostra nome; lightbox mostra "Visualização indisponível" + baixar.
+5. Receber vídeo → toca inline; expandir abre lightbox em player grande.
 
