@@ -127,6 +127,14 @@ export default function ChatInput({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefillText]);
 
+  // Auto-focus textarea when entering reply mode
+  useEffect(() => {
+    if (replyingTo) {
+      requestAnimationFrame(() => textareaRef.current?.focus());
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [replyingTo?.id]);
+
 
   const autoResize = useCallback(() => {
     const el = textareaRef.current;
@@ -239,6 +247,10 @@ export default function ChatInput({
         else messageType = 'document';
       }
 
+      const replyForApi = replyingTo?.external_id
+        ? { id: replyingTo.external_id, text: replyingTo.text || null, sender_name: replyingTo.sender_name || null }
+        : null;
+
       await sendWhatsAppMessage({
         instance_id: sendInstanceId,
         phone,
@@ -246,16 +258,18 @@ export default function ChatInput({
         message_type: messageType,
         media_url: mediaUrl,
         media_filename: mediaFilename,
+        reply_to: replyForApi,
       });
 
       onOptimisticUpdate?.(tempId, 'sent');
+      onCancelReply?.();
     } catch (err: any) {
       onOptimisticUpdate?.(tempId, 'failed');
       toast.error(err.message || 'Erro ao enviar mensagem');
     } finally {
       isSending.current = false;
     }
-  }, [text, attachment, sendInstanceId, phone, onOptimisticSend, onOptimisticUpdate]);
+  }, [text, attachment, sendInstanceId, phone, onOptimisticSend, onOptimisticUpdate, replyingTo, onCancelReply]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (showShortcuts) return;
