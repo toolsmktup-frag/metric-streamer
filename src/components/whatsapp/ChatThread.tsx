@@ -1,11 +1,71 @@
 import { useRef, useEffect, useState, useMemo } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Check, CheckCheck, Clock, Ban, Download, Play, Pause } from 'lucide-react';
+import { Check, CheckCheck, Clock, Ban, Download, Play, Pause, MoreVertical, FileText, Eye, Copy, Maximize2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import type { WhatsAppMessage } from '@/hooks/useWhatsApp';
 import type { WhatsAppInstance } from '@/hooks/useWhatsApp';
 import { getInstanceDisplayName } from '@/hooks/useWhatsApp';
 import { format } from 'date-fns';
+import { linkify } from '@/lib/linkify';
+import MediaLightbox, { type MediaType } from './MediaLightbox';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { toast } from 'sonner';
+
+function downloadFile(url: string, filename?: string | null) {
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename || '';
+  a.target = '_blank';
+  a.rel = 'noopener noreferrer';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+async function copyLinkToClipboard(url: string) {
+  try {
+    await navigator.clipboard.writeText(url);
+    toast.success('Link copiado');
+  } catch {
+    toast.error('Não foi possível copiar');
+  }
+}
+
+function MediaActionsMenu({ onView, url, filename, dark = false }: { onView: () => void; url: string; filename?: string | null; dark?: boolean }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          onClick={(e) => e.stopPropagation()}
+          className={`h-7 w-7 rounded-full flex items-center justify-center transition-colors ${
+            dark
+              ? 'bg-black/50 text-white hover:bg-black/70'
+              : 'bg-background/80 text-foreground hover:bg-background border border-border'
+          }`}
+          aria-label="Mais opções"
+        >
+          <MoreVertical className="h-4 w-4" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+        <DropdownMenuItem onClick={onView}>
+          <Eye className="h-4 w-4 mr-2" /> Visualizar
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => downloadFile(url, filename)}>
+          <Download className="h-4 w-4 mr-2" /> Baixar
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => copyLinkToClipboard(url)}>
+          <Copy className="h-4 w-4 mr-2" /> Copiar link
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
 
 interface ChatThreadProps {
   messages: WhatsAppMessage[];
@@ -227,6 +287,7 @@ function ProxiedImage({ message, fallbackUrl, caption }: { message: WhatsAppMess
   const [resolvedUrl, setResolvedUrl] = useState<string | null>(() => needsProxyDownload(fallbackUrl) ? null : fallbackUrl);
   const [loading, setLoading] = useState(() => needsProxyDownload(fallbackUrl));
   const [error, setError] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
 
   useEffect(() => {
     if (!needsProxyDownload(fallbackUrl)) {
@@ -257,9 +318,32 @@ function ProxiedImage({ message, fallbackUrl, caption }: { message: WhatsAppMess
       {loading ? (
         <div className="w-[200px] h-[150px] rounded-lg bg-muted animate-pulse flex items-center justify-center text-xs text-muted-foreground">Carregando...</div>
       ) : (
-        <img src={resolvedUrl!} alt="Imagem WhatsApp" className="rounded-lg w-full cursor-pointer" loading="lazy" onClick={() => window.open(resolvedUrl!, '_blank')} />
+        <div className="relative group">
+          <img
+            src={resolvedUrl!}
+            alt="Imagem WhatsApp"
+            className="rounded-lg w-full cursor-pointer"
+            loading="lazy"
+            onClick={() => setLightboxOpen(true)}
+          />
+          <div className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity md:opacity-0 [@media(hover:none)]:opacity-100">
+            <MediaActionsMenu
+              dark
+              url={resolvedUrl!}
+              filename={message.media_filename}
+              onView={() => setLightboxOpen(true)}
+            />
+          </div>
+          <MediaLightbox
+            open={lightboxOpen}
+            onClose={() => setLightboxOpen(false)}
+            type="image"
+            url={resolvedUrl!}
+            filename={message.media_filename}
+          />
+        </div>
       )}
-      {caption && <p className="text-sm mt-1">{caption}</p>}
+      {caption && <p className="text-sm mt-1 whitespace-pre-wrap break-words">{linkify(caption)}</p>}
     </div>
   );
 }
@@ -268,6 +352,7 @@ function ProxiedVideo({ message, fallbackUrl, caption }: { message: WhatsAppMess
   const [resolvedUrl, setResolvedUrl] = useState<string | null>(() => needsProxyDownload(fallbackUrl) ? null : fallbackUrl);
   const [loading, setLoading] = useState(() => needsProxyDownload(fallbackUrl));
   const [error, setError] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
 
   useEffect(() => {
     if (!needsProxyDownload(fallbackUrl)) {
@@ -298,10 +383,71 @@ function ProxiedVideo({ message, fallbackUrl, caption }: { message: WhatsAppMess
       {loading ? (
         <div className="w-[240px] h-[180px] rounded-lg bg-muted animate-pulse flex items-center justify-center text-xs text-muted-foreground">Carregando...</div>
       ) : (
-        <video src={resolvedUrl!} controls className="rounded-lg w-full" preload="metadata" />
+        <div className="relative group">
+          <video src={resolvedUrl!} controls className="rounded-lg w-full" preload="metadata" />
+          <div className="absolute top-1.5 right-1.5 flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity [@media(hover:none)]:opacity-100">
+            <button
+              onClick={() => setLightboxOpen(true)}
+              className="h-7 w-7 rounded-full bg-black/50 text-white hover:bg-black/70 flex items-center justify-center"
+              aria-label="Expandir vídeo"
+              title="Expandir"
+            >
+              <Maximize2 className="h-4 w-4" />
+            </button>
+            <MediaActionsMenu
+              dark
+              url={resolvedUrl!}
+              filename={message.media_filename}
+              onView={() => setLightboxOpen(true)}
+            />
+          </div>
+          <MediaLightbox
+            open={lightboxOpen}
+            onClose={() => setLightboxOpen(false)}
+            type="video"
+            url={resolvedUrl!}
+            filename={message.media_filename}
+          />
+        </div>
       )}
-      {caption && <p className="text-sm mt-1">{caption}</p>}
+      {caption && <p className="text-sm mt-1 whitespace-pre-wrap break-words">{linkify(caption)}</p>}
     </div>
+  );
+}
+
+function DocumentCard({ message, url }: { message: WhatsAppMessage; url: string }) {
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const filename = message.media_filename || 'Documento';
+  const mime = (message as any).media_mimetype || '';
+  const isPdf = /pdf/i.test(mime) || /\.pdf($|\?)/i.test(filename) || /\.pdf($|\?)/i.test(url);
+  const type: MediaType = isPdf ? 'pdf' : 'document';
+
+  return (
+    <>
+      <div
+        onClick={() => setLightboxOpen(true)}
+        className="flex items-center gap-2 p-2 rounded-lg bg-background/40 hover:bg-background/60 border border-border/50 cursor-pointer min-w-[200px] max-w-[260px] text-current"
+      >
+        <FileText className="h-8 w-8 shrink-0 opacity-80" />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium truncate">{filename}</p>
+          <p className="text-[10px] opacity-70 uppercase">{isPdf ? 'PDF' : (mime.split('/')[1] || 'Arquivo')}</p>
+        </div>
+        <MediaActionsMenu
+          url={url}
+          filename={filename}
+          onView={() => setLightboxOpen(true)}
+        />
+      </div>
+      <MediaLightbox
+        open={lightboxOpen}
+        onClose={() => setLightboxOpen(false)}
+        type={type}
+        url={url}
+        filename={filename}
+        mimeType={mime}
+      />
+    </>
   );
 }
 
@@ -337,17 +483,7 @@ function MediaRenderer({ message }: { message: WhatsAppMessage }) {
     case 'ptt':
       return <AudioPlayer message={message} src={media_url} isOutbound={message.direction === 'outbound'} />;
     case 'document':
-      return (
-        <a
-          href={media_url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-2 text-sm text-primary hover:underline"
-        >
-          <Download className="h-4 w-4" />
-          {message.media_filename || 'Documento'}
-        </a>
-      );
+      return <DocumentCard message={message} url={media_url} />;
     default:
       return null;
   }
@@ -431,7 +567,7 @@ export default function ChatThread({ messages, loading, phone, instances }: Chat
                   return hasMedia && !isDeleted ? (
                     <MediaRenderer message={msg} />
                   ) : (
-                    <p className="whitespace-pre-wrap break-words">{msg.body || ''}</p>
+                    <p className="whitespace-pre-wrap break-words">{linkify(msg.body || '')}</p>
                   );
                 })()}
 
