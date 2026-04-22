@@ -171,7 +171,7 @@ Deno.serve(async (req) => {
     }
 
     const payload: SendRequest = await req.json()
-    const { instance_id, phone, body, message_type = 'text', media_url, media_filename, action = 'send', message_id } = payload
+    const { instance_id, phone, body, message_type = 'text', media_url, media_filename, action = 'send', message_id, reply_to, emoji } = payload
 
     if (!instance_id || !phone) {
       return new Response(JSON.stringify({ error: 'instance_id and phone required' }), {
@@ -268,10 +268,57 @@ Deno.serve(async (req) => {
       })
     }
 
+    if (action === 'react' && message_id) {
+      // message_id here = local row id; we need its external id
+      const { data: targetMsg, error: targetErr } = await adminClient
+        .from('whatsapp_messages')
+        .select('id, message_id_external, reactions, direction, sender_name')
+        .eq('id', message_id)
+        .eq('organization_id', orgId)
+        .maybeSingle()
+      if (targetErr || !targetMsg) {
+        return new Response(JSON.stringify({ error: 'Target message not found' }), {
+          status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+      if (!targetMsg.message_id_external) {
+        return new Response(JSON.stringify({ error: 'Message has no external id (cannot react)' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      try {
+        await tryUazapiReact(instance.api_url, instance.api_token, phone, targetMsg.message_id_external, emoji || '')
+      } catch (err) {
+        const m = err instanceof Error ? err.message : String(err)
+        return new Response(JSON.stringify({ error: m }), {
+          status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      // Update reactions JSON: remove any previous from_me entry, add new (unless emoji empty = remove)
+      const existing: any[] = Array.isArray(targetMsg.reactions) ? targetMsg.reactions : []
+      const filtered = existing.filter((r: any) => !r?.from_me)
+      const next = emoji
+        ? [...filtered, { emoji, from_me: true, sender: 'me', timestamp: new Date().toISOString() }]
+        : filtered
+
+      await adminClient
+        .from('whatsapp_messages')
+        .update({ reactions: next, updated_at: new Date().toISOString() })
+        .eq('id', message_id)
+        .eq('organization_id', orgId)
+
+      return new Response(JSON.stringify({ success: true, reactions: next }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
     console.log('[whatsapp-send] sending via UAZAPI', {
       api_url: instance.api_url,
       phone: normalizePhone(phone),
       message_type,
+      reply_to_id: reply_to?.id || null,
     })
 
     const result = await tryUazapiSend(
@@ -281,7 +328,8 @@ Deno.serve(async (req) => {
       body || '',
       message_type,
       media_url,
-      media_filename
+      media_filename,
+      reply_to?.id || undefined,
     )
 
     const messageRecord: Record<string, unknown> = {
@@ -296,6 +344,7 @@ Deno.serve(async (req) => {
       media_filename,
       message_id_external: result.data?.keyId || result.data?.key?.id || result.data?.messageId || result.data?.id || null,
       payload_raw: result.data,
+      reply_to: reply_to ? { id: reply_to.id, text: reply_to.text || null, sender_name: reply_to.sender_name || null } : null,
     }
 
     const { data: savedMsg, error: saveErr } = await adminClient
