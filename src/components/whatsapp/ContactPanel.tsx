@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { User, Tag, StickyNote, Trash2, Send, ShoppingCart, DollarSign, MapPin, Activity, CreditCard, CheckCircle2, XCircle, Clock, RotateCcw, AlertTriangle, UserPlus, Eye, FileText, Lock, Loader2, type LucideIcon } from 'lucide-react';
+import { User, Tag, StickyNote, Trash2, Send, ShoppingCart, DollarSign, MapPin, Activity, CreditCard, CheckCircle2, XCircle, Clock, RotateCcw, AlertTriangle, UserPlus, Eye, FileText, Loader2, type LucideIcon } from 'lucide-react';
+import ClaimLeadBanner from './ClaimLeadBanner';
 import { useEnsureLead } from '@/hooks/useEnsureLead';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
