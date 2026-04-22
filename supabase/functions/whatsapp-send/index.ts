@@ -13,8 +13,10 @@ interface SendRequest {
   message_type?: string
   media_url?: string
   media_filename?: string
-  action?: 'send' | 'edit' | 'delete'
+  action?: 'send' | 'edit' | 'delete' | 'react'
   message_id?: string
+  reply_to?: { id: string; text?: string | null; sender_name?: string | null } | null
+  emoji?: string
 }
 
 function normalizePhone(phone: string) {
@@ -54,7 +56,7 @@ async function parseResponse(res: Response) {
   }
 }
 
-async function tryUazapiSend(apiUrl: string, apiToken: string, phone: string, body: string, messageType: string, mediaUrl?: string, mediaFilename?: string) {
+async function tryUazapiSend(apiUrl: string, apiToken: string, phone: string, body: string, messageType: string, mediaUrl?: string, mediaFilename?: string, replyId?: string) {
   const baseUrl = apiUrl.replace(/\/+$/, '')
   const recipient = normalizePhone(phone) // Use clean phone only — UAZAPI spec uses plain numbers
 
@@ -65,6 +67,7 @@ async function tryUazapiSend(apiUrl: string, apiToken: string, phone: string, bo
         file: mediaUrl,
         ...(body ? { text: body } : {}),
         ...(messageType === 'document' && mediaFilename ? { docName: mediaFilename } : {}),
+        ...(replyId ? { replyid: replyId } : {}),
         readchat: true,
         readmessages: true,
         async: false,
@@ -72,6 +75,7 @@ async function tryUazapiSend(apiUrl: string, apiToken: string, phone: string, bo
     : {
         number: recipient,
         text: body,
+        ...(replyId ? { replyid: replyId } : {}),
         readchat: true,
         readmessages: true,
         async: false,
@@ -104,6 +108,25 @@ async function tryUazapiSend(apiUrl: string, apiToken: string, phone: string, bo
     console.error(`[whatsapp-send] Failed: ${message}`)
     throw new Error(`UAZAPI send failed: ${message}`)
   }
+}
+
+async function tryUazapiReact(apiUrl: string, apiToken: string, phone: string, externalMessageId: string, emoji: string) {
+  const baseUrl = apiUrl.replace(/\/+$/, '')
+  const recipient = normalizePhone(phone)
+  const url = `${baseUrl}/message/react`
+  const payload = { number: recipient, id: externalMessageId, text: emoji || '' }
+
+  console.log(`[whatsapp-send/react] URL: ${url} payload: ${JSON.stringify(payload)}`)
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: buildHeaders(apiToken),
+    body: JSON.stringify(payload),
+  })
+  const { text, data } = await parseResponse(res)
+  console.log(`[whatsapp-send/react] Response ${res.status}: ${text.slice(0, 500)}`)
+  if (!res.ok) throw new Error(`UAZAPI react failed ${res.status}: ${text.slice(0, 300)}`)
+  return data
 }
 
 Deno.serve(async (req) => {
