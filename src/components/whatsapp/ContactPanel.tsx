@@ -81,7 +81,9 @@ export default function ContactPanel({ phone, senderName }: ContactPanelProps) {
     staleTime: 5 * 60 * 1000,
   });
   const canEditCrm = isAdmin || (!!lead?.assigned_to && lead.assigned_to === currentUserId);
-  const showClaimBanner = !!lead?.id && !!lead?.assigned_to && !canEditCrm;
+  const isUnassigned = !!lead?.id && !lead?.assigned_to;
+  const isOtherOwner = !!lead?.id && !!lead?.assigned_to && lead.assigned_to !== currentUserId && !isAdmin;
+  const showClaimBanner = !isAdmin && !!currentUserId && (isUnassigned || isOtherOwner);
 
   // Auto-cria lead pro chat do WhatsApp quando ainda não existe.
   // Vendedor recebe assigned_to = ele mesmo (libera canSeeCrm na mesma hora).
