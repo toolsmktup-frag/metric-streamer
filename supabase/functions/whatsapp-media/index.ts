@@ -291,6 +291,7 @@ Deno.serve(async (req) => {
 
     let lastError = 'Unknown error'
     let allNotFound = candidates.length > 0
+    let serviceUnavailable = false
     for (const candidate of candidates) {
       try {
         const media = await downloadMessageMedia(instance.api_url, instance.api_token, candidate)
@@ -323,6 +324,7 @@ Deno.serve(async (req) => {
       } catch (error) {
         lastError = error instanceof Error ? error.message : String(error)
         if (!(error instanceof MediaNotFoundError)) allNotFound = false
+        if (error instanceof MediaUnavailableError) serviceUnavailable = true
         console.error('[whatsapp-media] download failed for candidate', candidate, lastError)
       }
     }
@@ -338,15 +340,26 @@ Deno.serve(async (req) => {
       })
     }
 
-    return new Response(JSON.stringify({ error: lastError }), {
-      status: 502,
+    if (serviceUnavailable) {
+      return new Response(JSON.stringify({
+        error: 'WHATSAPP_DISCONNECTED',
+        fallback: true,
+        message: 'Instância do WhatsApp desconectada. Reconecte para baixar a mídia.',
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    return new Response(JSON.stringify({ error: lastError, fallback: true }), {
+      status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     console.error('[whatsapp-media] error:', message)
-    return new Response(JSON.stringify({ error: message }), {
-      status: 500,
+    return new Response(JSON.stringify({ error: message, fallback: true }), {
+      status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   }
