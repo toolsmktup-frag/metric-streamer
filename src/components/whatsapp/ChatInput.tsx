@@ -333,6 +333,7 @@ export default function ChatInput({
         </div>
       )}
 
+      <div className="flex items-end gap-2">
         {/* Instance selector for unified mode */}
         {showInstanceSelector && (
           <InstanceSelector
