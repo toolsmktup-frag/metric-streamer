@@ -1,54 +1,61 @@
 
 
-## Trocar Copiloto para Claude Haiku 4.5
+## Liberar visão completa do lead pra vendedora no chat WhatsApp
 
-### Decisão
-Usar **Anthropic direto** (não Lovable AI Gateway, não OpenRouter), com o modelo `claude-haiku-4-5` via API oficial da Anthropic.
+### Comportamento novo
 
-### O que muda na edge function `sales-copilot`
+**Visualização (sempre liberada):**
+- Toda vendedora vê painel completo do lead aberto no chat: notas, vendas, LTV, funis, tags, timeline, jornada — igual admin.
+- Continua respeitando a flag de privacidade existente (`hide_ltv_revenue` para vendedor) → LTV/receita seguem ocultos quando configurado, sem mudança.
 
-1. Trocar endpoint:
-   - de: `https://ai.gateway.lovable.dev/v1/chat/completions`
-   - para: `https://api.anthropic.com/v1/messages`
-2. Trocar autenticação:
-   - de: `Authorization: Bearer ${LOVABLE_API_KEY}`
-   - para: `x-api-key: ${ANTHROPIC_API_KEY}` + `anthropic-version: 2023-06-01`
-3. Trocar formato do payload:
-   - Anthropic usa `system` separado do array `messages` (não vai como role)
-   - Streaming usa SSE com eventos `content_block_delta` (estrutura diferente do OpenAI)
-4. Trocar parser de SSE no frontend (`useSalesCopilot.ts`):
-   - hoje lê `parsed.choices[0].delta.content` (formato OpenAI)
-   - precisa ler `parsed.delta.text` quando `event: content_block_delta` (formato Anthropic)
-5. Modelo: `claude-haiku-4-5` em todas as 4 ações (sugerir, analisar, objeção, perguntar)
+**Edição (gated por "assumir"):**
+- Lead **sem responsável** → ao abrir o chat, vendedora assume automaticamente (já é o comportamento de `useEnsureLead` para leads novos; estendemos pra leads existentes sem dono).
+- Lead **de outra vendedora** → painel mostra tudo em modo leitura + banner discreto no topo: *"Lead de [Nome da vendedora]. [Assumir este lead]"*. Clicar pede confirmação ("Vai transferir o lead pra você. A responsável atual perde a edição. Confirmar?") e reatribui.
+- Após assumir, todos os controles de edição liberam: notas, mover funil/etapa, tags.
+- Admin/gestor: zero mudança, continua editando tudo direto.
 
-### Setup que você precisa fazer
+### Mudanças por arquivo
 
-1. Pegar sua API key em https://console.anthropic.com/settings/keys (formato `sk-ant-...`)
-2. Adicionar no Supabase como secret de Edge Function:
-   - Painel Supabase → Project Settings → **Edge Functions → Secrets**
-   - Name: `ANTHROPIC_API_KEY`
-   - Value: `sk-ant-...`
-3. Como seu projeto Supabase não está vinculado ao Lovable Cloud, eu te entrego os 2 arquivos prontos pra você colar manual:
-   - `supabase/functions/sales-copilot/index.ts` → cola no editor da função no painel Supabase e clica **Deploy**
-   - `src/hooks/useSalesCopilot.ts` → já fica atualizado aqui no Lovable, deploy automático no frontend
+**`src/components/whatsapp/ContactPanel.tsx`**
+- Remove o early return do bloco `Lock` ("Lead não atribuído a você").
+- Cria duas flags: `canSeeCrm = true` (sempre, exceto privacidade de LTV) e `canEditCrm = isAdmin || lead.assigned_to === currentUserId`.
+- Hooks de dados (`useContactNotes`, `useLeadPurchases`, `useLeadFunnelJourney`, `useLeadEvents`) passam a receber `phone`/`lead.id` sempre que existir, sem o gate de `canSeeCrm`.
+- Notas, `FunnelLinker`, `TagsEditor`, `Select` de etapa e funil recebem prop `disabled={!canEditCrm}` (ou são renderizados como read-only).
+- Renderiza `<ClaimLeadBanner />` quando `lead.assigned_to && !canEditCrm` (lead com outro dono).
+- LTV/receita continuam consultando `useTeamPrivacySettings` ou flag equivalente já existente — sem mudança.
 
-### Custo estimado (Haiku 4.5)
-- Input: ~$1/M tokens
-- Output: ~$5/M tokens
-- Cada ação do Copiloto gasta ~2-5k tokens → fração de centavo por uso
+**`src/components/whatsapp/ClaimLeadBanner.tsx`** (novo)
+- Banner compacto no topo do painel: avatar + nome do dono atual + botão "Assumir".
+- Ao clicar, abre `AlertDialog` de confirmação e dispara `useAssignLead` com `assignedTo = currentUserId`.
+- Toast de sucesso e invalidação de queries (`lead-by-phone`, `leads-by-funnel`).
 
-### Trade-offs
-- Haiku 4.5 é o mais rápido e barato da família Claude 4, ótimo pra resposta de copiloto em tempo real
-- Se quiser análise mais profunda em "Analisar conversa", podemos usar `claude-sonnet-4-5` só nessa ação (te aviso e você decide)
-- A `LOVABLE_API_KEY` deixa de ser necessária — não precisa habilitar Lovable Cloud só pra isso
+**`src/hooks/useEnsureLead.ts` + RPC `ensure_lead_for_phone`**
+- Hoje só auto-atribui em lead novo. Mantém esse comportamento.
+- Para o caso de lead existente sem dono, NÃO mexemos no auto-claim silencioso (evita reivindicar lead alheio sem intenção). A vendedora clica no banner.
 
-### Detalhes técnicos
-- Manter streaming SSE end-to-end (Anthropic suporta nativo)
-- Manter os `try/catch` granulares por etapa de contexto (mensagens, lead, stage, LTV, script)
-- Manter cancelamento via `AbortController`
-- Headers CORS preservados
-- Sem mudança de schema no banco
+**`src/components/whatsapp/ContactPanel.tsx` — controles de edição**
+- `addNote`/`deleteNote` no `useContactNotes`: continuar permitindo no DB se RLS permitir, mas no UI bloquear (`disabled`) quando `!canEditCrm`.
+- `moveLeadStage`/`moveLeadFunnel`: select fica `disabled` com tooltip "Assuma o lead para editar".
 
-### Confirmação necessária
-Me responde só **"vai"** que eu já gero os 2 arquivos prontos pra você colar no Supabase + atualizo o frontend aqui.
+### RLS / backend
+
+Verificar (não alterar ainda — confirmo após ler):
+- Políticas SELECT em `lead_notes`, `lead_events`, `lead_stage_positions`, `lead_funnel_journey`, `customer_purchases` precisam permitir vendedor da mesma org ler leads de outros vendedores.
+- Se hoje estão restritas a `assigned_to = auth.uid()`, eu ajusto pra `same org` (SELECT) mantendo INSERT/UPDATE/DELETE no dono ou admin.
+
+Se alguma policy bloquear, faço migration adicionando policy de leitura por organização. Sem migration de dados, só DDL de policies.
+
+### O que NÃO muda
+- Permissões de admin/gestor.
+- Privacidade de LTV (flag existente é respeitada).
+- Visibilidade da lista de conversas (já mostra todas conforme acesso da instância).
+- Copiloto de Vendas (já funciona independente de assigned_to).
+- Botão "Configurar Vendedor" no card do lead (`LeadAssignSelect`) mantém a regra atual de transferência.
+
+### Validação após implementar
+1. Logar como vendedora, abrir chat de lead de outra vendedora → deve ver tudo em read-only com banner "Assumir".
+2. Clicar "Assumir" → confirmar → painel libera edição, lead aparece na lista da nova dona.
+3. Abrir chat de lead sem dono → assume automático (comportamento atual), edita direto.
+4. Logar como admin → zero diferença.
+5. Verificar que LTV continua oculto se a flag `hide_ltv_revenue` estiver ativa pra vendedor.
 
