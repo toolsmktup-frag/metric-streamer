@@ -235,6 +235,68 @@ Deno.serve(async (req) => {
       || payload.data?.key
     )
 
+    // Detect reaction event (UAZAPI v2: message.type/messageType === "ReactionMessage" or has message.reaction)
+    const v2MsgEarly = payload.message || {}
+    const reactionPayload =
+      v2MsgEarly.reaction ||
+      payload.reaction ||
+      (typeof v2MsgEarly.content === 'object' ? v2MsgEarly.content?.reaction : null)
+    const isReactionType =
+      String(v2MsgEarly.type || v2MsgEarly.messageType || payload.messageType || '').toLowerCase().includes('reaction') ||
+      !!reactionPayload
+
+    if (isMessage && isReactionType) {
+      const supabaseAdmin = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+      )
+      // Target external message id (the message being reacted to)
+      const targetExternalId =
+        reactionPayload?.key?.id ||
+        reactionPayload?.id ||
+        v2MsgEarly?.quoted?.id ||
+        v2MsgEarly?.contextInfo?.stanzaId ||
+        v2MsgEarly?.reactedMessageId ||
+        null
+      const emoji =
+        reactionPayload?.text ||
+        reactionPayload?.emoji ||
+        v2MsgEarly?.text ||
+        v2MsgEarly?.content ||
+        ''
+      const fromMe = v2MsgEarly?.fromMe === true || reactionPayload?.fromMe === true
+
+      console.log('[reaction] target:', targetExternalId, 'emoji:', emoji, 'fromMe:', fromMe)
+
+      if (targetExternalId) {
+        const { data: target } = await supabaseAdmin
+          .from('whatsapp_messages')
+          .select('id, reactions')
+          .eq('message_id_external', targetExternalId)
+          .maybeSingle()
+
+        if (target) {
+          const existing: any[] = Array.isArray(target.reactions) ? target.reactions : []
+          // Replace any prior reaction from same sender (from_me or contact)
+          const filtered = existing.filter((r: any) => r?.from_me !== fromMe)
+          const next = emoji && emoji.trim()
+            ? [...filtered, { emoji, from_me: fromMe, sender: fromMe ? 'me' : 'them', timestamp: new Date().toISOString() }]
+            : filtered
+
+          await supabaseAdmin
+            .from('whatsapp_messages')
+            .update({ reactions: next, updated_at: new Date().toISOString() })
+            .eq('id', target.id)
+        } else {
+          console.warn('[reaction] target message not found in DB:', targetExternalId)
+        }
+      }
+
+      return new Response(JSON.stringify({ ok: true, type: 'reaction' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
     if (!isMessage) {
       if (isGroupEvent) {
         const supabaseUrl = Deno.env.get('SUPABASE_URL')!
