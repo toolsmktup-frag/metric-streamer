@@ -319,15 +319,20 @@ export default function WhatsAppChat() {
             </div>
           )}
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7"
-          onClick={() => setHubOpen(true)}
-          title="Gerenciar Instâncias"
-        >
-          <Settings className="h-3.5 w-3.5" />
-        </Button>
+        <div className="flex items-center gap-2">
+          {selectedPhone && (
+            <SalesCopilotButton onClick={() => setCopilotOpen(o => !o)} active={copilotOpen} />
+          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={() => setHubOpen(true)}
+            title="Gerenciar Instâncias"
+          >
+            <Settings className="h-3.5 w-3.5" />
+          </Button>
+        </div>
       </div>
 
       {/* Main 3-column layout */}
@@ -358,17 +363,29 @@ export default function WhatsAppChat() {
               instances={isAllMode ? instances : undefined}
               replyInstanceId={replyInstanceId || undefined}
               onReplyInstanceChange={isAllMode ? (id) => setReplyInstanceId(id) : undefined}
+              prefillText={copilotPrefill}
+              onPrefillConsumed={() => setCopilotPrefill('')}
             />
           )}
         </div>
 
-        {showPanel && (
-          <div className="w-[280px] shrink-0 border-l border-border bg-card">
-            <ContactPanel
-              phone={selectedPhone}
-              senderName={selectedChat?.contact_name || selectedChat?.sender_name || null}
-            />
-          </div>
+        {copilotOpen ? (
+          <SalesCopilotPanel
+            open={copilotOpen}
+            onClose={() => setCopilotOpen(false)}
+            phone={selectedPhone}
+            instanceId={effectiveInstanceId}
+            onUseInInput={(t) => setCopilotPrefill(t)}
+          />
+        ) : (
+          showPanel && (
+            <div className="w-[280px] shrink-0 border-l border-border bg-card">
+              <ContactPanel
+                phone={selectedPhone}
+                senderName={selectedChat?.contact_name || selectedChat?.sender_name || null}
+              />
+            </div>
+          )
         )}
       </div>
 
