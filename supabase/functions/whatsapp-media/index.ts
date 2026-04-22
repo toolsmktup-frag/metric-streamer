@@ -123,6 +123,9 @@ async function downloadMessageMedia(apiUrl: string, apiToken: string, messageId:
     if (res.status === 404) {
       throw new MediaNotFoundError(`UAZAPI 404 for ${messageId}: ${text.slice(0, 200)}`)
     }
+    if (res.status >= 500) {
+      throw new MediaUnavailableError(`UAZAPI ${res.status}: ${text.slice(0, 200)}`)
+    }
     throw new Error(`UAZAPI returned ${res.status}: ${text.slice(0, 300)}`)
   }
 
