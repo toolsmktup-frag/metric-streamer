@@ -1,61 +1,45 @@
 
 
-## Liberar visão completa do lead pra vendedora no chat WhatsApp
+## Fix: vendedora não consegue assumir lead sem dono
 
-### Comportamento novo
+### Problema atual
+No `ContactPanel.tsx` linha 84:
+```ts
+const showClaimBanner = !!lead?.id && !!lead?.assigned_to && !canEditCrm;
+```
+O banner só aparece se `assigned_to` está preenchido. Quando o lead está **sem dono** (caso da Maria Cecilia no print), o banner não renderiza E `canEditCrm` é `false` → vendedora vê "Assuma o lead para adicionar notas" mas **não tem botão pra assumir**. Limbo.
 
-**Visualização (sempre liberada):**
-- Toda vendedora vê painel completo do lead aberto no chat: notas, vendas, LTV, funis, tags, timeline, jornada — igual admin.
-- Continua respeitando a flag de privacidade existente (`hide_ltv_revenue` para vendedor) → LTV/receita seguem ocultos quando configurado, sem mudança.
-
-**Edição (gated por "assumir"):**
-- Lead **sem responsável** → ao abrir o chat, vendedora assume automaticamente (já é o comportamento de `useEnsureLead` para leads novos; estendemos pra leads existentes sem dono).
-- Lead **de outra vendedora** → painel mostra tudo em modo leitura + banner discreto no topo: *"Lead de [Nome da vendedora]. [Assumir este lead]"*. Clicar pede confirmação ("Vai transferir o lead pra você. A responsável atual perde a edição. Confirmar?") e reatribui.
-- Após assumir, todos os controles de edição liberam: notas, mover funil/etapa, tags.
-- Admin/gestor: zero mudança, continua editando tudo direto.
-
-### Mudanças por arquivo
+### Mudança
 
 **`src/components/whatsapp/ContactPanel.tsx`**
-- Remove o early return do bloco `Lock` ("Lead não atribuído a você").
-- Cria duas flags: `canSeeCrm = true` (sempre, exceto privacidade de LTV) e `canEditCrm = isAdmin || lead.assigned_to === currentUserId`.
-- Hooks de dados (`useContactNotes`, `useLeadPurchases`, `useLeadFunnelJourney`, `useLeadEvents`) passam a receber `phone`/`lead.id` sempre que existir, sem o gate de `canSeeCrm`.
-- Notas, `FunnelLinker`, `TagsEditor`, `Select` de etapa e funil recebem prop `disabled={!canEditCrm}` (ou são renderizados como read-only).
-- Renderiza `<ClaimLeadBanner />` quando `lead.assigned_to && !canEditCrm` (lead com outro dono).
-- LTV/receita continuam consultando `useTeamPrivacySettings` ou flag equivalente já existente — sem mudança.
+- Trocar `showClaimBanner` para:
+  ```ts
+  const isUnassigned = !!lead?.id && !lead?.assigned_to;
+  const isOtherOwner = !!lead?.id && !!lead?.assigned_to && lead.assigned_to !== currentUserId && !isAdmin;
+  const showClaimBanner = !isAdmin && (isUnassigned || isOtherOwner);
+  ```
+- Ajustar a renderização do banner (linha 172) pra passar `currentOwnerId` opcional (pode ser `null` quando órfão).
 
-**`src/components/whatsapp/ClaimLeadBanner.tsx`** (novo)
-- Banner compacto no topo do painel: avatar + nome do dono atual + botão "Assumir".
-- Ao clicar, abre `AlertDialog` de confirmação e dispara `useAssignLead` com `assignedTo = currentUserId`.
-- Toast de sucesso e invalidação de queries (`lead-by-phone`, `leads-by-funnel`).
+**`src/components/whatsapp/ClaimLeadBanner.tsx`**
+- Aceitar `currentOwnerId: string | null`.
+- Quando `null` (lead sem dono):
+  - Avatar genérico com ícone `UserPlus` em vez de iniciais.
+  - Texto: *"Lead sem responsável"* + subtítulo *"Clique para assumir"*.
+  - Botão: **"Assumir pra mim"** (verde / `default` variant pra destacar — é ação positiva, não transferência).
+  - Confirmação no `AlertDialog`: *"Você vai virar a responsável por este lead. Confirmar?"* (sem texto de "transferir de outra vendedora").
+- Quando preenchido: comportamento atual (banner cinza, "Lead de [Nome]", confirmação de transferência).
 
-**`src/hooks/useEnsureLead.ts` + RPC `ensure_lead_for_phone`**
-- Hoje só auto-atribui em lead novo. Mantém esse comportamento.
-- Para o caso de lead existente sem dono, NÃO mexemos no auto-claim silencioso (evita reivindicar lead alheio sem intenção). A vendedora clica no banner.
+### Resultado esperado
+- Lead **sem dono** → banner verde "Lead sem responsável [Assumir pra mim]" no topo do painel. 1 clique + confirmação → vendedora vira dona, controles liberam.
+- Lead de **outra vendedora** → banner cinza atual (já funciona).
+- Lead **da própria vendedora** ou **admin** → sem banner, edição liberada (já funciona).
 
-**`src/components/whatsapp/ContactPanel.tsx` — controles de edição**
-- `addNote`/`deleteNote` no `useContactNotes`: continuar permitindo no DB se RLS permitir, mas no UI bloquear (`disabled`) quando `!canEditCrm`.
-- `moveLeadStage`/`moveLeadFunnel`: select fica `disabled` com tooltip "Assuma o lead para editar".
+### Validação
+1. Logar como vendedora, abrir chat da Maria Cecilia (lead sem dono no print) → banner verde aparece.
+2. Clicar "Assumir pra mim" → confirmar → notas/funis/tags liberam edição.
+3. Abrir chat de lead de outra vendedora → banner cinza com nome do dono (inalterado).
+4. Logar como admin → nenhum banner, edição direta (inalterado).
 
-### RLS / backend
-
-Verificar (não alterar ainda — confirmo após ler):
-- Políticas SELECT em `lead_notes`, `lead_events`, `lead_stage_positions`, `lead_funnel_journey`, `customer_purchases` precisam permitir vendedor da mesma org ler leads de outros vendedores.
-- Se hoje estão restritas a `assigned_to = auth.uid()`, eu ajusto pra `same org` (SELECT) mantendo INSERT/UPDATE/DELETE no dono ou admin.
-
-Se alguma policy bloquear, faço migration adicionando policy de leitura por organização. Sem migration de dados, só DDL de policies.
-
-### O que NÃO muda
-- Permissões de admin/gestor.
-- Privacidade de LTV (flag existente é respeitada).
-- Visibilidade da lista de conversas (já mostra todas conforme acesso da instância).
-- Copiloto de Vendas (já funciona independente de assigned_to).
-- Botão "Configurar Vendedor" no card do lead (`LeadAssignSelect`) mantém a regra atual de transferência.
-
-### Validação após implementar
-1. Logar como vendedora, abrir chat de lead de outra vendedora → deve ver tudo em read-only com banner "Assumir".
-2. Clicar "Assumir" → confirmar → painel libera edição, lead aparece na lista da nova dona.
-3. Abrir chat de lead sem dono → assume automático (comportamento atual), edita direto.
-4. Logar como admin → zero diferença.
-5. Verificar que LTV continua oculto se a flag `hide_ltv_revenue` estiver ativa pra vendedor.
+### Sem mudança no Supabase
+A RPC `assign_lead_to_seller` já permite vendedor reivindicar lead órfão da própria org (memória `seller-assignment-logic` confirma). Zero migration.
 
