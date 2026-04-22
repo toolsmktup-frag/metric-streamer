@@ -42,23 +42,23 @@ export default function ClaimLeadBanner({ leadId, currentOwnerId, currentUserId 
 
   return (
     <>
-      <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-2.5 flex items-center gap-2">
+      <div className="rounded-lg border border-border bg-muted/40 p-2.5 flex items-center gap-2">
         <Avatar className="h-7 w-7 shrink-0">
           {owner?.avatar_url ? <AvatarImage src={owner.avatar_url} alt={ownerName} /> : null}
-          <AvatarFallback className="text-[10px] font-bold bg-amber-500/15 text-amber-700 dark:text-amber-400">
+          <AvatarFallback className="text-[10px] font-bold bg-primary/15 text-primary">
             {getInitials(owner?.full_name || null)}
           </AvatarFallback>
         </Avatar>
         <div className="flex-1 min-w-0">
           <p className="text-[11px] font-medium text-foreground truncate">
-            Lead de <span className="text-amber-700 dark:text-amber-400">{ownerName}</span>
+            Lead de <span className="text-primary">{ownerName}</span>
           </p>
           <p className="text-[10px] text-muted-foreground">Visualização somente leitura</p>
         </div>
         <Button
           size="sm"
           variant="outline"
-          className="h-7 text-[10px] shrink-0 border-amber-500/40 hover:bg-amber-500/10"
+          className="h-7 text-[10px] shrink-0"
           onClick={() => setConfirmOpen(true)}
           disabled={assignLead.isPending}
         >
