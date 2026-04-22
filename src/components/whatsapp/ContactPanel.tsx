@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { User, Tag, StickyNote, Trash2, Send, ShoppingCart, DollarSign, MapPin, Activity, CreditCard, CheckCircle2, XCircle, Clock, RotateCcw, AlertTriangle, UserPlus, Eye, FileText, Lock, Loader2, type LucideIcon } from 'lucide-react';
+import { User, Tag, StickyNote, Trash2, Send, ShoppingCart, DollarSign, MapPin, Activity, CreditCard, CheckCircle2, XCircle, Clock, RotateCcw, AlertTriangle, UserPlus, Eye, FileText, Loader2, type LucideIcon } from 'lucide-react';
+import ClaimLeadBanner from './ClaimLeadBanner';
 import { useEnsureLead } from '@/hooks/useEnsureLead';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -79,7 +80,8 @@ export default function ContactPanel({ phone, senderName }: ContactPanelProps) {
     },
     staleTime: 5 * 60 * 1000,
   });
-  const canSeeCrm = isAdmin || (lead?.assigned_to && lead.assigned_to === currentUserId);
+  const canEditCrm = isAdmin || (!!lead?.assigned_to && lead.assigned_to === currentUserId);
+  const showClaimBanner = !!lead?.id && !!lead?.assigned_to && !canEditCrm;
 
   // Auto-cria lead pro chat do WhatsApp quando ainda não existe.
   // Vendedor recebe assigned_to = ele mesmo (libera canSeeCrm na mesma hora).
@@ -111,12 +113,12 @@ export default function ContactPanel({ phone, senderName }: ContactPanelProps) {
     ? ((ensureLead.error as any)?.message || 'Falha ao preparar lead')
     : null;
 
-  const { notes, loading: notesLoading, addNote, deleteNote } = useContactNotes(canSeeCrm ? phone : null);
+  const { notes, loading: notesLoading, addNote, deleteNote } = useContactNotes(phone);
   const [noteText, setNoteText] = useState('');
 
-  const { data: purchaseData } = useLeadPurchases(canSeeCrm ? (lead?.email ?? null) : null, canSeeCrm ? phone : null);
-  const { data: journey = [] } = useLeadFunnelJourney(canSeeCrm ? (lead?.id ?? null) : null);
-  const { data: events = [] } = useLeadEvents(canSeeCrm ? (lead?.id ?? null) : null);
+  const { data: purchaseData } = useLeadPurchases(lead?.email ?? null, phone);
+  const { data: journey = [] } = useLeadFunnelJourney(lead?.id ?? null);
+  const { data: events = [] } = useLeadEvents(lead?.id ?? null);
 
   const funnelIds = useMemo(() => Array.from(new Set<string>(journey.map((j: any) => j.funnel_id))), [journey]);
   const { data: stagesByFunnel = {} } = useLeadFunnelStages(funnelIds);
@@ -145,33 +147,10 @@ export default function ContactPanel({ phone, senderName }: ContactPanelProps) {
   };
 
   const handleAddNote = async () => {
-    if (!noteText.trim()) return;
+    if (!noteText.trim() || !canEditCrm) return;
     await addNote(noteText);
     setNoteText('');
   };
-
-  if (!canSeeCrm) {
-    return (
-      <div className="p-4 space-y-4 overflow-y-auto h-full">
-        <div className="flex flex-col items-center gap-2 pb-4 border-b border-border">
-          <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
-            <User className="h-8 w-8 text-primary" />
-          </div>
-          <h3 className="font-semibold text-foreground text-sm">
-            {senderName || formatPhone(phone)}
-          </h3>
-          <span className="text-xs text-muted-foreground">{formatPhone(phone)}</span>
-        </div>
-        <div className="rounded-lg border border-border bg-muted/30 p-4 flex flex-col items-center text-center gap-2">
-          <Lock className="h-5 w-5 text-muted-foreground" />
-          <p className="text-xs font-medium text-foreground">Lead não atribuído a você</p>
-          <p className="text-[11px] text-muted-foreground">
-            Notas, vendas, funis e timeline ficam visíveis apenas para o vendedor responsável ou para gestores.
-          </p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="p-4 space-y-4 overflow-y-auto h-full">
@@ -189,6 +168,15 @@ export default function ContactPanel({ phone, senderName }: ContactPanelProps) {
         )}
       </div>
 
+      {/* Claim banner — visible when lead belongs to another seller */}
+      {showClaimBanner && currentUserId && lead?.id && lead?.assigned_to && (
+        <ClaimLeadBanner
+          leadId={lead.id}
+          currentOwnerId={lead.assigned_to}
+          currentUserId={currentUserId}
+        />
+      )}
+
       {/* Notes */}
       <div>
         <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
@@ -198,8 +186,9 @@ export default function ContactPanel({ phone, senderName }: ContactPanelProps) {
           <Textarea
             value={noteText}
             onChange={e => setNoteText(e.target.value)}
-            placeholder="Adicionar nota..."
+            placeholder={canEditCrm ? "Adicionar nota..." : "Assuma o lead para adicionar notas"}
             className="text-xs min-h-[50px] flex-1 resize-none"
+            disabled={!canEditCrm}
             onKeyDown={e => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
@@ -207,7 +196,7 @@ export default function ContactPanel({ phone, senderName }: ContactPanelProps) {
               }
             }}
           />
-          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 self-end" onClick={handleAddNote} disabled={!noteText.trim()}>
+          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 self-end" onClick={handleAddNote} disabled={!noteText.trim() || !canEditCrm}>
             <Send className="h-3.5 w-3.5" />
           </Button>
         </div>
@@ -224,9 +213,11 @@ export default function ContactPanel({ phone, senderName }: ContactPanelProps) {
                   <span className="text-[10px] text-muted-foreground">
                     {format(new Date(note.created_at), 'dd/MM/yy HH:mm')}
                   </span>
-                  <button onClick={() => deleteNote(note.id)} className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive">
-                    <Trash2 className="h-3 w-3" />
-                  </button>
+                  {canEditCrm && (
+                    <button onClick={() => deleteNote(note.id)} className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive">
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -282,7 +273,12 @@ export default function ContactPanel({ phone, senderName }: ContactPanelProps) {
           <Tag className="h-3 w-3" /> Tags
         </h4>
         {lead?.id ? (
-          <TagsEditor leadId={lead.id} />
+          <div
+            className={!canEditCrm ? 'pointer-events-none opacity-60' : ''}
+            title={!canEditCrm ? 'Assuma o lead para editar' : undefined}
+          >
+            <TagsEditor leadId={lead.id} />
+          </div>
         ) : ensureLead.isPending || isFetchingLead ? (
           <div className="flex items-center gap-2 text-xs text-muted-foreground italic">
             <Loader2 className="h-3 w-3 animate-spin" /> Preparando lead…
@@ -311,7 +307,12 @@ export default function ContactPanel({ phone, senderName }: ContactPanelProps) {
         </h4>
         {journey.length === 0 ? (
           lead?.id ? (
-            <FunnelLinker leadId={lead.id} />
+            <div
+              className={!canEditCrm ? 'pointer-events-none opacity-60' : ''}
+              title={!canEditCrm ? 'Assuma o lead para editar' : undefined}
+            >
+              <FunnelLinker leadId={lead.id} />
+            </div>
           ) : ensureLead.isPending || isFetchingLead ? (
             <div className="flex items-center gap-2 text-xs text-muted-foreground italic">
               <Loader2 className="h-3 w-3 animate-spin" /> Preparando lead…
@@ -335,6 +336,7 @@ export default function ContactPanel({ phone, senderName }: ContactPanelProps) {
                   {/* Funnel selector */}
                   <Select
                     value={j.funnel_id}
+                    disabled={!canEditCrm}
                     onValueChange={(newFunnelId) => {
                       if (newFunnelId === j.funnel_id) return;
                       const targetFunnel = allFunnels.find((f: any) => f.id === newFunnelId);
@@ -369,6 +371,7 @@ export default function ContactPanel({ phone, senderName }: ContactPanelProps) {
                   {stages.length > 1 ? (
                     <Select
                       value={j.stage_id}
+                      disabled={!canEditCrm}
                       onValueChange={(newStageId) => {
                         if (newStageId === j.stage_id) return;
                         const targetStage = stages.find((s: any) => s.id === newStageId);
@@ -456,18 +459,6 @@ export default function ContactPanel({ phone, senderName }: ContactPanelProps) {
               })}
             </div>
           </div>
-        )}
-      </div>
-
-      {/* Tags */}
-      <div>
-        <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
-          <Tag className="h-3 w-3" /> Tags
-        </h4>
-        {lead?.id ? (
-          <TagsEditor leadId={lead.id} />
-        ) : (
-          <p className="text-xs text-muted-foreground italic">Lead não encontrado</p>
         )}
       </div>
     </div>
