@@ -170,11 +170,11 @@ export default function ContactPanel({ phone, senderName }: ContactPanelProps) {
         )}
       </div>
 
-      {/* Claim banner — visible when lead belongs to another seller */}
-      {showClaimBanner && currentUserId && lead?.id && lead?.assigned_to && (
+      {/* Claim banner — visible when lead is unassigned or owned by another seller */}
+      {showClaimBanner && currentUserId && lead?.id && (
         <ClaimLeadBanner
           leadId={lead.id}
-          currentOwnerId={lead.assigned_to}
+          currentOwnerId={lead.assigned_to ?? null}
           currentUserId={currentUserId}
         />
       )}
