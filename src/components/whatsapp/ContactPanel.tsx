@@ -168,6 +168,15 @@ export default function ContactPanel({ phone, senderName }: ContactPanelProps) {
         )}
       </div>
 
+      {/* Claim banner — visible when lead belongs to another seller */}
+      {showClaimBanner && currentUserId && lead?.id && lead?.assigned_to && (
+        <ClaimLeadBanner
+          leadId={lead.id}
+          currentOwnerId={lead.assigned_to}
+          currentUserId={currentUserId}
+        />
+      )}
+
       {/* Notes */}
       <div>
         <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
@@ -177,8 +186,9 @@ export default function ContactPanel({ phone, senderName }: ContactPanelProps) {
           <Textarea
             value={noteText}
             onChange={e => setNoteText(e.target.value)}
-            placeholder="Adicionar nota..."
+            placeholder={canEditCrm ? "Adicionar nota..." : "Assuma o lead para adicionar notas"}
             className="text-xs min-h-[50px] flex-1 resize-none"
+            disabled={!canEditCrm}
             onKeyDown={e => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
@@ -186,7 +196,7 @@ export default function ContactPanel({ phone, senderName }: ContactPanelProps) {
               }
             }}
           />
-          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 self-end" onClick={handleAddNote} disabled={!noteText.trim()}>
+          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 self-end" onClick={handleAddNote} disabled={!noteText.trim() || !canEditCrm}>
             <Send className="h-3.5 w-3.5" />
           </Button>
         </div>
