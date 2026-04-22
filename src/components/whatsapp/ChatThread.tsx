@@ -1,11 +1,71 @@
 import { useRef, useEffect, useState, useMemo } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Check, CheckCheck, Clock, Ban, Download, Play, Pause } from 'lucide-react';
+import { Check, CheckCheck, Clock, Ban, Download, Play, Pause, MoreVertical, FileText, Eye, Copy, Maximize2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import type { WhatsAppMessage } from '@/hooks/useWhatsApp';
 import type { WhatsAppInstance } from '@/hooks/useWhatsApp';
 import { getInstanceDisplayName } from '@/hooks/useWhatsApp';
 import { format } from 'date-fns';
+import { linkify } from '@/lib/linkify';
+import MediaLightbox, { type MediaType } from './MediaLightbox';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { toast } from 'sonner';
+
+function downloadFile(url: string, filename?: string | null) {
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename || '';
+  a.target = '_blank';
+  a.rel = 'noopener noreferrer';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+async function copyLinkToClipboard(url: string) {
+  try {
+    await navigator.clipboard.writeText(url);
+    toast.success('Link copiado');
+  } catch {
+    toast.error('Não foi possível copiar');
+  }
+}
+
+function MediaActionsMenu({ onView, url, filename, dark = false }: { onView: () => void; url: string; filename?: string | null; dark?: boolean }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          onClick={(e) => e.stopPropagation()}
+          className={`h-7 w-7 rounded-full flex items-center justify-center transition-colors ${
+            dark
+              ? 'bg-black/50 text-white hover:bg-black/70'
+              : 'bg-background/80 text-foreground hover:bg-background border border-border'
+          }`}
+          aria-label="Mais opções"
+        >
+          <MoreVertical className="h-4 w-4" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+        <DropdownMenuItem onClick={onView}>
+          <Eye className="h-4 w-4 mr-2" /> Visualizar
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => downloadFile(url, filename)}>
+          <Download className="h-4 w-4 mr-2" /> Baixar
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => copyLinkToClipboard(url)}>
+          <Copy className="h-4 w-4 mr-2" /> Copiar link
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
 
 interface ChatThreadProps {
   messages: WhatsAppMessage[];
