@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { UserCheck, Loader2 } from 'lucide-react';
+import { UserCheck, UserPlus, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -17,7 +17,7 @@ import { useAssignLead } from '@/hooks/useAssignLead';
 
 interface Props {
   leadId: string;
-  currentOwnerId: string;
+  currentOwnerId: string | null;
   currentUserId: string;
 }
 
@@ -30,7 +30,8 @@ export default function ClaimLeadBanner({ leadId, currentOwnerId, currentUserId 
   const assignLead = useAssignLead();
   const [confirmOpen, setConfirmOpen] = useState(false);
 
-  const owner = members.find(m => m.id === currentOwnerId);
+  const isUnassigned = !currentOwnerId;
+  const owner = currentOwnerId ? members.find(m => m.id === currentOwnerId) : undefined;
   const ownerName = owner?.full_name || 'outro vendedor';
 
   const handleClaim = () => {
@@ -42,22 +43,47 @@ export default function ClaimLeadBanner({ leadId, currentOwnerId, currentUserId 
 
   return (
     <>
-      <div className="rounded-lg border border-border bg-muted/40 p-2.5 flex items-center gap-2">
+      <div
+        className={
+          isUnassigned
+            ? 'rounded-lg border border-primary/30 bg-primary/10 p-2.5 flex items-center gap-2'
+            : 'rounded-lg border border-border bg-muted/40 p-2.5 flex items-center gap-2'
+        }
+      >
         <Avatar className="h-7 w-7 shrink-0">
-          {owner?.avatar_url ? <AvatarImage src={owner.avatar_url} alt={ownerName} /> : null}
-          <AvatarFallback className="text-[10px] font-bold bg-primary/15 text-primary">
-            {getInitials(owner?.full_name || null)}
+          {!isUnassigned && owner?.avatar_url ? (
+            <AvatarImage src={owner.avatar_url} alt={ownerName} />
+          ) : null}
+          <AvatarFallback
+            className={
+              isUnassigned
+                ? 'text-[10px] font-bold bg-primary text-primary-foreground'
+                : 'text-[10px] font-bold bg-primary/15 text-primary'
+            }
+          >
+            {isUnassigned ? <UserPlus className="h-3.5 w-3.5" /> : getInitials(owner?.full_name || null)}
           </AvatarFallback>
         </Avatar>
         <div className="flex-1 min-w-0">
-          <p className="text-[11px] font-medium text-foreground truncate">
-            Lead de <span className="text-primary">{ownerName}</span>
-          </p>
-          <p className="text-[10px] text-muted-foreground">Visualização somente leitura</p>
+          {isUnassigned ? (
+            <>
+              <p className="text-[11px] font-medium text-foreground truncate">
+                Lead <span className="text-primary">sem responsável</span>
+              </p>
+              <p className="text-[10px] text-muted-foreground">Clique para assumir</p>
+            </>
+          ) : (
+            <>
+              <p className="text-[11px] font-medium text-foreground truncate">
+                Lead de <span className="text-primary">{ownerName}</span>
+              </p>
+              <p className="text-[10px] text-muted-foreground">Visualização somente leitura</p>
+            </>
+          )}
         </div>
         <Button
           size="sm"
-          variant="outline"
+          variant={isUnassigned ? 'default' : 'outline'}
           className="h-7 text-[10px] shrink-0"
           onClick={() => setConfirmOpen(true)}
           disabled={assignLead.isPending}
@@ -66,8 +92,12 @@ export default function ClaimLeadBanner({ leadId, currentOwnerId, currentUserId 
             <Loader2 className="h-3 w-3 animate-spin" />
           ) : (
             <>
-              <UserCheck className="h-3 w-3 mr-1" />
-              Assumir
+              {isUnassigned ? (
+                <UserPlus className="h-3 w-3 mr-1" />
+              ) : (
+                <UserCheck className="h-3 w-3 mr-1" />
+              )}
+              {isUnassigned ? 'Assumir pra mim' : 'Assumir'}
             </>
           )}
         </Button>
@@ -76,16 +106,30 @@ export default function ClaimLeadBanner({ leadId, currentOwnerId, currentUserId 
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Assumir este lead?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {isUnassigned ? 'Assumir este lead?' : 'Assumir este lead?'}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              O lead será transferido de <strong>{ownerName}</strong> para você.
-              A responsável atual perde a permissão de edição. Deseja continuar?
+              {isUnassigned ? (
+                <>Você vai virar a responsável por este lead e poderá editar tudo. Confirmar?</>
+              ) : (
+                <>
+                  O lead será transferido de <strong>{ownerName}</strong> para você.
+                  A responsável atual perde a permissão de edição. Deseja continuar?
+                </>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={assignLead.isPending}>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={handleClaim} disabled={assignLead.isPending}>
-              {assignLead.isPending ? 'Transferindo…' : 'Sim, assumir'}
+              {assignLead.isPending
+                ? isUnassigned
+                  ? 'Assumindo…'
+                  : 'Transferindo…'
+                : isUnassigned
+                  ? 'Sim, assumir'
+                  : 'Sim, assumir'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
