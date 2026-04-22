@@ -287,6 +287,7 @@ function ProxiedImage({ message, fallbackUrl, caption }: { message: WhatsAppMess
   const [resolvedUrl, setResolvedUrl] = useState<string | null>(() => needsProxyDownload(fallbackUrl) ? null : fallbackUrl);
   const [loading, setLoading] = useState(() => needsProxyDownload(fallbackUrl));
   const [error, setError] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
 
   useEffect(() => {
     if (!needsProxyDownload(fallbackUrl)) {
@@ -317,9 +318,32 @@ function ProxiedImage({ message, fallbackUrl, caption }: { message: WhatsAppMess
       {loading ? (
         <div className="w-[200px] h-[150px] rounded-lg bg-muted animate-pulse flex items-center justify-center text-xs text-muted-foreground">Carregando...</div>
       ) : (
-        <img src={resolvedUrl!} alt="Imagem WhatsApp" className="rounded-lg w-full cursor-pointer" loading="lazy" onClick={() => window.open(resolvedUrl!, '_blank')} />
+        <div className="relative group">
+          <img
+            src={resolvedUrl!}
+            alt="Imagem WhatsApp"
+            className="rounded-lg w-full cursor-pointer"
+            loading="lazy"
+            onClick={() => setLightboxOpen(true)}
+          />
+          <div className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity md:opacity-0 [@media(hover:none)]:opacity-100">
+            <MediaActionsMenu
+              dark
+              url={resolvedUrl!}
+              filename={message.media_filename}
+              onView={() => setLightboxOpen(true)}
+            />
+          </div>
+          <MediaLightbox
+            open={lightboxOpen}
+            onClose={() => setLightboxOpen(false)}
+            type="image"
+            url={resolvedUrl!}
+            filename={message.media_filename}
+          />
+        </div>
       )}
-      {caption && <p className="text-sm mt-1">{caption}</p>}
+      {caption && <p className="text-sm mt-1 whitespace-pre-wrap break-words">{linkify(caption)}</p>}
     </div>
   );
 }
