@@ -1,9 +1,9 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Send, Paperclip, X, Smile, ChevronDown } from 'lucide-react';
+import { Send, Paperclip, X, Smile, ChevronDown, Reply } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { sendWhatsAppMessage, sendPresence } from '@/hooks/useWhatsApp';
-import type { WhatsAppInstance, WhatsAppMessage } from '@/hooks/useWhatsApp';
+import type { WhatsAppInstance, WhatsAppMessage, ReplyContext } from '@/hooks/useWhatsApp';
 import { getInstanceDisplayName } from '@/hooks/useWhatsApp';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -27,6 +27,10 @@ interface ChatInputProps {
   prefillText?: string;
   /** Called once the prefill has been consumed so the parent can clear it */
   onPrefillConsumed?: () => void;
+  /** Message being quoted (reply) */
+  replyingTo?: ReplyContext | null;
+  /** Cancel the reply quote */
+  onCancelReply?: () => void;
 }
 
 function InstanceSelector({
