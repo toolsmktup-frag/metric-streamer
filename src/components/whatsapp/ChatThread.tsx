@@ -377,14 +377,41 @@ function ProxiedVideo({ message, fallbackUrl, caption }: { message: WhatsAppMess
 
   if (error) return <div className="text-xs text-muted-foreground italic">Vídeo expirado no WhatsApp</div>;
 
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+
   return (
     <div className="max-w-[280px]">
       {loading ? (
         <div className="w-[240px] h-[180px] rounded-lg bg-muted animate-pulse flex items-center justify-center text-xs text-muted-foreground">Carregando...</div>
       ) : (
-        <video src={resolvedUrl!} controls className="rounded-lg w-full" preload="metadata" />
+        <div className="relative group">
+          <video src={resolvedUrl!} controls className="rounded-lg w-full" preload="metadata" />
+          <div className="absolute top-1.5 right-1.5 flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity [@media(hover:none)]:opacity-100">
+            <button
+              onClick={() => setLightboxOpen(true)}
+              className="h-7 w-7 rounded-full bg-black/50 text-white hover:bg-black/70 flex items-center justify-center"
+              aria-label="Expandir vídeo"
+              title="Expandir"
+            >
+              <Maximize2 className="h-4 w-4" />
+            </button>
+            <MediaActionsMenu
+              dark
+              url={resolvedUrl!}
+              filename={message.media_filename}
+              onView={() => setLightboxOpen(true)}
+            />
+          </div>
+          <MediaLightbox
+            open={lightboxOpen}
+            onClose={() => setLightboxOpen(false)}
+            type="video"
+            url={resolvedUrl!}
+            filename={message.media_filename}
+          />
+        </div>
       )}
-      {caption && <p className="text-sm mt-1">{caption}</p>}
+      {caption && <p className="text-sm mt-1 whitespace-pre-wrap break-words">{linkify(caption)}</p>}
     </div>
   );
 }
