@@ -134,6 +134,20 @@ export default function ContactPanel({ phone, senderName, contactPicture }: Cont
     [events],
   );
 
+  // Lista de nomes de instâncias da org — usada pra detectar quando o "senderName"
+  // que veio do whatsapp na verdade é o nome da própria instância (caso comum em
+  // mensagens fromMe, onde a UAZAPI grava o nome da conta no senderName).
+  const { data: instanceNames = [] } = useQuery({
+    queryKey: ['wz-instance-names'],
+    queryFn: async () => {
+      const { data } = await (supabase as any).from('wz_instances').select('name');
+      return ((data || []) as Array<{ name: string | null }>)
+        .map(r => (r.name || '').trim().toLowerCase())
+        .filter(Boolean);
+    },
+    staleTime: 10 * 60 * 1000,
+  });
+
   if (!phone) {
     return (
       <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
@@ -148,6 +162,15 @@ export default function ContactPanel({ phone, senderName, contactPicture }: Cont
     }
     return p;
   };
+
+  const isInstanceName = (n: string | null | undefined) => {
+    if (!n) return false;
+    return instanceNames.includes(n.trim().toLowerCase());
+  };
+
+  // Prioridade: nome real do lead → senderName (se não for nome de instância) → telefone
+  const cleanSenderName = isInstanceName(senderName) ? null : senderName;
+  const displayName = lead?.name || cleanSenderName || formatPhone(phone);
 
   const handleAddNote = async () => {
     if (!noteText.trim() || !canEditCrm) return;
@@ -167,7 +190,7 @@ export default function ContactPanel({ phone, senderName, contactPicture }: Cont
           )}
         </div>
         <h3 className="font-semibold text-foreground text-sm">
-          {senderName || lead?.name || formatPhone(phone)}
+          {displayName}
         </h3>
         <span className="text-xs text-muted-foreground">{formatPhone(phone)}</span>
         {lead?.email && (
