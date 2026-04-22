@@ -415,6 +415,42 @@ function ProxiedVideo({ message, fallbackUrl, caption }: { message: WhatsAppMess
   );
 }
 
+function DocumentCard({ message, url }: { message: WhatsAppMessage; url: string }) {
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const filename = message.media_filename || 'Documento';
+  const mime = (message as any).media_mimetype || '';
+  const isPdf = /pdf/i.test(mime) || /\.pdf($|\?)/i.test(filename) || /\.pdf($|\?)/i.test(url);
+  const type: MediaType = isPdf ? 'pdf' : 'document';
+
+  return (
+    <>
+      <div
+        onClick={() => setLightboxOpen(true)}
+        className="flex items-center gap-2 p-2 rounded-lg bg-background/40 hover:bg-background/60 border border-border/50 cursor-pointer min-w-[200px] max-w-[260px] text-current"
+      >
+        <FileText className="h-8 w-8 shrink-0 opacity-80" />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium truncate">{filename}</p>
+          <p className="text-[10px] opacity-70 uppercase">{isPdf ? 'PDF' : (mime.split('/')[1] || 'Arquivo')}</p>
+        </div>
+        <MediaActionsMenu
+          url={url}
+          filename={filename}
+          onView={() => setLightboxOpen(true)}
+        />
+      </div>
+      <MediaLightbox
+        open={lightboxOpen}
+        onClose={() => setLightboxOpen(false)}
+        type={type}
+        url={url}
+        filename={filename}
+        mimeType={mime}
+      />
+    </>
+  );
+}
+
 function MediaRenderer({ message }: { message: WhatsAppMessage }) {
   const message_type = detectRealMessageType(message);
   const { body } = message;
