@@ -383,6 +383,7 @@ export default function WhatsAppChat() {
               <ContactPanel
                 phone={selectedPhone}
                 senderName={selectedChat?.contact_name || selectedChat?.sender_name || null}
+                contactPicture={selectedChat?.contact_picture || null}
               />
             </div>
           )

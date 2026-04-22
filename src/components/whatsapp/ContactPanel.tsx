@@ -27,6 +27,7 @@ import { parseLocalDateTime } from '@/lib/localDate';
 interface ContactPanelProps {
   phone: string | null;
   senderName: string | null;
+  contactPicture?: string | null;
 }
 
 interface EventMapping {
@@ -66,7 +67,7 @@ function getEventDate(ev: { created_at: string; metadata: Record<string, unknown
   return parseLocalDateTime(originalDate) || parseLocalDateTime(ev.created_at) || new Date();
 }
 
-export default function ContactPanel({ phone, senderName }: ContactPanelProps) {
+export default function ContactPanel({ phone, senderName, contactPicture }: ContactPanelProps) {
   const { data: role = 'vendedor' } = useCurrentUserRole();
   const isAdmin = role === 'admin' || role === 'gestor';
 
@@ -158,8 +159,12 @@ export default function ContactPanel({ phone, senderName }: ContactPanelProps) {
     <div className="p-4 space-y-4 overflow-y-auto h-full">
       {/* Contact header */}
       <div className="flex flex-col items-center gap-2 pb-4 border-b border-border">
-        <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
-          <User className="h-8 w-8 text-primary" />
+        <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden">
+          {contactPicture ? (
+            <img src={contactPicture} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <User className="h-8 w-8 text-primary" />
+          )}
         </div>
         <h3 className="font-semibold text-foreground text-sm">
           {senderName || lead?.name || formatPhone(phone)}

@@ -100,27 +100,11 @@ BEGIN
     RAISE EXCEPTION 'Usuário sem organização';
   END IF;
 
-  -- Role: tenta user_profiles primeiro (fonte de verdade no app), fallback p/ user_roles
-  BEGIN
-    SELECT role::text INTO v_role
-    FROM public.user_profiles
-    WHERE id = v_user_id
-    LIMIT 1;
-  EXCEPTION WHEN undefined_table OR undefined_column THEN
-    v_role := NULL;
-  END;
-
-  IF v_role IS NULL THEN
-    BEGIN
-      SELECT role::text INTO v_role
-      FROM public.user_roles
-      WHERE user_id = v_user_id
-      ORDER BY CASE role::text WHEN 'admin' THEN 1 WHEN 'gestor' THEN 2 ELSE 3 END
-      LIMIT 1;
-    EXCEPTION WHEN undefined_table THEN
-      v_role := 'admin';
-    END;
-  END IF;
+  -- Role: APENAS user_profiles (fonte de verdade do app)
+  SELECT role::text INTO v_role
+  FROM public.user_profiles
+  WHERE id = v_user_id
+  LIMIT 1;
 
   v_role := COALESCE(v_role, 'vendedor');
 
