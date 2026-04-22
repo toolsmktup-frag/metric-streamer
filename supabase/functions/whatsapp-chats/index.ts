@@ -353,12 +353,37 @@ Deno.serve(async (req) => {
         }
       }
 
+      // Carrega nomes das instâncias da org pra filtrar nomes "poluídos"
+      // (UAZAPI grava nome da instância como senderName em mensagens fromMe).
+      const instanceNameSet = new Set<string>()
+      try {
+        const { data: instData } = await adminClient
+          .from('wz_instances')
+          .select('name')
+        for (const row of (instData || []) as Array<{ name: string | null }>) {
+          const n = (row?.name || '').trim().toLowerCase()
+          if (n) instanceNameSet.add(n)
+        }
+      } catch (_e) {
+        // best effort — segue sem filtro
+      }
+
+      const isInstanceName = (n: string | null | undefined) => {
+        if (!n) return false
+        return instanceNameSet.has(String(n).trim().toLowerCase())
+      }
+
       for (const [key, chat] of chatMap) {
         const contact = contactMap.get(key)
+        const contactName = contact?.name && !isInstanceName(contact.name) ? contact.name : null
         if (contact) {
-          chat.contact_name = contact.name
+          chat.contact_name = contactName
           chat.contact_picture = contact.profile_pic_url
-          if (!chat.sender_name) chat.sender_name = contact.name
+          if (!chat.sender_name && contactName) chat.sender_name = contactName
+        }
+        // Limpa sender_name se for nome de instância
+        if (isInstanceName(chat.sender_name)) {
+          chat.sender_name = chat.contact_name || null
         }
       }
 
