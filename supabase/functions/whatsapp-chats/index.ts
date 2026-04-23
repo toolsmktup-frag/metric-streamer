@@ -1,4 +1,4 @@
-// v2.2.0 - reduced scan limits + concurrency safety on the client side
+// v2.3.0 - vendedora vê TODAS as conversas das instâncias autorizadas (sem filtro por assigned_to)
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
@@ -292,10 +292,10 @@ Deno.serve(async (req) => {
         throw new Error(`messages query failed: ${serializeError(messagesError)}`)
       }
 
-      const access = await resolveLeadAccess(adminClient, ctx, recentMessages || [])
-      const visibleMessages = ctx.isAdmin
-        ? (recentMessages || [])
-        : (recentMessages || []).filter((message: any) => hasLeadAccess(ctx, access, message))
+      // Visibilidade: vendedora com acesso a uma instância vê TODAS as conversas
+      // dessa instância (sem filtro adicional por assigned_to). O filtro por
+      // instance_id já foi aplicado acima via ctx.allowedInstanceIds.
+      const visibleMessages = recentMessages || []
 
       const chatMap = new Map<string, any>()
       const relevantPhones = new Set<string>()
