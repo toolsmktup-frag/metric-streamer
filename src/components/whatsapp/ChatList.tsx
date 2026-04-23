@@ -5,8 +5,16 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import type { ChatSummary } from '@/hooks/useWhatsApp';
 import type { MultiChatSummary } from '@/hooks/useWhatsAppMultiChat';
-import { formatDistanceToNow } from 'date-fns';
+import { format, isToday, isYesterday, isThisWeek, isThisYear } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+
+function formatChatTime(date: Date): string {
+  if (isToday(date)) return format(date, 'HH:mm');
+  if (isYesterday(date)) return 'Ontem';
+  if (isThisWeek(date, { locale: ptBR })) return format(date, 'EEE', { locale: ptBR });
+  if (isThisYear(date)) return format(date, 'dd/MM');
+  return format(date, 'dd/MM/yyyy');
+}
 
 interface ChatListProps {
   chats: (ChatSummary | MultiChatSummary)[];
@@ -85,7 +93,7 @@ export default function ChatList({ chats, loading, selectedKey, onSelectChat, sh
               : chat.last_message.message_type !== 'text'
                 ? `📎 ${chat.last_message.message_type}`
                 : (chat.last_message.body || '').slice(0, 50);
-            const time = formatDistanceToNow(new Date(chat.last_message.created_at), { addSuffix: false, locale: ptBR });
+            const time = formatChatTime(new Date(chat.last_message.created_at));
 
             return (
               <button
