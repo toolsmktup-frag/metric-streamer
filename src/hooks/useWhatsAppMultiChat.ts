@@ -125,9 +125,19 @@ export function useWhatsAppMultiChats(instances: WhatsAppInstance[]) {
         ])
       );
 
+      // Defense in depth: build the set of instance IDs the user is allowed to
+      // see (from accessible-labels RPC + currently filtered instances). Any
+      // chat whose instance_id is NOT in this set is dropped client-side.
+      const accessibleIds = new Set<string>([
+        ...globalMeta.keys(),
+        ...instances.map(i => i.id),
+      ]);
+
       const merged = (Array.isArray(data) ? data : [])
-        .map((chat): MultiChatSummary => {
+        .map((chat): MultiChatSummary | null => {
           const iid = getChatInstanceId(chat);
+          if (!iid || !accessibleIds.has(iid)) return null;
+
           const fallbackInstanceName = getChatFallbackInstanceName(chat);
           const meta = globalMeta.get(iid) || localMeta.get(iid) || {
             instance_name: fallbackInstanceName || 'Instância',
@@ -141,6 +151,7 @@ export function useWhatsAppMultiChats(instances: WhatsAppInstance[]) {
             instance_color: meta.instance_color,
           };
         })
+        .filter((c): c is MultiChatSummary => c !== null)
         .sort((a, b) =>
           new Date(b.last_message.created_at).getTime() -
           new Date(a.last_message.created_at).getTime()
