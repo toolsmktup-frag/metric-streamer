@@ -99,12 +99,12 @@ export default function ChatList({ chats, loading, selectedKey, onSelectChat, sh
               <button
                 key={key}
                 onClick={() => onSelectChat(chat.phone, (chat as any).instance_id)}
-                className={`w-full flex items-center gap-3 px-3 py-3 text-left transition-colors border-b border-border/50 ${
+                className={`w-full flex items-start gap-3 px-3 py-3 text-left transition-colors border-b border-border/50 ${
                   isSelected ? 'bg-accent' : 'hover:bg-muted/50'
                 }`}
               >
                 {/* Avatar */}
-                <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0 overflow-hidden">
+                <div className="h-10 w-10 mt-0.5 rounded-full bg-primary/10 flex items-center justify-center shrink-0 overflow-hidden">
                   {chat.contact_picture ? (
                     <img src={chat.contact_picture} alt="" className="h-full w-full object-cover rounded-full" />
                   ) : (
@@ -116,10 +116,16 @@ export default function ChatList({ chats, loading, selectedKey, onSelectChat, sh
 
                 {/* Info */}
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
+                  {/* Linha 1: nome + hora */}
+                  <div className="flex items-baseline gap-2">
                     <span className="text-sm font-medium text-foreground truncate flex-1 min-w-0">{displayName}</span>
-                    <span className="w-[52px] text-right text-[11px] text-muted-foreground shrink-0 whitespace-nowrap">{time}</span>
+                    <span className={`text-[11px] shrink-0 whitespace-nowrap ${
+                      chat.unread_count > 0 ? 'text-primary font-semibold' : 'text-muted-foreground'
+                    }`}>
+                      {time}
+                    </span>
                   </div>
+                  {/* Linha 2: preview + badge não lidas */}
                   <div className="flex items-center justify-between gap-2 mt-0.5">
                     <span className="text-xs text-muted-foreground truncate flex-1 min-w-0">{preview}</span>
                     {chat.unread_count > 0 && (
