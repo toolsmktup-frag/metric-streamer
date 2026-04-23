@@ -1,75 +1,41 @@
+# Enriquecer contexto do lead no Copiloto de Vendas
 
+## O que vai mudar
 
-## Plano: Responder (quote) + Reagir (emoji) no chat WhatsApp
+Atualizar a edge function `sales-copilot` pra puxar MUITO mais contexto do lead antes de mandar pro Claude. Hoje ela só pega: nome, email, tags, funil/etapa, LTV e 5 últimas compras. Vai passar a pegar também:
 
-### 1. Backend — edge function `whatsapp-send` (estender)
+1. **Eventos do lead** (últimos 20 de `lead_events`) — PIX gerado, carrinho abandonado, mudanças de etapa, cliques, etc.
+2. **Tempo parado na etapa atual** (calculado via `entered_at` de `lead_stage_positions`) — "lead há 7 dias parado em 'Aguardando pagamento'"
+3. **UTMs de origem** (utm_source, utm_campaign, utm_content) — pra Claude saber se veio de anúncio FB, indicação, orgânico
+4. **Endereço** (cidade/estado extraídos de `metadata` do lead) — útil pra rapport
+5. **Histórico financeiro expandido** — de 5 pra 15 últimas compras + resumo: ticket médio, dias desde a última compra, método de pagamento favorito, produto mais comprado
+6. **Status do cliente** — primeira compra, recorrente, inativo (sem comprar há 90+ dias), etc.
 
-Hoje (presumido) aceita `{ instance_id, phone, text/media }`. Adicionar dois campos opcionais:
+## Como o Claude vai usar isso
 
-- **`reply_to: { id: string, text?: string, sender?: string }`** → quando presente, monta payload UAZAPI com `replyid` (ID externo da mensagem citada). Endpoint UAZAPI v2: `POST /send/text` (ou `/send/media`) aceita `replyid` no body.
-- **`reaction: { message_id: string, emoji: string }`** → novo branch que chama `POST /message/react` da UAZAPI com `{ number, id, text: emoji }`. Emoji vazio (`""`) = remover reação.
+O `buildSystemPrompt` vai ganhar instruções extras tipo:
+- Se LTV > R$ 1.000 → tratar como cliente VIP, tom mais próximo
+- Se parado >5 dias na etapa → sugerir mensagem de reativação/quebra de gelo
+- Se tem PIX gerado mas não pagou → focar em remover fricção do pagamento
+- Se cidade conhecida → pode usar referência local sutil
+- Se veio de UTM específica → adaptar abordagem (lead de FB Ads ≠ indicação)
 
-Após envio bem-sucedido de reação, fazer **upsert em `whatsapp_messages`** numa coluna nova `reactions jsonb` (ou tabela `whatsapp_message_reactions`) — escolho **coluna `reactions jsonb`** pra simplicidade: array `[{ emoji, from_me, sender, timestamp }]`.
+## O que você precisa fazer
 
-### 2. Banco — migration
+Vou te entregar **1 arquivo único** (`supabase/functions/sales-copilot/index.ts`) pra você:
+1. Abrir o Supabase Dashboard → Edge Functions → `sales-copilot`
+2. Apagar o conteúdo atual
+3. Colar o novo
+4. Deploy
 
-Adicionar 2 colunas em `whatsapp_messages`:
-- `reactions jsonb DEFAULT '[]'::jsonb` — reações coladas ao balão.
-- `reply_to jsonb` — `{ id, text, sender_name }` da mensagem citada (já populado em outbound; pra inbound, parsear `payload_raw.message.quoted` no `uazapi-webhook`).
+Não precisa migration nem mudança no banco — todas as tabelas usadas (`lead_events`, `lead_stage_positions`, `unified_customers`, `customer_purchases`) já existem.
 
-Atualizar `uazapi-webhook` pra:
-- Capturar `message.quoted` (objeto UAZAPI com a mensagem citada) → salvar em `reply_to`.
-- Capturar eventos de reação (`messageType === "ReactionMessage"` ou `message.reaction`) → fazer `UPDATE whatsapp_messages SET reactions = reactions || ...` na mensagem original (matched por `message_id_external`).
+## Detalhes técnicos
 
-### 3. Frontend — `ChatThread.tsx`
+- Todas as queries novas rodam em `Promise.allSettled` em paralelo pra não aumentar latência
+- Cada query tem try/catch isolado — se uma falhar (ex: lead sem eventos), o resto continua
+- O `leadCtx` (string passada no system prompt) vai de ~300 chars pra ~1500 chars no caso de lead rico, ainda bem dentro do limite de contexto da Claude Haiku 4.5
+- Mantém compatibilidade total com o frontend (`useSalesCopilot.ts`) — nenhuma mudança no contrato da request/response
+- Mantém o stream SSE no formato OpenAI-like que o hook já espera
 
-**Menu de 3 pontos** (já existe pra mídia — estender pra TODOS os balões):
-- `MoreVertical` no canto superior do balão (esq pra outbound, dir pra inbound — espelhado).
-- `DropdownMenu` com itens:
-  - **Responder** (`Reply` icon) → seta `replyingTo` no estado do componente pai (`WhatsAppChat` ou equivalente).
-  - **Reagir** (`Smile` icon) → abre popover com 6 emojis rápidos (`👍 ❤️ 😂 😮 😢 🙏`) + botão "..." pra picker completo (escopo v1: só os 6 rápidos, picker completo fica pra depois).
-  - **Copiar** (texto, se houver).
-  - Itens existentes de mídia (Visualizar/Baixar) quando aplicável.
-
-**Reações renderizadas no balão:**
-- Pequena pílula no canto inferior do balão mostrando emoji(s) + count se >1 do mesmo.
-- Click na própria reação (se `from_me`) remove ela.
-
-**Preview de "respondendo a"** acima do input (`MessageInput.tsx` ou similar):
-- Card cinza com barra colorida lateral, nome do sender + trecho da mensagem citada (max 2 linhas), botão X pra cancelar.
-- Ao enviar, inclui `reply_to: { id, text, sender }` no payload.
-
-**Quote renderizado dentro do balão** (quando msg recebida tem `reply_to`):
-- Bloco menor encostado no topo do balão, fundo levemente diferente, barra lateral colorida, sender + texto truncado. Click rola até a mensagem original (best-effort: scroll pra `data-msg-id`).
-
-### 4. Hook `useSendMessage` (ou `useWhatsAppSend`)
-
-Estender pra aceitar `replyTo` e ter método separado `reactToMessage(messageId, emoji)`. Optimistic update: insere reação no cache do React Query antes da resposta do servidor.
-
-### Arquivos editados/criados
-
-**Backend:**
-- `supabase/functions/whatsapp-send/index.ts` — branches `reply_to` + `reaction`.
-- `supabase/functions/uazapi-webhook/index.ts` — parse `quoted` e `ReactionMessage`.
-- Migration: `ALTER TABLE whatsapp_messages ADD COLUMN reactions jsonb DEFAULT '[]'::jsonb, ADD COLUMN reply_to jsonb;`
-
-**Frontend:**
-- `src/components/whatsapp/ChatThread.tsx` — menu 3 pontos universal + render de reações + render de quote.
-- `src/components/whatsapp/MessageInput.tsx` (ou similar) — preview "respondendo a".
-- `src/components/whatsapp/QuickReactionPicker.tsx` (novo) — popover com 6 emojis.
-- Hook de envio — adicionar `reactToMessage` e suporte a `replyTo`.
-
-### Validação
-
-1. Click ⋮ no balão → menu abre com Responder/Reagir/Copiar.
-2. Click Responder → preview aparece sobre o input; envio inclui citação; mensagem recebida do outro lado mostra como reply.
-3. Click Reagir → emoji escolhido aparece colado no balão; outro WhatsApp recebe a reação.
-4. Reação recebida via webhook aparece automaticamente no balão (realtime).
-5. Reply recebido renderiza quote dentro do balão.
-
-### Fora de escopo (v2)
-- Picker completo de emoji (mil emojis).
-- Múltiplas reações por usuário diferente no mesmo chat (1:1 só tem você + contato, então é trivial).
-- Long-press mobile / swipe-to-reply.
-- Editar/deletar mensagem.
-
+Confirma que posso seguir e gerar o arquivo?
