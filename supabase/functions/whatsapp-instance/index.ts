@@ -163,16 +163,33 @@ Deno.serve(async (req) => {
         })
       }
 
-      // Auto-grant access to the creator so non-admin users (vendedoras) see the instance they just created
+      // Auto-grant access to creator + all admins/gestors of the org
+      // (admins têm bypass no hook, mas precisam aparecer marcados na página /equipe)
       try {
+        const { data: orgAdmins } = await supabase
+          .from('user_profiles')
+          .select('id')
+          .eq('organization_id', profile.organization_id)
+          .in('role', ['admin', 'gestor'])
+
+        const userIdsToGrant = new Set<string>([user.id])
+        for (const a of orgAdmins || []) userIdsToGrant.add((a as any).id)
+
+        const accessRows = Array.from(userIdsToGrant).map((uid) => ({
+          user_id: uid,
+          instance_id: newInstance.id,
+          organization_id: profile.organization_id,
+        }))
+
         const { error: accessErr } = await supabase
           .from('whatsapp_instance_access')
-          .insert({
-            user_id: user.id,
-            instance_id: newInstance.id,
-            organization_id: profile.organization_id,
-          })
-        if (accessErr) console.error('[create_instance] auto-grant access failed:', accessErr.message)
+          .upsert(accessRows, { onConflict: 'user_id,instance_id', ignoreDuplicates: true })
+
+        if (accessErr) {
+          console.error('[create_instance] auto-grant access failed:', accessErr.message, accessErr)
+        } else {
+          console.log('[create_instance] auto-granted access to', accessRows.length, 'users')
+        }
       } catch (e) {
         console.error('[create_instance] auto-grant access exception:', (e as Error).message)
       }
