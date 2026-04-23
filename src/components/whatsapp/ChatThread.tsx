@@ -5,7 +5,8 @@ import { supabase } from '@/integrations/supabase/client';
 import type { WhatsAppMessage } from '@/hooks/useWhatsApp';
 import type { WhatsAppInstance } from '@/hooks/useWhatsApp';
 import { getInstanceDisplayName, reactToWhatsAppMessage } from '@/hooks/useWhatsApp';
-import { format } from 'date-fns';
+import { format, isToday, isYesterday, isSameDay } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { linkify } from '@/lib/linkify';
 import MediaLightbox, { type MediaType } from './MediaLightbox';
 import QuickReactionPicker from './QuickReactionPicker';
@@ -100,6 +101,12 @@ function formatTime(s: number) {
   const m = Math.floor(s / 60);
   const sec = Math.floor(s % 60);
   return `${m}:${sec.toString().padStart(2, '0')}`;
+}
+
+function formatMessageDayLabel(date: Date) {
+  if (isToday(date)) return 'Hoje';
+  if (isYesterday(date)) return 'Ontem';
+  return format(date, 'EEEE, dd/MM/yyyy', { locale: ptBR });
 }
 
 function needsProxyDownload(src: string | null) {
@@ -717,64 +724,76 @@ export default function ChatThread({ messages, loading, phone, instances, onRepl
   return (
     <ScrollArea className="flex-1">
       <div className="p-4 space-y-2 min-h-full flex flex-col justify-end">
-        {messages.map(msg => {
+        {messages.map((msg, index) => {
           const isOut = msg.direction === 'outbound';
           const isDeleted = msg.is_deleted;
           const time = format(new Date(msg.created_at), 'HH:mm');
           const instanceName = instanceMap?.get(msg.instance_id);
           const canReact = !!msg.message_id_external && !!instanceId && !!phoneForActions && !isDeleted;
           const isOptimistic = msg.id.startsWith('temp-');
+          const currentDate = new Date(msg.created_at);
+          const previousDate = index > 0 ? new Date(messages[index - 1].created_at) : null;
+          const showDateSeparator = !previousDate || !isSameDay(currentDate, previousDate);
 
           return (
-            <div
-              key={msg.id}
-              data-msg-id={msg.id}
-              data-msg-external-id={msg.message_id_external || ''}
-              className={`flex ${isOut ? 'justify-end' : 'justify-start'}`}
-            >
-              <div
-                className={`group relative max-w-[65%] rounded-2xl px-3 py-2 pr-8 text-sm shadow-sm ${
-                  isOut
-                    ? 'bg-primary text-primary-foreground rounded-br-sm'
-                    : 'bg-card border border-border text-foreground rounded-bl-sm'
-                } ${isDeleted ? 'opacity-50 italic' : ''}`}
-              >
-                {!isDeleted && !isOptimistic && (
-                  <MessageActionsMenu
-                    msg={msg}
-                    isOut={isOut}
-                    onReply={onReply}
-                    onReact={handleReact}
-                    canReact={canReact}
-                  />
-                )}
-
-                {instanceName && isOut && (
-                  <div className="mb-1">
-                    <InstanceBadge instanceName={instanceName} isOutbound={isOut} />
-                  </div>
-                )}
-
-                <QuoteBlock replyTo={msg.reply_to} isOut={isOut} />
-
-                {(() => {
-                  const realType = detectRealMessageType(msg);
-                  const hasMedia = realType !== 'text' && (extractMediaUrlFromPayload(msg) || realType === 'audio' || realType === 'ptt');
-                  return hasMedia && !isDeleted ? (
-                    <MediaRenderer message={msg} />
-                  ) : (
-                    <p className="whitespace-pre-wrap break-words">{linkify(msg.body || '')}</p>
-                  );
-                })()}
-
-                <div className={`flex items-center gap-1 mt-1 ${isOut ? 'justify-end' : 'justify-start'}`}>
-                  <span className={`text-[10px] ${isOut ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
-                    {time}
+            <div key={msg.id}>
+              {showDateSeparator && (
+                <div className="flex items-center justify-center py-2">
+                  <span className="rounded-full border border-border bg-muted px-3 py-1 text-[11px] font-medium text-muted-foreground">
+                    {formatMessageDayLabel(currentDate)}
                   </span>
-                  <StatusIcon status={msg.status} direction={msg.direction} />
                 </div>
+              )}
 
-                <ReactionsBar msg={msg} isOut={isOut} onRemoveOwn={handleRemoveReaction} />
+              <div
+                data-msg-id={msg.id}
+                data-msg-external-id={msg.message_id_external || ''}
+                className={`flex ${isOut ? 'justify-end' : 'justify-start'}`}
+              >
+                <div
+                  className={`group relative max-w-[65%] rounded-2xl px-3 py-2 pr-8 text-sm shadow-sm ${
+                    isOut
+                      ? 'bg-primary text-primary-foreground rounded-br-sm'
+                      : 'bg-card border border-border text-foreground rounded-bl-sm'
+                  } ${isDeleted ? 'opacity-50 italic' : ''}`}
+                >
+                  {!isDeleted && !isOptimistic && (
+                    <MessageActionsMenu
+                      msg={msg}
+                      isOut={isOut}
+                      onReply={onReply}
+                      onReact={handleReact}
+                      canReact={canReact}
+                    />
+                  )}
+
+                  {instanceName && isOut && (
+                    <div className="mb-1">
+                      <InstanceBadge instanceName={instanceName} isOutbound={isOut} />
+                    </div>
+                  )}
+
+                  <QuoteBlock replyTo={msg.reply_to} isOut={isOut} />
+
+                  {(() => {
+                    const realType = detectRealMessageType(msg);
+                    const hasMedia = realType !== 'text' && (extractMediaUrlFromPayload(msg) || realType === 'audio' || realType === 'ptt');
+                    return hasMedia && !isDeleted ? (
+                      <MediaRenderer message={msg} />
+                    ) : (
+                      <p className="whitespace-pre-wrap break-words">{linkify(msg.body || '')}</p>
+                    );
+                  })()}
+
+                  <div className={`flex items-center gap-1 mt-1 ${isOut ? 'justify-end' : 'justify-start'}`}>
+                    <span className={`text-[10px] ${isOut ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
+                      {time}
+                    </span>
+                    <StatusIcon status={msg.status} direction={msg.direction} />
+                  </div>
+
+                  <ReactionsBar msg={msg} isOut={isOut} onRemoveOwn={handleRemoveReaction} />
+                </div>
               </div>
             </div>
           );

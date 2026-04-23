@@ -118,7 +118,7 @@ export default function ChatList({ chats, loading, selectedKey, onSelectChat, sh
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium text-foreground truncate flex-1 min-w-0">{displayName}</span>
-                    <span className="text-[11px] text-muted-foreground shrink-0 whitespace-nowrap">{time}</span>
+                    <span className="w-[52px] text-right text-[11px] text-muted-foreground shrink-0 whitespace-nowrap">{time}</span>
                   </div>
                   <div className="flex items-center justify-between gap-2 mt-0.5">
                     <span className="text-xs text-muted-foreground truncate flex-1 min-w-0">{preview}</span>
