@@ -75,7 +75,19 @@ export default function SalesCopilotPanel({ open, onClose, phone, instanceId, on
   };
 
   return (
-    <div className="w-[380px] shrink-0 border-l border-border bg-card flex flex-col h-full">
+    <>
+      {/* Backdrop só em telas estreitas */}
+      <div
+        className="fixed inset-0 bg-background/40 backdrop-blur-[1px] z-40 lg:hidden"
+        onClick={onClose}
+      />
+      <div
+        className="
+          fixed right-0 top-0 bottom-0 z-50 w-[92vw] max-w-[420px]
+          lg:static lg:w-[380px] lg:z-auto
+          shrink-0 border-l border-border bg-card flex flex-col h-full shadow-2xl lg:shadow-none
+        "
+      >
       {/* Header */}
       <div className="h-12 px-3 flex items-center justify-between border-b border-border shrink-0">
         <div className="flex items-center gap-2">
@@ -112,9 +124,9 @@ export default function SalesCopilotPanel({ open, onClose, phone, instanceId, on
             {(Object.keys(ACTION_LABELS) as CopilotAction[]).map((k) => {
               const Icon = ACTION_LABELS[k].icon;
               return (
-                <TabsTrigger key={k} value={k} className="text-xs px-1 gap-1">
-                  <Icon className="h-3 w-3" />
-                  <span className="hidden sm:inline">{ACTION_LABELS[k].label.split(' ')[0]}</span>
+                <TabsTrigger key={k} value={k} className="text-[11px] px-1 gap-1 data-[state=active]:font-semibold">
+                  <Icon className="h-3 w-3 shrink-0" />
+                  <span className="truncate">{ACTION_LABELS[k].label.split(' ')[0]}</span>
                 </TabsTrigger>
               );
             })}
@@ -204,6 +216,7 @@ export default function SalesCopilotPanel({ open, onClose, phone, instanceId, on
           </ScrollArea>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 }
