@@ -107,7 +107,7 @@ export default function SalesCopilotPanel({ open, onClose, phone, instanceId, on
           </div>
         )}
 
-        <Tabs value={tab} onValueChange={(v) => setTab(v as CopilotAction)} className="flex-1 flex flex-col min-h-0 px-3">
+        <Tabs value={tab} onValueChange={(v) => setTab(v as CopilotAction)} className="flex flex-col px-3 shrink-0">
           <TabsList className="grid grid-cols-4 h-9 shrink-0">
             {(Object.keys(ACTION_LABELS) as CopilotAction[]).map((k) => {
               const Icon = ACTION_LABELS[k].icon;
