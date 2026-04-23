@@ -99,12 +99,12 @@ export default function ChatList({ chats, loading, selectedKey, onSelectChat, sh
               <button
                 key={key}
                 onClick={() => onSelectChat(chat.phone, (chat as any).instance_id)}
-                className={`w-full flex items-start gap-3 px-3 py-3 text-left transition-colors border-b border-border/50 ${
+                className={`w-full flex items-start gap-2 px-2 py-2.5 text-left transition-colors border-b border-border/50 ${
                   isSelected ? 'bg-accent' : 'hover:bg-muted/50'
                 }`}
               >
                 {/* Avatar */}
-                <div className="h-10 w-10 mt-0.5 rounded-full bg-primary/10 flex items-center justify-center shrink-0 overflow-hidden">
+                <div className="h-9 w-9 mt-0.5 rounded-full bg-primary/10 flex items-center justify-center shrink-0 overflow-hidden">
                   {chat.contact_picture ? (
                     <img src={chat.contact_picture} alt="" className="h-full w-full object-cover rounded-full" />
                   ) : (
@@ -116,10 +116,10 @@ export default function ChatList({ chats, loading, selectedKey, onSelectChat, sh
 
                 {/* Info */}
                 <div className="flex-1 min-w-0">
-                  {/* Linha 1: nome + hora */}
-                  <div className="flex items-baseline gap-2">
+                  {/* Linha 1: nome + hora (estilo WhatsApp) */}
+                  <div className="flex items-center gap-1.5 w-full">
                     <span className="text-sm font-medium text-foreground truncate flex-1 min-w-0">{displayName}</span>
-                    <span className={`text-[11px] shrink-0 whitespace-nowrap ${
+                    <span className={`text-[10px] leading-none shrink-0 whitespace-nowrap tabular-nums ${
                       chat.unread_count > 0 ? 'text-primary font-semibold' : 'text-muted-foreground'
                     }`}>
                       {time}
