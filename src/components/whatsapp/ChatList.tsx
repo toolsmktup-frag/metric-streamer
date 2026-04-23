@@ -116,35 +116,36 @@ export default function ChatList({ chats, loading, selectedKey, onSelectChat, sh
 
                 {/* Info */}
                 <div className="flex-1 min-w-0">
-                  {/* Linha 1: nome + hora (estilo WhatsApp) */}
-                  <div className="flex items-center gap-1.5 w-full">
-                    <span className="text-sm font-medium text-foreground truncate flex-1 min-w-0">{displayName}</span>
-                    <span className={`text-[10px] leading-none shrink-0 whitespace-nowrap tabular-nums ${
+                  <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-2">
+                    <span className="text-sm font-medium text-foreground truncate min-w-0">
+                      {displayName}
+                    </span>
+                    <span className={`text-[11px] leading-none text-right shrink-0 whitespace-nowrap tabular-nums ${
                       chat.unread_count > 0 ? 'text-primary font-semibold' : 'text-muted-foreground'
                     }`}>
                       {time}
                     </span>
-                  </div>
-                  {/* Linha 2: preview + badge não lidas */}
-                  <div className="flex items-center justify-between gap-2 mt-0.5">
-                    <span className="text-xs text-muted-foreground truncate flex-1 min-w-0">{preview}</span>
-                    {chat.unread_count > 0 && (
-                      <span className="shrink-0 h-4 min-w-[16px] px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center">
-                        {chat.unread_count}
-                      </span>
+
+                    <div className="col-span-2 mt-0.5 flex items-center gap-2 min-w-0">
+                      <span className="text-xs text-muted-foreground truncate flex-1 min-w-0">{preview}</span>
+                      {chat.unread_count > 0 && (
+                        <span className="shrink-0 h-4 min-w-[16px] px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center">
+                          {chat.unread_count}
+                        </span>
+                      )}
+                    </div>
+
+                    {showInstanceBadge && multi && (
+                      <div className="col-span-2 mt-1 min-w-0">
+                        <span
+                          className="inline-flex max-w-full items-center truncate rounded-full px-1.5 py-0.5 text-[9px] font-medium text-white"
+                          style={{ backgroundColor: chat.instance_color }}
+                        >
+                          {chat.instance_name}
+                        </span>
+                      </div>
                     )}
                   </div>
-                  {/* Instance badge */}
-                  {showInstanceBadge && multi && (
-                    <div className="mt-1">
-                      <span
-                        className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-medium text-white max-w-full truncate"
-                        style={{ backgroundColor: chat.instance_color }}
-                      >
-                        {chat.instance_name}
-                      </span>
-                    </div>
-                  )}
                 </div>
               </button>
             );
