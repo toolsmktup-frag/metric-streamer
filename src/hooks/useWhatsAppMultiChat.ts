@@ -60,16 +60,17 @@ export function useWhatsAppMultiChats(instances: WhatsAppInstance[]) {
 
   const instanceIds = JSON.stringify(instances.map(i => i.id));
 
-  // Fetch ALL org instances once (for badge name resolution in unified mode).
-  // The chats endpoint may return chats from instances the user doesn't have direct access to
-  // (e.g. admin viewing all), so we need the full org map to label badges correctly.
+  // Fetch the instances the CURRENT user is allowed to see (admin = all in org,
+  // vendedor = only those in whatsapp_instance_access). We use this both to label
+  // badges and as a defense-in-depth filter to drop chats from instances the user
+  // shouldn't see, even if the backend leaks them.
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const { data, error } = await (supabase as any).rpc('get_org_instance_labels');
+      const { data, error } = await (supabase as any).rpc('get_user_accessible_instance_labels');
       if (cancelled) return;
       if (error) {
-        console.error('[useWhatsAppMultiChats] get_org_instance_labels failed:', error);
+        console.error('[useWhatsAppMultiChats] get_user_accessible_instance_labels failed:', error);
         return;
       }
       const map = new Map<string, InstanceMeta>();
@@ -79,7 +80,7 @@ export function useWhatsAppMultiChats(instances: WhatsAppInstance[]) {
           instance_color: getInstanceColor(index),
         });
       });
-      console.log('[useWhatsAppMultiChats] loaded', map.size, 'instance labels');
+      console.log('[useWhatsAppMultiChats] loaded', map.size, 'accessible instance labels');
       setGlobalMeta(map);
     })();
     return () => { cancelled = true; };
@@ -124,9 +125,19 @@ export function useWhatsAppMultiChats(instances: WhatsAppInstance[]) {
         ])
       );
 
+      // Defense in depth: build the set of instance IDs the user is allowed to
+      // see (from accessible-labels RPC + currently filtered instances). Any
+      // chat whose instance_id is NOT in this set is dropped client-side.
+      const accessibleIds = new Set<string>([
+        ...globalMeta.keys(),
+        ...instances.map(i => i.id),
+      ]);
+
       const merged = (Array.isArray(data) ? data : [])
-        .map((chat): MultiChatSummary => {
+        .map((chat): MultiChatSummary | null => {
           const iid = getChatInstanceId(chat);
+          if (!iid || !accessibleIds.has(iid)) return null;
+
           const fallbackInstanceName = getChatFallbackInstanceName(chat);
           const meta = globalMeta.get(iid) || localMeta.get(iid) || {
             instance_name: fallbackInstanceName || 'Instância',
@@ -140,6 +151,7 @@ export function useWhatsAppMultiChats(instances: WhatsAppInstance[]) {
             instance_color: meta.instance_color,
           };
         })
+        .filter((c): c is MultiChatSummary => c !== null)
         .sort((a, b) =>
           new Date(b.last_message.created_at).getTime() -
           new Date(a.last_message.created_at).getTime()
