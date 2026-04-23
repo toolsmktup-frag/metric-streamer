@@ -93,7 +93,7 @@ export default function ChatList({ chats, loading, selectedKey, onSelectChat, sh
               : chat.last_message.message_type !== 'text'
                 ? `📎 ${chat.last_message.message_type}`
                 : (chat.last_message.body || '').slice(0, 50);
-            const time = formatDistanceToNow(new Date(chat.last_message.created_at), { addSuffix: false, locale: ptBR });
+            const time = formatChatTime(new Date(chat.last_message.created_at));
 
             return (
               <button
