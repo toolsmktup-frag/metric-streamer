@@ -116,14 +116,14 @@ export default function ChatList({ chats, loading, selectedKey, onSelectChat, sh
 
                 {/* Info */}
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-foreground truncate">{displayName}</span>
-                    <span className="text-[10px] text-muted-foreground shrink-0 ml-1">{time}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-foreground truncate flex-1 min-w-0">{displayName}</span>
+                    <span className="text-[11px] text-muted-foreground shrink-0 whitespace-nowrap">{time}</span>
                   </div>
-                  <div className="flex items-center justify-between mt-0.5">
-                    <span className="text-xs text-muted-foreground truncate">{preview}</span>
+                  <div className="flex items-center justify-between gap-2 mt-0.5">
+                    <span className="text-xs text-muted-foreground truncate flex-1 min-w-0">{preview}</span>
                     {chat.unread_count > 0 && (
-                      <span className="ml-1 shrink-0 h-4 min-w-[16px] px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center">
+                      <span className="shrink-0 h-4 min-w-[16px] px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center">
                         {chat.unread_count}
                       </span>
                     )}
@@ -132,7 +132,7 @@ export default function ChatList({ chats, loading, selectedKey, onSelectChat, sh
                   {showInstanceBadge && multi && (
                     <div className="mt-1">
                       <span
-                        className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-medium text-white"
+                        className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-medium text-white max-w-full truncate"
                         style={{ backgroundColor: chat.instance_color }}
                       >
                         {chat.instance_name}
