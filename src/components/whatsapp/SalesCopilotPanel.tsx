@@ -83,17 +83,6 @@ export default function SalesCopilotPanel({ open, onClose, phone, instanceId, on
           <span className="font-semibold text-sm">Copiloto de Vendas</span>
         </div>
         <div className="flex items-center gap-1">
-          {canEditScript && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              title="Configurar script"
-              onClick={() => navigate('/configuracoes/copiloto-vendas')}
-            >
-              <Settings className="h-3.5 w-3.5" />
-            </Button>
-          )}
           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose}>
             <X className="h-4 w-4" />
           </Button>
