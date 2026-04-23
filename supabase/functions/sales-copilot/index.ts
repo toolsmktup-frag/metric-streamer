@@ -40,6 +40,19 @@ function safeStr(v: unknown, max = 500): string {
   return s.length > max ? s.slice(0, max) : s;
 }
 
+function daysBetween(from: string | Date | null | undefined, to: Date = new Date()): number | null {
+  if (!from) return null;
+  const d = typeof from === "string" ? new Date(from) : from;
+  if (isNaN(d.getTime())) return null;
+  return Math.floor((to.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+function fmtDate(v: any): string {
+  try {
+    return new Date(v).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
+  } catch { return String(v || ""); }
+}
+
 function buildSystemPrompt(action: Action, script: string, leadCtx: string): string {
   const base = `Você é um copiloto de vendas que AUXILIA vendedores brasileiros via WhatsApp. Você NUNCA responde diretamente o cliente — você fala COM o vendedor, sugerindo o que ele pode mandar. Use português brasileiro informal e direto. Seja prático.
 
@@ -48,32 +61,46 @@ ${script || "(Nenhum script configurado — use bom senso de vendas consultivas)
 
 == CONTEXTO DO LEAD ==
 ${leadCtx}
+
+== COMO USAR O CONTEXTO ==
+- Se LTV > R$ 1.000 ou status = "VIP/Recorrente": trate como cliente próximo, tom mais íntimo, agradeça a parceria.
+- Se "Dias parado na etapa" > 5: o lead esfriou — sugira mensagem de quebra de gelo / reativação, NÃO continue como se a conversa estivesse quente.
+- Se há evento "PIX gerado" ou "Boleto gerado" sem compra aprovada depois: foco total em remover fricção do pagamento (oferecer outra forma, tirar dúvida, lembrar do prazo).
+- Se há "Carrinho abandonado": traga de volta com urgência genuína (estoque, bônus, prazo).
+- Se status = "Inativo (90+ dias sem comprar)": NÃO trate como lead novo — fale como reaproximação.
+- Se status = "Primeira compra recente": foque em pós-venda, ativação, próximo produto da escada de valor.
+- Se cidade/estado conhecidos: pode usar referência local sutil (clima, fuso, gíria) se fizer sentido.
+- Se UTM mostra origem específica (ex: anúncio FB de produto X): adapte o gancho à dor que aquele anúncio prometeu resolver.
+- Se produto mais comprado é conhecido: sugira upsell/cross-sell coerente.
+- NUNCA invente dados que não estão no contexto. Se faltar info, peça pro vendedor confirmar.
 `;
 
   switch (action) {
     case "suggest":
       return `${base}
 
-TAREFA: Analise as últimas mensagens da conversa e sugira 2 ou 3 variações de resposta que o vendedor pode mandar AGORA. Use markdown. Numere as opções (1, 2, 3). Cada opção deve ser uma mensagem pronta pra copiar — texto que vai pro WhatsApp do cliente. Diferencie o tom entre as opções (ex: mais direto, mais consultivo, mais empático).`;
+TAREFA: Analise as últimas mensagens da conversa E o contexto do lead, e sugira 2 ou 3 variações de resposta que o vendedor pode mandar AGORA. Use markdown. Numere as opções (1, 2, 3). Cada opção deve ser uma mensagem pronta pra copiar — texto que vai pro WhatsApp do cliente. Diferencie o tom entre as opções (ex: mais direto, mais consultivo, mais empático). Se o contexto do lead indicar algo relevante (ex: parado há X dias, cliente VIP, PIX pendente), AS SUGESTÕES DEVEM REFLETIR ISSO.`;
     case "analyze":
       return `${base}
 
-TAREFA: Faça uma análise rápida da conversa em markdown estruturado:
-- **Temperatura do lead**: 🥶 Frio / 🌤️ Morno / 🔥 Quente (com 1 frase justificando)
+TAREFA: Faça uma análise rápida da conversa em markdown estruturado, CRUZANDO histórico de chat com o contexto do lead:
+- **Temperatura do lead**: 🥶 Frio / 🌤️ Morno / 🔥 Quente (com 1 frase justificando — considere LTV, dias parado, eventos)
+- **Perfil**: (novo / recorrente / VIP / inativo / em recuperação) — baseado no histórico financeiro
 - **Estágio na jornada**: (descoberta, consideração, decisão, objeção, fechamento, pós-venda)
+- **Sinais do contexto**: cite eventos relevantes (ex: "PIX gerado há 2 dias sem pagamento", "parado em 'Aguardando contato' há 7 dias", "veio de anúncio FB - Produto X")
 - **Objeções detectadas**: lista
 - **Sinais de compra**: lista
-- **Próximo passo recomendado**: 1-2 frases concretas
+- **Próximo passo recomendado**: 1-2 frases concretas e específicas pro caso desse lead
 
 Seja conciso. Sem enrolação.`;
     case "objection":
       return `${base}
 
-TAREFA: O vendedor enfrentou uma objeção e precisa contorná-la. Identifique a objeção (no histórico ou na pergunta livre) e devolva 2-3 abordagens de contorno alinhadas ao script. Cada uma deve ser uma mensagem pronta pra copiar. Use markdown e numere.`;
+TAREFA: O vendedor enfrentou uma objeção e precisa contorná-la. Identifique a objeção (no histórico ou na pergunta livre) e devolva 2-3 abordagens de contorno alinhadas ao script E ao perfil do lead (se é cliente recorrente, se já comprou X, se veio de anúncio Y, etc). Cada uma deve ser uma mensagem pronta pra copiar. Use markdown e numere.`;
     case "ask":
       return `${base}
 
-TAREFA: Responda a pergunta do vendedor de forma prática, baseada no contexto da conversa e no script. Se a pergunta for sobre o que mandar, devolva uma mensagem pronta pra copiar.`;
+TAREFA: Responda a pergunta do vendedor de forma prática, baseada no contexto da conversa, no histórico do lead e no script. Se a pergunta for sobre o que mandar, devolva uma mensagem pronta pra copiar.`;
   }
 }
 
@@ -102,16 +129,7 @@ function buildUserPrompt(action: Action, messages: any[], customQuestion?: strin
 
 /**
  * Converte stream SSE da Anthropic pra um formato simples consumido pelo frontend.
- * Frontend espera linhas SSE no formato: `data: {"text":"..."}` + `data: [DONE]` no final.
- *
- * Anthropic emite eventos como:
- *   event: content_block_delta
- *   data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"olá"}}
- *
- *   event: message_stop
- *   data: {"type":"message_stop"}
- *
- * A gente extrai só o `delta.text` e reemite num formato OpenAI-like simplificado.
+ * Frontend espera linhas SSE no formato: `data: {"choices":[{"delta":{"content":"..."}}]}` + `data: [DONE]` no final.
  */
 function transformAnthropicStream(upstream: ReadableStream<Uint8Array>): ReadableStream<Uint8Array> {
   const decoder = new TextDecoder();
@@ -141,7 +159,6 @@ function transformAnthropicStream(upstream: ReadableStream<Uint8Array>): Readabl
               if (parsed?.type === "content_block_delta") {
                 const text = parsed?.delta?.text;
                 if (typeof text === "string" && text.length) {
-                  // Reemite no formato compatível com o parser do frontend
                   const payload = JSON.stringify({
                     choices: [{ delta: { content: text } }],
                   });
@@ -161,7 +178,6 @@ function transformAnthropicStream(upstream: ReadableStream<Uint8Array>): Readabl
             }
           }
         }
-        // flush final
         controller.enqueue(encoder.encode(`data: [DONE]\n\n`));
       } catch (e) {
         try {
@@ -271,7 +287,7 @@ Deno.serve(async (req) => {
     try {
       const { data: leads, error: leadErr } = await admin
         .from("leads")
-        .select("id, name, email, phone, tags")
+        .select("id, name, email, phone, tags, utm_source, utm_medium, utm_campaign, utm_content, utm_term, metadata, created_at")
         .eq("organization_id", orgId)
         .in("phone", phoneVariants.length ? phoneVariants : [body.phone])
         .limit(1);
@@ -283,19 +299,73 @@ Deno.serve(async (req) => {
 
     if (lead) {
       const tagsStr = Array.isArray(lead.tags) && lead.tags.length ? lead.tags.join(", ") : "(nenhuma)";
-      leadCtx = `Nome: ${lead.name || "(sem nome)"}\nTelefone: ${lead.phone || body.phone}\nEmail: ${lead.email || "(sem email)"}\nTags: ${tagsStr}`;
+      const leadAgeDays = daysBetween(lead.created_at);
 
-      // ===== Stage / funnel (independent, simplified to avoid fragile joins) =====
-      try {
-        const { data: stagePos, error: spErr } = await admin
+      // --- Endereço (de metadata) ---
+      const meta = (lead.metadata || {}) as Record<string, any>;
+      const addressBits = [meta.city, meta.state].filter(Boolean).join("/");
+      const addressStr = addressBits ? `${addressBits}` : (meta.cep ? `CEP ${meta.cep}` : "");
+
+      // --- UTMs ---
+      const utmParts: string[] = [];
+      if (lead.utm_source) utmParts.push(`source=${lead.utm_source}`);
+      if (lead.utm_medium) utmParts.push(`medium=${lead.utm_medium}`);
+      if (lead.utm_campaign) utmParts.push(`campaign=${lead.utm_campaign}`);
+      if (lead.utm_content) utmParts.push(`content=${lead.utm_content}`);
+      if (lead.utm_term) utmParts.push(`term=${lead.utm_term}`);
+      const utmStr = utmParts.length ? utmParts.join(" | ") : "(sem UTM — origem desconhecida)";
+
+      leadCtx = `Nome: ${lead.name || "(sem nome)"}
+Telefone: ${lead.phone || body.phone}
+Email: ${lead.email || "(sem email)"}
+Tags: ${tagsStr}
+Lead criado há: ${leadAgeDays !== null ? `${leadAgeDays} dias` : "(desconhecido)"}
+${addressStr ? `Localização: ${addressStr}` : ""}
+Origem (UTM): ${utmStr}`.replace(/\n\n+/g, "\n");
+
+      // ===== Roda em paralelo: stage, customer/purchases, events =====
+      const [stageRes, customerRes, eventsRes] = await Promise.allSettled([
+        // Stage / funnel + entered_at pra calcular tempo parado
+        admin
           .from("lead_stage_positions")
-          .select("funnel_id, stage_id")
+          .select("funnel_id, stage_id, entered_at")
           .eq("lead_id", lead.id)
-          .limit(5);
-        if (spErr) log("stage_pos_error", { err: spErr.message });
-        if (stagePos && stagePos.length) {
-          const funnelIds = Array.from(new Set(stagePos.map((s: any) => s.funnel_id).filter(Boolean)));
-          const stageIds = Array.from(new Set(stagePos.map((s: any) => s.stage_id).filter(Boolean)));
+          .limit(10),
+        // Unified customer
+        (lead.email
+          ? admin
+              .from("unified_customers")
+              .select("id, lifetime_value, total_purchases, primary_email, primary_phone")
+              .eq("organization_id", orgId)
+              .eq("primary_email", String(lead.email).toLowerCase())
+              .limit(1)
+          : admin
+              .from("unified_customers")
+              .select("id, lifetime_value, total_purchases, primary_email, primary_phone")
+              .eq("organization_id", orgId)
+              .in("primary_phone", phoneVariants.length ? phoneVariants : [body.phone])
+              .limit(1)),
+        // Eventos do lead
+        admin
+          .from("lead_events")
+          .select("event_name, metadata, created_at, funnel_id")
+          .eq("lead_id", lead.id)
+          .order("created_at", { ascending: false })
+          .limit(20),
+      ]);
+
+      // ----- Stage / funnel -----
+      let stagePositions: any[] = [];
+      if (stageRes.status === "fulfilled") {
+        stagePositions = (stageRes.value as any).data || [];
+      } else {
+        log("stage_pos_error", { err: String((stageRes as any).reason) });
+      }
+
+      if (stagePositions.length) {
+        try {
+          const funnelIds = Array.from(new Set(stagePositions.map((s: any) => s.funnel_id).filter(Boolean)));
+          const stageIds = Array.from(new Set(stagePositions.map((s: any) => s.stage_id).filter(Boolean)));
 
           const [funnelsRes, stagesRes] = await Promise.allSettled([
             funnelIds.length
@@ -315,51 +385,120 @@ Deno.serve(async (req) => {
             for (const s of (stagesRes.value as any).data || []) stageMap.set(s.id, s.name);
           }
 
-          const stagesStr = stagePos
-            .map((s: any) => `${funnelMap.get(s.funnel_id) || "?"} → ${stageMap.get(s.stage_id) || "?"}`)
+          const stagesStr = stagePositions
+            .map((s: any) => {
+              const fname = funnelMap.get(s.funnel_id) || "?";
+              const sname = stageMap.get(s.stage_id) || "?";
+              const dStop = daysBetween(s.entered_at);
+              const dStr = dStop !== null ? ` [parado há ${dStop}d]` : "";
+              return `${fname} → ${sname}${dStr}`;
+            })
             .join(" | ");
           leadCtx += `\nFunis/Etapas: ${stagesStr}`;
+        } catch (e) {
+          log("stage_join_throw", { err: String(e) });
         }
-      } catch (e) {
-        log("stage_throw", { err: String(e) });
       }
 
-      // ===== LTV / purchases (independent) =====
-      try {
-        if (lead.email || phoneVariants.length) {
-          let customerQuery = admin
-            .from("unified_customers")
-            .select("id, lifetime_value, total_purchases")
-            .eq("organization_id", orgId);
-          if (lead.email) {
-            customerQuery = customerQuery.eq("primary_email", String(lead.email).toLowerCase());
-          } else {
-            customerQuery = customerQuery.in("primary_phone", phoneVariants);
-          }
-          const { data: customers, error: custErr } = await customerQuery.limit(1);
-          if (custErr) log("customer_error", { err: custErr.message });
-          const customer = customers?.[0];
-          if (customer) {
-            leadCtx += `\nLTV: R$ ${Number(customer.lifetime_value || 0).toFixed(2)} (${customer.total_purchases || 0} compras)`;
-            try {
-              const { data: purchases } = await admin
-                .from("customer_purchases")
-                .select("product_name, gross_amount, status, purchased_at")
-                .eq("unified_customer_id", customer.id)
-                .order("purchased_at", { ascending: false })
-                .limit(5);
-              if (purchases && purchases.length) {
-                leadCtx += `\nÚltimas compras: ${purchases
-                  .map((p: any) => `${p.product_name} (R$ ${p.gross_amount} — ${p.status})`)
-                  .join("; ")}`;
-              }
-            } catch (e) {
-              log("purchases_throw", { err: String(e) });
+      // ----- LTV / purchases -----
+      let customer: any = null;
+      if (customerRes.status === "fulfilled") {
+        customer = ((customerRes.value as any).data || [])[0] || null;
+      } else {
+        log("customer_error", { err: String((customerRes as any).reason) });
+      }
+
+      if (customer) {
+        const ltv = Number(customer.lifetime_value || 0);
+        leadCtx += `\nLTV: R$ ${ltv.toFixed(2)} (${customer.total_purchases || 0} compras)`;
+
+        try {
+          const { data: purchases } = await admin
+            .from("customer_purchases")
+            .select("product_name, gross_amount, net_amount, status, purchased_at, payment_method, installments, offer_name")
+            .eq("unified_customer_id", customer.id)
+            .order("purchased_at", { ascending: false })
+            .limit(15);
+
+          const list = purchases || [];
+          if (list.length) {
+            const approved = list.filter((p: any) => p.status === "authorized" || p.status === "approved");
+            const lastApproved = approved[0];
+            const daysSinceLast = lastApproved ? daysBetween(lastApproved.purchased_at) : null;
+
+            // Ticket médio
+            const totalApproved = approved.reduce((sum: number, p: any) => sum + Number(p.net_amount ?? p.gross_amount ?? 0), 0);
+            const ticketMedio = approved.length ? totalApproved / approved.length : 0;
+
+            // Produto mais comprado
+            const productCount: Record<string, number> = {};
+            for (const p of approved) {
+              const k = p.product_name || "(sem nome)";
+              productCount[k] = (productCount[k] || 0) + 1;
             }
+            const topProduct = Object.entries(productCount).sort((a, b) => b[1] - a[1])[0];
+
+            // Método de pagamento favorito
+            const payCount: Record<string, number> = {};
+            for (const p of approved) {
+              if (!p.payment_method) continue;
+              payCount[p.payment_method] = (payCount[p.payment_method] || 0) + 1;
+            }
+            const topPay = Object.entries(payCount).sort((a, b) => b[1] - a[1])[0];
+
+            // Status do cliente
+            let clientStatus = "Lead (sem compra aprovada)";
+            if (approved.length === 1) clientStatus = "Primeira compra";
+            else if (approved.length >= 2 && approved.length <= 4) clientStatus = "Cliente recorrente";
+            else if (approved.length >= 5) clientStatus = "Cliente VIP";
+            if (daysSinceLast !== null && daysSinceLast > 90 && approved.length > 0) {
+              clientStatus += " (INATIVO há " + daysSinceLast + " dias)";
+            }
+
+            leadCtx += `\nStatus do cliente: ${clientStatus}`;
+            if (approved.length) {
+              leadCtx += `\nTicket médio: R$ ${ticketMedio.toFixed(2)}`;
+              if (daysSinceLast !== null) leadCtx += ` | Última compra aprovada: ${daysSinceLast} dias atrás`;
+              if (topProduct) leadCtx += `\nProduto mais comprado: ${topProduct[0]} (${topProduct[1]}x)`;
+              if (topPay) leadCtx += ` | Pagamento favorito: ${topPay[0]}`;
+            }
+
+            // Lista resumida das últimas compras (top 8 pra não estourar contexto)
+            const recent = list.slice(0, 8).map((p: any) => {
+              const v = Number(p.net_amount ?? p.gross_amount ?? 0).toFixed(2);
+              const inst = p.installments && p.installments > 1 ? ` ${p.installments}x` : "";
+              return `${fmtDate(p.purchased_at)} • ${p.product_name} • R$ ${v}${inst} • ${p.status}`;
+            }).join("\n  - ");
+            leadCtx += `\nÚltimas compras:\n  - ${recent}`;
+          } else {
+            leadCtx += `\nStatus do cliente: Lead (sem histórico de compras registrado)`;
           }
+        } catch (e) {
+          log("purchases_throw", { err: String(e) });
         }
-      } catch (e) {
-        log("ltv_throw", { err: String(e) });
+      } else {
+        leadCtx += `\nStatus do cliente: Lead novo (não identificado em unified_customers)`;
+      }
+
+      // ----- Eventos do lead -----
+      if (eventsRes.status === "fulfilled") {
+        const events = ((eventsRes.value as any).data || []) as any[];
+        if (events.length) {
+          const eventsStr = events.slice(0, 15).map((e: any) => {
+            const d = fmtDate(e.created_at);
+            const meta = e.metadata && typeof e.metadata === "object"
+              ? Object.entries(e.metadata)
+                  .filter(([k]) => !["funnel_id", "from_stage_id", "to_stage_id"].includes(k))
+                  .slice(0, 3)
+                  .map(([k, v]) => `${k}=${safeStr(v, 50)}`)
+                  .join(", ")
+              : "";
+            return `${d} • ${e.event_name}${meta ? ` (${meta})` : ""}`;
+          }).join("\n  - ");
+          leadCtx += `\nÚltimos eventos do lead:\n  - ${eventsStr}`;
+        }
+      } else {
+        log("events_error", { err: String((eventsRes as any).reason) });
       }
     }
 
@@ -383,7 +522,13 @@ Deno.serve(async (req) => {
 
     const model = body.action === "analyze" ? MODEL_DEEP : MODEL_FAST;
 
-    log("ai_call", { model, msg_count: messages.length, has_lead: !!lead, has_script: !!script });
+    log("ai_call", {
+      model,
+      msg_count: messages.length,
+      has_lead: !!lead,
+      has_script: !!script,
+      lead_ctx_chars: leadCtx.length,
+    });
 
     let aiResp: Response;
     try {
