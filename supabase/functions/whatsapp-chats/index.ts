@@ -409,9 +409,11 @@ Deno.serve(async (req) => {
       const limit = Math.min(Math.max(parseInt(url.searchParams.get('limit') || '50', 10), 1), 200)
       const offset = Math.max(parseInt(url.searchParams.get('offset') || '0', 10), 0)
 
-      if (!ctx.isAdmin) {
-        const phoneAccess = await resolveLeadAccess(adminClient, ctx, [{ phone: cleanPhone }])
-        if (!hasLeadAccess(ctx, phoneAccess, { phone: cleanPhone })) {
+      // Visibilidade: vendedora não-admin precisa ter acesso à instância em
+      // que a conversa ocorre. Não filtramos mais por assigned_to do lead —
+      // quem tem acesso à instância vê todas as conversas dela.
+      if (!ctx.isAdmin && !isAllMode) {
+        if (ctx.allowedInstanceIds && !ctx.allowedInstanceIds.has(instanceId!)) {
           return new Response(JSON.stringify({ error: 'Forbidden' }), {
             status: 403,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -438,10 +440,7 @@ Deno.serve(async (req) => {
         throw new Error(`messages query failed: ${serializeError(msgErr)}`)
       }
 
-      const access = await resolveLeadAccess(adminClient, ctx, messages || [{ phone: cleanPhone }])
-      const messageList = ctx.isAdmin
-        ? (messages || [])
-        : (messages || []).filter((message: any) => hasLeadAccess(ctx, access, message))
+      const messageList = messages || []
 
       const unreadInbound = messageList.filter((message: any) => message.direction === 'inbound' && message.status !== 'read' && !message.is_deleted)
       const unreadIds = new Set(unreadInbound.map((message: any) => message.id))
