@@ -343,18 +343,50 @@ async function handleWebhookEvent(admin: SupabaseClient, payload: any) {
   const participants = extractParticipants(payload)
   const actionRaw = String(
     payload.action || payload.Action || payload.eventAction || payload.EventAction ||
-    payload.data?.action || payload.data?.Action || eventType
+    payload.data?.action || payload.data?.Action ||
+    payload.messageType || payload.MessageType ||
+    payload.update_type || payload.UpdateType ||
+    eventType
   ).toLowerCase()
 
-  const joinKeywords = ['add', 'join', 'joined', 'participant_add', 'group_join', 'invite', 'request']
-  const leaveKeywords = ['remove', 'leave', 'left', 'participant_remove', 'group_leave', 'kick']
-  const isJoin = joinKeywords.some(v => actionRaw.includes(v))
-  const isLeave = !isJoin && leaveKeywords.some(v => actionRaw.includes(v))
+  const joinKeywords = ['add', 'join', 'joined', 'participant_add', 'group_join', 'invite', 'request', 'promote']
+  const leaveKeywords = ['remove', 'leave', 'left', 'participant_remove', 'group_leave', 'kick', 'demote']
+  let isJoin = joinKeywords.some(v => actionRaw.includes(v))
+  let isLeave = !isJoin && leaveKeywords.some(v => actionRaw.includes(v))
+
+  // UAZAPI v2 fallback: when EventType is "groups"/"group_participants" with participants and no
+  // explicit action keyword, assume "join" (most common scenario when invites are accepted).
+  if (!isJoin && !isLeave && participants.length > 0 && groupIds.length > 0) {
+    const evLower = String(eventType).toLowerCase()
+    if (evLower.includes('group') || evLower === 'chats' || evLower === 'presence') {
+      isJoin = true
+    }
+  }
 
   console.log('[wz-group-sync] webhook_event', { eventType, actionRaw, groupIds, participants, isJoin, isLeave })
 
+  // Always log received event for visibility, even when not actionable.
+  const debugSnapshot = {
+    event_type: eventType,
+    action_raw: actionRaw,
+    group_ids: groupIds,
+    participants,
+    raw_keys: Object.keys(payload || {}),
+  }
+
   if (groupIds.length === 0 || participants.length === 0 || (!isJoin && !isLeave)) {
-    return { handled: false, reason: 'missing_group_or_participants_or_action', eventType, actionRaw, groupIds, participants }
+    // Log to runs for visibility on UI ("Últimos eventos recebidos")
+    try {
+      const fakeConfig: any = {
+        funnel_id: '00000000-0000-0000-0000-000000000000',
+        instance_id: null,
+        group_ids: groupIds,
+        mode: 'webhook_event',
+      }
+      await logRun(admin, fakeConfig, debugSnapshot, null, 'ignored',
+        `Evento ignorado: ${groupIds.length === 0 ? 'sem groupId' : participants.length === 0 ? 'sem participantes' : `ação "${actionRaw}" não reconhecida`}`)
+    } catch (_e) { /* best effort */ }
+    return { handled: false, reason: 'missing_group_or_participants_or_action', ...debugSnapshot }
   }
 
   const { data: configs, error } = await admin
@@ -365,9 +397,11 @@ async function handleWebhookEvent(admin: SupabaseClient, payload: any) {
 
   let movedTotal = 0
   const summaries: any[] = []
+  let matchedAnyConfig = false
   for (const config of configs || []) {
     const watchedGroupIds = (config.group_ids || []).filter((groupId: string) => groupIds.includes(groupId))
     if (watchedGroupIds.length === 0) continue
+    matchedAnyConfig = true
     const targetStage = isJoin && config.auto_move_on_join
       ? config.in_group_stage_id
       : isLeave && config.auto_move_on_leave
@@ -386,7 +420,7 @@ async function handleWebhookEvent(admin: SupabaseClient, payload: any) {
       : targets.length === 0
         ? `Nenhum lead encontrado no funil para os telefones: ${participants.join(', ')}`
         : !targetStage
-          ? `Sem etapa de destino para ação ${isJoin ? 'join' : 'leave'}`
+          ? `Sem etapa de destino para ação ${isJoin ? 'join' : 'leave'} (toggle desligado?)`
           : 'Leads já estavam na etapa de destino'
 
     await logRun(admin, { ...config, mode: 'webhook_event', group_ids: watchedGroupIds }, {
@@ -402,6 +436,20 @@ async function handleWebhookEvent(admin: SupabaseClient, payload: any) {
 
     summaries.push({ funnel_id: config.funnel_id, targets: targets.length, moved: movedForConfig, status })
   }
+
+  if (!matchedAnyConfig) {
+    try {
+      const fakeConfig: any = {
+        funnel_id: '00000000-0000-0000-0000-000000000000',
+        instance_id: null,
+        group_ids: groupIds,
+        mode: 'webhook_event',
+      }
+      await logRun(admin, fakeConfig, { ...debugSnapshot, action: isJoin ? 'join' : 'leave' }, null, 'no_match',
+        `Grupo ${groupIds.join(', ')} não está monitorado em nenhum funil ativo`)
+    } catch (_e) { /* best effort */ }
+  }
+
   return { handled: true, eventType, action: isJoin ? 'join' : 'leave', groupIds, participants, moved: movedTotal, summaries }
 }
 
