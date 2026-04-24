@@ -74,8 +74,8 @@ Deno.serve(async (req) => {
     // ── Pagination helper ──
     const PAGE_SIZE = 500;
     const MAX_ROWS = 1000; // hard cap to avoid CPU time exceeded
-    const fetchPaged = async <T>(
-      queryFactory: (from: number, to: number) => Promise<{ data: T[] | null; error: any }>,
+    const fetchPaged = async <T = any>(
+      queryFactory: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: any }>,
     ): Promise<T[]> => {
       const all: T[] = [];
       let from = 0;
