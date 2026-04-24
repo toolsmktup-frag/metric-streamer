@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
+import { Search } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
@@ -118,6 +120,7 @@ const WhatsAppGroupSyncConfig: React.FC<WhatsAppGroupSyncConfigProps> = ({ funne
   const [groups, setGroups] = useState<WzGroupOption[]>([]);
   const [inviteGroupId, setInviteGroupId] = useState<string | null>(null);
   const [lastResult, setLastResult] = useState<WzGroupSyncResult | null>(null);
+  const [groupSearch, setGroupSearch] = useState('');
 
   const { data: webhookStatus } = useWzWebhookStatus(funnelId, config.instance_id);
   const { data: runs = [] } = useWzGroupSyncRuns(funnelId);
@@ -199,17 +202,46 @@ const WhatsAppGroupSyncConfig: React.FC<WhatsAppGroupSyncConfigProps> = ({ funne
 
         {groups.length > 0 && (
           <div className="space-y-2">
-            <div className="text-sm font-medium text-foreground">Grupos monitorados</div>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="text-sm font-medium text-foreground">
+                Grupos monitorados
+                <span className="ml-2 text-xs text-muted-foreground">
+                  ({groups.filter(g => {
+                    const q = groupSearch.trim().toLowerCase();
+                    if (!q) return true;
+                    return g.name?.toLowerCase().includes(q) || g.id?.toLowerCase().includes(q);
+                  }).length} de {groups.length})
+                </span>
+              </div>
+              <div className="relative w-full md:w-72">
+                <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar por nome ou ID..."
+                  value={groupSearch}
+                  onChange={e => setGroupSearch(e.target.value)}
+                  className="pl-8 h-8 text-xs"
+                />
+              </div>
+            </div>
             <div className="grid gap-2 md:grid-cols-2">
-              {groups.map(group => (
-                <label key={group.id} className="flex cursor-pointer items-start gap-2 rounded-md border border-border bg-background p-3 text-sm">
-                  <Checkbox checked={selectedGroups.has(group.id)} onCheckedChange={checked => handleToggleGroup(group.id, !!checked)} />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate font-medium text-foreground">{group.name}</span>
-                    <span className="block truncate text-xs text-muted-foreground">{group.id}</span>
-                  </span>
-                </label>
-              ))}
+              {groups
+                .filter(group => {
+                  const q = groupSearch.trim().toLowerCase();
+                  if (!q) return true;
+                  return (
+                    group.name?.toLowerCase().includes(q) ||
+                    group.id?.toLowerCase().includes(q)
+                  );
+                })
+                .map(group => (
+                  <label key={group.id} className="flex cursor-pointer items-start gap-2 rounded-md border border-border bg-background p-3 text-sm">
+                    <Checkbox checked={selectedGroups.has(group.id)} onCheckedChange={checked => handleToggleGroup(group.id, !!checked)} />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-medium text-foreground">{group.name}</span>
+                      <span className="block truncate text-xs text-muted-foreground">{group.id}</span>
+                    </span>
+                  </label>
+                ))}
             </div>
           </div>
         )}
