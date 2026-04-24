@@ -32,8 +32,8 @@ Deno.serve(async (req) => {
     }
 
     // Fire-and-forget: run RPC in background so we return immediately
-    const bgTask = supabase
-      .rpc("sync_leads_from_sales", { p_log_id: logEntry.id })
+    const bgTask = Promise.resolve(supabase
+      .rpc("sync_leads_from_sales", { p_log_id: logEntry.id }))
       .then(({ error }) => {
         if (error) {
           console.error(`RPC failed for job ${logEntry.id}:`, error.message);
