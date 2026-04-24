@@ -168,7 +168,7 @@ export default function WzInstanceManager({ embedded = false }: { embedded?: boo
                     <div className="flex-1 min-w-0">
                       <h3 className="font-semibold text-foreground">{inst.name}</h3>
                       <p className="text-xs text-muted-foreground truncate">
-                        {profile?.phone_number || inst.api_url}
+                        {profile?.phone_number || 'Sem número'}
                       </p>
                     </div>
                     <Badge variant="secondary" className="text-[10px]">Manual</Badge>
