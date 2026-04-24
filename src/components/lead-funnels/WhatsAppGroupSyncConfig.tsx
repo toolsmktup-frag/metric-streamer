@@ -120,6 +120,7 @@ const WhatsAppGroupSyncConfig: React.FC<WhatsAppGroupSyncConfigProps> = ({ funne
   const [groups, setGroups] = useState<WzGroupOption[]>([]);
   const [inviteGroupId, setInviteGroupId] = useState<string | null>(null);
   const [lastResult, setLastResult] = useState<WzGroupSyncResult | null>(null);
+  const [groupSearch, setGroupSearch] = useState('');
 
   const { data: webhookStatus } = useWzWebhookStatus(funnelId, config.instance_id);
   const { data: runs = [] } = useWzGroupSyncRuns(funnelId);
