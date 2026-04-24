@@ -202,7 +202,7 @@ Deno.serve(async (req) => {
           body: JSON.stringify({ url: webhookUrl, enabled: true, events: ['messages', 'messages_update', 'connection'] }),
         })
       } catch (e) {
-        console.error('Webhook config failed:', e.message)
+        console.error('Webhook config failed:', (e as Error).message)
       }
 
       let qrcode = null
@@ -218,7 +218,7 @@ Deno.serve(async (req) => {
         qrcode = connectData?.qrcode || connectData?.base64 || connectData?.instance?.qrcode || null
         paircode = connectData?.paircode || connectData?.instance?.paircode || null
       } catch (e) {
-        console.error('Connect after create failed:', e.message)
+        console.error('Connect after create failed:', (e as Error).message)
       }
 
       return new Response(JSON.stringify({
@@ -397,7 +397,7 @@ Deno.serve(async (req) => {
           })
           console.log('Webhook auto-configured:', webhookUrl)
         } catch (e) {
-          console.error('Failed to auto-configure webhook:', e.message)
+          console.error('Failed to auto-configure webhook:', (e as Error).message)
         }
 
         break
@@ -489,7 +489,7 @@ Deno.serve(async (req) => {
             headers: uazHeaders,
           })
         } catch (e) {
-          console.log('UAZAPI delete failed (may not exist):', e.message)
+          console.log('UAZAPI delete failed (may not exist):', (e as Error).message)
         }
 
         const { error: delErr } = await supabase
@@ -561,7 +561,7 @@ Deno.serve(async (req) => {
     })
   } catch (err) {
     console.error('whatsapp-instance error:', err)
-    return new Response(JSON.stringify({ error: err.message }), {
+    return new Response(JSON.stringify({ error: (err as Error).message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })

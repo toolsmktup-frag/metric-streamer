@@ -96,7 +96,7 @@ Deno.serve(async (req) => {
         }
         await res.text() // consume body
       } catch (e) {
-        console.log(`Contact info attempt failed:`, e.message)
+        console.log(`Contact info attempt failed:`, (e as Error).message)
       }
     }
 
@@ -106,7 +106,7 @@ Deno.serve(async (req) => {
     })
   } catch (err) {
     console.error('whatsapp-contact-info error:', err)
-    return new Response(JSON.stringify({ error: err.message }), {
+    return new Response(JSON.stringify({ error: (err as Error).message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
