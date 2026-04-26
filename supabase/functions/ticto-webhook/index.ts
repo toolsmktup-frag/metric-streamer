@@ -256,14 +256,18 @@ Deno.serve(async (req) => {
     const productId = Number(item.product_id || item.id || invoice.product_id || invoice.product?.id || payload.product_id || 0) || null;
     const installments = Number(order.installments || payment.installments?.qty || invoice.installments || 1) || 1;
 
-    // ── UTM Inheritance: se UTMs estão vazios, herdar da venda mais recente do mesmo cliente (24h) ──
+    // ── UTM Inheritance: herdar da venda mais recente do mesmo cliente quando ──
+    // faltar meta_campaign_id OU utm_source. Janela ampliada para 30 dias para
+    // cobrir upsells, downsells, pix tardios e remarketing pós-compra.
     const customerEmail = clean(customer.email);
-    if (!utmSource && (customerEmail || phone)) {
+    const incomingCampaignId = parseUtmPair(clean(tracking.utm_campaign)).id;
+    const needsInheritance = !utmSource || !incomingCampaignId;
+
+    if (needsInheritance && (customerEmail || phone)) {
       try {
-        // Try by email first
         let donor: any = null;
         const selectCols = "id, utm_source, utm_campaign, utm_medium, utm_content, utm_term, meta_campaign_id, meta_adset_id, meta_ad_id, fbc, fbp, fbclid, gclid";
-        const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+        const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
         if (customerEmail) {
           const { data } = await supabase
@@ -271,7 +275,7 @@ Deno.serve(async (req) => {
             .select(selectCols)
             .eq("status", "authorized")
             .ilike("customer_email", customerEmail)
-            .not("utm_source", "is", null)
+            .not("meta_campaign_id", "is", null)
             .gte("order_date", cutoff)
             .order("order_date", { ascending: false })
             .limit(1)
@@ -287,7 +291,7 @@ Deno.serve(async (req) => {
               .select(selectCols)
               .eq("status", "authorized")
               .like("customer_phone", `%${phoneDigits.slice(-10)}`)
-              .not("utm_source", "is", null)
+              .not("meta_campaign_id", "is", null)
               .gte("order_date", cutoff)
               .order("order_date", { ascending: false })
               .limit(1)
@@ -297,11 +301,15 @@ Deno.serve(async (req) => {
         }
 
         if (donor) {
-          utmSource   = donor.utm_source;
-          utmCampaign = donor.utm_campaign;
-          utmMedium   = donor.utm_medium;
-          utmContent  = donor.utm_content;
-          utmTerm     = donor.utm_term;
+          // Só sobrescreve UTMs se o webhook atual não trouxe nada
+          if (!utmSource) {
+            utmSource   = donor.utm_source;
+            utmCampaign = donor.utm_campaign;
+            utmMedium   = donor.utm_medium;
+            utmContent  = donor.utm_content;
+            utmTerm     = donor.utm_term;
+          }
+          // IDs de campanha são herdados sempre que faltarem
           inheritedCampaignId = donor.meta_campaign_id;
           inheritedAdsetId    = donor.meta_adset_id;
           inheritedAdId       = donor.meta_ad_id;
@@ -309,7 +317,7 @@ Deno.serve(async (req) => {
           if (!fbp)    fbp    = donor.fbp;
           if (!fbclid) fbclid = donor.fbclid;
           if (!gclid)  gclid  = donor.gclid;
-          console.log(`[ticto-webhook] UTM inherited from transaction ${donor.id}`);
+          console.log(`[ticto-webhook] UTM/campaign inherited from transaction ${donor.id} (missing utm=${!utmSource} missing campaign=${!incomingCampaignId})`);
         }
       } catch (inheritErr) {
         console.error("[ticto-webhook] UTM inheritance error (non-fatal):", inheritErr);
