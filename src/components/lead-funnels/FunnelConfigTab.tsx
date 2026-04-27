@@ -4,7 +4,8 @@ import { Funnel } from '@/hooks/useFunnels';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Trash2, ArrowRight, Shuffle, Circle } from 'lucide-react';
+import { Plus, Trash2, ArrowRight, Shuffle, Circle, Download } from 'lucide-react';
+import { downloadCsv } from '@/lib/exportCsv';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 
@@ -471,6 +472,66 @@ const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSave
       {/* WhatsApp Groups */}
       {funnelId && stages.length > 0 && (
         <WhatsAppGroupSyncConfig funnelId={funnelId} stages={stages} />
+      )}
+
+      {/* Export Leads */}
+      {funnelId && positions.length >= 0 && (
+        <div>
+          <h3 className="text-lg font-semibold text-foreground mb-3">Exportar Leads</h3>
+          <Button
+            variant="outline"
+            className="gap-2"
+            onClick={() => {
+              if (!positions.length) {
+                toast.error('Nenhum lead para exportar neste funil');
+                return;
+              }
+              const stageMap = new Map(stages.map(s => [s.id, s.name]));
+              const rows = positions.map(p => {
+                const lead = p.lead || ({} as Lead);
+                return {
+                  name: lead.name || '',
+                  email: lead.email || '',
+                  phone: lead.phone || '',
+                  stage: stageMap.get(p.stage_id) || '',
+                  entered_at: p.entered_at ? new Date(p.entered_at).toLocaleString('pt-BR') : '',
+                  utm_source: lead.utm_source || '',
+                  utm_medium: lead.utm_medium || '',
+                  utm_campaign: lead.utm_campaign || '',
+                  utm_content: lead.utm_content || '',
+                  utm_term: lead.utm_term || '',
+                  created_at: lead.created_at ? new Date(lead.created_at).toLocaleString('pt-BR') : '',
+                };
+              });
+              const safeName = (funnelName || 'funil').replace(/[^a-z0-9-_]+/gi, '_').toLowerCase();
+              const stamp = new Date().toISOString().slice(0, 10);
+              downloadCsv(
+                rows,
+                [
+                  { key: 'name', label: 'Nome' },
+                  { key: 'email', label: 'Email' },
+                  { key: 'phone', label: 'Telefone' },
+                  { key: 'stage', label: 'Etapa' },
+                  { key: 'entered_at', label: 'Entrou na Etapa' },
+                  { key: 'utm_source', label: 'UTM Source' },
+                  { key: 'utm_medium', label: 'UTM Medium' },
+                  { key: 'utm_campaign', label: 'UTM Campaign' },
+                  { key: 'utm_content', label: 'UTM Content' },
+                  { key: 'utm_term', label: 'UTM Term' },
+                  { key: 'created_at', label: 'Criado em' },
+                ],
+                `leads_${safeName}_${stamp}.csv`,
+              );
+              toast.success(`${rows.length} leads exportados`);
+            }}
+          >
+            <Download className="h-4 w-4" />
+            Exportar Leads (CSV)
+          </Button>
+          <p className="text-xs text-muted-foreground mt-1.5">
+            Baixa todos os leads atualmente neste funil em formato CSV (compatível com Excel).
+          </p>
+        </div>
       )}
 
       {/* Redistribute Leads */}
