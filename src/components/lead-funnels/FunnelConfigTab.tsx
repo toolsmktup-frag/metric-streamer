@@ -487,12 +487,27 @@ const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSave
                 return;
               }
               const stageMap = new Map(stages.map(s => [s.id, s.name]));
+              const formatPhone = (raw?: string | null) => {
+                if (!raw) return '';
+                let digits = String(raw).replace(/\D/g, '');
+                if (!digits) return '';
+                // Remove leading zeros
+                digits = digits.replace(/^0+/, '');
+                // Ensure Brazil country code 55
+                if (!digits.startsWith('55')) {
+                  // If looks like local number (10 or 11 digits), prefix 55
+                  if (digits.length === 10 || digits.length === 11) {
+                    digits = '55' + digits;
+                  }
+                }
+                return digits;
+              };
               const rows = positions.map(p => {
                 const lead = p.lead || ({} as Lead);
                 return {
                   name: lead.name || '',
                   email: lead.email || '',
-                  phone: lead.phone || '',
+                  phone: formatPhone(lead.phone),
                   stage: stageMap.get(p.stage_id) || '',
                   entered_at: p.entered_at ? new Date(p.entered_at).toLocaleString('pt-BR') : '',
                   utm_source: lead.utm_source || '',
