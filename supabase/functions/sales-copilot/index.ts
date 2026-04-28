@@ -575,16 +575,6 @@ Origem (UTM): ${utmStr}`.replace(/\n\n+/g, "\n");
       lead_ctx_chars: leadCtx.length,
     });
 
-    const model = body.action === "analyze" ? MODEL_DEEP : MODEL_FAST;
-
-    log("ai_call", {
-      model,
-      msg_count: messages.length,
-      has_lead: !!lead,
-      has_script: !!script,
-      lead_ctx_chars: leadCtx.length,
-    });
-
     let aiResp: Response;
     try {
       aiResp = await fetch("https://api.anthropic.com/v1/messages", {
