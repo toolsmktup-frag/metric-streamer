@@ -15,6 +15,8 @@ interface RequestBody {
   phone: string;
   instance_id: string; // can be 'all'
   custom_question?: string;
+  offer_mode?: "auto" | "ignore" | "specific";
+  offer_id?: string;
 }
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -524,41 +526,62 @@ Origem (UTM): ${utmStr}`.replace(/\n\n+/g, "\n");
     }
 
     // ===== Active offers (independent) =====
+    const offerMode = body.offer_mode || "auto";
+    const focusOfferId = body.offer_id;
     let offersBlock = "";
-    try {
-      const { data: offers, error: offersErr } = await admin
-        .from("sales_copilot_offers")
-        .select("name, is_featured, short_description, price_promo, price_full, access_period, composition, target_audience, ai_rules, sort_order")
-        .eq("organization_id", orgId)
-        .eq("status", "active")
-        .order("is_featured", { ascending: false })
-        .order("sort_order", { ascending: true });
-      if (offersErr) log("offers_error", { err: offersErr.message });
 
-      const list = offers || [];
-      if (list.length) {
-        const sections = list.map((o: any) => {
-          const lines: string[] = [];
-          const title = o.is_featured
-            ? `### ⭐ ${o.name} (DESTAQUE — oferta principal agora)`
-            : `### ${o.name}`;
-          lines.push(title);
-          if (o.short_description) lines.push(`Resumo: ${safeStr(o.short_description, 300)}`);
-          if (o.price_promo) lines.push(`Preço: ${safeStr(o.price_promo, 200)}`);
-          if (o.price_full) lines.push(`Preço cheio (referência): ${safeStr(o.price_full, 200)}`);
-          if (o.access_period) lines.push(`Acesso: ${safeStr(o.access_period, 200)}`);
-          if (o.composition) lines.push(`Composição:\n${safeStr(o.composition, 1500)}`);
-          if (o.target_audience) lines.push(`Pra quem é: ${safeStr(o.target_audience, 400)}`);
-          if (o.ai_rules) lines.push(`Regras: ${safeStr(o.ai_rules, 600)}`);
-          return lines.join("\n");
-        });
-        offersBlock = `== OFERTAS ATIVAS ==\n${sections.join("\n\n")}`;
-      } else {
-        offersBlock = `== OFERTAS ATIVAS ==\n(Nenhuma oferta cadastrada — não invente valores ou condições. Se o cliente perguntar preço, peça pro vendedor confirmar com a equipe comercial.)`;
+    if (offerMode === "ignore") {
+      offersBlock = `== OFERTAS ATIVAS ==\n(MODO SUPORTE ATIVADO PELO VENDEDOR: NÃO ofertar produtos nesta conversa. Foco total em tirar dúvidas, dar atendimento, suporte pós-venda ou desbloquear objeções operacionais. Se o cliente pedir preço de algo, peça pro vendedor passar manualmente.)`;
+    } else {
+      try {
+        let query = admin
+          .from("sales_copilot_offers")
+          .select("name, is_featured, short_description, price_promo, price_full, access_period, composition, target_audience, ai_rules, sort_order")
+          .eq("organization_id", orgId)
+          .eq("status", "active")
+          .order("is_featured", { ascending: false })
+          .order("sort_order", { ascending: true });
+
+        if (offerMode === "specific" && focusOfferId) {
+          query = admin
+            .from("sales_copilot_offers")
+            .select("name, is_featured, short_description, price_promo, price_full, access_period, composition, target_audience, ai_rules, sort_order")
+            .eq("organization_id", orgId)
+            .eq("id", focusOfferId);
+        }
+
+        const { data: offers, error: offersErr } = await query;
+        if (offersErr) log("offers_error", { err: offersErr.message });
+
+        const list = offers || [];
+        if (list.length) {
+          const sections = list.map((o: any) => {
+            const lines: string[] = [];
+            const title = o.is_featured
+              ? `### ⭐ ${o.name} (DESTAQUE — oferta principal agora)`
+              : `### ${o.name}`;
+            lines.push(title);
+            if (o.short_description) lines.push(`Resumo: ${safeStr(o.short_description, 300)}`);
+            if (o.price_promo) lines.push(`Preço: ${safeStr(o.price_promo, 200)}`);
+            if (o.price_full) lines.push(`Preço cheio (referência): ${safeStr(o.price_full, 200)}`);
+            if (o.access_period) lines.push(`Acesso: ${safeStr(o.access_period, 200)}`);
+            if (o.composition) lines.push(`Composição:\n${safeStr(o.composition, 1500)}`);
+            if (o.target_audience) lines.push(`Pra quem é: ${safeStr(o.target_audience, 400)}`);
+            if (o.ai_rules) lines.push(`Regras: ${safeStr(o.ai_rules, 600)}`);
+            return lines.join("\n");
+          });
+
+          const focusHeader = (offerMode === "specific" && focusOfferId)
+            ? `== OFERTAS ATIVAS ==\n🎯 FOCO MANUAL DO VENDEDOR: O vendedor selecionou explicitamente esta oferta para esta conversa. Priorize-a na sua sugestão, exceto se o cliente já recusou esta oferta de forma clara — nesse caso, contorne a objeção mantendo o foco nela.\n\n`
+            : `== OFERTAS ATIVAS ==\n`;
+          offersBlock = `${focusHeader}${sections.join("\n\n")}`;
+        } else {
+          offersBlock = `== OFERTAS ATIVAS ==\n(Nenhuma oferta cadastrada — não invente valores ou condições. Se o cliente perguntar preço, peça pro vendedor confirmar com a equipe comercial.)`;
+        }
+      } catch (e) {
+        log("offers_throw", { err: String(e) });
+        offersBlock = `== OFERTAS ATIVAS ==\n(Erro ao carregar ofertas — peça pro vendedor confirmar valores.)`;
       }
-    } catch (e) {
-      log("offers_throw", { err: String(e) });
-      offersBlock = `== OFERTAS ATIVAS ==\n(Erro ao carregar ofertas — peça pro vendedor confirmar valores.)`;
     }
 
     const systemPrompt = buildSystemPrompt(body.action, script, offersBlock, leadCtx);
@@ -572,6 +595,8 @@ Origem (UTM): ${utmStr}`.replace(/\n\n+/g, "\n");
       has_lead: !!lead,
       has_script: !!script,
       offers_chars: offersBlock.length,
+      offer_mode: offerMode,
+      offer_id: focusOfferId || null,
       lead_ctx_chars: leadCtx.length,
     });
 

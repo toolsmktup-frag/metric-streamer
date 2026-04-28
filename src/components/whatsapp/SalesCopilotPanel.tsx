@@ -1,12 +1,15 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { X, Sparkles, Brain, Shield, MessageSquareQuote, Copy, ArrowDown, Square, Loader2, Settings } from 'lucide-react';
+import { X, Sparkles, Brain, Shield, MessageSquareQuote, Copy, ArrowDown, Square, Loader2, Target } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { useSalesCopilot, type CopilotAction } from '@/hooks/useSalesCopilot';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
+import { useSalesCopilot, type CopilotAction, type OfferMode } from '@/hooks/useSalesCopilot';
 import { useActiveSalesScript } from '@/hooks/useSalesScripts';
+import { useSalesOffers } from '@/hooks/useSalesOffers';
 import { useCurrentUserRole } from '@/hooks/useCurrentUserRole';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
@@ -29,10 +32,42 @@ const ACTION_LABELS: Record<CopilotAction, { label: string; icon: any; hint: str
 export default function SalesCopilotPanel({ open, onClose, phone, instanceId, onUseInInput }: Props) {
   const [tab, setTab] = useState<CopilotAction>('suggest');
   const [customQuestion, setCustomQuestion] = useState('');
+  // offerSelection: 'auto' | 'ignore' | <offer_id>
+  const [offerSelection, setOfferSelection] = useState<string>('auto');
   const { run, cancel, output, isStreaming, reset } = useSalesCopilot();
   const { data: script } = useActiveSalesScript();
+  const { data: offers } = useSalesOffers();
   const { data: role } = useCurrentUserRole();
   const navigate = useNavigate();
+
+  const storageKey = useMemo(
+    () => (phone && instanceId ? `copilot-offer-mode:${instanceId}:${phone}` : null),
+    [phone, instanceId]
+  );
+
+  // Restaura escolha por conversa
+  useEffect(() => {
+    if (!storageKey) {
+      setOfferSelection('auto');
+      return;
+    }
+    const saved = localStorage.getItem(storageKey);
+    setOfferSelection(saved || 'auto');
+  }, [storageKey]);
+
+  const persistSelection = (value: string) => {
+    setOfferSelection(value);
+    if (storageKey) localStorage.setItem(storageKey, value);
+  };
+
+  const activeOffers = (offers || []).filter((o) => o.status === 'active');
+  const selectedOffer = activeOffers.find((o) => o.id === offerSelection);
+  const focusBadgeLabel =
+    offerSelection === 'ignore'
+      ? 'Suporte (sem ofertas)'
+      : selectedOffer
+        ? `Foco: ${selectedOffer.name}`
+        : null;
 
   if (!open) return null;
 
@@ -48,11 +83,15 @@ export default function SalesCopilotPanel({ open, onClose, phone, instanceId, on
       return;
     }
     setTab(action);
+    const offerMode: OfferMode =
+      offerSelection === 'auto' ? 'auto' : offerSelection === 'ignore' ? 'ignore' : 'specific';
     run({
       action,
       phone,
       instance_id: instanceId,
       custom_question: action === 'objection' || action === 'ask' ? customQuestion.trim() : undefined,
+      offer_mode: offerMode,
+      offer_id: offerMode === 'specific' ? offerSelection : undefined,
     });
   };
 
@@ -90,11 +129,17 @@ export default function SalesCopilotPanel({ open, onClose, phone, instanceId, on
       >
       {/* Header */}
       <div className="h-12 px-3 flex items-center justify-between border-b border-border shrink-0">
-        <div className="flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-primary" />
-          <span className="font-semibold text-sm">Copiloto de Vendas</span>
+        <div className="flex items-center gap-2 min-w-0">
+          <Sparkles className="h-4 w-4 text-primary shrink-0" />
+          <span className="font-semibold text-sm shrink-0">Copiloto</span>
+          {focusBadgeLabel && (
+            <Badge variant="secondary" className="h-5 text-[10px] px-1.5 gap-1 truncate max-w-[180px]">
+              <Target className="h-2.5 w-2.5 shrink-0" />
+              <span className="truncate">{focusBadgeLabel}</span>
+            </Badge>
+          )}
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 shrink-0">
           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose}>
             <X className="h-4 w-4" />
           </Button>
@@ -118,6 +163,47 @@ export default function SalesCopilotPanel({ open, onClose, phone, instanceId, on
             )}
           </div>
         )}
+
+        {/* Foco da oferta */}
+        <div className="px-3 pt-2 pb-1 shrink-0">
+          <div className="flex items-center gap-2">
+            <Target className="h-3 w-3 text-muted-foreground shrink-0" />
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+              Foco da oferta
+            </span>
+          </div>
+          <Select value={offerSelection} onValueChange={persistSelection}>
+            <SelectTrigger className="h-8 mt-1 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="auto" className="text-xs">
+                Automático (IA decide)
+              </SelectItem>
+              <SelectItem value="ignore" className="text-xs">
+                Ignorar ofertas (suporte/pós-venda)
+              </SelectItem>
+              {activeOffers.length > 0 && (
+                <div className="px-2 py-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+                  Forçar oferta específica
+                </div>
+              )}
+              {activeOffers.map((o) => (
+                <SelectItem key={o.id} value={o.id} className="text-xs">
+                  {o.is_featured ? '⭐ ' : ''}{o.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {offerSelection !== 'auto' && (
+            <button
+              onClick={() => persistSelection('auto')}
+              className="text-[10px] text-muted-foreground hover:text-foreground mt-1 underline"
+            >
+              voltar pro automático
+            </button>
+          )}
+        </div>
 
         <Tabs value={tab} onValueChange={(v) => setTab(v as CopilotAction)} className="flex flex-col px-3 shrink-0">
           <TabsList className="grid grid-cols-4 h-9 shrink-0">
