@@ -1,122 +1,108 @@
 
-# Sistema de Follow-ups no CRM
+# Aba "Ofertas" no Copiloto de Vendas
 
-Vamos adicionar **Follow-ups** — uma forma simples de "lembrar de falar com fulano daqui X dias" ou já "deixar a mensagem pronta para o sistema enviar sozinho". Tudo plugado nos lugares onde você já trabalha hoje (Kanban, chat WhatsApp, card do lead) + uma central pra acompanhar.
+Hoje a tela `/configuracoes/copiloto-vendas` só tem **1 campo**: o script grandão (tom de voz, etapas, objeções). Toda chamada da IA injeta esse script no prompt. Vamos adicionar uma **biblioteca de ofertas** ao lado, com cards individuais que você liga/desliga, e o backend monta o prompt juntando script + ofertas ativas.
 
-## Conceito (1 entidade, 2 modos)
+## Como vai funcionar pra você
 
-Cada follow-up tem **um modo**:
+A tela vira **2 abas**: **"Script base"** (o que já existe) e **"Ofertas"** (nova).
 
-1. **Lembrete** → o sistema só te avisa na hora marcada (badge no menu, na home/Resumo, no card do lead). Você fala manualmente.
-2. **Envio automático** → você escreve a mensagem agora, escolhe a data/hora e a instância do WhatsApp. Na hora marcada o sistema dispara sozinho (mesma engine das automações WZ que já existe).
+### Aba Ofertas — lista de cards
+Cada oferta é um card com:
+- ✅ Switch ativo/inativo (rápido — só ofertas ativas vão pra IA)
+- ⭐ Estrela "destaque" (1 oferta principal por vez — a IA prioriza essa quando o cliente pergunta "o que vocês têm?")
+- Nome (ex: "Combo Erveiros")
+- Resumo curto (2-3 linhas — aparece no card)
+- Conteúdo completo em markdown (modal de edição)
+- Botões: editar, duplicar, excluir
 
-Cada follow-up pertence a **um lead** (telefone + nome) e opcionalmente a um funil/etapa. Tem responsável (quem foi designado), status (`pending`, `done`, `sent`, `cancelled`, `snoozed`, `failed`) e prazo (`due_at`).
+### Modal de edição da oferta
+Campos estruturados (não bloco corrido):
+- **Nome interno** (ex: "Combo Erveiros — Promo Nov/26")
+- **Preço promocional** (ex: "12x R$ 129,70 ou R$ 1.297 à vista")
+- **Preço cheio / referência** (opcional — pra ancoragem)
+- **Acesso/garantia** (ex: "2 anos")
+- **Composição / o que tá incluso** (textarea markdown — bullets)
+- **Pra quem é / dor que resolve** (1-2 linhas)
+- **Regras de uso pela IA** (textarea — ex: "se já comprou Curso A antes, ofertar só Curso B")
+- **Status**: Rascunho / Ativa / Pausada / Encerrada
 
-## Onde encaixa na UI (4 pontos de entrada)
+### Como entra no prompt da IA
+O backend (edge function `sales-copilot`) busca todas as ofertas com status `ativa` da org e monta uma seção nova no system prompt:
 
-### 1. Botão "Agendar follow-up" no Card do Kanban
-No `LeadCard` (mesmo menu do GripVertical que abre o popover de mover de estágio) adicionar item **"Agendar follow-up"**. Abre um `Dialog` rápido:
-- Modo: Lembrete / Mensagem automática
-- Quando: presets (hoje +3h, amanhã, +3 dias, +7 dias, +10 dias, +30 dias) ou data custom
-- Título/observação (lembrete) **ou** mensagem + instância WhatsApp (automático)
-- Salvar
+```text
+== OFERTAS ATIVAS ==
+### ⭐ Combo Erveiros (DESTAQUE — oferta principal agora)
+Preço: 12x R$ 129,70 ou R$ 1.297 à vista
+Preço cheio: R$ 5.000 (R$ 2.500 cada curso)
+Acesso: 2 anos
+Composição:
+  - Curso dos Erveiros (+30 plantas, preparos práticos...)
+  - Alinhamento com Ervas (+40 plantas, vibracional...)
+Regras: se já comprou um dos cursos, NÃO ofertar combo cheio.
 
-### 2. Aba "Follow-ups" dentro do detalhe do lead
-Na página do lead/timeline, uma aba lista todos os follow-ups daquele contato (passados + futuros), com ações: marcar feito, reagendar (snooze: +1h, +1d, +1 sem), cancelar, editar.
+### Curso Avulso Erveiros
+Preço: 12x R$ 250 ou R$ 2.500 à vista
+[...]
+```
 
-### 3. Botão no Chat do WhatsApp
-No `ContactPanel` (lateral direita do chat) e no `ChatInput` (ao lado do botão de enviar): **"Agendar"** — mesma dialog. Caso clássico: "manda essa mensagem amanhã 9h", "lembra de falar com ele em 10 dias".
+E adiciono regras no system prompt base:
+- "Se cliente pergunta preço de algo: usa SÓ o que tá em OFERTAS ATIVAS, nunca inventa."
+- "Prioriza a oferta marcada como ⭐ DESTAQUE quando o cliente está em descoberta."
+- "Se cliente já comprou X (ver histórico), aplica as regras de exclusão da oferta."
 
-### 4. Página central /tarefas (acompanhamento)
-Nova rota `/tarefas` no sidebar com 4 abas:
-- **Hoje** (vencendo hoje)
-- **Atrasadas** (vencidas e ainda pending)
-- **Próximas 7 dias**
-- **Concluídas / Histórico**
+## Limite de contexto
+Não tem problema. Mesmo com **20 ofertas ativas** detalhadas, ficamos em ~15k tokens — Claude Haiku 4.5 aceita 200k. Margem confortável.
 
-Filtros: por responsável, por funil, por modo (lembrete vs auto). Cada linha mostra lead, prazo, prévia da mensagem, ações rápidas (concluir / reagendar / abrir chat / abrir lead).
+## Detalhes técnicos
 
-### 5. Badge global no header
-Contador de follow-ups vencendo hoje + atrasadas, igual notificação. Click → vai pra `/tarefas`.
-
-### 6. Widget no `/resumo`
-Card "Meus follow-ups de hoje" com os 5 primeiros + botão "ver todos".
-
-## Boas práticas que vamos aplicar
-
-- **Snooze rápido**: em 1 clique adia +1h / +1d / +1 sem (padrão de CRMs como Pipedrive/HubSpot).
-- **Presets de prazo** (3d, 7d, 10d, 30d) — você raramente digita data, é 1 clique.
-- **Auto-criação opcional**: regra por etapa do funil — ex: "lead entrou em 'Sem resposta' → cria follow-up automático em +3 dias". Configurável na aba de configuração do funil (fica pra v2 depois que o básico estiver de pé).
-- **Cancelamento automático**: se o lead responder no WhatsApp, follow-ups pendentes do tipo "envio automático" são cancelados (igual o `skipIfReplied` que já existe nas automações). Opção marcável por follow-up.
-- **Variáveis**: na mensagem automática suportar `{{nome}}`, `{{primeiro_nome}}` (mesmo padrão das automações).
-- **Permissões**: vendedor vê só os próprios follow-ups; admin vê todos.
-
-## Arquitetura técnica
-
-### Banco (1 tabela nova)
+### Banco — 1 tabela nova
 ```sql
-create table public.lead_follow_ups (
+create table public.sales_copilot_offers (
   id uuid primary key default gen_random_uuid(),
-  organization_id uuid not null,
-  lead_id uuid references leads(id) on delete cascade,
-  funnel_id uuid references funnels(id) on delete set null,
-  stage_id uuid references lead_funnel_stages(id) on delete set null,
-  assigned_to uuid references auth.users(id),
+  organization_id uuid not null references organizations(id) on delete cascade,
+  name text not null,
+  status text not null default 'active'
+    check (status in ('draft','active','paused','archived')),
+  is_featured boolean default false,
+  short_description text,
+  price_promo text,
+  price_full text,
+  access_period text,
+  composition text,         -- markdown bullets
+  target_audience text,
+  ai_rules text,            -- regras pra IA (quando ofertar/não ofertar)
+  sort_order int default 0,
   created_by uuid references auth.users(id),
-  mode text not null check (mode in ('reminder','auto_send')),
-  title text,
-  message text,                    -- usada quando mode='auto_send'
-  instance_id uuid,                -- WhatsApp instance pra disparar
-  skip_if_replied boolean default true,
-  due_at timestamptz not null,
-  status text not null default 'pending'
-    check (status in ('pending','done','sent','cancelled','snoozed','failed')),
-  completed_at timestamptz,
-  sent_at timestamptz,
-  error_message text,
-  metadata jsonb default '{}',
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
 
-create index idx_followups_due_pending
-  on lead_follow_ups (due_at) where status = 'pending';
-create index idx_followups_lead on lead_follow_ups (lead_id);
-create index idx_followups_assigned on lead_follow_ups (assigned_to, status, due_at);
+create index idx_offers_org_active on sales_copilot_offers (organization_id, status);
+-- Só 1 oferta featured por org
+create unique index idx_offers_one_featured
+  on sales_copilot_offers (organization_id) where is_featured = true;
 ```
-+ RLS por `organization_id` e `assigned_to` (mesmo padrão de `lead_funnels`).
-
-### Worker (cron)
-Edge function `follow-up-dispatcher` rodando a cada 1 min via pg_cron (mesma estrutura do `wz-scheduler`):
-- pega `lead_follow_ups` com `status='pending'` e `due_at <= now()`
-- se `mode='reminder'` → marca `status='due'`/cria notificação (não envia nada)
-- se `mode='auto_send'` → checa `skip_if_replied` (última mensagem do lead foi recebida depois da criação?), se ok dispara via UAZAPI usando `instance_id`, marca `sent`. Em erro → `failed` + `error_message`.
+RLS: mesma política de `sales_copilot_scripts` (admin/gestor da org).
 
 ### Frontend
-- Hook `useFollowUps` (lista/filtros), `useCreateFollowUp`, `useUpdateFollowUp` (snooze/done/cancel).
-- Componente `FollowUpDialog` reutilizado nos 4 pontos de entrada.
-- Componente `FollowUpList` reutilizado no card do lead, na página `/tarefas` e no widget do Resumo.
-- Realtime: subscribe na tabela pra atualizar contador do badge.
+- `src/hooks/useSalesOffers.ts` — list/create/update/delete/toggle.
+- `src/components/sales-copilot/OffersTab.tsx` — grid de cards + botão "Nova oferta".
+- `src/components/sales-copilot/OfferCard.tsx` — card com switch ativo/destaque.
+- `src/components/sales-copilot/OfferDialog.tsx` — modal de edição.
+- `SalesCopilotConfig.tsx` — vira `<Tabs>` com "Script base" e "Ofertas".
 
-## Roadmap de entrega
+### Edge function
+Em `supabase/functions/sales-copilot/index.ts`:
+1. Após buscar `script` (linha ~505), buscar também ofertas ativas da org.
+2. Montar bloco `== OFERTAS ATIVAS ==` ordenado: featured primeiro, depois `sort_order`.
+3. Passar pro `buildSystemPrompt(action, script, offersBlock, leadCtx)` e injetar no system prompt.
+4. Adicionar 3 regras novas em "COMO USAR O CONTEXTO" sobre uso correto das ofertas.
 
-**Fase 1 (MVP — entrega tudo o que você pediu):**
-1. Migration da tabela + RLS (SQL pra você rodar manualmente no Supabase, como sempre).
-2. Hooks + `FollowUpDialog`.
-3. Botão no `LeadCard` (Kanban) e no `ContactPanel`/`ChatInput` (WhatsApp).
-4. Página `/tarefas` com as 4 abas + filtros básicos.
-5. Edge function `follow-up-dispatcher` + cron 1 min.
-6. Badge no header + widget no `/resumo`.
+## Entrega
+1. Migration da tabela `sales_copilot_offers` + RLS (você roda manual no Supabase, como sempre).
+2. Hook + componentes (cards, modal, tab).
+3. Edge function atualizada — código pronto pra você colar no Dashboard.
+4. Já deixo o **Combo Erveiros pré-cadastrado** no formato estruturado pra você só clicar "ativar".
 
-**Fase 2 (depois, se quiser):**
-- Auto-criação por etapa do funil.
-- Templates rápidos de mensagem ("Oi {{primeiro_nome}}, ainda tem interesse?").
-- Métricas: taxa de resposta após follow-up, conversão por SDR.
-
-## O que você precisa decidir antes
-
-1. **Notificação fora do app**: só badge dentro do sistema, ou quer também receber no seu próprio WhatsApp quando um lembrete vencer? (recomendo só badge no MVP)
-2. **Quem vê o quê**: vendedor vê só os dele, admin vê todos? (recomendo sim)
-3. **Cancelar se responder**: ligado por padrão pros envios automáticos? (recomendo sim)
-
-Se topar, sigo pra implementação na ordem do roadmap fase 1.
+Topa que eu sigo?
