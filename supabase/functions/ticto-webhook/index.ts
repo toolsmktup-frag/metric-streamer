@@ -531,6 +531,7 @@ Deno.serve(async (req) => {
           p_event_name: leadEventName,
           p_product_name: record.product_name || null,
           p_purchased_at: orderDate || new Date().toISOString(),
+          p_funnel_id: funnelId,
           p_metadata: {
             platform: "ticto",
             transaction_id: String((record as any).platform_transaction_id || record.order_hash || ""),

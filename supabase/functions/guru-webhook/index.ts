@@ -363,6 +363,7 @@ Deno.serve(async (req) => {
           p_event_name: leadEventName,
           p_product_name: productName || null,
           p_purchased_at: new Date(purchasedAt).toISOString(),
+          p_funnel_id: funnelId,
           p_metadata: {
             platform: "guru",
             transaction_id: String(transactionId || ""),
