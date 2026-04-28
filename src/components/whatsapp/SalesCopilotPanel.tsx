@@ -285,12 +285,17 @@ export default function SalesCopilotPanel({ open, onClose, phone, instanceId, on
               )}
             </div>
           </div>
-          <ScrollArea className="flex-1">
-            <div className="px-3 pb-4">
+          <ScrollArea className="flex-1 min-w-0">
+            <div className="px-3 pb-4 min-w-0 max-w-full">
               {output ? (
-                <div className="prose prose-sm dark:prose-invert max-w-none text-sm leading-relaxed
+                <div className="prose prose-sm dark:prose-invert max-w-none text-sm leading-relaxed break-words
                   prose-headings:text-foreground prose-p:text-foreground prose-strong:text-foreground
-                  prose-li:text-foreground prose-code:text-foreground">
+                  prose-li:text-foreground prose-code:text-foreground
+                  prose-pre:whitespace-pre-wrap prose-pre:break-words prose-pre:max-w-full
+                  prose-code:whitespace-pre-wrap prose-code:break-words
+                  [&_pre]:whitespace-pre-wrap [&_pre]:break-words [&_pre]:max-w-full [&_pre]:overflow-x-auto
+                  [&_code]:whitespace-pre-wrap [&_code]:break-words
+                  [&_p]:break-words [&_li]:break-words">
                   <ReactMarkdown>{output}</ReactMarkdown>
                 </div>
               ) : (
