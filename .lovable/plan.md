@@ -1,108 +1,56 @@
+## Objetivo
 
-# Aba "Ofertas" no Copiloto de Vendas
+Dar ao vendedor controle manual sobre qual oferta o copiloto usa em cada conversa, sem perder o modo automático atual. Tudo dentro do painel do Copiloto (perto do botão "Sugerir resposta") — sem tocar na sidebar do lead.
 
-Hoje a tela `/configuracoes/copiloto-vendas` só tem **1 campo**: o script grandão (tom de voz, etapas, objeções). Toda chamada da IA injeta esse script no prompt. Vamos adicionar uma **biblioteca de ofertas** ao lado, com cards individuais que você liga/desliga, e o backend monta o prompt juntando script + ofertas ativas.
+## UX (no SalesCopilotPanel, acima dos botões de ação)
 
-## Como vai funcionar pra você
-
-A tela vira **2 abas**: **"Script base"** (o que já existe) e **"Ofertas"** (nova).
-
-### Aba Ofertas — lista de cards
-Cada oferta é um card com:
-- ✅ Switch ativo/inativo (rápido — só ofertas ativas vão pra IA)
-- ⭐ Estrela "destaque" (1 oferta principal por vez — a IA prioriza essa quando o cliente pergunta "o que vocês têm?")
-- Nome (ex: "Combo Erveiros")
-- Resumo curto (2-3 linhas — aparece no card)
-- Conteúdo completo em markdown (modal de edição)
-- Botões: editar, duplicar, excluir
-
-### Modal de edição da oferta
-Campos estruturados (não bloco corrido):
-- **Nome interno** (ex: "Combo Erveiros — Promo Nov/26")
-- **Preço promocional** (ex: "12x R$ 129,70 ou R$ 1.297 à vista")
-- **Preço cheio / referência** (opcional — pra ancoragem)
-- **Acesso/garantia** (ex: "2 anos")
-- **Composição / o que tá incluso** (textarea markdown — bullets)
-- **Pra quem é / dor que resolve** (1-2 linhas)
-- **Regras de uso pela IA** (textarea — ex: "se já comprou Curso A antes, ofertar só Curso B")
-- **Status**: Rascunho / Ativa / Pausada / Encerrada
-
-### Como entra no prompt da IA
-O backend (edge function `sales-copilot`) busca todas as ofertas com status `ativa` da org e monta uma seção nova no system prompt:
+Adicionar um bloco compacto "Foco da oferta" com um Select:
 
 ```text
-== OFERTAS ATIVAS ==
-### ⭐ Combo Erveiros (DESTAQUE — oferta principal agora)
-Preço: 12x R$ 129,70 ou R$ 1.297 à vista
-Preço cheio: R$ 5.000 (R$ 2.500 cada curso)
-Acesso: 2 anos
-Composição:
-  - Curso dos Erveiros (+30 plantas, preparos práticos...)
-  - Alinhamento com Ervas (+40 plantas, vibracional...)
-Regras: se já comprou um dos cursos, NÃO ofertar combo cheio.
-
-### Curso Avulso Erveiros
-Preço: 12x R$ 250 ou R$ 2.500 à vista
-[...]
+Foco da oferta:  [ Automático (IA decide) ▼ ]
+                 ├─ Automático (IA decide)
+                 ├─ Ignorar ofertas (suporte/pós-venda)
+                 ├─ ⭐ Combo Erveiros + Alinhamento
+                 ├─ Curso dos Erveiros
+                 └─ Alinhamento com Ervas
 ```
 
-E adiciono regras no system prompt base:
-- "Se cliente pergunta preço de algo: usa SÓ o que tá em OFERTAS ATIVAS, nunca inventa."
-- "Prioriza a oferta marcada como ⭐ DESTAQUE quando o cliente está em descoberta."
-- "Se cliente já comprou X (ver histórico), aplica as regras de exclusão da oferta."
+- **Automático** (padrão): comportamento atual — manda todas as ofertas ativas, IA escolhe.
+- **Ignorar ofertas**: não envia bloco de ofertas; system prompt instrui "modo suporte, não ofertar nada".
+- **Oferta específica**: envia só aquela oferta + instrução "FOCO: priorize esta oferta nesta conversa".
 
-## Limite de contexto
-Não tem problema. Mesmo com **20 ofertas ativas** detalhadas, ficamos em ~15k tokens — Claude Haiku 4.5 aceita 200k. Margem confortável.
+A escolha fica salva **por conversa** (chave = `phone+instance_id`) em `localStorage`, persistindo entre recarregamentos. Ao trocar de conversa, volta pro padrão "Automático" se nunca foi setado.
 
-## Detalhes técnicos
+Mostro um badge sutil ("Foco: Combo Erveiros") perto do título do painel quando estiver em modo não-automático, pra deixar visível.
 
-### Banco — 1 tabela nova
-```sql
-create table public.sales_copilot_offers (
-  id uuid primary key default gen_random_uuid(),
-  organization_id uuid not null references organizations(id) on delete cascade,
-  name text not null,
-  status text not null default 'active'
-    check (status in ('draft','active','paused','archived')),
-  is_featured boolean default false,
-  short_description text,
-  price_promo text,
-  price_full text,
-  access_period text,
-  composition text,         -- markdown bullets
-  target_audience text,
-  ai_rules text,            -- regras pra IA (quando ofertar/não ofertar)
-  sort_order int default 0,
-  created_by uuid references auth.users(id),
-  created_at timestamptz default now(),
-  updated_at timestamptz default now()
-);
+## Mudanças técnicas
 
-create index idx_offers_org_active on sales_copilot_offers (organization_id, status);
--- Só 1 oferta featured por org
-create unique index idx_offers_one_featured
-  on sales_copilot_offers (organization_id) where is_featured = true;
-```
-RLS: mesma política de `sales_copilot_scripts` (admin/gestor da org).
+### 1. Frontend — `SalesCopilotPanel.tsx`
+- Carregar lista de ofertas ativas via `useSalesOffers` (já existe).
+- Novo state `offerMode`: `'auto' | 'ignore' | <offer_id>`.
+- Persistir em `localStorage` com chave `copilot-offer-mode:{instance_id}:{phone}`.
+- Passar `offer_mode` e `offer_id` no payload do `run()`.
 
-### Frontend
-- `src/hooks/useSalesOffers.ts` — list/create/update/delete/toggle.
-- `src/components/sales-copilot/OffersTab.tsx` — grid de cards + botão "Nova oferta".
-- `src/components/sales-copilot/OfferCard.tsx` — card com switch ativo/destaque.
-- `src/components/sales-copilot/OfferDialog.tsx` — modal de edição.
-- `SalesCopilotConfig.tsx` — vira `<Tabs>` com "Script base" e "Ofertas".
+### 2. Hook — `useSalesCopilot.ts`
+- Aceitar `offer_mode?: 'auto' | 'ignore' | 'specific'` e `offer_id?: string` em `RunArgs`, repassar no body do POST.
 
-### Edge function
-Em `supabase/functions/sales-copilot/index.ts`:
-1. Após buscar `script` (linha ~505), buscar também ofertas ativas da org.
-2. Montar bloco `== OFERTAS ATIVAS ==` ordenado: featured primeiro, depois `sort_order`.
-3. Passar pro `buildSystemPrompt(action, script, offersBlock, leadCtx)` e injetar no system prompt.
-4. Adicionar 3 regras novas em "COMO USAR O CONTEXTO" sobre uso correto das ofertas.
+### 3. Edge Function — `supabase/functions/sales-copilot/index.ts`
+- Ler `offer_mode` e `offer_id` do body.
+- Lógica do bloco de ofertas:
+  - `ignore`: `offersBlock = "== OFERTAS ATIVAS ==\n(MODO SUPORTE: não ofertar produtos. Foco em tirar dúvidas e dar atendimento pós-venda.)"`
+  - `specific` + `offer_id`: filtra query por aquele id, prefixa com `"FOCO MANUAL: o vendedor selecionou esta oferta. Priorize-a na resposta, exceto se o cliente já recusou explicitamente."`
+  - `auto` (default): comportamento atual.
+- Edge function precisa ser **redeployada manualmente** no Supabase Dashboard (vou gerar `.txt` pronto pra colar, como das outras vezes).
+
+## Detalhes técnicos relevantes
+
+- Não exige migration — `sales_copilot_offers` já tem tudo.
+- `useSalesOffers` já retorna ofertas ordenadas com `is_featured` (⭐) e `is_active`.
+- O filtro do select mostra só ofertas com `is_active = true`, com as featured no topo.
+- Sem mudança no `SalesCopilotButton.tsx` nem no `WhatsAppChat.tsx`.
 
 ## Entrega
-1. Migration da tabela `sales_copilot_offers` + RLS (você roda manual no Supabase, como sempre).
-2. Hook + componentes (cards, modal, tab).
-3. Edge function atualizada — código pronto pra você colar no Dashboard.
-4. Já deixo o **Combo Erveiros pré-cadastrado** no formato estruturado pra você só clicar "ativar".
 
-Topa que eu sigo?
+1. Atualizar 3 arquivos (`SalesCopilotPanel.tsx`, `useSalesCopilot.ts`, `sales-copilot/index.ts`).
+2. Gerar `/mnt/documents/sales-copilot-index.ts.txt` atualizado pra você colar no Supabase.
+3. Confirmar que o seletor aparece e a escolha persiste entre recarregamentos da mesma conversa.
