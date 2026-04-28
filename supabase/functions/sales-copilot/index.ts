@@ -53,16 +53,22 @@ function fmtDate(v: any): string {
   } catch { return String(v || ""); }
 }
 
-function buildSystemPrompt(action: Action, script: string, leadCtx: string): string {
+function buildSystemPrompt(action: Action, script: string, offersBlock: string, leadCtx: string): string {
   const base = `Você é um copiloto de vendas que AUXILIA vendedores brasileiros via WhatsApp. Você NUNCA responde diretamente o cliente — você fala COM o vendedor, sugerindo o que ele pode mandar. Use português brasileiro informal e direto. Seja prático.
 
 == SCRIPT DE VENDAS DA EMPRESA ==
 ${script || "(Nenhum script configurado — use bom senso de vendas consultivas)"}
 
+${offersBlock}
+
 == CONTEXTO DO LEAD ==
 ${leadCtx}
 
 == COMO USAR O CONTEXTO ==
+- Se cliente perguntar preço/condição/conteúdo: use SOMENTE o que está em "OFERTAS ATIVAS". NUNCA invente valores, prazos ou conteúdo de produto.
+- Quando o cliente está em descoberta ("o que vocês têm?", "me explica"), priorize a oferta marcada como ⭐ DESTAQUE.
+- Respeite as "Regras de uso pela IA" de cada oferta (quando ofertar, quando NÃO ofertar, exceções).
+- Se o cliente já comprou um produto que está dentro de uma oferta combo, NÃO ofereça o combo cheio — sugira só o que falta.
 - Se LTV > R$ 1.000 ou status = "VIP/Recorrente": trate como cliente próximo, tom mais íntimo, agradeça a parceria.
 - Se "Dias parado na etapa" > 5: o lead esfriou — sugira mensagem de quebra de gelo / reativação, NÃO continue como se a conversa estivesse quente.
 - Se há evento "PIX gerado" ou "Boleto gerado" sem compra aprovada depois: foco total em remover fricção do pagamento (oferecer outra forma, tirar dúvida, lembrar do prazo).
