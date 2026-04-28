@@ -23,6 +23,7 @@ interface LeadCardProps {
   stageClassification?: ValueClassification | null;
   userRole?: string;
   currentUserId?: string;
+  stages?: LeadFunnelStage[];
 }
 
 const STATUS_LABELS: Record<string, string> = {
