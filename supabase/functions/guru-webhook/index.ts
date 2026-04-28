@@ -13,12 +13,12 @@ function jsonResponse(body: unknown, status = 200) {
   });
 }
 
-/** Normaliza valor monetário: aceita centavos (int) ou reais (float) */
+/** Normaliza valor monetário: Guru sempre envia em reais (float ou int) */
 function parseAmount(value: unknown): number {
-  if (!value) return 0;
+  if (value == null || value === "") return 0;
   const n = Number(value);
-  // Guru envia em centavos quando value > 1000 e parece inteiro
-  return n > 1000 && Number.isInteger(n) ? n / 100 : n;
+  if (!Number.isFinite(n)) return 0;
+  return n;
 }
 
 function normalizePaymentMethod(value: unknown): string | null {
@@ -192,7 +192,7 @@ Deno.serve(async (req) => {
     let funnelId: string | null = null;
 
     if (urlToken) {
-      // Lookup em funnel_platforms (fonte única de verdade pós-migração multi-plataforma)
+      // 1. Tenta em funnel_platforms (multi-plataforma por funil)
       const { data: byPlatform } = await supabase
         .from("funnel_platforms")
         .select("funnel_id")
@@ -200,6 +200,16 @@ Deno.serve(async (req) => {
         .eq("is_active", true)
         .maybeSingle();
       funnelId = byPlatform?.funnel_id ?? null;
+
+      // 2. Fallback: token legado salvo em lead_funnels.webhook_token
+      if (!funnelId) {
+        const { data: byLegacy } = await supabase
+          .from("lead_funnels")
+          .select("id")
+          .eq("webhook_token", urlToken)
+          .maybeSingle();
+        funnelId = byLegacy?.id ?? null;
+      }
     }
 
     if (!funnelId && productName) {
