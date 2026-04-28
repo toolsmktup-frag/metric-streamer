@@ -307,7 +307,9 @@ Deno.serve(async (req) => {
       meta_campaign_id:       finalMetaCampaignId,
       meta_adset_id:          finalMetaAdsetId,
       meta_ad_id:             finalMetaAdId,
-      funnel_id:              funnelId,
+      // funnel_id removido: a FK aponta para `funnels` (CRM antigo), mas o token
+      // resolve para `lead_funnels` (CRM novo) → causava FK violation.
+      // O funnelId continua sendo passado para sync_lead_from_sale (lead_funnels).
       imported_from:          "webhook",
       raw_data:               payload,
       affiliate_name:         affiliateName,
