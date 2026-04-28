@@ -1,12 +1,15 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { X, Sparkles, Brain, Shield, MessageSquareQuote, Copy, ArrowDown, Square, Loader2, Settings } from 'lucide-react';
+import { X, Sparkles, Brain, Shield, MessageSquareQuote, Copy, ArrowDown, Square, Loader2, Target } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { useSalesCopilot, type CopilotAction } from '@/hooks/useSalesCopilot';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
+import { useSalesCopilot, type CopilotAction, type OfferMode } from '@/hooks/useSalesCopilot';
 import { useActiveSalesScript } from '@/hooks/useSalesScripts';
+import { useSalesOffers } from '@/hooks/useSalesOffers';
 import { useCurrentUserRole } from '@/hooks/useCurrentUserRole';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
