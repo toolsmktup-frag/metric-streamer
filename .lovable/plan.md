@@ -1,87 +1,122 @@
-## Diagnóstico
 
-A vendedora Gabi (e provavelmente as outras) está vendo conversas de instâncias que ela NÃO tem acesso. Causa raiz são 3 furos no controle de acesso:
+# Sistema de Follow-ups no CRM
 
-### Furo 1 — Dropdown "Todas as instâncias" no chat unificado (CRÍTICO)
+Vamos adicionar **Follow-ups** — uma forma simples de "lembrar de falar com fulano daqui X dias" ou já "deixar a mensagem pronta para o sistema enviar sozinho". Tudo plugado nos lugares onde você já trabalha hoje (Kanban, chat WhatsApp, card do lead) + uma central pra acompanhar.
 
-No `useWhatsAppMultiChat.ts`, quando o front chama `whatsapp-chats?instance_id=all`, o backend até filtra corretamente pela `whatsapp_instance_access` da vendedora. **MAS** o hook chama um RPC chamado `get_org_instance_labels` que retorna **TODAS as instâncias da organização** (ignora RLS — é `SECURITY DEFINER`). Isso é usado só pra montar o "badge" colorido com o nome da instância em cada conversa, mas tem dois efeitos colaterais:
+## Conceito (1 entidade, 2 modos)
 
-1. Se o backend `whatsapp-chats` retornar uma conversa com `instance_id` que a vendedora NÃO deveria ver (ver Furo 2), o front tem o label e exibe normalmente, sem rejeitar.
-2. O dropdown "Todas as instâncias" pode acabar listando instâncias indevidas (depende de onde vem a lista do filtro — preciso verificar).
+Cada follow-up tem **um modo**:
 
-### Furo 2 — `resolveLeadAccess` usa `assigned_to` para autorizar mensagens (CRÍTICO)
+1. **Lembrete** → o sistema só te avisa na hora marcada (badge no menu, na home/Resumo, no card do lead). Você fala manualmente.
+2. **Envio automático** → você escreve a mensagem agora, escolhe a data/hora e a instância do WhatsApp. Na hora marcada o sistema dispara sozinho (mesma engine das automações WZ que já existe).
 
-Na edge function `whatsapp-chats` (linhas 88-149), quando uma vendedora não-admin chama `list_chats`, o filtro de visibilidade da mensagem NÃO é só por `instance_id`. O fluxo é:
+Cada follow-up pertence a **um lead** (telefone + nome) e opcionalmente a um funil/etapa. Tem responsável (quem foi designado), status (`pending`, `done`, `sent`, `cancelled`, `snoozed`, `failed`) e prazo (`due_at`).
 
-1. Busca últimas 300 mensagens onde `instance_id IN allowedInstanceIds` ✅
-2. Mas depois roda `resolveLeadAccess` que filtra por **leads atribuídos à vendedora** (`assigned_to = user_id`)
+## Onde encaixa na UI (4 pontos de entrada)
 
-O problema: na linha 296-298, se a vendedora **NÃO é admin**, ela só vê mensagens cujo lead está atribuído a ela OU cujo telefone bate com um lead atribuído a ela. Mas a Gabi pode ter `whatsapp_instance_access` para a instância "Gabi 2 - Equipe" e ao mesmo tempo um lead com aquele telefone está atribuído a OUTRA vendedora — nesse caso some. **PIOR**: leads sem `assigned_to` (null) e telefones sem lead cadastrado caem no filtro de telefone — se duas vendedoras têm acesso a instâncias diferentes mas o mesmo lead aparece em ambas, ambas veem.
+### 1. Botão "Agendar follow-up" no Card do Kanban
+No `LeadCard` (mesmo menu do GripVertical que abre o popover de mover de estágio) adicionar item **"Agendar follow-up"**. Abre um `Dialog` rápido:
+- Modo: Lembrete / Mensagem automática
+- Quando: presets (hoje +3h, amanhã, +3 dias, +7 dias, +10 dias, +30 dias) ou data custom
+- Título/observação (lembrete) **ou** mensagem + instância WhatsApp (automático)
+- Salvar
 
-Isso já estava acontecendo, mas o bug visível agora é:
+### 2. Aba "Follow-ups" dentro do detalhe do lead
+Na página do lead/timeline, uma aba lista todos os follow-ups daquele contato (passados + futuros), com ações: marcar feito, reagendar (snooze: +1h, +1d, +1 sem), cancelar, editar.
 
-### Furo 3 — Janela "Gerenciar Instâncias" lista TODAS as instâncias da org pra qualquer admin (esperado), MAS o checkbox "Acesso de Vendedores" salva sem validar org
+### 3. Botão no Chat do WhatsApp
+No `ContactPanel` (lateral direita do chat) e no `ChatInput` (ao lado do botão de enviar): **"Agendar"** — mesma dialog. Caso clássico: "manda essa mensagem amanhã 9h", "lembra de falar com ele em 10 dias".
 
-Na print 2 vejo que a Luisa 0938 tem checkboxes pra Sarini, Daniela, Gabriela, rafa.colombo e Luisa. Os 2 últimos estão marcados. Olhando `Equipe.tsx` (linha 88-104) e `InstanceAccessManager.tsx`, o INSERT em `whatsapp_instance_access` não valida que o `instance_id` pertence à mesma organização do `user_id` que está sendo concedido. Combinado com RLS frouxa pode permitir cruzamento.
+### 4. Página central /tarefas (acompanhamento)
+Nova rota `/tarefas` no sidebar com 4 abas:
+- **Hoje** (vencendo hoje)
+- **Atrasadas** (vencidas e ainda pending)
+- **Próximas 7 dias**
+- **Concluídas / Histórico**
 
-Mas o sintoma "instâncias se misturando" descrito pela Gabi é provavelmente o Furo 2 + uma situação onde a Gabi tem acesso a 2 instâncias (ex: "Gabi 1" e "Gabi 2") e as conversas estão aparecendo em ambas no dropdown "Todas as instâncias", com o badge mostrando uma instância errada — porque o `instance_id` retornado pelo backend é o correto, mas o front pode estar batendo no `globalMeta` que mistura nomes se houver instâncias duplicadas/renomeadas.
+Filtros: por responsável, por funil, por modo (lembrete vs auto). Cada linha mostra lead, prazo, prévia da mensagem, ações rápidas (concluir / reagendar / abrir chat / abrir lead).
 
-## O que fazer
+### 5. Badge global no header
+Contador de follow-ups vencendo hoje + atrasadas, igual notificação. Click → vai pra `/tarefas`.
 
-### Passo 1 — Auditar primeiro (read-only)
-Antes de mudar código, rodar 3 SELECTs no Supabase pra confirmar:
+### 6. Widget no `/resumo`
+Card "Meus follow-ups de hoje" com os 5 primeiros + botão "ver todos".
 
+## Boas práticas que vamos aplicar
+
+- **Snooze rápido**: em 1 clique adia +1h / +1d / +1 sem (padrão de CRMs como Pipedrive/HubSpot).
+- **Presets de prazo** (3d, 7d, 10d, 30d) — você raramente digita data, é 1 clique.
+- **Auto-criação opcional**: regra por etapa do funil — ex: "lead entrou em 'Sem resposta' → cria follow-up automático em +3 dias". Configurável na aba de configuração do funil (fica pra v2 depois que o básico estiver de pé).
+- **Cancelamento automático**: se o lead responder no WhatsApp, follow-ups pendentes do tipo "envio automático" são cancelados (igual o `skipIfReplied` que já existe nas automações). Opção marcável por follow-up.
+- **Variáveis**: na mensagem automática suportar `{{nome}}`, `{{primeiro_nome}}` (mesmo padrão das automações).
+- **Permissões**: vendedor vê só os próprios follow-ups; admin vê todos.
+
+## Arquitetura técnica
+
+### Banco (1 tabela nova)
 ```sql
--- 1. Quais instâncias a Gabi tem acesso?
-SELECT u.email, wi.name, wi.id, wia.created_at
-FROM whatsapp_instance_access wia
-JOIN auth.users u ON u.id = wia.user_id
-JOIN whatsapp_instances wi ON wi.id = wia.instance_id
-WHERE u.email ILIKE '%gabi%' OR u.email ILIKE '%gabriela%'
-ORDER BY u.email, wi.name;
+create table public.lead_follow_ups (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null,
+  lead_id uuid references leads(id) on delete cascade,
+  funnel_id uuid references funnels(id) on delete set null,
+  stage_id uuid references lead_funnel_stages(id) on delete set null,
+  assigned_to uuid references auth.users(id),
+  created_by uuid references auth.users(id),
+  mode text not null check (mode in ('reminder','auto_send')),
+  title text,
+  message text,                    -- usada quando mode='auto_send'
+  instance_id uuid,                -- WhatsApp instance pra disparar
+  skip_if_replied boolean default true,
+  due_at timestamptz not null,
+  status text not null default 'pending'
+    check (status in ('pending','done','sent','cancelled','snoozed','failed')),
+  completed_at timestamptz,
+  sent_at timestamptz,
+  error_message text,
+  metadata jsonb default '{}',
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
 
--- 2. Há acessos cruzados entre orgs? (não deveria ter)
-SELECT wia.user_id, up.organization_id AS user_org,
-       wi.organization_id AS inst_org, wi.name
-FROM whatsapp_instance_access wia
-JOIN user_profiles up ON up.id = wia.user_id
-JOIN whatsapp_instances wi ON wi.id = wia.instance_id
-WHERE up.organization_id <> wi.organization_id;
-
--- 3. Há instâncias com nomes duplicados na mesma org?
-SELECT organization_id, lower(trim(name)) AS norm_name, COUNT(*), array_agg(id)
-FROM whatsapp_instances
-GROUP BY 1,2 HAVING COUNT(*) > 1;
+create index idx_followups_due_pending
+  on lead_follow_ups (due_at) where status = 'pending';
+create index idx_followups_lead on lead_follow_ups (lead_id);
+create index idx_followups_assigned on lead_follow_ups (assigned_to, status, due_at);
 ```
++ RLS por `organization_id` e `assigned_to` (mesmo padrão de `lead_funnels`).
 
-### Passo 2 — Corrigir o backend `whatsapp-chats`
+### Worker (cron)
+Edge function `follow-up-dispatcher` rodando a cada 1 min via pg_cron (mesma estrutura do `wz-scheduler`):
+- pega `lead_follow_ups` com `status='pending'` e `due_at <= now()`
+- se `mode='reminder'` → marca `status='due'`/cria notificação (não envia nada)
+- se `mode='auto_send'` → checa `skip_if_replied` (última mensagem do lead foi recebida depois da criação?), se ok dispara via UAZAPI usando `instance_id`, marca `sent`. Em erro → `failed` + `error_message`.
 
-Na edge function `supabase/functions/whatsapp-chats/index.ts`, em `list_chats`:
+### Frontend
+- Hook `useFollowUps` (lista/filtros), `useCreateFollowUp`, `useUpdateFollowUp` (snooze/done/cancel).
+- Componente `FollowUpDialog` reutilizado nos 4 pontos de entrada.
+- Componente `FollowUpList` reutilizado no card do lead, na página `/tarefas` e no widget do Resumo.
+- Realtime: subscribe na tabela pra atualizar contador do badge.
 
-- Para vendedoras não-admin, **remover** o filtro adicional por `assigned_to` no caminho do unified mode. O critério único deve ser: `instance_id ∈ allowedInstanceIds`. Quem tem acesso à instância vê todas as conversas dela. Se a regra é "vendedora só vê leads atribuídos a ela", isso precisa ser uma decisão do produto — hoje a regra está aplicada de forma inconsistente (não bloqueia no `messages` action por instance_id, mas filtra por lead).
-- Garantir que tanto `list_chats` quanto `messages` apliquem **a mesma regra de visibilidade**.
+## Roadmap de entrega
 
-### Passo 3 — Corrigir o front `useWhatsAppMultiChat.ts`
+**Fase 1 (MVP — entrega tudo o que você pediu):**
+1. Migration da tabela + RLS (SQL pra você rodar manualmente no Supabase, como sempre).
+2. Hooks + `FollowUpDialog`.
+3. Botão no `LeadCard` (Kanban) e no `ContactPanel`/`ChatInput` (WhatsApp).
+4. Página `/tarefas` com as 4 abas + filtros básicos.
+5. Edge function `follow-up-dispatcher` + cron 1 min.
+6. Badge no header + widget no `/resumo`.
 
-- Trocar `get_org_instance_labels` (que retorna toda a org) por uma versão que retorna **apenas as instâncias que o usuário tem acesso** (admin = todas, vendedora = via `whatsapp_instance_access`). Criar novo RPC `get_user_accessible_instance_labels()`.
-- Após o merge, **descartar** qualquer chat cujo `instance_id` não esteja no mapa de instâncias acessíveis (defesa em profundidade no front).
+**Fase 2 (depois, se quiser):**
+- Auto-criação por etapa do funil.
+- Templates rápidos de mensagem ("Oi {{primeiro_nome}}, ainda tem interesse?").
+- Métricas: taxa de resposta após follow-up, conversão por SDR.
 
-### Passo 4 — Hardenar `whatsapp_instance_access`
+## O que você precisa decidir antes
 
-Adicionar constraint/policy SQL pra garantir que `user_id.organization_id == instance_id.organization_id` no INSERT (previne cruzamento de org via UI).
+1. **Notificação fora do app**: só badge dentro do sistema, ou quer também receber no seu próprio WhatsApp quando um lembrete vencer? (recomendo só badge no MVP)
+2. **Quem vê o quê**: vendedor vê só os dele, admin vê todos? (recomendo sim)
+3. **Cancelar se responder**: ligado por padrão pros envios automáticos? (recomendo sim)
 
-### Passo 5 — Validar com a Gabi
-
-Pedir pra ela recarregar e confirmar que só vê as conversas das instâncias marcadas no painel "Acesso de Vendedores".
-
-## Arquivos afetados
-
-- `supabase/functions/whatsapp-chats/index.ts` (deploy manual no Supabase Dashboard)
-- `src/hooks/useWhatsAppMultiChat.ts`
-- Novo SQL: `docs/sql/get_user_accessible_instance_labels.sql` (rodar no Supabase Dashboard)
-- Novo SQL: hardening de `whatsapp_instance_access` (rodar no Supabase Dashboard)
-
-## Perguntas antes de implementar
-
-1. **Regra de produto**: vendedora com acesso à instância deve ver **todas** as conversas dessa instância, ou só as conversas dos leads atribuídos a ela? Hoje o código mistura as duas regras e gera o bug.
-2. Posso seguir com o passo 1 (rodar os 3 SELECTs de auditoria) pra confirmar o diagnóstico antes de tocar no código?
+Se topar, sigo pra implementação na ordem do roadmap fase 1.
