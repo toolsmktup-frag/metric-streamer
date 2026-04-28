@@ -32,10 +32,42 @@ const ACTION_LABELS: Record<CopilotAction, { label: string; icon: any; hint: str
 export default function SalesCopilotPanel({ open, onClose, phone, instanceId, onUseInInput }: Props) {
   const [tab, setTab] = useState<CopilotAction>('suggest');
   const [customQuestion, setCustomQuestion] = useState('');
+  // offerSelection: 'auto' | 'ignore' | <offer_id>
+  const [offerSelection, setOfferSelection] = useState<string>('auto');
   const { run, cancel, output, isStreaming, reset } = useSalesCopilot();
   const { data: script } = useActiveSalesScript();
+  const { data: offers } = useSalesOffers();
   const { data: role } = useCurrentUserRole();
   const navigate = useNavigate();
+
+  const storageKey = useMemo(
+    () => (phone && instanceId ? `copilot-offer-mode:${instanceId}:${phone}` : null),
+    [phone, instanceId]
+  );
+
+  // Restaura escolha por conversa
+  useEffect(() => {
+    if (!storageKey) {
+      setOfferSelection('auto');
+      return;
+    }
+    const saved = localStorage.getItem(storageKey);
+    setOfferSelection(saved || 'auto');
+  }, [storageKey]);
+
+  const persistSelection = (value: string) => {
+    setOfferSelection(value);
+    if (storageKey) localStorage.setItem(storageKey, value);
+  };
+
+  const activeOffers = (offers || []).filter((o) => o.status === 'active');
+  const selectedOffer = activeOffers.find((o) => o.id === offerSelection);
+  const focusBadgeLabel =
+    offerSelection === 'ignore'
+      ? 'Suporte (sem ofertas)'
+      : selectedOffer
+        ? `Foco: ${selectedOffer.name}`
+        : null;
 
   if (!open) return null;
 
@@ -51,11 +83,15 @@ export default function SalesCopilotPanel({ open, onClose, phone, instanceId, on
       return;
     }
     setTab(action);
+    const offerMode: OfferMode =
+      offerSelection === 'auto' ? 'auto' : offerSelection === 'ignore' ? 'ignore' : 'specific';
     run({
       action,
       phone,
       instance_id: instanceId,
       custom_question: action === 'objection' || action === 'ask' ? customQuestion.trim() : undefined,
+      offer_mode: offerMode,
+      offer_id: offerMode === 'specific' ? offerSelection : undefined,
     });
   };
 
