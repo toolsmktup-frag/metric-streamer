@@ -595,6 +595,8 @@ Origem (UTM): ${utmStr}`.replace(/\n\n+/g, "\n");
       has_lead: !!lead,
       has_script: !!script,
       offers_chars: offersBlock.length,
+      offer_mode: offerMode,
+      offer_id: focusOfferId || null,
       lead_ctx_chars: leadCtx.length,
     });
 
