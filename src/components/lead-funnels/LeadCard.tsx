@@ -41,13 +41,15 @@ function friendlyStatus(status: string): string {
   return STATUS_LABELS[status.toLowerCase().trim()] || status;
 }
 
-const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, onWhatsAppClick, isDragging, isRevenue = true, purchaseSummary, recontactInfo, hideValues, stageClassification, userRole, currentUserId }) => {
+const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, onWhatsAppClick, isDragging, isRevenue = true, purchaseSummary, recontactInfo, hideValues, stageClassification, userRole, currentUserId, stages }) => {
   const lead = position.lead;
   // Fallback: try metadata for phone if lead.phone is empty
   const leadPhone = lead.phone || (lead.metadata?.phone as string) || (lead.metadata?.cel as string) || (lead.metadata?.telefone as string) || null;
   const { attributes, listeners, setNodeRef, transform } = useDraggable({
     id: position.id,
   });
+  const moveStage = useMoveLeadStage();
+  const [stageMenuOpen, setStageMenuOpen] = React.useState(false);
 
   const style = transform
     ? { transform: `translate(${transform.x}px, ${transform.y}px)` }
@@ -61,6 +63,29 @@ const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, onWhatsAppClick,
 
   const hasLTV = purchaseSummary && purchaseSummary.totalOrders > 0;
 
+  const sortedStages = React.useMemo(
+    () => (stages ? [...stages].sort((a, b) => a.sort_order - b.sort_order) : []),
+    [stages]
+  );
+
+  const handlePickStage = (stage: LeadFunnelStage) => {
+    if (stage.id === position.stage_id) {
+      setStageMenuOpen(false);
+      return;
+    }
+    moveStage.mutate(
+      {
+        positionId: position.id,
+        leadId: position.lead_id,
+        funnelId: position.funnel_id,
+        fromStageId: position.stage_id,
+        toStageId: stage.id,
+        toStageName: stage.name,
+      },
+      { onSettled: () => setStageMenuOpen(false) }
+    );
+  };
+
   return (
     <div
       ref={setNodeRef}
@@ -71,14 +96,63 @@ const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, onWhatsAppClick,
       onClick={onClick}
     >
       <div className="flex items-start gap-2.5">
-        <button
-          {...attributes}
-          {...listeners}
-          className="mt-0.5 text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing touch-none"
-          onClick={e => e.stopPropagation()}
-        >
-          <GripVertical className="h-4 w-4" />
-        </button>
+        <Popover open={stageMenuOpen} onOpenChange={setStageMenuOpen}>
+          <PopoverTrigger asChild>
+            <button
+              {...attributes}
+              {...listeners}
+              className="mt-0.5 text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing touch-none"
+              onClick={e => {
+                e.stopPropagation();
+                if (sortedStages.length > 0) setStageMenuOpen(true);
+              }}
+              title="Arraste para mover ou clique para escolher etapa"
+            >
+              <GripVertical className="h-4 w-4" />
+            </button>
+          </PopoverTrigger>
+          {sortedStages.length > 0 && (
+            <PopoverContent
+              align="start"
+              side="right"
+              className="w-56 p-1"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="px-2 py-1.5 text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
+                Mover para
+              </div>
+              <div className="max-h-72 overflow-y-auto">
+                {sortedStages.map(stage => {
+                  const isCurrent = stage.id === position.stage_id;
+                  return (
+                    <button
+                      key={stage.id}
+                      type="button"
+                      onClick={() => handlePickStage(stage)}
+                      disabled={isCurrent || moveStage.isPending}
+                      className={`w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded-md text-left transition-colors ${
+                        isCurrent
+                          ? 'bg-muted text-muted-foreground cursor-default'
+                          : 'hover:bg-accent hover:text-accent-foreground'
+                      }`}
+                    >
+                      <span
+                        className="h-2.5 w-2.5 rounded-full shrink-0"
+                        style={{ backgroundColor: stage.color }}
+                      />
+                      <span className="flex-1 truncate">{stage.name}</span>
+                      {isCurrent ? (
+                        <Check className="h-3.5 w-3.5 shrink-0 opacity-70" />
+                      ) : (
+                        <ArrowRight className="h-3.5 w-3.5 shrink-0 opacity-50" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </PopoverContent>
+          )}
+        </Popover>
 
         <div className="h-8 w-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold shrink-0">
           {initials}
