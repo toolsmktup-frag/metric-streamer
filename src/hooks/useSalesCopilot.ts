@@ -4,11 +4,15 @@ import { toast } from 'sonner';
 
 export type CopilotAction = 'suggest' | 'analyze' | 'objection' | 'ask';
 
+export type OfferMode = 'auto' | 'ignore' | 'specific';
+
 interface RunArgs {
   action: CopilotAction;
   phone: string;
   instance_id: string;
   custom_question?: string;
+  offer_mode?: OfferMode;
+  offer_id?: string;
 }
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL || 'https://emfbocpmphtftqcezaib.supabase.co'}/functions/v1/sales-copilot`;
