@@ -1,6 +1,6 @@
 import React from 'react';
-import { Lead, LeadStagePosition, ValueClassification } from '@/types/leadFunnels';
-import { Mail, Phone, Clock, DollarSign, GripVertical, MessageCircle, ShoppingBag, CalendarClock, Timer, EyeOff, AlertTriangle, Hourglass } from 'lucide-react';
+import { Lead, LeadFunnelStage, LeadStagePosition, ValueClassification } from '@/types/leadFunnels';
+import { Mail, Phone, Clock, DollarSign, GripVertical, MessageCircle, ShoppingBag, CalendarClock, Timer, EyeOff, AlertTriangle, Hourglass, Check, ArrowRight } from 'lucide-react';
 import { PurchaseSummary } from '@/hooks/useBulkLeadPurchases';
 import { useDraggable } from '@dnd-kit/core';
 import { formatLocalDateTime } from '@/lib/localDate';
@@ -8,6 +8,8 @@ import { differenceInDays } from 'date-fns';
 import type { RecontactInfo } from '@/hooks/useRecontactDeadlines';
 import LeadAssignSelect from './LeadAssignSelect';
 import { extractMetadataAmount, classificationColor, classificationLabel } from '@/lib/valueClassification';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { useMoveLeadStage } from '@/hooks/useMoveLeadStage';
 
 interface LeadCardProps {
   position: LeadStagePosition & { lead: Lead };
