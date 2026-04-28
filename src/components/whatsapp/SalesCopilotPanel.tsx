@@ -129,11 +129,17 @@ export default function SalesCopilotPanel({ open, onClose, phone, instanceId, on
       >
       {/* Header */}
       <div className="h-12 px-3 flex items-center justify-between border-b border-border shrink-0">
-        <div className="flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-primary" />
-          <span className="font-semibold text-sm">Copiloto de Vendas</span>
+        <div className="flex items-center gap-2 min-w-0">
+          <Sparkles className="h-4 w-4 text-primary shrink-0" />
+          <span className="font-semibold text-sm shrink-0">Copiloto</span>
+          {focusBadgeLabel && (
+            <Badge variant="secondary" className="h-5 text-[10px] px-1.5 gap-1 truncate max-w-[180px]">
+              <Target className="h-2.5 w-2.5 shrink-0" />
+              <span className="truncate">{focusBadgeLabel}</span>
+            </Badge>
+          )}
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 shrink-0">
           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose}>
             <X className="h-4 w-4" />
           </Button>
@@ -157,6 +163,47 @@ export default function SalesCopilotPanel({ open, onClose, phone, instanceId, on
             )}
           </div>
         )}
+
+        {/* Foco da oferta */}
+        <div className="px-3 pt-2 pb-1 shrink-0">
+          <div className="flex items-center gap-2">
+            <Target className="h-3 w-3 text-muted-foreground shrink-0" />
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+              Foco da oferta
+            </span>
+          </div>
+          <Select value={offerSelection} onValueChange={persistSelection}>
+            <SelectTrigger className="h-8 mt-1 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="auto" className="text-xs">
+                Automático (IA decide)
+              </SelectItem>
+              <SelectItem value="ignore" className="text-xs">
+                Ignorar ofertas (suporte/pós-venda)
+              </SelectItem>
+              {activeOffers.length > 0 && (
+                <div className="px-2 py-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+                  Forçar oferta específica
+                </div>
+              )}
+              {activeOffers.map((o) => (
+                <SelectItem key={o.id} value={o.id} className="text-xs">
+                  {o.is_featured ? '⭐ ' : ''}{o.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {offerSelection !== 'auto' && (
+            <button
+              onClick={() => persistSelection('auto')}
+              className="text-[10px] text-muted-foreground hover:text-foreground mt-1 underline"
+            >
+              voltar pro automático
+            </button>
+          )}
+        </div>
 
         <Tabs value={tab} onValueChange={(v) => setTab(v as CopilotAction)} className="flex flex-col px-3 shrink-0">
           <TabsList className="grid grid-cols-4 h-9 shrink-0">
