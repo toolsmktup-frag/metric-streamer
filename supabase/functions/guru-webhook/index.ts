@@ -192,7 +192,7 @@ Deno.serve(async (req) => {
     let funnelId: string | null = null;
 
     if (urlToken) {
-      // Lookup em funnel_platforms (fonte única de verdade pós-migração multi-plataforma)
+      // 1. Tenta em funnel_platforms (multi-plataforma por funil)
       const { data: byPlatform } = await supabase
         .from("funnel_platforms")
         .select("funnel_id")
@@ -200,6 +200,16 @@ Deno.serve(async (req) => {
         .eq("is_active", true)
         .maybeSingle();
       funnelId = byPlatform?.funnel_id ?? null;
+
+      // 2. Fallback: token legado salvo em lead_funnels.webhook_token
+      if (!funnelId) {
+        const { data: byLegacy } = await supabase
+          .from("lead_funnels")
+          .select("id")
+          .eq("webhook_token", urlToken)
+          .maybeSingle();
+        funnelId = byLegacy?.id ?? null;
+      }
     }
 
     if (!funnelId && productName) {
