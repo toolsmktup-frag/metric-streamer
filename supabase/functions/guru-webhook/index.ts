@@ -13,12 +13,12 @@ function jsonResponse(body: unknown, status = 200) {
   });
 }
 
-/** Normaliza valor monetário: aceita centavos (int) ou reais (float) */
+/** Normaliza valor monetário: Guru sempre envia em reais (float ou int) */
 function parseAmount(value: unknown): number {
-  if (!value) return 0;
+  if (value == null || value === "") return 0;
   const n = Number(value);
-  // Guru envia em centavos quando value > 1000 e parece inteiro
-  return n > 1000 && Number.isInteger(n) ? n / 100 : n;
+  if (!Number.isFinite(n)) return 0;
+  return n;
 }
 
 function normalizePaymentMethod(value: unknown): string | null {
