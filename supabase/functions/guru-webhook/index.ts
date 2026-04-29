@@ -307,9 +307,11 @@ Deno.serve(async (req) => {
       meta_campaign_id:       finalMetaCampaignId,
       meta_adset_id:          finalMetaAdsetId,
       meta_ad_id:             finalMetaAdId,
-      // funnel_id removido: a FK aponta para `funnels` (CRM antigo), mas o token
-      // resolve para `lead_funnels` (CRM novo) → causava FK violation.
-      // O funnelId continua sendo passado para sync_lead_from_sale (lead_funnels).
+      // funnel_id restaurado: FK foi removida em docs/fix-guru-sales-funnel-id.sql
+      // (apontava para `funnels` antigo, mas resolvemos via `lead_funnels` novo).
+      // Sem funnel_id, a view v_all_sales não associa a venda ao funil → some
+      // do Resumo / KPI / Campanhas.
+      funnel_id:              funnelId,
       imported_from:          "webhook",
       raw_data:               payload,
       affiliate_name:         affiliateName,
