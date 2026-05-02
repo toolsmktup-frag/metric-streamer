@@ -22,14 +22,20 @@ COMMENT ON COLUMN public.lead_funnel_products.auto_move_from_stage_id IS
   'Etapa de origem: o cron só move o lead se ele estiver nesta etapa. NULL = move de qualquer etapa (legacy).';
 
 -- 2. Backfill: para todos os produtos JÁ configurados com auto_move_stage_id,
---    setar auto_move_from_stage_id = primeira etapa (sort_order=0) do funil.
---    Isso garante que vendas existentes continuem funcionando, mas com a
---    proteção: só move quem ainda está parado na etapa inicial.
+--    setar auto_move_from_stage_id = etapa "Compra Aprovada" quando existir.
+--    Se o funil não tiver essa etapa, usa a primeira etapa como fallback.
+--    Regra esperada: Compra Aprovada → (passou X dias) → Base de Recontato.
 UPDATE public.lead_funnel_products lfp
 SET auto_move_from_stage_id = (
-  SELECT id FROM public.lead_funnel_stages
+  SELECT id
+  FROM public.lead_funnel_stages
   WHERE funnel_id = lfp.lead_funnel_id
-  ORDER BY sort_order ASC
+  ORDER BY
+    CASE
+      WHEN lower(name) LIKE '%compra%' AND lower(name) LIKE '%aprovad%' THEN 0
+      ELSE 1
+    END,
+    sort_order ASC
   LIMIT 1
 )
 WHERE lfp.auto_move_stage_id IS NOT NULL
