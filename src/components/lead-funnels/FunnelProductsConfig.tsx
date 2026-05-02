@@ -196,17 +196,33 @@ const FunnelProductsConfig: React.FC<FunnelProductsConfigProps> = ({
               className="w-20"
             />
             <Select
+              value={prod.auto_move_from_stage_id || 'none'}
+              onValueChange={v => updateProduct(idx, 'auto_move_from_stage_id', v === 'none' ? null : v)}
+            >
+              <SelectTrigger className="w-40" title="Só move o lead se ele estiver nesta etapa">
+                <SelectValue placeholder="De: etapa" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">De: qualquer etapa</SelectItem>
+                {stages.map(s => (
+                  <SelectItem key={s.id} value={s.id}>
+                    De: {s.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select
               value={prod.auto_move_stage_id || 'none'}
               onValueChange={v => updateProduct(idx, 'auto_move_stage_id', v === 'none' ? null : v)}
             >
               <SelectTrigger className="w-44" title="Mover lead vencido para esta etapa">
-                <SelectValue placeholder="Mover p/ etapa" />
+                <SelectValue placeholder="Para: etapa" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">Sem auto-mover</SelectItem>
                 {stages.map(s => (
                   <SelectItem key={s.id} value={s.id}>
-                    {s.name}
+                    Para: {s.name}
                   </SelectItem>
                 ))}
               </SelectContent>
