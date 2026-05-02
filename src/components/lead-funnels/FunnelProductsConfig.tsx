@@ -53,8 +53,12 @@ const FunnelProductsConfig: React.FC<FunnelProductsConfigProps> = ({
     );
   }, [products]);
 
-  // Default origem = primeira etapa do funil (ex: "Base de clientes")
-  const defaultFromStageId = stages.length > 0 ? stages[0].id : null;
+  // Default origem = etapa de compra aprovada: o lead fica ali contando o prazo de recompra.
+  const purchaseApprovedStage = stages.find(stage => {
+    const name = stage.name.toLowerCase();
+    return name.includes('compra') && name.includes('aprovad');
+  });
+  const defaultFromStageId = purchaseApprovedStage?.id ?? (stages.length > 0 ? stages[0].id : null);
 
   const addProduct = () => {
     setLocalProducts(prev => [
@@ -162,7 +166,7 @@ const FunnelProductsConfig: React.FC<FunnelProductsConfigProps> = ({
 
       <p className="text-xs text-muted-foreground mb-3">
         Configure os produtos deste funil e defina os dias para recontato (recompra).
-        O cron <strong>só move o lead se ele estiver na etapa "De"</strong> (default: primeira etapa do funil), preservando trabalho da vendedora em negociações.
+        O cron <strong>só move o lead se ele estiver na etapa "De"</strong> (default: Compra Aprovada), preservando trabalho da vendedora em negociações.
       </p>
 
       <div className="space-y-2">
