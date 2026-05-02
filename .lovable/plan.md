@@ -1,62 +1,88 @@
-## Diagnóstico
+## O problema (o que tá acontecendo hoje)
 
-O Kanban da Gabi (RECOMPRA - POTES) não mostra os badges de recontato (verde/vermelho) para vendas **novas** porque elas não estão sendo posicionadas no funil RECOMPRA via webhook.
+A função de "atualizar funil" (`recontact-cron` + botão na tela do funil) hoje funciona assim:
 
-**Causa raiz:**
+1. Pega TODO lead que tá no funil RECOMPRA - POTES (não importa em que etapa).
+2. Calcula: data da última compra + dias de recontato.
+3. Se já venceu → **move pra etapa configurada** (ex: "Hora de recontatar").
 
-1. O webhook do Guru chama `sync_lead_from_sale` (RPC v5).
-2. A v5 roteia o lead para **todos os funis** cujo produto bate em:
-   - `lead_product_mappings.raw_product_name = product_name` (match exato), OU
-   - `lead_funnel_products.product_name_contains` ILIKE no nome do produto.
-3. O funil RECOMPRA - POTES (`19f75912-...`) **não tem** uma entrada em `lead_funnel_products` com `product_name_contains = 'articulabem'` apontando pra ele (ou tem mas não está casando).
-4. Sem essa entrada, o webhook não posiciona o lead no RECOMPRA, não cria `lead_event` com `funnel_id = recompra` → o hook `useBulkLeadPurchaseProducts` busca eventos filtrando por `funnel_id = recompra` e não encontra → `useRecontactDeadlines` não calcula → badge não aparece.
+**O bug que você notou:** ela move qualquer lead, inclusive os que estão em "Aguardando resposta", "Em negociação", "Contato enviado", "Não fechou". Ou seja, atropela o trabalho da Gabi.
 
-Foi por isso que o reprocessamento manual (`docs/sql/step2-reprocess-leads-to-recompra.sql`) funcionou — ele pega eventos da BASE e replica no RECOMPRA. Mas vendas novas não passam por esse script.
+---
 
-**Bonus bug menor:** o Guru webhook passa `p_funnel_id` na chamada da RPC, mas a v5 não tem esse parâmetro (foi removido). Argumento é ignorado. Não quebra nada hoje, mas é lixo.
+## A solução (simples e funcional)
 
-## Solução
+Adicionar um campo extra na configuração do produto: **"Mover apenas se estiver na etapa: ___"** (com default = "Compra aprovada").
 
-### 1. Cadastrar produto Articulabem no funil RECOMPRA - POTES
+Aí a regra fica:
 
-Inserir (ou garantir que exista) registro em `lead_funnel_products`:
+```text
+SE lead está em [Compra aprovada]
+E já passou X dias da compra
+ENTÃO move pra [Hora de recontatar]
+```
 
-- `lead_funnel_id` = `19f75912-295e-4c67-acad-275ce6849c5c` (RECOMPRA - POTES)
-- `product_name_contains` = `articulabem`
-- `display_name` = `Articulabem`
-- `recontact_days` = valor que a Gabi usa hoje (ex: 90, 120, 180 — preciso confirmar com você)
-- `auto_move_stage_id` = etapa "Hora de recontatar" do funil RECOMPRA (preciso confirmar qual)
+Qualquer lead que a vendedora tirou de "Compra aprovada" pra trabalhar (negociação, aguardando resposta, etc.) **fica lá, intocado**. O cron nunca mexe.
 
-Com isso:
-- Toda venda nova de Articulabem cai automaticamente no RECOMPRA - POTES via `sync_lead_from_sale`.
-- O cron `recontact-cron` move o lead pra etapa de recontato quando vencer.
-- O Kanban mostra o badge verde (faltam X dias) / vermelho (vencido há X dias).
+E sua segunda pergunta — *"ele vai direto pro Base depois de X dias até entrar na contagem?"* — sim, é exatamente isso que vai acontecer:
 
-### 2. Backfill leve (opcional mas recomendado)
+```text
+[Base de clientes] ──compra entra aqui──┐
+                                        │
+        (passa X dias parado aqui)      │
+                                        ▼
+                          [Hora de recontatar]  ← cron move só daqui pra cá
+                                        │
+                          (Gabi pega e trabalha)
+                                        │
+                    ┌───────────────────┼───────────────────┐
+                    ▼                   ▼                   ▼
+            [Em negociação]   [Aguardando resposta]   [Não fechou]
+                    │
+                    └─→ cron NÃO mexe mais (saiu da etapa de origem)
+```
 
-Rodar o script `docs/sql/step2-reprocess-leads-to-recompra.sql` mais uma vez para pegar qualquer venda dos últimos dias que entrou DEPOIS do nosso último backfill mas ANTES desse cadastro de produto.
+---
 
-### 3. Limpeza do webhook Guru
+## O que vou fazer
 
-Remover o `p_funnel_id: funnelId` da chamada `sync_lead_from_sale` no `supabase/functions/guru-webhook/index.ts` (linha 370). Argumento ignorado, gera ruído. Função principal — gravar a venda em `sales` com `funnel_id` — continua intacta.
+**1. Banco** (migration nova):
+- Adicionar coluna `auto_move_from_stage_id` em `lead_funnel_products` (qual etapa observar).
+- Migration de dados: pra todos os produtos já configurados, setar `auto_move_from_stage_id` = primeira etapa do funil ("Base de clientes").
 
-## Perguntas antes de executar
+**2. Edge Function `recontact-cron`** (ajuste cirúrgico):
+- Adicionar filtro: só processa posições onde `stage_id = auto_move_from_stage_id` do produto.
+- Se `auto_move_from_stage_id` for NULL (config antiga), mantém comportamento atual (compatibilidade).
 
-Preciso confirmar com você dois valores:
-- **Quantos dias** de recontato pra Articulabem? (90? 120? 180?)
-- **Qual etapa** do RECOMPRA - POTES o lead deve ir quando vencer? (nome da coluna no Kanban da Gabi: "Hora de recontatar"? "Recompra agora"?)
+**3. UI da configuração do produto** (`FunnelProductsConfig.tsx` no funil):
+- Novo dropdown: **"Observar leads na etapa"** (ao lado de "Mover para etapa").
+- Default na criação: primeira etapa do funil.
 
-Se você não souber de cabeça, eu rodo um SELECT no funil RECOMPRA pra te listar as etapas e algum produto já configurado lá pra você comparar, e você me responde.
+**4. Botão "Atualizar funil"** (`LeadFunnelDetail.tsx`):
+- Mesma lógica de filtro aplicada client-side (já que ele faz a mesma operação localmente).
 
-## Detalhes técnicos
+**5. Backfill do Articulabem RECOMPRA - POTES:**
+- Mapear "Articulabem" no funil RECOMPRA com:
+  - `recontact_days`: 90 (ajustável depois pelo SQL diagnóstico)
+  - `auto_move_from_stage_id`: "Base de clientes"
+  - `auto_move_stage_id`: "Hora de recontatar"
+- Reprocessar leads históricos pro funil RECOMPRA (já tinha o script `step2-reprocess-leads-to-recompra.sql`).
 
-**Arquivos envolvidos:**
-- `supabase/functions/guru-webhook/index.ts` (limpar `p_funnel_id`)
-- `lead_funnel_products` (insert do Articulabem no RECOMPRA)
-- `docs/sql/step2-reprocess-leads-to-recompra.sql` (rerun opcional)
+---
 
-**Tabelas que serão tocadas:**
-- INSERT em `lead_funnel_products` (1 linha)
-- Edge function redeployada (manual via dashboard, conforme nosso padrão)
+## O que NÃO vou mexer
 
-**Sem migrations de schema. Sem mudanças em RLS.**
+- Estrutura geral do funil, RLS, outras automações de WhatsApp.
+- Comportamento de funis sem `auto_move_from_stage_id` configurado (continua igual — backward compatible).
+- Lógica de soma linear de `recontact_days` quando o lead tem múltiplas compras (já funciona bem).
+
+---
+
+## Confirmação antes de codar
+
+Preciso só confirmar 2 coisas com você:
+
+1. **Nome da etapa de origem padrão**: vou usar **"Base de clientes"** (primeira etapa do funil RECOMPRA - POTES). Confere?
+2. **Nome da etapa de destino**: existe uma etapa chamada **"Hora de recontatar"** no funil? Se o nome for outro, me diga qual é (ou roda o Bloco 1 do `diagnose-articulabem-recompra.sql` que te passei antes que ele lista).
+
+Depois que aprovar e me responder essas 2, eu executo tudo de uma vez.
