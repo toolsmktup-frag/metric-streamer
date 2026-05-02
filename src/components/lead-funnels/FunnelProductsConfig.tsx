@@ -15,6 +15,7 @@ interface ProductRow {
   display_name: string;
   recontact_days: number | null;
   auto_move_stage_id: string | null;
+  auto_move_from_stage_id: string | null;
 }
 
 interface FunnelProductsConfigProps {
