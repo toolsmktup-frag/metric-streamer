@@ -136,6 +136,7 @@ const FunnelProductsConfig: React.FC<FunnelProductsConfigProps> = ({
                   display_name: cat.display_name || '',
                   recontact_days: cat.recontact_days,
                   auto_move_stage_id: null,
+                  auto_move_from_stage_id: defaultFromStageId,
                 },
               ]);
             }}>
