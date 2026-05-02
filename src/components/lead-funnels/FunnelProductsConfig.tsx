@@ -15,6 +15,7 @@ interface ProductRow {
   display_name: string;
   recontact_days: number | null;
   auto_move_stage_id: string | null;
+  auto_move_from_stage_id: string | null;
 }
 
 interface FunnelProductsConfigProps {
@@ -47,14 +48,25 @@ const FunnelProductsConfig: React.FC<FunnelProductsConfigProps> = ({
         display_name: p.display_name || '',
         recontact_days: p.recontact_days,
         auto_move_stage_id: p.auto_move_stage_id,
+        auto_move_from_stage_id: p.auto_move_from_stage_id,
       }))
     );
   }, [products]);
 
+  // Default origem = primeira etapa do funil (ex: "Base de clientes")
+  const defaultFromStageId = stages.length > 0 ? stages[0].id : null;
+
   const addProduct = () => {
     setLocalProducts(prev => [
       ...prev,
-      { source_funnel_product_id: null, product_name_contains: '', display_name: '', recontact_days: null, auto_move_stage_id: null },
+      {
+        source_funnel_product_id: null,
+        product_name_contains: '',
+        display_name: '',
+        recontact_days: null,
+        auto_move_stage_id: null,
+        auto_move_from_stage_id: defaultFromStageId,
+      },
     ]);
   };
 
@@ -82,6 +94,7 @@ const FunnelProductsConfig: React.FC<FunnelProductsConfigProps> = ({
         display_name: p.display_name.trim() || null,
         recontact_days: p.recontact_days,
         auto_move_stage_id: p.auto_move_stage_id,
+        auto_move_from_stage_id: p.auto_move_from_stage_id,
       }))
     );
   };
@@ -123,6 +136,7 @@ const FunnelProductsConfig: React.FC<FunnelProductsConfigProps> = ({
                   display_name: cat.display_name || '',
                   recontact_days: cat.recontact_days,
                   auto_move_stage_id: null,
+                  auto_move_from_stage_id: defaultFromStageId,
                 },
               ]);
             }}>
@@ -147,8 +161,8 @@ const FunnelProductsConfig: React.FC<FunnelProductsConfigProps> = ({
       </div>
 
       <p className="text-xs text-muted-foreground mb-3">
-        Configure os produtos deste funil e defina os dias para recontato (recompra). 
-        Ao definir "Mover para", leads vencidos serão movidos automaticamente todo dia à meia-noite (horário de Brasília) e também pelo botão "Atualizar Funil" no Kanban.
+        Configure os produtos deste funil e defina os dias para recontato (recompra).
+        O cron <strong>só move o lead se ele estiver na etapa "De"</strong> (default: primeira etapa do funil), preservando trabalho da vendedora em negociações.
       </p>
 
       <div className="space-y-2">
@@ -182,17 +196,33 @@ const FunnelProductsConfig: React.FC<FunnelProductsConfigProps> = ({
               className="w-20"
             />
             <Select
+              value={prod.auto_move_from_stage_id || 'none'}
+              onValueChange={v => updateProduct(idx, 'auto_move_from_stage_id', v === 'none' ? null : v)}
+            >
+              <SelectTrigger className="w-40" title="Só move o lead se ele estiver nesta etapa">
+                <SelectValue placeholder="De: etapa" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">De: qualquer etapa</SelectItem>
+                {stages.map(s => (
+                  <SelectItem key={s.id} value={s.id}>
+                    De: {s.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select
               value={prod.auto_move_stage_id || 'none'}
               onValueChange={v => updateProduct(idx, 'auto_move_stage_id', v === 'none' ? null : v)}
             >
               <SelectTrigger className="w-44" title="Mover lead vencido para esta etapa">
-                <SelectValue placeholder="Mover p/ etapa" />
+                <SelectValue placeholder="Para: etapa" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">Sem auto-mover</SelectItem>
                 {stages.map(s => (
                   <SelectItem key={s.id} value={s.id}>
-                    {s.name}
+                    Para: {s.name}
                   </SelectItem>
                 ))}
               </SelectContent>

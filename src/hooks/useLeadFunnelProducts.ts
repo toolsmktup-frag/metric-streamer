@@ -9,6 +9,7 @@ export interface LeadFunnelProduct {
   display_name: string | null;
   recontact_days: number | null;
   auto_move_stage_id: string | null;
+  auto_move_from_stage_id: string | null;
   created_at: string;
 }
 
@@ -68,6 +69,7 @@ export function useUpsertLeadFunnelProducts() {
             display_name: p.display_name,
             recontact_days: p.recontact_days,
             auto_move_stage_id: p.auto_move_stage_id,
+            auto_move_from_stage_id: p.auto_move_from_stage_id,
           })
           .eq('id', p.id);
       }
@@ -83,6 +85,7 @@ export function useUpsertLeadFunnelProducts() {
             display_name: p.display_name,
             recontact_days: p.recontact_days,
             auto_move_stage_id: p.auto_move_stage_id,
+            auto_move_from_stage_id: p.auto_move_from_stage_id,
           })));
         if (error) throw error;
       }

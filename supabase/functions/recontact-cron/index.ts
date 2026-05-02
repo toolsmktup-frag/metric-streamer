@@ -30,7 +30,7 @@ Deno.serve(async (req) => {
     // 1. Fetch all lead_funnel_products with recontact config
     const { data: products, error: prodErr } = await supabase
       .from("lead_funnel_products")
-      .select("id, lead_funnel_id, product_name_contains, display_name, recontact_days, auto_move_stage_id")
+      .select("id, lead_funnel_id, product_name_contains, display_name, recontact_days, auto_move_stage_id, auto_move_from_stage_id")
       .not("recontact_days", "is", null)
       .not("auto_move_stage_id", "is", null);
 
@@ -187,6 +187,17 @@ Deno.serve(async (req) => {
 
         // Already in target stage?
         if (pos.stage_id === lastMatchedProduct.auto_move_stage_id) continue;
+
+        // ─── FILTRO DE ETAPA DE ORIGEM ───
+        // Se o produto tem auto_move_from_stage_id configurado, só move se o
+        // lead estiver naquela etapa. Protege leads em negociação, aguardando
+        // resposta etc. de serem atropelados pelo cron.
+        if (
+          lastMatchedProduct.auto_move_from_stage_id &&
+          pos.stage_id !== lastMatchedProduct.auto_move_from_stage_id
+        ) {
+          continue;
+        }
 
         // Move lead
         const { error: moveErr } = await supabase

@@ -108,6 +108,14 @@ const LeadFunnelDetail: React.FC = () => {
           if (recontact.matchedProductId !== product.id) continue;
           if (pos.stage_id === product.auto_move_stage_id) continue;
 
+          // Filtro etapa de origem: só move se o lead estiver na etapa configurada
+          if (
+            product.auto_move_from_stage_id &&
+            pos.stage_id !== product.auto_move_from_stage_id
+          ) {
+            continue;
+          }
+
           const targetStage = stagesArr.find(s => s.id === product.auto_move_stage_id);
           await moveLeadStage.mutateAsync({
             positionId: pos.id,
