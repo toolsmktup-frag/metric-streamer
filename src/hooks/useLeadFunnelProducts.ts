@@ -9,6 +9,7 @@ export interface LeadFunnelProduct {
   display_name: string | null;
   recontact_days: number | null;
   auto_move_stage_id: string | null;
+  auto_move_from_stage_id: string | null;
   created_at: string;
 }
 
