@@ -188,6 +188,17 @@ Deno.serve(async (req) => {
         // Already in target stage?
         if (pos.stage_id === lastMatchedProduct.auto_move_stage_id) continue;
 
+        // ─── FILTRO DE ETAPA DE ORIGEM ───
+        // Se o produto tem auto_move_from_stage_id configurado, só move se o
+        // lead estiver naquela etapa. Protege leads em negociação, aguardando
+        // resposta etc. de serem atropelados pelo cron.
+        if (
+          lastMatchedProduct.auto_move_from_stage_id &&
+          pos.stage_id !== lastMatchedProduct.auto_move_from_stage_id
+        ) {
+          continue;
+        }
+
         // Move lead
         const { error: moveErr } = await supabase
           .from("lead_stage_positions")
