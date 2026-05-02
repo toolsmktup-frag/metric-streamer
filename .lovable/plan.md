@@ -1,56 +1,62 @@
-## Objetivo
+## Diagnóstico
 
-Dar ao vendedor controle manual sobre qual oferta o copiloto usa em cada conversa, sem perder o modo automático atual. Tudo dentro do painel do Copiloto (perto do botão "Sugerir resposta") — sem tocar na sidebar do lead.
+O Kanban da Gabi (RECOMPRA - POTES) não mostra os badges de recontato (verde/vermelho) para vendas **novas** porque elas não estão sendo posicionadas no funil RECOMPRA via webhook.
 
-## UX (no SalesCopilotPanel, acima dos botões de ação)
+**Causa raiz:**
 
-Adicionar um bloco compacto "Foco da oferta" com um Select:
+1. O webhook do Guru chama `sync_lead_from_sale` (RPC v5).
+2. A v5 roteia o lead para **todos os funis** cujo produto bate em:
+   - `lead_product_mappings.raw_product_name = product_name` (match exato), OU
+   - `lead_funnel_products.product_name_contains` ILIKE no nome do produto.
+3. O funil RECOMPRA - POTES (`19f75912-...`) **não tem** uma entrada em `lead_funnel_products` com `product_name_contains = 'articulabem'` apontando pra ele (ou tem mas não está casando).
+4. Sem essa entrada, o webhook não posiciona o lead no RECOMPRA, não cria `lead_event` com `funnel_id = recompra` → o hook `useBulkLeadPurchaseProducts` busca eventos filtrando por `funnel_id = recompra` e não encontra → `useRecontactDeadlines` não calcula → badge não aparece.
 
-```text
-Foco da oferta:  [ Automático (IA decide) ▼ ]
-                 ├─ Automático (IA decide)
-                 ├─ Ignorar ofertas (suporte/pós-venda)
-                 ├─ ⭐ Combo Erveiros + Alinhamento
-                 ├─ Curso dos Erveiros
-                 └─ Alinhamento com Ervas
-```
+Foi por isso que o reprocessamento manual (`docs/sql/step2-reprocess-leads-to-recompra.sql`) funcionou — ele pega eventos da BASE e replica no RECOMPRA. Mas vendas novas não passam por esse script.
 
-- **Automático** (padrão): comportamento atual — manda todas as ofertas ativas, IA escolhe.
-- **Ignorar ofertas**: não envia bloco de ofertas; system prompt instrui "modo suporte, não ofertar nada".
-- **Oferta específica**: envia só aquela oferta + instrução "FOCO: priorize esta oferta nesta conversa".
+**Bonus bug menor:** o Guru webhook passa `p_funnel_id` na chamada da RPC, mas a v5 não tem esse parâmetro (foi removido). Argumento é ignorado. Não quebra nada hoje, mas é lixo.
 
-A escolha fica salva **por conversa** (chave = `phone+instance_id`) em `localStorage`, persistindo entre recarregamentos. Ao trocar de conversa, volta pro padrão "Automático" se nunca foi setado.
+## Solução
 
-Mostro um badge sutil ("Foco: Combo Erveiros") perto do título do painel quando estiver em modo não-automático, pra deixar visível.
+### 1. Cadastrar produto Articulabem no funil RECOMPRA - POTES
 
-## Mudanças técnicas
+Inserir (ou garantir que exista) registro em `lead_funnel_products`:
 
-### 1. Frontend — `SalesCopilotPanel.tsx`
-- Carregar lista de ofertas ativas via `useSalesOffers` (já existe).
-- Novo state `offerMode`: `'auto' | 'ignore' | <offer_id>`.
-- Persistir em `localStorage` com chave `copilot-offer-mode:{instance_id}:{phone}`.
-- Passar `offer_mode` e `offer_id` no payload do `run()`.
+- `lead_funnel_id` = `19f75912-295e-4c67-acad-275ce6849c5c` (RECOMPRA - POTES)
+- `product_name_contains` = `articulabem`
+- `display_name` = `Articulabem`
+- `recontact_days` = valor que a Gabi usa hoje (ex: 90, 120, 180 — preciso confirmar com você)
+- `auto_move_stage_id` = etapa "Hora de recontatar" do funil RECOMPRA (preciso confirmar qual)
 
-### 2. Hook — `useSalesCopilot.ts`
-- Aceitar `offer_mode?: 'auto' | 'ignore' | 'specific'` e `offer_id?: string` em `RunArgs`, repassar no body do POST.
+Com isso:
+- Toda venda nova de Articulabem cai automaticamente no RECOMPRA - POTES via `sync_lead_from_sale`.
+- O cron `recontact-cron` move o lead pra etapa de recontato quando vencer.
+- O Kanban mostra o badge verde (faltam X dias) / vermelho (vencido há X dias).
 
-### 3. Edge Function — `supabase/functions/sales-copilot/index.ts`
-- Ler `offer_mode` e `offer_id` do body.
-- Lógica do bloco de ofertas:
-  - `ignore`: `offersBlock = "== OFERTAS ATIVAS ==\n(MODO SUPORTE: não ofertar produtos. Foco em tirar dúvidas e dar atendimento pós-venda.)"`
-  - `specific` + `offer_id`: filtra query por aquele id, prefixa com `"FOCO MANUAL: o vendedor selecionou esta oferta. Priorize-a na resposta, exceto se o cliente já recusou explicitamente."`
-  - `auto` (default): comportamento atual.
-- Edge function precisa ser **redeployada manualmente** no Supabase Dashboard (vou gerar `.txt` pronto pra colar, como das outras vezes).
+### 2. Backfill leve (opcional mas recomendado)
 
-## Detalhes técnicos relevantes
+Rodar o script `docs/sql/step2-reprocess-leads-to-recompra.sql` mais uma vez para pegar qualquer venda dos últimos dias que entrou DEPOIS do nosso último backfill mas ANTES desse cadastro de produto.
 
-- Não exige migration — `sales_copilot_offers` já tem tudo.
-- `useSalesOffers` já retorna ofertas ordenadas com `is_featured` (⭐) e `is_active`.
-- O filtro do select mostra só ofertas com `is_active = true`, com as featured no topo.
-- Sem mudança no `SalesCopilotButton.tsx` nem no `WhatsAppChat.tsx`.
+### 3. Limpeza do webhook Guru
 
-## Entrega
+Remover o `p_funnel_id: funnelId` da chamada `sync_lead_from_sale` no `supabase/functions/guru-webhook/index.ts` (linha 370). Argumento ignorado, gera ruído. Função principal — gravar a venda em `sales` com `funnel_id` — continua intacta.
 
-1. Atualizar 3 arquivos (`SalesCopilotPanel.tsx`, `useSalesCopilot.ts`, `sales-copilot/index.ts`).
-2. Gerar `/mnt/documents/sales-copilot-index.ts.txt` atualizado pra você colar no Supabase.
-3. Confirmar que o seletor aparece e a escolha persiste entre recarregamentos da mesma conversa.
+## Perguntas antes de executar
+
+Preciso confirmar com você dois valores:
+- **Quantos dias** de recontato pra Articulabem? (90? 120? 180?)
+- **Qual etapa** do RECOMPRA - POTES o lead deve ir quando vencer? (nome da coluna no Kanban da Gabi: "Hora de recontatar"? "Recompra agora"?)
+
+Se você não souber de cabeça, eu rodo um SELECT no funil RECOMPRA pra te listar as etapas e algum produto já configurado lá pra você comparar, e você me responde.
+
+## Detalhes técnicos
+
+**Arquivos envolvidos:**
+- `supabase/functions/guru-webhook/index.ts` (limpar `p_funnel_id`)
+- `lead_funnel_products` (insert do Articulabem no RECOMPRA)
+- `docs/sql/step2-reprocess-leads-to-recompra.sql` (rerun opcional)
+
+**Tabelas que serão tocadas:**
+- INSERT em `lead_funnel_products` (1 linha)
+- Edge function redeployada (manual via dashboard, conforme nosso padrão)
+
+**Sem migrations de schema. Sem mudanças em RLS.**
