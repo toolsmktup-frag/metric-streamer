@@ -48,14 +48,25 @@ const FunnelProductsConfig: React.FC<FunnelProductsConfigProps> = ({
         display_name: p.display_name || '',
         recontact_days: p.recontact_days,
         auto_move_stage_id: p.auto_move_stage_id,
+        auto_move_from_stage_id: p.auto_move_from_stage_id,
       }))
     );
   }, [products]);
 
+  // Default origem = primeira etapa do funil (ex: "Base de clientes")
+  const defaultFromStageId = stages.length > 0 ? stages[0].id : null;
+
   const addProduct = () => {
     setLocalProducts(prev => [
       ...prev,
-      { source_funnel_product_id: null, product_name_contains: '', display_name: '', recontact_days: null, auto_move_stage_id: null },
+      {
+        source_funnel_product_id: null,
+        product_name_contains: '',
+        display_name: '',
+        recontact_days: null,
+        auto_move_stage_id: null,
+        auto_move_from_stage_id: defaultFromStageId,
+      },
     ]);
   };
 
@@ -83,6 +94,7 @@ const FunnelProductsConfig: React.FC<FunnelProductsConfigProps> = ({
         display_name: p.display_name.trim() || null,
         recontact_days: p.recontact_days,
         auto_move_stage_id: p.auto_move_stage_id,
+        auto_move_from_stage_id: p.auto_move_from_stage_id,
       }))
     );
   };
