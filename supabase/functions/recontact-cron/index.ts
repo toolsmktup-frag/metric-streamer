@@ -30,7 +30,7 @@ Deno.serve(async (req) => {
     // 1. Fetch all lead_funnel_products with recontact config
     const { data: products, error: prodErr } = await supabase
       .from("lead_funnel_products")
-      .select("id, lead_funnel_id, product_name_contains, display_name, recontact_days, auto_move_stage_id")
+      .select("id, lead_funnel_id, product_name_contains, display_name, recontact_days, auto_move_stage_id, auto_move_from_stage_id")
       .not("recontact_days", "is", null)
       .not("auto_move_stage_id", "is", null);
 
