@@ -4,7 +4,7 @@ A função de "atualizar funil" (`recontact-cron` + botão na tela do funil) hoj
 
 1. Pega TODO lead que tá no funil RECOMPRA - POTES (não importa em que etapa).
 2. Calcula: data da última compra + dias de recontato.
-3. Se já venceu → **move pra etapa configurada** (ex: "Hora de recontatar").
+3. Se já venceu → **move pra etapa configurada** (ex: "Base de Recontato").
 
 **O bug que você notou:** ela move qualquer lead, inclusive os que estão em "Aguardando resposta", "Em negociação", "Contato enviado", "Não fechou". Ou seja, atropela o trabalho da Gabi.
 
