@@ -161,8 +161,8 @@ const FunnelProductsConfig: React.FC<FunnelProductsConfigProps> = ({
       </div>
 
       <p className="text-xs text-muted-foreground mb-3">
-        Configure os produtos deste funil e defina os dias para recontato (recompra). 
-        Ao definir "Mover para", leads vencidos serão movidos automaticamente todo dia à meia-noite (horário de Brasília) e também pelo botão "Atualizar Funil" no Kanban.
+        Configure os produtos deste funil e defina os dias para recontato (recompra).
+        O cron <strong>só move o lead se ele estiver na etapa "De"</strong> (default: primeira etapa do funil), preservando trabalho da vendedora em negociações.
       </p>
 
       <div className="space-y-2">
