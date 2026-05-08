@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Copy, Info } from 'lucide-react';
+import { Copy, Info, RefreshCw, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useSyncMeta, useMetaSyncStatus } from '@/hooks/useMetaData';
 
 const BASE_URL = 'https://emfbocpmphtftqcezaib.supabase.co/functions/v1';
 
@@ -77,6 +78,96 @@ function CopyField({ value }: { value: string }) {
   );
 }
 
+function MetaSyncCard() {
+  const syncMeta = useSyncMeta();
+  const { data: syncStatus } = useMetaSyncStatus();
+  const isRunning = syncStatus?.status === 'running' &&
+    !!syncStatus?.started_at &&
+    (Date.now() - new Date(syncStatus.started_at).getTime()) < 5 * 60 * 1000;
+  const isSyncing = syncMeta.isPending || isRunning;
+
+  const handleSync = (fullSync: boolean) => {
+    toast.info(fullSync ? 'Sincronização completa (30 dias) iniciada...' : 'Sincronizando hoje + ontem...');
+    syncMeta.mutate({ full_sync: fullSync }, {
+      onSuccess: (data: any) => {
+        if (data?.records_synced > 0) toast.success(`Sync OK! ${data.records_synced} registros`);
+        else toast.warning('Sync concluído mas nenhum registro retornado. Veja o status abaixo.');
+      },
+      onError: (err: any) => toast.error(`Erro no sync: ${err.message}`),
+    });
+  };
+
+  const lastFinished = syncStatus?.finished_at ? new Date(syncStatus.finished_at) : null;
+  const status = syncStatus?.status;
+
+  return (
+    <div className="rounded-lg border border-border bg-card p-6 space-y-4">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h3 className="font-semibold text-foreground flex items-center gap-2">
+            <span>🔵</span> Meta Ads (Facebook / Instagram)
+          </h3>
+          <p className="text-sm text-muted-foreground mt-1">
+            Sincroniza campanhas, conjuntos, anúncios e métricas das suas contas conectadas.
+          </p>
+        </div>
+        <div className="flex gap-2 shrink-0">
+          <button
+            onClick={() => handleSync(false)}
+            disabled={isSyncing}
+            className="inline-flex items-center gap-2 rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-50"
+          >
+            <RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+            {isSyncing ? 'Sincronizando...' : 'Sincronizar agora'}
+          </button>
+          <button
+            onClick={() => handleSync(true)}
+            disabled={isSyncing}
+            title="Últimos 30 dias completos"
+            className="inline-flex items-center gap-1 rounded-lg border border-border bg-card text-muted-foreground px-3 py-2 text-xs font-medium hover:text-foreground disabled:opacity-50"
+          >
+            30d
+          </button>
+        </div>
+      </div>
+
+      {syncStatus && (
+        <div className={`rounded-lg border p-3 text-sm flex items-start gap-2 ${
+          status === 'failed' ? 'border-destructive/40 bg-destructive/5 text-destructive' :
+          status === 'running' ? 'border-border bg-muted/40 text-muted-foreground' :
+          'border-border bg-muted/40 text-muted-foreground'
+        }`}>
+          {status === 'failed' ? <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" /> :
+           status === 'running' ? <Loader2 className="h-4 w-4 mt-0.5 shrink-0 animate-spin" /> :
+           <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0 text-green-600" />}
+          <div className="flex-1 min-w-0">
+            <div className="font-medium">
+              {status === 'failed' && 'Última sincronização falhou'}
+              {status === 'running' && 'Sincronização em andamento'}
+              {status === 'completed' && `Última sync OK — ${syncStatus.records_synced ?? 0} registros`}
+            </div>
+            {lastFinished && (
+              <div className="text-xs opacity-80 mt-0.5">
+                {lastFinished.toLocaleString('pt-BR')}
+              </div>
+            )}
+            {syncStatus.error && (
+              <div className="text-xs mt-1 break-words font-mono">
+                {syncStatus.error}
+              </div>
+            )}
+            {status === 'failed' && syncStatus.error?.includes('190') && (
+              <div className="text-xs mt-2 text-foreground">
+                ⚠️ Token Meta expirado. Gere um novo em developers.facebook.com e atualize o secret <code className="font-mono">META_ACCESS_TOKEN</code> no Supabase.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Integracoes() {
   const [platform, setPlatform] = useState<Platform>('guru');
   const info = PLATFORM_INFO[platform];
@@ -90,6 +181,8 @@ export default function Integracoes() {
           Configure webhooks para receber vendas automaticamente no Resumo Geral
         </p>
       </div>
+
+      <MetaSyncCard />
 
       {/* Seletor de plataforma */}
       <div className="flex gap-3 flex-wrap">
