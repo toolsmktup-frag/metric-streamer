@@ -157,6 +157,7 @@ Deno.serve(async (req) => {
       .single();
 
     let totalRecords = 0;
+    const phaseErrors: string[] = [];
 
     try {
     // Coleta IDs de contas de todos os funis + env var (fallback)
@@ -242,7 +243,7 @@ Deno.serve(async (req) => {
           else if (assigned > 0) console.log(`Auto-assigned ${assigned} campaigns to funnels`);
         } catch (e) { console.error("Auto-assign error:", e); }
 
-      } catch (e) { console.error("Phase 1 error:", e); }
+      } catch (e) { console.error("Phase 1 error:", e); phaseErrors.push(`P1:${e instanceof Error ? e.message : String(e)}`); }
 
       // ── PHASE 2: Adsets + Adset Insights (always) ──
       try {
@@ -281,7 +282,7 @@ Deno.serve(async (req) => {
 
         totalRecords += adsets.length + adsetInsightRows.length;
         console.log(`Phase 2 done: ${adsets.length} adsets, ${adsetInsightRows.length} insights (${Date.now() - t2}ms)`);
-      } catch (e) { console.error("Phase 2 error:", e); }
+      } catch (e) { console.error("Phase 2 error:", e); phaseErrors.push(`P2:${e instanceof Error ? e.message : String(e)}`); }
 
       // ── PHASE 3: Ads (always) ──
       try {
@@ -304,7 +305,7 @@ Deno.serve(async (req) => {
         if (adRows.length > 0) await batchUpsert(supabase, "meta_ads", adRows, "id");
         totalRecords += adRows.length;
         console.log(`Phase 3 done: ${adRows.length} ads (${Date.now() - t3}ms)`);
-      } catch (e) { console.error("Phase 3 error:", e); }
+      } catch (e) { console.error("Phase 3 error:", e); phaseErrors.push(`P3:${e instanceof Error ? e.message : String(e)}`); }
 
       // ── PHASE 4: Ad Insights (chunked) ──
       try {
@@ -352,24 +353,28 @@ Deno.serve(async (req) => {
             }
           } catch (chunkErr) {
             console.error(`Phase 4 chunk ${chunk.since}-${chunk.until} error:`, chunkErr);
+            phaseErrors.push(`P4[${chunk.since}]:${chunkErr instanceof Error ? chunkErr.message : String(chunkErr)}`);
           }
         }
 
         totalRecords += adInsightTotal;
         console.log(`Phase 4 done: ${adInsightTotal} ad insights (${Date.now() - t4}ms)`);
-      } catch (e) { console.error("Phase 4 error:", e); }
+      } catch (e) { console.error("Phase 4 error:", e); phaseErrors.push(`P4:${e instanceof Error ? e.message : String(e)}`); }
 
     } // fim do for (accountIds)
 
+      // Se 0 registros e houve erros, marcar como failed para o usuário ver o motivo (token inválido, etc.)
+      const allFailed = totalRecords === 0 && phaseErrors.length > 0;
       if (syncLog) {
         await supabase.from("meta_sync_log").update({
           finished_at: new Date().toISOString(),
-          status: "completed",
+          status: allFailed ? "failed" : "completed",
           records_synced: totalRecords,
+          error: phaseErrors.length > 0 ? phaseErrors.slice(0, 3).join(" | ").slice(0, 500) : null,
         }).eq("id", syncLog.id);
       }
 
-      console.log(`Sync ${syncMode} completed! Total records: ${totalRecords}`);
+      console.log(`Sync ${syncMode} ${allFailed ? "FAILED" : "completed"}! Total records: ${totalRecords}, errors: ${phaseErrors.length}`);
     } catch (error) {
       console.error("Sync error:", error);
       if (syncLog) {
