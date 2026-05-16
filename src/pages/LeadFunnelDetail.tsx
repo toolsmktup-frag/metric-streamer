@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useLeadFunnel, useUpdateLeadFunnel, useUpsertStages, useUpsertTransitionRules, useFunnelSourceNodes, useFunnelEdges, useSaveFunnelSourceNodes, useSaveFunnelEdges, useLeadFunnels, useUpsertLeadFunnelCampaigns } from '@/hooks/useLeadFunnels';
+import { useLeadFunnelStageMappings, useUpsertLeadFunnelStageMappings } from '@/hooks/useLeadFunnelStageMappings';
 import { useLeadCampaign, useLeadCampaigns } from '@/hooks/useLeadCampaigns';
 import { useLeadsByFunnel, useFunnelLeadCounts, useFunnelStageHistoryCounts } from '@/hooks/useLeads';
 import { useBulkLeadPurchases } from '@/hooks/useBulkLeadPurchases';
