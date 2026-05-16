@@ -383,7 +383,6 @@ const LeadCampaignsPage: React.FC = () => {
                             }
                           }}
                           onClick={(e) => e.stopPropagation()}
-                          onClick={(e) => e.stopPropagation()}
                           className="border border-input rounded-md px-2 py-1 text-xs bg-background max-w-[180px]"
                           title="Funil de tráfego"
                         >
