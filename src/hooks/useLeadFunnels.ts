@@ -284,3 +284,28 @@ export function useSaveFunnelEdges() {
     },
   });
 }
+
+// ===========================================================
+// Campanhas agregadas pelo funil (M:N) — funil "Visão Geral"
+// ===========================================================
+export function useUpsertLeadFunnelCampaigns() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ funnelId, campaignIds }: { funnelId: string; campaignIds: string[] }) => {
+      await (supabase as any).from('lead_funnel_campaigns').delete().eq('lead_funnel_id', funnelId);
+      if (campaignIds.length === 0) return [];
+      const { data, error } = await (supabase as any)
+        .from('lead_funnel_campaigns')
+        .insert(campaignIds.map(cid => ({ lead_funnel_id: funnelId, lead_campaign_id: cid })))
+        .select();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (_, { funnelId }) => {
+      qc.invalidateQueries({ queryKey: ['lead-funnel', funnelId] });
+      qc.invalidateQueries({ queryKey: ['lead-funnels'] });
+      qc.invalidateQueries({ queryKey: ['leads-by-funnel', funnelId] });
+      qc.invalidateQueries({ queryKey: ['funnel-lead-counts', funnelId] });
+    },
+  });
+}
