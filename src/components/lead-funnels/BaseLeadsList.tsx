@@ -36,8 +36,19 @@ const BaseLeadsList: React.FC<BaseLeadsListProps> = ({ positions, onLeadClick, o
   const [sortKey, setSortKey] = useState<SortKey>('ltv');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [page, setPage] = useState(1);
+  const [guruFilter, setGuruFilter] = useState<string>(() => {
+    if (typeof window === 'undefined') return 'all';
+    return localStorage.getItem('guru_account_filter') || 'all';
+  });
+  const { data: guruAccounts = [] } = useGuruAccounts();
 
   const { data: purchaseMap, isLoading: ltvLoading } = useBulkLeadPurchases(positions);
+
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('guru_account_filter', guruFilter);
+    }
+  }, [guruFilter]);
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) {
