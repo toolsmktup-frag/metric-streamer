@@ -1,70 +1,69 @@
-# Auditoria — Botão "Atualizar Funil" e lembrete de recontato (potes)
+# Plano — Lembrete "25 dias antes do pote acabar"
 
-## Como funciona hoje (mapa rápido)
+## Objetivo
+
+Avisar a vendedora (via Kanban + WhatsApp) que um cliente está prestes a ficar sem o pote, antes do prazo acabar — sem código novo, reusando a infra de recontato que já existe.
+
+## Abordagem (opção 1b)
+
+Criar uma **etapa intermediária "Lembrete 25d antes"** no funil RECOMPRA - POTES e configurar produtos espelhados com `recontact_days = produto_dias − 25`. O cron e o botão "Atualizar Funil" já existentes movem os leads automaticamente pra essa etapa quando faltam 25 dias.
 
 ```text
-                       ┌──────────────────────────────┐
-   lead_funnel_products│ recontact_days (ex.: 30, 90) │
-                       │ auto_move_from_stage_id      │  ← origem permitida
-                       │ auto_move_stage_id           │  ← destino (Recontato)
-                       └─────────────┬────────────────┘
-                                     │
-        ┌────────────────────────────┴──────────────────────────────┐
-        │                                                            │
-  Botão "Atualizar Funil"                              cron recontact-daily
-  (KanbanBoard → LeadFunnelDetail.                    (03:00 UTC todo dia)
-   handleBulkMoveOverdue)                              supabase/functions/
-                                                       recontact-cron
-        │                                                            │
-        └─────── mesma regra: só move se VENCIDO ───────────────────┘
-                 (daysRemaining < 0, isOverdue)
+Compra Aprovada ──(produto_dias − 25)──▶ Lembrete 25d antes ──(25 dias)──▶ Base de Recontato
+       │                                          │                                │
+       └─ lead comprou Pote 30d                   └─ vendedora vê card             └─ pote acabou,
+          dia 01/01                                  no dia 06/01 e                   move pra negociação
+                                                     manda WhatsApp
 ```
 
-UI mostra badge "faltam Xd / atrasado Yd" em cada card (`useRecontactDeadlines`) e permite ordenar a coluna por recontato. Não existe disparo automático de mensagem 25 dias antes — o sistema **só age depois que vence**.
+## Passos
 
-## Achados (do mais importante pro menor)
+1. **Criar etapa nova no Kanban** do funil `19f75912...` (RECOMPRA - POTES):
+   - Nome: `Lembrete 25d antes`
+   - Posição: entre "Compra Aprovada" e "Base de Recontato"
+   - Cor: laranja/amarelo (atenção, não urgência)
 
-### 1. "Lembrar 25 dias antes" NÃO existe hoje
-Tanto o botão quanto o cron só fazem uma coisa: **mover** o lead pra etapa de recontato **depois** que `purchase_date + recontact_days` já passou. Não há gatilho proativo "faltam N dias → manda WhatsApp" nem mudança de cor/etapa antecipada. A UI mostra o countdown, mas o sistema não dispara nada com base nele.
+2. **Duplicar configuração de produtos** em `lead_funnel_products`:
+   - Para cada produto com `recontact_days` (Pote 30, Pote 90, Pote 180, etc.), criar um segundo registro:
+     - `product_name_contains`: mesmo
+     - `recontact_days`: original − 25 (ex.: 30 → 5, 90 → 65, 180 → 155)
+     - `auto_move_from_stage_id`: "Compra Aprovada"
+     - `auto_move_stage_id`: nova etapa "Lembrete 25d antes"
+   - Os registros originais continuam levando de "Lembrete 25d antes" → "Base de Recontato" depois dos 25 dias finais.
+     - Ajustar `auto_move_from_stage_id` dos registros originais para apontar para "Lembrete 25d antes" (em vez de "Compra Aprovada").
+     - Ajustar `recontact_days` dos registros originais para `25` (os 25 dias restantes).
 
-Opções pra resolver (decidir depois):
-- a) Campo novo `remind_days_before` no `lead_funnel_products` + cron lê e dispara automação WhatsApp.
-- b) Etapa intermediária "Lembrete enviado" com `auto_move_stage_id` separado e `recontact_days = original − 25`. Reaproveita 100% da infra atual.
-- c) Trigger nativo na automação WZ por "dias desde última compra" (mais flexível, mais trabalho).
+3. **Conferir a soma linear**: a memória `recontact-system` soma `recontact_days` quando há múltiplas compras. Confirmar que o comportamento esperado para o lembrete também é cumulativo (cliente que comprou Pote 30 + Pote 90 vai pra "Lembrete" quando faltam 25d do total = dia 95).
 
-### 2. Botão e cron rodam regras LIGEIRAMENTE diferentes
-- **Botão** (`handleBulkMoveOverdue`, linha 95-141 de `LeadFunnelDetail.tsx`) chama `moveLeadStage.mutateAsync` → passa por toda a cadeia de regras (registra `stage_transition`, dispara realtime, pode acionar automações).
-- **Cron** (`recontact-cron/index.ts` linha 203-227) faz `UPDATE` direto em `lead_stage_positions` e só registra `lead_events { event_name: 'auto_recontact_move' }`.
+4. **(Opcional, mesma sessão) Ligar automação WhatsApp** na entrada da etapa "Lembrete 25d antes":
+   - Trigger: `lead_entered_stage` = "Lembrete 25d antes"
+   - Mensagem: "Oi {{nome}}, seu pote está acabando em ~25 dias. Quer já garantir o próximo?"
+   - Reusa a infra `wz-automation` que já existe.
 
-Consequência: um lead movido pelo cron não aparece nos relatórios de movimentação por etapa do mesmo jeito que um movido pelo botão. Risco médio — dashboards de transição podem subcontar.
+## Riscos / pontos de atenção
 
-### 3. Soma de `recontact_days` pode confundir
-Ambos somam: se o lead comprou Pote 30d + Pote 90d, o deadline = última compra + 120 dias. Isso é a memória `recontact-system` (linear accumulation) — mas pro caso "vendi 30d e quero recontatar pra vender 90d" o usuário talvez espere **30 dias do produto inicial**, não 120. Vale confirmar a intenção com a Gabi.
+- **Mexe na produção do funil mais crítico** — fazer numa janela de baixo movimento e validar com 1-2 leads de teste antes.
+- **Cards vão acumular numa etapa nova** — pré-aviso pra Gabi de que vai aparecer coluna nova no Kanban.
+- **Soma linear** (item 3) pode surpreender: confirmar com a Gabi se "25d antes do total acumulado" é o que ela quer, ou se prefere "25d antes da próxima compra individual".
+- **Não unifica botão + cron** — os relatórios de transição continuam com leve inconsistência (achado #2 da auditoria). Fica pra um próximo passo se necessário.
 
-### 4. Match por substring é frágil
-`product_name_contains` usa `includes()` case-insensitive sem ordenação. Se houver dois produtos cadastrados ("Articulabem" e "Articulabem Premium"), o primeiro a casar ganha — pode pegar o errado. Já existem `lead_product_mappings` (match explícito) com prioridade correta, então só dá problema quando o mapping não está preenchido.
+## O que NÃO vai ser feito agora
 
-### 5. Date parsing diverge entre UI e cron
-- UI usa `parseLocalDateTime` (timezone local consistente).
-- Cron faz parsing manual: `dd/MM/yyyy` vira meia-noite **local do servidor (UTC)**, ISO usa UTC direto. Em datas de borda (compra às 22h BRT do dia X) pode dar 1 dia de diferença entre o que aparece na UI e o que o cron decide.
-
-### 6. Sem feedback de saúde
-Hoje não dá pra saber, sem ler logs do cron, **se ele rodou ontem** ou quantos leads moveu. Único sinal é o `lead_events.event_name = 'auto_recontact_move'`.
-
-## Sugestão de próximos passos (escolher um)
-
-1. **Implementar lembrete proativo (#1)** — mais valor pro negócio, é a dor real (avisar antes do pote acabar). Opção (b) é a mais barata: criar uma etapa "Lembrete 25d antes" e configurar `recontact_days = produto_dias − 25`. Zero código novo.
-2. **Unificar botão + cron (#2)** — fazer o cron chamar a mesma RPC/rota que o botão, garantindo logs consistentes.
-3. **Painel de saúde** — pequeno card no topo do funil mostrando "última execução do cron, X leads movidos, Y vencidos pendentes".
-4. **Tudo junto** — escopo médio, ~1 dia de trabalho.
-
-Não recomendo mexer nos itens 3-5 agora a menos que apareça caso concreto — são riscos teóricos.
+- Painel de saúde do cron (achado #6)
+- Unificar lógica botão vs cron (achado #2)
+- Reescrever date parsing (achado #5)
+- Refinar match por substring (achado #4)
 
 ## Detalhes técnicos (referência)
 
-- Arquivos centrais: `src/pages/LeadFunnelDetail.tsx` (95-141), `src/components/lead-funnels/KanbanBoard.tsx` (298-318), `src/hooks/useRecontactDeadlines.ts`, `supabase/functions/recontact-cron/index.ts`.
-- Schema: `lead_funnel_products.{recontact_days, auto_move_stage_id, auto_move_from_stage_id}` (migrações em `docs/migration_recontact_cron.sql` + `docs/sql/setup-recompra-compra-aprovada-to-base-recontato.sql`).
-- Cron: `pg_cron` `'recontact-daily'`, `0 3 * * *` (00h BRT) chamando edge function via `pg_net`.
-- Filtro de origem: se `auto_move_from_stage_id` está setado, só move leads naquela etapa (protege quem está em negociação) — já funciona corretamente nos dois caminhos.
+- Tabela: `public.lead_funnel_products` (colunas `recontact_days`, `auto_move_from_stage_id`, `auto_move_stage_id`)
+- Etapas: `public.lead_funnel_stages` (criar nova com `funnel_id = 19f75912...`)
+- Cron: `recontact-daily` já roda 00h BRT, não precisa mudar
+- Botão: `handleBulkMoveOverdue` em `LeadFunnelDetail.tsx` já cobre o novo fluxo
+- SQL de setup: criar arquivo `docs/sql/setup-lembrete-25d-antes.sql` espelhando o padrão de `setup-recompra-compra-aprovada-to-base-recontato.sql`
 
-Me diz qual dos 4 caminhos seguir e eu detalho.
+## Entrega
+
+1. SQL pronto pra colar no Supabase Dashboard (criação da etapa + upsert dos `lead_funnel_products`)
+2. Instruções curtas pra Gabi de como configurar a automação WhatsApp na nova etapa
+3. Checklist de validação com 1-2 leads de teste
