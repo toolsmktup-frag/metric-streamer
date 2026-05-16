@@ -49,6 +49,8 @@ const FunnelProductsConfig: React.FC<FunnelProductsConfigProps> = ({
         product_name_contains: p.product_name_contains,
         display_name: p.display_name || '',
         recontact_days: p.recontact_days,
+        pot_duration_days: p.pot_duration_days,
+        reminder_days_before: p.reminder_days_before,
         auto_move_stage_id: p.auto_move_stage_id,
         auto_move_from_stage_id: p.auto_move_from_stage_id,
       }))
@@ -70,6 +72,8 @@ const FunnelProductsConfig: React.FC<FunnelProductsConfigProps> = ({
         product_name_contains: '',
         display_name: '',
         recontact_days: null,
+        pot_duration_days: null,
+        reminder_days_before: null,
         auto_move_stage_id: null,
         auto_move_from_stage_id: defaultFromStageId,
       },
@@ -78,7 +82,17 @@ const FunnelProductsConfig: React.FC<FunnelProductsConfigProps> = ({
 
   const updateProduct = (idx: number, field: keyof ProductRow, value: string | number | null) => {
     setLocalProducts(prev =>
-      prev.map((p, i) => (i === idx ? { ...p, [field]: value } : p))
+      prev.map((p, i) => {
+        if (i !== idx) return p;
+        const next = { ...p, [field]: value } as ProductRow;
+        // Auto-calcular recontact_days quando os 2 campos novos estiverem preenchidos
+        if (field === 'pot_duration_days' || field === 'reminder_days_before') {
+          if (next.pot_duration_days != null && next.reminder_days_before != null) {
+            next.recontact_days = Math.max(next.pot_duration_days - next.reminder_days_before, 1);
+          }
+        }
+        return next;
+      })
     );
   };
 
@@ -99,6 +113,8 @@ const FunnelProductsConfig: React.FC<FunnelProductsConfigProps> = ({
         product_name_contains: p.product_name_contains.trim(),
         display_name: p.display_name.trim() || null,
         recontact_days: p.recontact_days,
+        pot_duration_days: p.pot_duration_days,
+        reminder_days_before: p.reminder_days_before,
         auto_move_stage_id: p.auto_move_stage_id,
         auto_move_from_stage_id: p.auto_move_from_stage_id,
       }))
