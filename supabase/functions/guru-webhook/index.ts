@@ -338,6 +338,7 @@ Deno.serve(async (req) => {
       gclid,
       checkout_url:           checkoutUrl,
       page_url:               pageUrl,
+      guru_account_slug:      guruAccountSlug,
     };
 
     const { error } = await supabase
