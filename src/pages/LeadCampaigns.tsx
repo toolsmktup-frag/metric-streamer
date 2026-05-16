@@ -8,7 +8,7 @@ import FunnelAccessManager from '@/components/lead-funnels/FunnelAccessManager';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Plus, Trash2, ChevronRight, Layers, Users, Link2 } from 'lucide-react';
+import { Plus, Trash2, ChevronRight, Layers, Users, Link2, Pencil } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
@@ -243,6 +243,26 @@ const LeadCampaignsPage: React.FC = () => {
               <div className="flex items-center gap-2">
                 <span className="h-3 w-3 rounded-full" style={{ backgroundColor: campaign.color }} />
                 <h2 className="font-semibold text-foreground">{campaign.name}</h2>
+                {isAdmin && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 w-6 p-0"
+                    title="Renomear campanha"
+                    onClick={async () => {
+                      const novo = window.prompt('Novo nome da campanha:', campaign.name);
+                      if (!novo || novo.trim() === '' || novo === campaign.name) return;
+                      try {
+                        await updateCampaign.mutateAsync({ id: campaign.id, name: novo.trim() } as any);
+                        toast.success('Campanha renomeada');
+                      } catch {
+                        toast.error('Erro ao renomear campanha');
+                      }
+                    }}
+                  >
+                    <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                  </Button>
+                )}
                 <span className="text-xs text-muted-foreground">({funnels.length} funis)</span>
               </div>
               {isAdmin && (
@@ -319,6 +339,25 @@ const LeadCampaignsPage: React.FC = () => {
                   <div className="flex items-center gap-1 shrink-0">
                     {isAdmin && (
                       <>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0"
+                          title="Renomear funil"
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            const novo = window.prompt('Novo nome do funil:', funnel.name);
+                            if (!novo || novo.trim() === '' || novo === funnel.name) return;
+                            try {
+                              await updateLeadFunnel.mutateAsync({ id: funnel.id, name: novo.trim() } as any);
+                              toast.success('Funil renomeado');
+                            } catch {
+                              toast.error('Erro ao renomear funil');
+                            }
+                          }}
+                        >
+                          <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                        </Button>
                         <select
                           value={funnel.ignore_traffic_funnel ? IGNORE_VALUE : (funnel.traffic_funnel_id || '')}
                           onChange={async (e) => {
