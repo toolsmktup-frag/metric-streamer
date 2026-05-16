@@ -64,7 +64,7 @@ export function useLeadPurchases(email: string | null, phone: string | null) {
 
       const { data: purchases, error } = await supabase
         .from('customer_purchases')
-        .select('id, product_name, gross_amount, net_amount, status, purchased_at, platform, product_type, offer_name, payment_method, installments')
+        .select('id, product_name, gross_amount, net_amount, status, purchased_at, platform, product_type, offer_name, payment_method, installments, guru_account_slug')
         .eq('unified_customer_id', customerId)
         .order('purchased_at', { ascending: false });
 
