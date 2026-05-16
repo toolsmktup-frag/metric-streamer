@@ -271,9 +271,12 @@ const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, onWhatsAppClick,
       )}
 
 
-      {/* Context badges (produto/status) */}
-      {(lead.metadata?.product_name || lead.metadata?.status) && (
+      {/* Context badges (produto/status/conta Guru) */}
+      {(lead.metadata?.product_name || lead.metadata?.status || lead.metadata?.guru_account) && (
         <div className="mt-1 flex items-center gap-1.5 flex-wrap ml-[42px]">
+          {lead.metadata?.guru_account && (
+            <GuruAccountBadge slug={lead.metadata.guru_account as string} />
+          )}
           {lead.metadata?.product_name && (
             <span className="text-[10px] px-1.5 py-0.5 bg-primary/10 text-primary rounded font-medium truncate max-w-[140px]">
               {lead.metadata.product_name as string}
