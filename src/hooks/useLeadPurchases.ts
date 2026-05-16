@@ -13,6 +13,7 @@ export interface LeadPurchase {
   offer_name: string | null;
   payment_method: string | null;
   installments: number | null;
+  guru_account_slug: string | null;
 }
 
 export interface LeadPurchaseSummary {
