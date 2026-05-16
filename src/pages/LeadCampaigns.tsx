@@ -339,23 +339,26 @@ const LeadCampaignsPage: React.FC = () => {
                   <div className="flex items-center gap-1 shrink-0">
                     {isAdmin && (
                       <>
-                        <select
-                          value={funnel.ignore_traffic_funnel ? IGNORE_VALUE : (funnel.traffic_funnel_id || '')}
-                          onChange={async (e) => {
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0"
+                          title="Renomear funil"
+                          onClick={async (e) => {
                             e.stopPropagation();
-                            const raw = e.target.value;
-                            const isIgnore = raw === IGNORE_VALUE;
-                            const tfId = isIgnore ? null : (raw || null);
+                            const novo = window.prompt('Novo nome do funil:', funnel.name);
+                            if (!novo || novo.trim() === '' || novo === funnel.name) return;
                             try {
-                              await updateLeadFunnel.mutateAsync({
-                                id: funnel.id,
-                                traffic_funnel_id: tfId,
-                                ignore_traffic_funnel: isIgnore,
-                              } as any);
-                              toast.success(
-                                isIgnore
-                                  ? 'Funil de tráfego ignorado'
-                                  : tfId
+                              await updateLeadFunnel.mutateAsync({ id: funnel.id, name: novo.trim() } as any);
+                              toast.success('Funil renomeado');
+                            } catch {
+                              toast.error('Erro ao renomear funil');
+                            }
+                          }}
+                        >
+                          <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                        </Button>
+                        <select
                                     ? 'Funil de tráfego associado!'
                                     : 'Herdando funil da campanha'
                               );
