@@ -320,16 +320,22 @@ const LeadCampaignsPage: React.FC = () => {
                     {isAdmin && (
                       <>
                         <select
-                          value={funnel.traffic_funnel_id === IGNORE_FUNNEL_ID ? IGNORE_FUNNEL_ID : (funnel.traffic_funnel_id || '')}
+                          value={funnel.ignore_traffic_funnel ? IGNORE_VALUE : (funnel.traffic_funnel_id || '')}
                           onChange={async (e) => {
                             e.stopPropagation();
-                            const val = e.target.value === IGNORE_FUNNEL_ID ? IGNORE_FUNNEL_ID : (e.target.value || null);
+                            const raw = e.target.value;
+                            const isIgnore = raw === IGNORE_VALUE;
+                            const tfId = isIgnore ? null : (raw || null);
                             try {
-                              await updateLeadFunnel.mutateAsync({ id: funnel.id, traffic_funnel_id: val });
+                              await updateLeadFunnel.mutateAsync({
+                                id: funnel.id,
+                                traffic_funnel_id: tfId,
+                                ignore_traffic_funnel: isIgnore,
+                              } as any);
                               toast.success(
-                                val === IGNORE_FUNNEL_ID
+                                isIgnore
                                   ? 'Funil de tráfego ignorado'
-                                  : val
+                                  : tfId
                                     ? 'Funil de tráfego associado!'
                                     : 'Herdando funil da campanha'
                               );
@@ -342,11 +348,13 @@ const LeadCampaignsPage: React.FC = () => {
                           title="Funil de tráfego"
                         >
                           <option value="">
-                            {campaign.traffic_funnel_id
-                              ? `↳ ${trafficFunnels.find(tf => tf.id === campaign.traffic_funnel_id)?.name || 'Campanha'}`
-                              : 'Herdar da campanha'}
+                            {campaign.ignore_traffic_funnel
+                              ? '↳ (campanha ignora)'
+                              : campaign.traffic_funnel_id
+                                ? `↳ ${trafficFunnels.find(tf => tf.id === campaign.traffic_funnel_id)?.name || 'Campanha'}`
+                                : 'Herdar da campanha'}
                           </option>
-                          <option value={IGNORE_FUNNEL_ID}>🚫 Ignorar funil de tráfego</option>
+                          <option value={IGNORE_VALUE}>🚫 Ignorar funil de tráfego</option>
                           {trafficFunnels.map(tf => (
                             <option key={tf.id} value={tf.id}>{tf.name}</option>
                           ))}
@@ -406,16 +414,22 @@ const LeadCampaignsPage: React.FC = () => {
                   {isAdmin && (
                     <>
                       <select
-                        value={funnel.traffic_funnel_id === IGNORE_FUNNEL_ID ? IGNORE_FUNNEL_ID : (funnel.traffic_funnel_id || '')}
+                        value={funnel.ignore_traffic_funnel ? IGNORE_VALUE : (funnel.traffic_funnel_id || '')}
                         onChange={async (e) => {
                           e.stopPropagation();
-                          const val = e.target.value === IGNORE_FUNNEL_ID ? IGNORE_FUNNEL_ID : (e.target.value || null);
+                          const raw = e.target.value;
+                          const isIgnore = raw === IGNORE_VALUE;
+                          const tfId = isIgnore ? null : (raw || null);
                           try {
-                            await updateLeadFunnel.mutateAsync({ id: funnel.id, traffic_funnel_id: val });
+                            await updateLeadFunnel.mutateAsync({
+                              id: funnel.id,
+                              traffic_funnel_id: tfId,
+                              ignore_traffic_funnel: isIgnore,
+                            } as any);
                             toast.success(
-                              val === IGNORE_FUNNEL_ID
+                              isIgnore
                                 ? 'Funil de tráfego ignorado'
-                                : val
+                                : tfId
                                   ? 'Funil de tráfego associado!'
                                   : 'Funil de tráfego removido'
                             );
@@ -428,7 +442,7 @@ const LeadCampaignsPage: React.FC = () => {
                         title="Funil de tráfego"
                       >
                         <option value="">Sem funil de tráfego</option>
-                        <option value={IGNORE_FUNNEL_ID}>🚫 Ignorar funil de tráfego</option>
+                        <option value={IGNORE_VALUE}>🚫 Ignorar funil de tráfego</option>
                         {trafficFunnels.map(tf => (
                           <option key={tf.id} value={tf.id}>{tf.name}</option>
                         ))}
