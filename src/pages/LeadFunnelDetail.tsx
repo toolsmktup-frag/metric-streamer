@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useLeadFunnel, useUpdateLeadFunnel, useUpsertStages, useUpsertTransitionRules, useFunnelSourceNodes, useFunnelEdges, useSaveFunnelSourceNodes, useSaveFunnelEdges, useLeadFunnels, useUpsertLeadFunnelCampaigns } from '@/hooks/useLeadFunnels';
+import { useLeadFunnelStageMappings, useUpsertLeadFunnelStageMappings } from '@/hooks/useLeadFunnelStageMappings';
 import { useLeadCampaign, useLeadCampaigns } from '@/hooks/useLeadCampaigns';
 import { useLeadsByFunnel, useFunnelLeadCounts, useFunnelStageHistoryCounts } from '@/hooks/useLeads';
 import { useBulkLeadPurchases } from '@/hooks/useBulkLeadPurchases';
@@ -75,10 +76,20 @@ const LeadFunnelDetail: React.FC = () => {
     return map;
   }, [funnel?.lead_funnel_stages]);
 
+  const { data: stageMappings = [] } = useLeadFunnelStageMappings(id ?? null);
+  const upsertStageMappings = useUpsertLeadFunnelStageMappings();
+
+  const sourceStageIdToTargetStageIdMap = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const row of stageMappings) m[row.source_stage_id] = row.target_stage_id;
+    return m;
+  }, [stageMappings]);
+
   const { data: positions = [] } = useLeadsByFunnel(id ?? null, {
     refetchInterval: isAdmin ? false : 5000,
     aggregateFromFunnelIds,
     stageNameToIdMap,
+    sourceStageIdToTargetStageIdMap,
   });
   const { data: leadCounts = {} } = useFunnelLeadCounts(id ?? null);
   const { data: historicalLeadCounts = {} } = useFunnelStageHistoryCounts(id ?? null);
@@ -508,6 +519,17 @@ const LeadFunnelDetail: React.FC = () => {
                 }
               }}
               savingLinkedCampaigns={upsertLeadFunnelCampaigns.isPending}
+              aggregatedSourceFunnelIds={aggregateFromFunnelIds}
+              stageMappings={stageMappings}
+              onSaveStageMappings={async (mappings) => {
+                try {
+                  await upsertStageMappings.mutateAsync({ targetFunnelId: funnel.id, mappings });
+                  toast.success('Mapeamento de etapas salvo!');
+                } catch {
+                  toast.error('Erro ao salvar mapeamento de etapas');
+                }
+              }}
+              savingStageMappings={upsertStageMappings.isPending}
             />
           </TabsContent>
         )}

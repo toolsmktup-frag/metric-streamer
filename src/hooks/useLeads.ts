@@ -45,15 +45,19 @@ export function useLeadsByFunnel(
     refetchInterval?: number | false;
     /** Funis adicionais cujos lead_stage_positions devem ser agregados (visão geral). */
     aggregateFromFunnelIds?: string[];
-    /** Mapa stage_name (lowercase) → stage_id do funil destino. Posições agregadas com stage_name não-mapeado são descartadas. */
+    /** Mapa stage_name (lowercase) → stage_id do funil destino. Fallback usado quando não há mapeamento explícito. */
     stageNameToIdMap?: Record<string, string>;
+    /** Mapa source_stage_id → target_stage_id (mapeamento explícito). Tem precedência sobre stageNameToIdMap. */
+    sourceStageIdToTargetStageIdMap?: Record<string, string>;
   }
 ) {
   const extraIds = (options?.aggregateFromFunnelIds || []).filter(Boolean);
   const stageMap = options?.stageNameToIdMap || {};
+  const explicitMap = options?.sourceStageIdToTargetStageIdMap || {};
   const stageMapKey = Object.keys(stageMap).sort().map(k => `${k}:${stageMap[k]}`).join('|');
+  const explicitMapKey = Object.keys(explicitMap).sort().map(k => `${k}:${explicitMap[k]}`).join('|');
   return useQuery({
-    queryKey: ['leads-by-funnel', funnelId, extraIds.slice().sort().join(','), stageMapKey],
+    queryKey: ['leads-by-funnel', funnelId, extraIds.slice().sort().join(','), stageMapKey, explicitMapKey],
     queryFn: async () => {
       if (!funnelId) return [];
       const own = await fetchAllRows<LeadStagePosition & { lead: Lead }>(
@@ -80,8 +84,10 @@ export function useLeadsByFunnel(
           srcStageIdToName[s.id] = (s.name || '').trim().toLowerCase();
         }
         for (const p of srcPositions) {
+          // Precedência: mapeamento explícito por source_stage_id; fallback por nome.
+          const explicit = explicitMap[p.stage_id];
           const nm = srcStageIdToName[p.stage_id];
-          const remapped = nm ? stageMap[nm] : undefined;
+          const remapped = explicit || (nm ? stageMap[nm] : undefined);
           if (!remapped) continue;
           aggregated.push({ ...p, stage_id: remapped, funnel_id: funnelId });
         }

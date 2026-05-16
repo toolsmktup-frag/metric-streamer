@@ -17,6 +17,7 @@ import FunnelAutomationsConfig from './FunnelAutomationsConfig';
 import WhatsAppGroupSyncConfig from './WhatsAppGroupSyncConfig';
 import RedistributeLeadsDialog from './RedistributeLeadsDialog';
 import ProductMappingConfig from './ProductMappingConfig';
+import StageMappingConfig from './StageMappingConfig';
 import { getDefaultClassification, classificationLabel } from '@/lib/valueClassification';
 
 import type { LeadFunnelProduct } from '@/hooks/useLeadFunnelProducts';
@@ -61,6 +62,11 @@ interface FunnelConfigTabProps {
   linkedCampaignIds?: string[];
   onSaveLinkedCampaigns?: (ids: string[]) => void;
   savingLinkedCampaigns?: boolean;
+  // Mapeamento de etapas (visão geral)
+  aggregatedSourceFunnelIds?: string[];
+  stageMappings?: import('@/hooks/useLeadFunnelStageMappings').LeadFunnelStageMapping[];
+  onSaveStageMappings?: (mappings: { source_stage_id: string; target_stage_id: string }[]) => void;
+  savingStageMappings?: boolean;
 }
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
@@ -75,7 +81,7 @@ const CANONICAL_EVENTS = [
   { value: 'canceled', label: 'Cancelado' },
 ];
 
-const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSaveStages, onSaveRules, saving, funnelId, funnelName, leadFunnelProducts = [], catalogProducts = [], onSaveProducts, savingProducts, onBulkMoveOverdue, bulkMoving, distinctLeadProducts = [], existingMappings = [], onSaveMappings, savingMappings, loadingDistinctProducts, positions = [], trafficFunnels = [], currentTrafficFunnelId, onTrafficFunnelChange, savingTrafficFunnel, metaPixelId, metaAccessToken, onMetaPixelChange, savingMetaPixel, allCampaigns = [], linkedCampaignIds = [], onSaveLinkedCampaigns, savingLinkedCampaigns }) => {
+const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSaveStages, onSaveRules, saving, funnelId, funnelName, leadFunnelProducts = [], catalogProducts = [], onSaveProducts, savingProducts, onBulkMoveOverdue, bulkMoving, distinctLeadProducts = [], existingMappings = [], onSaveMappings, savingMappings, loadingDistinctProducts, positions = [], trafficFunnels = [], currentTrafficFunnelId, onTrafficFunnelChange, savingTrafficFunnel, metaPixelId, metaAccessToken, onMetaPixelChange, savingMetaPixel, allCampaigns = [], linkedCampaignIds = [], onSaveLinkedCampaigns, savingLinkedCampaigns, aggregatedSourceFunnelIds = [], stageMappings = [], onSaveStageMappings, savingStageMappings }) => {
   const [localStages, setLocalStages] = useState<Partial<LeadFunnelStage>[]>(
     stages.length ? stages : [{ name: 'Novo Lead', color: COLORS[0], sort_order: 0 }]
   );
@@ -490,6 +496,17 @@ const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSave
                 {savingLinkedCampaigns ? 'Salvando...' : 'Salvar campanhas agregadas'}
               </Button>
             </div>
+          )}
+
+          {funnelId && onSaveStageMappings && aggregatedSourceFunnelIds.length > 0 && (
+            <StageMappingConfig
+              targetFunnelId={funnelId}
+              targetStages={stages as any}
+              sourceFunnelIds={aggregatedSourceFunnelIds}
+              existingMappings={stageMappings}
+              onSave={onSaveStageMappings}
+              saving={savingStageMappings}
+            />
           )}
 
           {onMetaPixelChange && (
