@@ -104,7 +104,8 @@ BEGIN
         display_name, recontact_days, auto_move_from_stage_id, auto_move_stage_id
       ) VALUES (
         v_funnel_id, r.source_funnel_product_id, r.product_name_contains,
-        r.display_name, r.recontact_days - 25, v_compra_aprovada_id, v_lembrete_id
+        COALESCE(r.display_name, r.product_name_contains) || ' — Lembrete (' || (r.recontact_days - 25) || 'd)',
+        r.recontact_days - 25, v_compra_aprovada_id, v_lembrete_id
       );
       v_novos := v_novos + 1;
     END IF;
@@ -113,7 +114,8 @@ BEGIN
     UPDATE public.lead_funnel_products
     SET recontact_days = 25,
         auto_move_from_stage_id = v_lembrete_id,
-        auto_move_stage_id = v_base_recontato_id
+        auto_move_stage_id = v_base_recontato_id,
+        display_name = regexp_replace(COALESCE(display_name, product_name_contains), ' — (Lembrete|Recontato).*$', '') || ' — Recontato (25d finais)'
     WHERE id = r.id;
     v_originais := v_originais + 1;
   END LOOP;
