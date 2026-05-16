@@ -1,82 +1,77 @@
-# Funil de leads geral com seleção de campanhas
+# Mapeamento explícito de etapas no Funil Visão Geral
 
-## O problema hoje
+## O que muda pro usuário
 
-Cada **funil de leads** (`lead_funnels`) está amarrado a **uma única campanha** (`campaign_id`). Não dá pra ter um funil "Geral" que mostre, por exemplo, leads das campanhas A + C + E juntas num mesmo Kanban.
+Hoje o Visão Geral só mostra leads de funis agregados quando o **nome da etapa é idêntico**. Como cada funil filho tem suas próprias etapas (Articulabem ≠ SuperVita), nada aparece.
 
-## Recomendação (best practice)
+Vamos adicionar um **"de-para" de etapas**: para cada funil agregado, você escolhe manualmente qual etapa dele cai em qual coluna do Visão Geral. Etapas não-mapeadas simplesmente não aparecem (com opção futura de "Outros").
 
-Transformar a relação funil ↔ campanha em **muitos-para-muitos**, mantendo `campaign_id` como "campanha primária" pra retrocompatibilidade. Isso permite:
+### Fluxo de uso
 
-- Criar um funil **"Visão Geral"** (ou quantos quiser) que agrega leads de N campanhas escolhidas a dedo.
-- Manter funis dedicados por campanha como hoje (continuam funcionando).
-- Atribuição de novos leads continua usando `campaign_id` (a "dona" da venda), e os funis adicionais só **espelham** a visualização.
+1. No Visão Geral → **Configuração → Integrações → Campanhas agregadas**, marca as campanhas (como já faz hoje).
+2. Logo abaixo, aparece um bloco novo **"Mapeamento de etapas"**, agrupado por funil de origem:
+   ```text
+   ─ SuperVita ─────────────────────────
+     Lead novo        → [Novos       ▼]
+     Em contato       → [Atendimento ▼]
+     Venda fechada    → [Ganho       ▼]
+     Sem interesse    → [— Ignorar — ]
+   
+   ─ Articulabem ───────────────────────
+     Captura          → [Novos       ▼]
+     ...
+   ```
+3. Salva. O Kanban do Visão Geral passa a mostrar os leads nas colunas certas, independente de como cada funil filho nomeou suas etapas.
 
-Essa é a abordagem padrão pra CRM com múltiplas origens: separar **propriedade do dado** (campaign_id da venda) da **visibilidade em pipelines** (M:N).
-
-### Alternativas consideradas
-
-1. **Filtro client-side no Kanban** (selecionar campanhas e filtrar leads exibidos). Mais simples, mas é só uma view temporária — sem regras de automação, sem permissão por funil, sem persistência.
-2. **Tags em vez de M:N**. Funciona, mas mistura conceitos (tag de lead vs. tag de funil) e dificulta permissão granular por funil.
-
-**Vamos com a opção M:N**, que é a mais limpa e escala melhor.
-
-## Como vai funcionar pro usuário
-
-1. Na tela de criar/editar funil aparece um novo bloco **"Campanhas incluídas"** com multi-select de todas as `lead_campaigns` da org.
-2. Marque "Visão Geral" como tipo e selecione as campanhas A, C, E → o Kanban desse funil passa a mostrar leads dessas 3 campanhas.
-3. Funis existentes continuam intactos — automaticamente entram com a `campaign_id` atual já marcada no multi-select.
+**Fallback automático:** se o usuário não configurou o mapeamento ainda, mantemos o comportamento atual de casar por nome (case-insensitive) — assim quem já padronizou nomes continua funcionando sem reconfigurar.
 
 ## Detalhes técnicos
 
-**Migration nova (rodar manual no Supabase):**
+### Nova tabela (migration manual)
 
 ```sql
-CREATE TABLE public.lead_funnel_campaigns (
+CREATE TABLE public.lead_funnel_stage_mappings (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  lead_funnel_id uuid NOT NULL REFERENCES public.lead_funnels(id) ON DELETE CASCADE,
-  lead_campaign_id uuid NOT NULL REFERENCES public.lead_campaigns(id) ON DELETE CASCADE,
+  target_funnel_id uuid NOT NULL REFERENCES public.lead_funnels(id) ON DELETE CASCADE,
+  source_stage_id  uuid NOT NULL REFERENCES public.lead_funnel_stages(id) ON DELETE CASCADE,
+  target_stage_id  uuid NOT NULL REFERENCES public.lead_funnel_stages(id) ON DELETE CASCADE,
   created_at timestamptz DEFAULT now(),
-  UNIQUE(lead_funnel_id, lead_campaign_id)
+  UNIQUE(target_funnel_id, source_stage_id)
 );
-
-CREATE INDEX idx_lfc_funnel ON public.lead_funnel_campaigns(lead_funnel_id);
-CREATE INDEX idx_lfc_campaign ON public.lead_funnel_campaigns(lead_campaign_id);
-
-ALTER TABLE public.lead_funnel_campaigns ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "lfc_all" ON public.lead_funnel_campaigns
+CREATE INDEX idx_lfsm_target ON public.lead_funnel_stage_mappings(target_funnel_id);
+ALTER TABLE public.lead_funnel_stage_mappings ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "lfsm_all" ON public.lead_funnel_stage_mappings
 FOR ALL TO authenticated
 USING (EXISTS (SELECT 1 FROM public.lead_funnels lf
-  WHERE lf.id = lead_funnel_campaigns.lead_funnel_id
-    AND lf.organization_id = public.get_user_org_id()))
+  WHERE lf.id = target_funnel_id AND lf.organization_id = public.get_user_org_id()))
 WITH CHECK (EXISTS (SELECT 1 FROM public.lead_funnels lf
-  WHERE lf.id = lead_funnel_campaigns.lead_funnel_id
-    AND lf.organization_id = public.get_user_org_id()));
-
--- Backfill: copia o campaign_id atual pra tabela nova
-INSERT INTO public.lead_funnel_campaigns (lead_funnel_id, lead_campaign_id)
-SELECT id, campaign_id FROM public.lead_funnels
-WHERE campaign_id IS NOT NULL
-ON CONFLICT DO NOTHING;
+  WHERE lf.id = target_funnel_id AND lf.organization_id = public.get_user_org_id()));
 ```
 
-**Frontend:**
+Semântica: `target_funnel_id` = funil Visão Geral; `source_stage_id` = etapa do funil filho; `target_stage_id` = coluna do Visão Geral. UNIQUE garante que cada etapa de origem aponta pra um único destino.
 
-- `useLeadFunnels.ts` → na query incluir `lead_funnel_campaigns(lead_campaign_id)`. Quando buscar leads do funil, montar a lista de campanhas: `[funnel.campaign_id, ...funnel.lead_funnel_campaigns.map(...)]` (dedup) e filtrar `lead.metadata->>campaign_id` por `.in(...)`.
-- Novo hook `useUpsertLeadFunnelCampaigns(funnelId, campaignIds[])` → delete + insert (mesmo padrão de `useUpsertFunnelProducts`).
-- `LeadFunnelDetail.tsx` (ou modal de edição): adicionar bloco "Campanhas incluídas" com multi-select usando `useLeadCampaigns()`.
-- Badge no header do funil mostrando quantas campanhas estão incluídas (ex: "3 campanhas").
+### Hooks e tipos
 
-**Compatibilidade:** `campaign_id` continua existindo e funcionando como campanha primária. Nada quebra; só ganha capacidade adicional.
+- `src/hooks/useLeadFunnelStageMappings.ts` (novo): `useStageMappings(targetFunnelId)` e `useUpsertStageMappings(targetFunnelId, rows[])` (delete + insert).
+- `src/hooks/useLeads.ts → useLeadsByFunnel`: substituir o `stageNameToIdMap` por um `sourceStageIdToTargetStageIdMap` quando houver mapeamento explícito; manter o fallback por nome quando o mapa estiver vazio.
+- `src/pages/LeadFunnelDetail.tsx`: carrega `useStageMappings`, monta o mapa e passa pro `useLeadsByFunnel`.
+
+### UI
+
+- Novo componente `src/components/lead-funnels/StageMappingConfig.tsx`, renderizado em `FunnelConfigTab.tsx` logo abaixo do bloco de "Campanhas agregadas". Lista etapas dos funis agregados (via `useLeadFunnelStages`) e mostra um `<Select>` por linha com as etapas do funil destino + opção "— Ignorar —".
+
+### Compatibilidade
+
+- Mapeamento vazio → cai no comportamento atual (match por nome). Quem já tem padrão funcionando não precisa mexer.
+- Funis dedicados (não-Visão-Geral) não são afetados — a tabela só é lida quando há campanhas agregadas.
 
 ## Arquivos afetados
 
-- `docs/migration_lead_funnel_campaigns.sql` (novo — rodar manual)
-- `src/hooks/useLeadFunnels.ts` (incluir relação + filtro multi-campanha)
-- `src/hooks/useUpsertLeadFunnelCampaigns.ts` (novo)
-- `src/types/leadFunnels.ts` (adicionar `lead_funnel_campaigns?: {...}[]`)
-- `src/pages/LeadFunnelDetail.tsx` (UI multi-select + badge)
-- `src/pages/LeadCampaigns.tsx` (badge "N campanhas" nos cards de funil, opcional)
+- `docs/migration_lead_funnel_stage_mappings.sql` (novo — rodar manual)
+- `src/hooks/useLeadFunnelStageMappings.ts` (novo)
+- `src/hooks/useLeads.ts` (estender `useLeadsByFunnel`)
+- `src/components/lead-funnels/StageMappingConfig.tsx` (novo)
+- `src/components/lead-funnels/FunnelConfigTab.tsx` (incluir o novo bloco)
+- `src/pages/LeadFunnelDetail.tsx` (carregar mapeamento + passar pro hook)
 
 Nenhuma edge function precisa ser tocada.
