@@ -83,6 +83,8 @@ const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSave
   const [redistributeOpen, setRedistributeOpen] = useState(false);
   const [localPixelId, setLocalPixelId] = useState(metaPixelId || '');
   const [localAccessToken, setLocalAccessToken] = useState(metaAccessToken || '');
+  const [localLinkedCampaigns, setLocalLinkedCampaigns] = useState<string[]>(linkedCampaignIds);
+  useEffect(() => { setLocalLinkedCampaigns(linkedCampaignIds); }, [linkedCampaignIds.join(',')]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
