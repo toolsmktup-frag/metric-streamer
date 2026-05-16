@@ -91,6 +91,7 @@ const LeadFunnelDetail: React.FC = () => {
   const upsertStages = useUpsertStages();
   const upsertRules = useUpsertTransitionRules();
   const updateLeadFunnel = useUpdateLeadFunnel();
+  const upsertLeadFunnelCampaigns = useUpsertLeadFunnelCampaigns();
   const upsertLeadProducts = useUpsertLeadFunnelProducts();
   const saveProductMappings = useSaveLeadProductMappings();
   const saveSourceNodes = useSaveFunnelSourceNodes();
