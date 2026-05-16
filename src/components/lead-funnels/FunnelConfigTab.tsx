@@ -17,6 +17,7 @@ import FunnelAutomationsConfig from './FunnelAutomationsConfig';
 import WhatsAppGroupSyncConfig from './WhatsAppGroupSyncConfig';
 import RedistributeLeadsDialog from './RedistributeLeadsDialog';
 import ProductMappingConfig from './ProductMappingConfig';
+import StageMappingConfig from './StageMappingConfig';
 import { getDefaultClassification, classificationLabel } from '@/lib/valueClassification';
 
 import type { LeadFunnelProduct } from '@/hooks/useLeadFunnelProducts';
