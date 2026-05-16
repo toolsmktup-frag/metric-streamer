@@ -7,6 +7,7 @@ import { formatLocalDateTime } from '@/lib/localDate';
 import { differenceInDays } from 'date-fns';
 import type { RecontactInfo } from '@/hooks/useRecontactDeadlines';
 import LeadAssignSelect from './LeadAssignSelect';
+import GuruAccountBadge from '@/components/GuruAccountBadge';
 import { extractMetadataAmount, classificationColor, classificationLabel } from '@/lib/valueClassification';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useMoveLeadStage } from '@/hooks/useMoveLeadStage';
