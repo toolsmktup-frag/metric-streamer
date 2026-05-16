@@ -282,6 +282,22 @@ Deno.serve(async (req) => {
     const checkoutUrl = tracking.checkout_url || sale.checkout_url || payload.checkout_url || queryParams.checkout_url || null;
     const pageUrl = tracking.page_url || queryParams.page || payload.page_url || payload.page || null;
 
+    // ── Resolver conta Guru pelo api_token (Soulnaturi vs Articulabem etc.) ──
+    let guruAccountSlug: string | null = null;
+    const apiToken = payload.api_token || null;
+    if (apiToken) {
+      try {
+        const { data: acc } = await supabase
+          .from("guru_accounts")
+          .select("account_slug")
+          .eq("api_token", apiToken)
+          .maybeSingle();
+        guruAccountSlug = acc?.account_slug ?? null;
+      } catch (e) {
+        console.error("guru_accounts lookup failed (non-fatal):", e);
+      }
+    }
+
     const record = {
       organization_id:        "00000000-0000-0000-0000-000000000001",
       unified_customer_id:    unifiedCustomerId,
@@ -322,6 +338,7 @@ Deno.serve(async (req) => {
       gclid,
       checkout_url:           checkoutUrl,
       page_url:               pageUrl,
+      guru_account_slug:      guruAccountSlug,
     };
 
     const { error } = await supabase
@@ -370,6 +387,7 @@ Deno.serve(async (req) => {
           p_funnel_id: funnelId,
           p_metadata: {
             platform: "guru",
+            guru_account: guruAccountSlug,
             transaction_id: String(transactionId || ""),
             product_name: productName,
             status: normalizedStatus,

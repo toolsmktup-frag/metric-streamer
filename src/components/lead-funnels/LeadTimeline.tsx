@@ -13,6 +13,7 @@ import { parseLocalDateTime } from '@/lib/localDate';
 import LeadAssignSelect from './LeadAssignSelect';
 import { useCurrentUserRole } from '@/hooks/useCurrentUserRole';
 import { supabase } from '@/integrations/supabase/client';
+import GuruAccountBadge from '@/components/GuruAccountBadge';
 
 interface LeadTimelineProps {
   lead: Lead | null;
@@ -197,6 +198,7 @@ const LeadTimeline: React.FC<LeadTimelineProps> = ({ lead, open, onClose }) => {
                             <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 font-medium">
                               {p.platform}
                             </Badge>
+                            <GuruAccountBadge slug={p.guru_account_slug} />
                             {p.product_type && (
                               <span className="text-muted-foreground flex items-center gap-0.5">
                                 <CreditCard className="h-2.5 w-2.5" /> {p.product_type}
