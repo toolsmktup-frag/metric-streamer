@@ -519,6 +519,17 @@ const LeadFunnelDetail: React.FC = () => {
                 }
               }}
               savingLinkedCampaigns={upsertLeadFunnelCampaigns.isPending}
+              aggregatedSourceFunnelIds={aggregateFromFunnelIds}
+              stageMappings={stageMappings}
+              onSaveStageMappings={async (mappings) => {
+                try {
+                  await upsertStageMappings.mutateAsync({ targetFunnelId: funnel.id, mappings });
+                  toast.success('Mapeamento de etapas salvo!');
+                } catch {
+                  toast.error('Erro ao salvar mapeamento de etapas');
+                }
+              }}
+              savingStageMappings={upsertStageMappings.isPending}
             />
           </TabsContent>
         )}
