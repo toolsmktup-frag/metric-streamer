@@ -1,52 +1,42 @@
-# Marcar origem da conta Guru (Soulnaturi vs Articulabem)
+# Mostrar origem da conta Guru na UI
 
-Mantém **1 funil só**, mas cada venda e cada lead passam a carregar a conta Guru de origem, para que dashboards, Kanban e relatórios consigam filtrar/segmentar por marca.
+A migration já rodou e a edge function `guru-webhook` já está gravando `guru_account_slug` em `customer_purchases` + `metadata.guru_account` no lead. Falta exibir e filtrar por essa origem nos lugares onde o usuário precisa enxergar de qual conta (Soulnaturi / Articulabem) a venda veio.
 
-## Mapeamento das contas
+## O que entregar
 
-| api_token (Guru) | Conta / Marca |
-|---|---|
-| `9fmDLyGxbcXGqcZyTJb8Kcb1BjhY8xwfrEprE7t6` | **Soulnaturi** |
-| `O3yB6USrrplTojFXy7jltjhviNujOHUE35ITGYjz` | **Articulabem** |
+1. **Badge da conta no LeadCard (Kanban)**
+   - No `KanbanBoard` cada `LeadCard` mostra um chip pequeno colorido com o `display_name` da conta (cor vinda de `guru_accounts.color`).
+   - Fonte: `lead.metadata.guru_account` (já presente) cruzado com o hook `useGuruAccounts`.
+   - Se não tiver conta mapeada, não renderiza nada.
 
-Mapa fica configurável (não hardcoded no código) — guardado em uma tabela ou JSON de config para você poder adicionar/renomear contas futuramente sem precisar redeployar edge function.
+2. **Filtro por conta Guru em Vendas (`/vendas`)**
+   - Adicionar um `Select` "Conta Guru" ao lado dos filtros existentes em `Vendas.tsx`.
+   - Opções vêm de `useGuruAccounts` ("Todas" + cada conta).
+   - Aplica filtro client-side em cima de `v_all_sales.guru_account_slug` (já exposto pela view).
+   - Mostrar também uma coluna/badge "Conta" na tabela de vendas.
 
-## O que muda
+3. **Filtro por conta Guru na Base de Leads (`/leads-base` ou `LeadsList`)**
+   - Mesmo padrão: `Select` de conta + badge na linha.
+   - Filtro feito no server-side onde já existe paginação (`metadata->>guru_account`).
 
-### 1. Banco — nova coluna + tabela de mapa
-- Nova tabela `guru_accounts` (`api_token` PK, `account_slug`, `display_name`, `color`) — cadastro das duas contas.
-- Nova coluna `customer_purchases.guru_account_slug` (text, nullable, indexada).
-- Atualizar a view `v_all_sales` para expor `guru_account_slug` e `guru_account_name` (JOIN com `guru_accounts`).
-
-### 2. Webhook Guru (`supabase/functions/guru-webhook/index.ts`)
-- Extrair `payload.api_token`, resolver contra `guru_accounts`, gravar `guru_account_slug` no `customer_purchases`.
-- Passar `guru_account: <slug>` dentro do `p_metadata` do `sync_lead_from_sale` → fica salvo no `lead.metadata` e no `lead_events.metadata`.
-- Aplicar tag automática no lead: `origem:soulnaturi` ou `origem:articulabem` (via `lead_tags`), pra usar em filtros e router de automações WhatsApp.
-
-### 3. Backfill (1x)
-Script SQL que percorre `customer_purchases` onde `platform='guru'` e popula `guru_account_slug` a partir de `raw_data->>'api_token'`. Também tagueia os leads associados.
-
-### 4. UI — visibilidade da origem
-- **Vendas** (`/vendas`): novo filtro "Conta Guru" no topo (Todas / Soulnaturi / Articulabem) + coluna/badge colorido na linha da venda.
-- **Lead Detail** (drawer/sidebar): badge da conta Guru visível ao lado do nome do produto na timeline de compras.
-- **Kanban**: badge pequeno (cor por conta) no card do lead quando ele tem origem Guru identificada.
-- **Dashboard CRM**: card de KPI "Vendas por conta" (Soulnaturi vs Articulabem) — split simples por contagem e receita.
-
-### 5. Automações WhatsApp (preparação, sem alterar fluxos existentes)
-A tag `origem:soulnaturi` / `origem:articulabem` aplicada no lead já permite que você use o **Router por Tag** nas automações existentes — não precisa mexer em flow nenhum agora, só ganha a capacidade de bifurcar quando quiser.
-
-## Ordem de execução
-
-1. Migration: cria `guru_accounts`, coluna `guru_account_slug`, atualiza `v_all_sales`.
-2. Seed: insere as 2 contas (Soulnaturi e Articulabem) na `guru_accounts`.
-3. Patch no `guru-webhook` (deploy manual no Supabase Dashboard — você cola).
-4. Backfill SQL (você roda no Dashboard).
-5. UI: filtro e badges em Vendas, Lead Detail, Kanban, KPI.
+4. **Badge da conta na lista de funis / detalhe**
+   - Em `LeadFunnelDetail` (cabeçalho do lead) mostrar o `GuruAccountBadge` já criado, ao lado do nome.
 
 ## Detalhes técnicos
 
-- `guru_account_slug` em vez de `account_id` direto pra ficar legível em filtros/URLs (`?conta=soulnaturi`).
-- View `v_all_sales` resolve o `display_name` no JOIN para o front consumir já formatado.
-- Tag aplicada via insert idempotente em `lead_tags` (não duplica se já existir).
-- Cores das contas guardadas em `guru_accounts.color` (HSL) → frontend usa direto, sem hardcode.
-- Nada quebra retroativo: coluna nullable, view tolera NULL, UI mostra "—" quando origem desconhecida.
+- Hook `useGuruAccounts` (já existe) retorna `{ slug, display_name, color }[]` — usar como fonte única de cor/nome.
+- Componente `GuruAccountBadge` (já existe) é reutilizado em todos os lugares.
+- Nenhuma migration nova. Nenhum deploy de edge function novo.
+- Filtro de Vendas: server-side em `v_all_sales` via `.eq('guru_account_slug', slug)`.
+- Filtro de Base de Leads: usar `metadata->>guru_account` no `.eq()` do supabase-js.
+- Persistir filtro selecionado em `localStorage` (`guru_account_filter`) pra manter entre navegações.
+
+## Arquivos afetados
+
+- `src/components/lead-funnels/LeadCard.tsx` (badge)
+- `src/components/lead-funnels/KanbanBoard.tsx` (passar conta pro card se preciso)
+- `src/pages/Vendas.tsx` (select + coluna)
+- `src/pages/LeadsList.tsx` ou `BaseLeadsList.tsx` (select + badge + filtro server-side)
+- `src/pages/LeadFunnelDetail.tsx` (badge no header)
+
+Sem mexer em backend.
