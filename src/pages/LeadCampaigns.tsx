@@ -8,7 +8,7 @@ import FunnelAccessManager from '@/components/lead-funnels/FunnelAccessManager';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Plus, Trash2, ChevronRight, Layers, Users, Link2 } from 'lucide-react';
+import { Plus, Trash2, ChevronRight, Layers, Users, Link2, Pencil } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
