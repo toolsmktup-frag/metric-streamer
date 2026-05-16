@@ -7,6 +7,7 @@ import { formatLocalDateTime } from '@/lib/localDate';
 import { differenceInDays } from 'date-fns';
 import type { RecontactInfo } from '@/hooks/useRecontactDeadlines';
 import LeadAssignSelect from './LeadAssignSelect';
+import GuruAccountBadge from '@/components/GuruAccountBadge';
 import { extractMetadataAmount, classificationColor, classificationLabel } from '@/lib/valueClassification';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useMoveLeadStage } from '@/hooks/useMoveLeadStage';
@@ -270,9 +271,12 @@ const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, onWhatsAppClick,
       )}
 
 
-      {/* Context badges (produto/status) */}
-      {(lead.metadata?.product_name || lead.metadata?.status) && (
+      {/* Context badges (produto/status/conta Guru) */}
+      {(lead.metadata?.product_name || lead.metadata?.status || lead.metadata?.guru_account) && (
         <div className="mt-1 flex items-center gap-1.5 flex-wrap ml-[42px]">
+          {lead.metadata?.guru_account && (
+            <GuruAccountBadge slug={lead.metadata.guru_account as string} />
+          )}
           {lead.metadata?.product_name && (
             <span className="text-[10px] px-1.5 py-0.5 bg-primary/10 text-primary rounded font-medium truncate max-w-[140px]">
               {lead.metadata.product_name as string}

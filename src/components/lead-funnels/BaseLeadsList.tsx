@@ -13,6 +13,8 @@ import {
 } from '@/components/ui/pagination';
 import { Search, Users, DollarSign, ShoppingCart, TrendingUp, MessageCircle, ChevronUp, ChevronDown, Timer } from 'lucide-react';
 import { useBulkLeadPurchases, type PurchaseSummary } from '@/hooks/useBulkLeadPurchases';
+import { useGuruAccounts } from '@/hooks/useGuruAccounts';
+import GuruAccountBadge from '@/components/GuruAccountBadge';
 import { formatCurrency } from '@/lib/formatters';
 import type { Lead, LeadStagePosition } from '@/types/leadFunnels';
 import type { RecontactInfo } from '@/hooks/useRecontactDeadlines';
@@ -34,8 +36,19 @@ const BaseLeadsList: React.FC<BaseLeadsListProps> = ({ positions, onLeadClick, o
   const [sortKey, setSortKey] = useState<SortKey>('ltv');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [page, setPage] = useState(1);
+  const [guruFilter, setGuruFilter] = useState<string>(() => {
+    if (typeof window === 'undefined') return 'all';
+    return localStorage.getItem('guru_account_filter') || 'all';
+  });
+  const { data: guruAccounts = [] } = useGuruAccounts();
 
   const { data: purchaseMap, isLoading: ltvLoading } = useBulkLeadPurchases(positions);
+
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('guru_account_filter', guruFilter);
+    }
+  }, [guruFilter]);
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -56,6 +69,10 @@ const BaseLeadsList: React.FC<BaseLeadsListProps> = ({ positions, onLeadClick, o
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
     let list = positions.filter(p => {
+      if (guruFilter !== 'all') {
+        const slug = (p.lead.metadata as any)?.guru_account;
+        if (slug !== guruFilter) return false;
+      }
       if (!q) return true;
       const name = p.lead.name || '';
       return (
@@ -97,7 +114,7 @@ const BaseLeadsList: React.FC<BaseLeadsListProps> = ({ positions, onLeadClick, o
     });
 
     return list;
-  }, [positions, search, sortKey, sortDir, purchaseMap, recontactMap]);
+  }, [positions, search, sortKey, sortDir, purchaseMap, recontactMap, guruFilter]);
 
   // Summary stats
   const stats = useMemo(() => {
@@ -190,15 +207,30 @@ const BaseLeadsList: React.FC<BaseLeadsListProps> = ({ positions, onLeadClick, o
         </Card>
       </div>
 
-      {/* Search */}
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Buscar por nome, email ou telefone..."
-          value={search}
-          onChange={e => { setSearch(e.target.value); setPage(1); }}
-          className="pl-9"
-        />
+      {/* Search + Guru account filter */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative max-w-sm flex-1 min-w-[200px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar por nome, email ou telefone..."
+            value={search}
+            onChange={e => { setSearch(e.target.value); setPage(1); }}
+            className="pl-9"
+          />
+        </div>
+        {guruAccounts.length > 0 && (
+          <select
+            value={guruFilter}
+            onChange={e => { setGuruFilter(e.target.value); setPage(1); }}
+            className="rounded-md border border-border bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring h-10"
+            title="Filtrar por conta Guru"
+          >
+            <option value="all">Todas as contas</option>
+            {guruAccounts.map(a => (
+              <option key={a.account_slug} value={a.account_slug}>{a.display_name}</option>
+            ))}
+          </select>
+        )}
       </div>
 
       {/* Table */}
@@ -266,7 +298,12 @@ const BaseLeadsList: React.FC<BaseLeadsListProps> = ({ positions, onLeadClick, o
                     className="cursor-pointer"
                     onClick={() => onLeadClick(p.lead_id)}
                   >
-                    <TableCell className="font-medium text-foreground">{name}</TableCell>
+                    <TableCell className="font-medium text-foreground">
+                      <div className="flex items-center gap-2">
+                        <span>{name}</span>
+                        <GuruAccountBadge slug={(p.lead.metadata as any)?.guru_account} />
+                      </div>
+                    </TableCell>
                     <TableCell className="text-muted-foreground text-xs">{p.lead.email || '—'}</TableCell>
                     <TableCell className="text-muted-foreground text-xs">{p.lead.phone || '—'}</TableCell>
                     <TableCell className="text-right font-mono text-foreground">
