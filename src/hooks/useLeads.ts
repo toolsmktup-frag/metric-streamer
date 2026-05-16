@@ -84,8 +84,10 @@ export function useLeadsByFunnel(
           srcStageIdToName[s.id] = (s.name || '').trim().toLowerCase();
         }
         for (const p of srcPositions) {
+          // Precedência: mapeamento explícito por source_stage_id; fallback por nome.
+          const explicit = explicitMap[p.stage_id];
           const nm = srcStageIdToName[p.stage_id];
-          const remapped = nm ? stageMap[nm] : undefined;
+          const remapped = explicit || (nm ? stageMap[nm] : undefined);
           if (!remapped) continue;
           aggregated.push({ ...p, stage_id: remapped, funnel_id: funnelId });
         }
