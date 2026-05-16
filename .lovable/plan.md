@@ -1,42 +1,82 @@
-# Mostrar origem da conta Guru na UI
+# Funil de leads geral com seleção de campanhas
 
-A migration já rodou e a edge function `guru-webhook` já está gravando `guru_account_slug` em `customer_purchases` + `metadata.guru_account` no lead. Falta exibir e filtrar por essa origem nos lugares onde o usuário precisa enxergar de qual conta (Soulnaturi / Articulabem) a venda veio.
+## O problema hoje
 
-## O que entregar
+Cada **funil de leads** (`lead_funnels`) está amarrado a **uma única campanha** (`campaign_id`). Não dá pra ter um funil "Geral" que mostre, por exemplo, leads das campanhas A + C + E juntas num mesmo Kanban.
 
-1. **Badge da conta no LeadCard (Kanban)**
-   - No `KanbanBoard` cada `LeadCard` mostra um chip pequeno colorido com o `display_name` da conta (cor vinda de `guru_accounts.color`).
-   - Fonte: `lead.metadata.guru_account` (já presente) cruzado com o hook `useGuruAccounts`.
-   - Se não tiver conta mapeada, não renderiza nada.
+## Recomendação (best practice)
 
-2. **Filtro por conta Guru em Vendas (`/vendas`)**
-   - Adicionar um `Select` "Conta Guru" ao lado dos filtros existentes em `Vendas.tsx`.
-   - Opções vêm de `useGuruAccounts` ("Todas" + cada conta).
-   - Aplica filtro client-side em cima de `v_all_sales.guru_account_slug` (já exposto pela view).
-   - Mostrar também uma coluna/badge "Conta" na tabela de vendas.
+Transformar a relação funil ↔ campanha em **muitos-para-muitos**, mantendo `campaign_id` como "campanha primária" pra retrocompatibilidade. Isso permite:
 
-3. **Filtro por conta Guru na Base de Leads (`/leads-base` ou `LeadsList`)**
-   - Mesmo padrão: `Select` de conta + badge na linha.
-   - Filtro feito no server-side onde já existe paginação (`metadata->>guru_account`).
+- Criar um funil **"Visão Geral"** (ou quantos quiser) que agrega leads de N campanhas escolhidas a dedo.
+- Manter funis dedicados por campanha como hoje (continuam funcionando).
+- Atribuição de novos leads continua usando `campaign_id` (a "dona" da venda), e os funis adicionais só **espelham** a visualização.
 
-4. **Badge da conta na lista de funis / detalhe**
-   - Em `LeadFunnelDetail` (cabeçalho do lead) mostrar o `GuruAccountBadge` já criado, ao lado do nome.
+Essa é a abordagem padrão pra CRM com múltiplas origens: separar **propriedade do dado** (campaign_id da venda) da **visibilidade em pipelines** (M:N).
+
+### Alternativas consideradas
+
+1. **Filtro client-side no Kanban** (selecionar campanhas e filtrar leads exibidos). Mais simples, mas é só uma view temporária — sem regras de automação, sem permissão por funil, sem persistência.
+2. **Tags em vez de M:N**. Funciona, mas mistura conceitos (tag de lead vs. tag de funil) e dificulta permissão granular por funil.
+
+**Vamos com a opção M:N**, que é a mais limpa e escala melhor.
+
+## Como vai funcionar pro usuário
+
+1. Na tela de criar/editar funil aparece um novo bloco **"Campanhas incluídas"** com multi-select de todas as `lead_campaigns` da org.
+2. Marque "Visão Geral" como tipo e selecione as campanhas A, C, E → o Kanban desse funil passa a mostrar leads dessas 3 campanhas.
+3. Funis existentes continuam intactos — automaticamente entram com a `campaign_id` atual já marcada no multi-select.
 
 ## Detalhes técnicos
 
-- Hook `useGuruAccounts` (já existe) retorna `{ slug, display_name, color }[]` — usar como fonte única de cor/nome.
-- Componente `GuruAccountBadge` (já existe) é reutilizado em todos os lugares.
-- Nenhuma migration nova. Nenhum deploy de edge function novo.
-- Filtro de Vendas: server-side em `v_all_sales` via `.eq('guru_account_slug', slug)`.
-- Filtro de Base de Leads: usar `metadata->>guru_account` no `.eq()` do supabase-js.
-- Persistir filtro selecionado em `localStorage` (`guru_account_filter`) pra manter entre navegações.
+**Migration nova (rodar manual no Supabase):**
+
+```sql
+CREATE TABLE public.lead_funnel_campaigns (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  lead_funnel_id uuid NOT NULL REFERENCES public.lead_funnels(id) ON DELETE CASCADE,
+  lead_campaign_id uuid NOT NULL REFERENCES public.lead_campaigns(id) ON DELETE CASCADE,
+  created_at timestamptz DEFAULT now(),
+  UNIQUE(lead_funnel_id, lead_campaign_id)
+);
+
+CREATE INDEX idx_lfc_funnel ON public.lead_funnel_campaigns(lead_funnel_id);
+CREATE INDEX idx_lfc_campaign ON public.lead_funnel_campaigns(lead_campaign_id);
+
+ALTER TABLE public.lead_funnel_campaigns ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "lfc_all" ON public.lead_funnel_campaigns
+FOR ALL TO authenticated
+USING (EXISTS (SELECT 1 FROM public.lead_funnels lf
+  WHERE lf.id = lead_funnel_campaigns.lead_funnel_id
+    AND lf.organization_id = public.get_user_org_id()))
+WITH CHECK (EXISTS (SELECT 1 FROM public.lead_funnels lf
+  WHERE lf.id = lead_funnel_campaigns.lead_funnel_id
+    AND lf.organization_id = public.get_user_org_id()));
+
+-- Backfill: copia o campaign_id atual pra tabela nova
+INSERT INTO public.lead_funnel_campaigns (lead_funnel_id, lead_campaign_id)
+SELECT id, campaign_id FROM public.lead_funnels
+WHERE campaign_id IS NOT NULL
+ON CONFLICT DO NOTHING;
+```
+
+**Frontend:**
+
+- `useLeadFunnels.ts` → na query incluir `lead_funnel_campaigns(lead_campaign_id)`. Quando buscar leads do funil, montar a lista de campanhas: `[funnel.campaign_id, ...funnel.lead_funnel_campaigns.map(...)]` (dedup) e filtrar `lead.metadata->>campaign_id` por `.in(...)`.
+- Novo hook `useUpsertLeadFunnelCampaigns(funnelId, campaignIds[])` → delete + insert (mesmo padrão de `useUpsertFunnelProducts`).
+- `LeadFunnelDetail.tsx` (ou modal de edição): adicionar bloco "Campanhas incluídas" com multi-select usando `useLeadCampaigns()`.
+- Badge no header do funil mostrando quantas campanhas estão incluídas (ex: "3 campanhas").
+
+**Compatibilidade:** `campaign_id` continua existindo e funcionando como campanha primária. Nada quebra; só ganha capacidade adicional.
 
 ## Arquivos afetados
 
-- `src/components/lead-funnels/LeadCard.tsx` (badge)
-- `src/components/lead-funnels/KanbanBoard.tsx` (passar conta pro card se preciso)
-- `src/pages/Vendas.tsx` (select + coluna)
-- `src/pages/LeadsList.tsx` ou `BaseLeadsList.tsx` (select + badge + filtro server-side)
-- `src/pages/LeadFunnelDetail.tsx` (badge no header)
+- `docs/migration_lead_funnel_campaigns.sql` (novo — rodar manual)
+- `src/hooks/useLeadFunnels.ts` (incluir relação + filtro multi-campanha)
+- `src/hooks/useUpsertLeadFunnelCampaigns.ts` (novo)
+- `src/types/leadFunnels.ts` (adicionar `lead_funnel_campaigns?: {...}[]`)
+- `src/pages/LeadFunnelDetail.tsx` (UI multi-select + badge)
+- `src/pages/LeadCampaigns.tsx` (badge "N campanhas" nos cards de funil, opcional)
 
-Sem mexer em backend.
+Nenhuma edge function precisa ser tocada.
