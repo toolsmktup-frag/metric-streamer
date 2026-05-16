@@ -16,7 +16,7 @@ export function useLeadFunnels(campaignId?: string | null) {
       try {
         let query = (supabase as any)
           .from('lead_funnels')
-          .select('*, lead_funnel_stages(*), stage_transition_rules(*)')
+          .select('*, lead_funnel_stages(*), stage_transition_rules(*), lead_funnel_campaigns(lead_campaign_id)')
           .order('sort_order', { ascending: true });
         if (campaignId) query = query.eq('campaign_id', campaignId);
         const { data, error } = await query;
@@ -41,7 +41,7 @@ export function useLeadFunnel(id: string | null) {
       try {
         const { data, error } = await (supabase as any)
           .from('lead_funnels')
-          .select('*, lead_funnel_stages(*), stage_transition_rules(*)')
+          .select('*, lead_funnel_stages(*), stage_transition_rules(*), lead_funnel_campaigns(lead_campaign_id)')
           .eq('id', id)
           .single();
         if (error) {
