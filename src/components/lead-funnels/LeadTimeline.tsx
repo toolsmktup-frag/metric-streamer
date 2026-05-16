@@ -13,6 +13,7 @@ import { parseLocalDateTime } from '@/lib/localDate';
 import LeadAssignSelect from './LeadAssignSelect';
 import { useCurrentUserRole } from '@/hooks/useCurrentUserRole';
 import { supabase } from '@/integrations/supabase/client';
+import GuruAccountBadge from '@/components/GuruAccountBadge';
 
 interface LeadTimelineProps {
   lead: Lead | null;
