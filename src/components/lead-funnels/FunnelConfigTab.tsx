@@ -56,6 +56,11 @@ interface FunnelConfigTabProps {
   metaAccessToken?: string | null;
   onMetaPixelChange?: (pixelId: string | null, accessToken: string | null) => void;
   savingMetaPixel?: boolean;
+  // Campanhas agregadas (visão geral)
+  allCampaigns?: { id: string; name: string; color: string }[];
+  linkedCampaignIds?: string[];
+  onSaveLinkedCampaigns?: (ids: string[]) => void;
+  savingLinkedCampaigns?: boolean;
 }
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
@@ -70,7 +75,7 @@ const CANONICAL_EVENTS = [
   { value: 'canceled', label: 'Cancelado' },
 ];
 
-const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSaveStages, onSaveRules, saving, funnelId, funnelName, leadFunnelProducts = [], catalogProducts = [], onSaveProducts, savingProducts, onBulkMoveOverdue, bulkMoving, distinctLeadProducts = [], existingMappings = [], onSaveMappings, savingMappings, loadingDistinctProducts, positions = [], trafficFunnels = [], currentTrafficFunnelId, onTrafficFunnelChange, savingTrafficFunnel, metaPixelId, metaAccessToken, onMetaPixelChange, savingMetaPixel }) => {
+const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSaveStages, onSaveRules, saving, funnelId, funnelName, leadFunnelProducts = [], catalogProducts = [], onSaveProducts, savingProducts, onBulkMoveOverdue, bulkMoving, distinctLeadProducts = [], existingMappings = [], onSaveMappings, savingMappings, loadingDistinctProducts, positions = [], trafficFunnels = [], currentTrafficFunnelId, onTrafficFunnelChange, savingTrafficFunnel, metaPixelId, metaAccessToken, onMetaPixelChange, savingMetaPixel, allCampaigns = [], linkedCampaignIds = [], onSaveLinkedCampaigns, savingLinkedCampaigns }) => {
   const [localStages, setLocalStages] = useState<Partial<LeadFunnelStage>[]>(
     stages.length ? stages : [{ name: 'Novo Lead', color: COLORS[0], sort_order: 0 }]
   );
