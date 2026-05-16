@@ -298,7 +298,12 @@ const BaseLeadsList: React.FC<BaseLeadsListProps> = ({ positions, onLeadClick, o
                     className="cursor-pointer"
                     onClick={() => onLeadClick(p.lead_id)}
                   >
-                    <TableCell className="font-medium text-foreground">{name}</TableCell>
+                    <TableCell className="font-medium text-foreground">
+                      <div className="flex items-center gap-2">
+                        <span>{name}</span>
+                        <GuruAccountBadge slug={(p.lead.metadata as any)?.guru_account} />
+                      </div>
+                    </TableCell>
                     <TableCell className="text-muted-foreground text-xs">{p.lead.email || '—'}</TableCell>
                     <TableCell className="text-muted-foreground text-xs">{p.lead.phone || '—'}</TableCell>
                     <TableCell className="text-right font-mono text-foreground">
