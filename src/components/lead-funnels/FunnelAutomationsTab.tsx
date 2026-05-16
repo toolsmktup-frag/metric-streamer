@@ -115,6 +115,30 @@ function AutomationCard({ automation, funnelId, onToggle, onToggleVisibility }: 
 }) {
   const { data: executions = [] } = useWzExecutions({ flowId: automation.wz_flow_id });
   const recentExecs = executions.slice(0, 3);
+  const unlinkMutation = useUnlinkFunnelAutomation();
+  const qc = useQueryClient();
+  const [deleting, setDeleting] = useState(false);
+  const onlyHere = !automation.show_in_automations;
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      await unlinkMutation.mutateAsync({ id: automation.id, funnel_id: funnelId });
+      if (onlyHere && automation.wz_flow_id) {
+        const { error } = await (supabase as any)
+          .from('wz_flows')
+          .delete()
+          .eq('id', automation.wz_flow_id);
+        if (error) throw error;
+        qc.invalidateQueries({ queryKey: ['wz-flows'] });
+        toast.success('Automação e fluxo deletados');
+      }
+    } catch (e: any) {
+      toast.error('Erro ao deletar: ' + (e?.message || 'desconhecido'));
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   return (
     <div className="border border-border rounded-lg p-4 space-y-3">
@@ -130,6 +154,29 @@ function AutomationCard({ automation, funnelId, onToggle, onToggleVisibility }: 
         <Button variant="outline" size="sm" className="gap-1" onClick={() => window.open(`/ferramentas/automacoes/${automation.wz_flow_id}`, '_blank')}>
           <ExternalLink className="h-3.5 w-3.5" /> Editar
         </Button>
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button variant="outline" size="sm" className="text-destructive hover:text-destructive hover:bg-destructive/10" disabled={deleting}>
+              {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Deletar automação?</AlertDialogTitle>
+              <AlertDialogDescription>
+                {onlyHere
+                  ? 'Esta automação está marcada como "Só neste funil". O vínculo e o fluxo serão apagados permanentemente.'
+                  : 'Esta automação está visível em Automações (pode estar em uso em outros lugares). Apenas o vínculo com este funil será removido — o fluxo continuará existindo.'}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                {onlyHere ? 'Deletar fluxo' : 'Desvincular'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
 
       {recentExecs.length > 0 && (
