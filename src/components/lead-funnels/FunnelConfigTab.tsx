@@ -61,6 +61,11 @@ interface FunnelConfigTabProps {
   linkedCampaignIds?: string[];
   onSaveLinkedCampaigns?: (ids: string[]) => void;
   savingLinkedCampaigns?: boolean;
+  // Mapeamento de etapas (visão geral)
+  aggregatedSourceFunnelIds?: string[];
+  stageMappings?: import('@/hooks/useLeadFunnelStageMappings').LeadFunnelStageMapping[];
+  onSaveStageMappings?: (mappings: { source_stage_id: string; target_stage_id: string }[]) => void;
+  savingStageMappings?: boolean;
 }
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
