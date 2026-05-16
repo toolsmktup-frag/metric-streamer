@@ -1,44 +1,48 @@
-# Conectar 2ª conta Guru ao funil Recompra de Potes
+# Fix: "Ignorar funil de tráfego" quebra com erro
 
-## Diagnóstico (rodado agora)
+## Diagnóstico
 
-| Item | Status |
-|------|--------|
-| CRM "RECOMPRA - POTES" vinculado ao funil de tráfego "Articulabem - 1" via `traffic_funnel_id` | OK |
-| 6 produtos mapeados em `lead_funnel_products` (Pote 30/90/180/360 dias, 9 Potes, Grátis) com recontact e auto-move stage | OK |
-| 15 produtos cadastrados em `funnel_products` do Articulabem - 1, com `product_id` distintos das 2 contas Guru (ex: 1765547722 vs 1778018683) | OK |
-| Tokens de webhook ativos no Articulabem - 1: **1 Guru + 1 Ticto** | **FALTA 1 token Guru** |
+Em `src/pages/LeadCampaigns.tsx` o seletor "🚫 Ignorar funil de tráfego" grava um UUID fake (`00000000-0000-0000-0000-000000000000`) na coluna `lead_funnels.traffic_funnel_id`.
 
-## Único ajuste necessário
+Essa coluna é uma **foreign key** para `funnels(id)` (veja `docs/migration_traffic_funnel_link.sql`). Como esse UUID zero não existe na tabela `funnels`, o Postgres rejeita o update com violação de FK — daí o toast "Erro ao atualizar funil".
 
-Cadastrar **um segundo token Guru** no funil "Articulabem - 1" (`b253f262-44ac-4c64-8c4e-2e9fa0f9146e`). Sem isso, os webhooks da 2ª conta Guru chegam mas não encontram funil correspondente e são descartados — vendas não viram leads, automações não disparam, recontato não conta.
+Resultado: clicar em "Ignorar" sempre falha, no caso do "Dia das Maes/26" e em qualquer outro funil/campanha.
 
-A tabela `funnel_platforms` já aceita múltiplas linhas por funil/plataforma (foi pra isso que existe o `funnel-platforms-multi.sql`). Não tem conflito.
+## Solução
 
-## Passos
+Trocar o sentinel UUID por uma coluna booleana dedicada `ignore_traffic_funnel`.
 
-1. **Gerar o 2º token Guru no app**
-   - Tela do funil Articulabem - 1 → seção "Webhooks / Plataformas"
-   - Adicionar nova integração Guru → app gera um `webhook_token` novo
-   - Copiar a URL completa do webhook
+### Banco (SQL para rodar no Supabase Dashboard)
 
-2. **Colar a URL no painel da 2ª conta Guru**
-   - Dashboard Guru (conta nova) → Webhooks → adicionar URL gerada
-   - Marcar os mesmos eventos da 1ª conta (purchase, refund, pix_generated, etc.)
+```sql
+ALTER TABLE public.lead_funnels
+  ADD COLUMN IF NOT EXISTS ignore_traffic_funnel boolean NOT NULL DEFAULT false;
 
-3. **Testar com 1 venda real (ou de teste)**
-   - Conferir em `webhook_audit_log` se chegou (deve ter linha com o novo token)
-   - Conferir se a venda apareceu em `sales` com o `funnel_id` certo
-   - Conferir se o lead caiu no CRM "RECOMPRA - POTES" na etapa correta
+ALTER TABLE public.lead_campaigns
+  ADD COLUMN IF NOT EXISTS ignore_traffic_funnel boolean NOT NULL DEFAULT false;
+```
 
-## Detalhes técnicos
+### Frontend (`src/pages/LeadCampaigns.tsx`)
 
-- Não precisa mexer em código nenhum — a UI de webhooks do funil já suporta múltiplos tokens Guru.
-- `traffic_funnel_id` e `lead_funnel_products` já estão corretos, não tocar.
-- Atribuição de ROI continua funcionando: as vendas das 2 contas Guru consolidam no Articulabem - 1, e a regra `traffic-funnel-link` atribui o lead ao funil da 1ª compra dele.
-- O CRM "Recompra de Potes" só recebe leads que JÁ COMPRARAM (porque a regra de entrada é o evento `purchase` com produto mapeado), então não há risco de duplicidade.
+- Remover constante `IGNORE_FUNNEL_ID`.
+- No `<select>` do funil:
+  - `value` = `'__ignore__'` se `funnel.ignore_traffic_funnel`, senão `funnel.traffic_funnel_id || ''`.
+  - Ao escolher `__ignore__`: chamar `updateLeadFunnel.mutateAsync({ id, ignore_traffic_funnel: true, traffic_funnel_id: null })`.
+  - Ao escolher um funil real: `{ ignore_traffic_funnel: false, traffic_funnel_id: val }`.
+  - Ao escolher vazio (herdar/sem): `{ ignore_traffic_funnel: false, traffic_funnel_id: null }`.
+- Mesma lógica no `<select>` da campanha (linha 251).
 
-## Fora de escopo
+### Tipos / hooks
 
-- Mudanças na arquitetura `funnels` vs `lead_funnels` (opção A escolhida = não mudar).
-- Auto-vincular ou unificar tabelas de produtos.
+- `src/types/leadFunnels.ts`: adicionar `ignore_traffic_funnel: boolean` em `LeadFunnel` e `LeadCampaign`.
+- `useUpdateLeadFunnel` / `useUpdateLeadCampaign` já fazem spread, então só passa o campo novo.
+
+### Atribuição de ROI (consumidores do traffic_funnel_id)
+
+Pontos a revisar para respeitar o flag (qualquer leitura que faça "herdar da campanha quando funil é null"):
+- `src/pages/LeadFunnelDetail.tsx:403` — usa `funnel.traffic_funnel_id ?? campaign?.traffic_funnel_id`. Precisa virar: se `funnel.ignore_traffic_funnel` → `null`; senão se `funnel.traffic_funnel_id` → usa; senão se `campaign.ignore_traffic_funnel` → `null`; senão `campaign.traffic_funnel_id`.
+- Qualquer query de relatório que faça o mesmo "coalesce" (a buscar via grep antes de editar).
+
+## Escopo
+
+Apenas o fluxo "Ignorar funil de tráfego". Nenhuma alteração em webhooks, automações, ou outras telas.
