@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useLeadFunnel, useUpdateLeadFunnel, useUpsertStages, useUpsertTransitionRules, useFunnelSourceNodes, useFunnelEdges, useSaveFunnelSourceNodes, useSaveFunnelEdges } from '@/hooks/useLeadFunnels';
-import { useLeadCampaign } from '@/hooks/useLeadCampaigns';
+import { useLeadFunnel, useUpdateLeadFunnel, useUpsertStages, useUpsertTransitionRules, useFunnelSourceNodes, useFunnelEdges, useSaveFunnelSourceNodes, useSaveFunnelEdges, useLeadFunnels, useUpsertLeadFunnelCampaigns } from '@/hooks/useLeadFunnels';
+import { useLeadCampaign, useLeadCampaigns } from '@/hooks/useLeadCampaigns';
 import { useLeadsByFunnel, useFunnelLeadCounts, useFunnelStageHistoryCounts } from '@/hooks/useLeads';
 import { useBulkLeadPurchases } from '@/hooks/useBulkLeadPurchases';
 import { useBulkLeadPurchaseProducts } from '@/hooks/useBulkLeadPurchaseProducts';
@@ -49,8 +49,36 @@ const LeadFunnelDetail: React.FC = () => {
   const { data: userRole = 'vendedor' } = useCurrentUserRole();
   const isAdmin = userRole === 'admin' || userRole === 'gestor';
   const { data: campaign } = useLeadCampaign(funnel?.campaign_id ?? null);
+  const { data: allCampaigns = [] } = useLeadCampaigns();
+  const { data: allLeadFunnels = [] } = useLeadFunnels();
+
+  // Campanhas agregadas (visão geral): resolve para funis fonte
+  const linkedCampaignIds = useMemo(
+    () => (funnel?.lead_funnel_campaigns || []).map(c => c.lead_campaign_id),
+    [funnel?.lead_funnel_campaigns]
+  );
+  const aggregateFromFunnelIds = useMemo(() => {
+    if (!funnel) return [];
+    const ownCampaign = funnel.campaign_id;
+    const extraIds = linkedCampaignIds.filter(cid => cid !== ownCampaign);
+    if (extraIds.length === 0) return [];
+    return allLeadFunnels
+      .filter(f => f.id !== funnel.id && f.campaign_id && extraIds.includes(f.campaign_id))
+      .map(f => f.id);
+  }, [funnel, linkedCampaignIds, allLeadFunnels]);
+
+  const stageNameToIdMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    (funnel?.lead_funnel_stages || []).forEach(s => {
+      map[(s.name || '').trim().toLowerCase()] = s.id;
+    });
+    return map;
+  }, [funnel?.lead_funnel_stages]);
+
   const { data: positions = [] } = useLeadsByFunnel(id ?? null, {
     refetchInterval: isAdmin ? false : 5000,
+    aggregateFromFunnelIds,
+    stageNameToIdMap,
   });
   const { data: leadCounts = {} } = useFunnelLeadCounts(id ?? null);
   const { data: historicalLeadCounts = {} } = useFunnelStageHistoryCounts(id ?? null);
@@ -63,6 +91,7 @@ const LeadFunnelDetail: React.FC = () => {
   const upsertStages = useUpsertStages();
   const upsertRules = useUpsertTransitionRules();
   const updateLeadFunnel = useUpdateLeadFunnel();
+  const upsertLeadFunnelCampaigns = useUpsertLeadFunnelCampaigns();
   const upsertLeadProducts = useUpsertLeadFunnelProducts();
   const saveProductMappings = useSaveLeadProductMappings();
   const saveSourceNodes = useSaveFunnelSourceNodes();
@@ -468,6 +497,17 @@ const LeadFunnelDetail: React.FC = () => {
                 }
               }}
               savingMetaPixel={updateLeadFunnel.isPending}
+              allCampaigns={allCampaigns}
+              linkedCampaignIds={linkedCampaignIds}
+              onSaveLinkedCampaigns={async (ids) => {
+                try {
+                  await upsertLeadFunnelCampaigns.mutateAsync({ funnelId: funnel.id, campaignIds: ids });
+                  toast.success('Campanhas agregadas atualizadas!');
+                } catch {
+                  toast.error('Erro ao salvar campanhas agregadas');
+                }
+              }}
+              savingLinkedCampaigns={upsertLeadFunnelCampaigns.isPending}
             />
           </TabsContent>
         )}

@@ -56,6 +56,11 @@ interface FunnelConfigTabProps {
   metaAccessToken?: string | null;
   onMetaPixelChange?: (pixelId: string | null, accessToken: string | null) => void;
   savingMetaPixel?: boolean;
+  // Campanhas agregadas (visão geral)
+  allCampaigns?: { id: string; name: string; color: string }[];
+  linkedCampaignIds?: string[];
+  onSaveLinkedCampaigns?: (ids: string[]) => void;
+  savingLinkedCampaigns?: boolean;
 }
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
@@ -70,7 +75,7 @@ const CANONICAL_EVENTS = [
   { value: 'canceled', label: 'Cancelado' },
 ];
 
-const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSaveStages, onSaveRules, saving, funnelId, funnelName, leadFunnelProducts = [], catalogProducts = [], onSaveProducts, savingProducts, onBulkMoveOverdue, bulkMoving, distinctLeadProducts = [], existingMappings = [], onSaveMappings, savingMappings, loadingDistinctProducts, positions = [], trafficFunnels = [], currentTrafficFunnelId, onTrafficFunnelChange, savingTrafficFunnel, metaPixelId, metaAccessToken, onMetaPixelChange, savingMetaPixel }) => {
+const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSaveStages, onSaveRules, saving, funnelId, funnelName, leadFunnelProducts = [], catalogProducts = [], onSaveProducts, savingProducts, onBulkMoveOverdue, bulkMoving, distinctLeadProducts = [], existingMappings = [], onSaveMappings, savingMappings, loadingDistinctProducts, positions = [], trafficFunnels = [], currentTrafficFunnelId, onTrafficFunnelChange, savingTrafficFunnel, metaPixelId, metaAccessToken, onMetaPixelChange, savingMetaPixel, allCampaigns = [], linkedCampaignIds = [], onSaveLinkedCampaigns, savingLinkedCampaigns }) => {
   const [localStages, setLocalStages] = useState<Partial<LeadFunnelStage>[]>(
     stages.length ? stages : [{ name: 'Novo Lead', color: COLORS[0], sort_order: 0 }]
   );
@@ -78,6 +83,8 @@ const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSave
   const [redistributeOpen, setRedistributeOpen] = useState(false);
   const [localPixelId, setLocalPixelId] = useState(metaPixelId || '');
   const [localAccessToken, setLocalAccessToken] = useState(metaAccessToken || '');
+  const [localLinkedCampaigns, setLocalLinkedCampaigns] = useState<string[]>(linkedCampaignIds);
+  useEffect(() => { setLocalLinkedCampaigns(linkedCampaignIds); }, [linkedCampaignIds.join(',')]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -444,6 +451,44 @@ const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSave
                   <option key={f.id} value={f.id}>{f.name}</option>
                 ))}
               </select>
+            </div>
+          )}
+
+          {onSaveLinkedCampaigns && allCampaigns.length > 0 && (
+            <div>
+              <h3 className="text-lg font-semibold text-foreground mb-2">Campanhas agregadas (Visão Geral)</h3>
+              <p className="text-sm text-muted-foreground mb-3">
+                Selecione campanhas adicionais para que este funil mostre leads vindos delas, agrupados pelas etapas com nome igual.
+                Útil para criar um funil "Geral" que junta várias campanhas num só Kanban.
+              </p>
+              <div className="space-y-2 border border-border rounded-md p-3 max-h-64 overflow-y-auto bg-background">
+                {allCampaigns.map(c => {
+                  const checked = localLinkedCampaigns.includes(c.id);
+                  return (
+                    <label key={c.id} className="flex items-center gap-2 cursor-pointer text-sm">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={e => {
+                          setLocalLinkedCampaigns(prev =>
+                            e.target.checked ? [...prev, c.id] : prev.filter(x => x !== c.id)
+                          );
+                        }}
+                      />
+                      <span className="h-3 w-3 rounded-full" style={{ backgroundColor: c.color }} />
+                      <span className="text-foreground">{c.name}</span>
+                    </label>
+                  );
+                })}
+              </div>
+              <Button
+                onClick={() => onSaveLinkedCampaigns(localLinkedCampaigns)}
+                disabled={savingLinkedCampaigns}
+                className="mt-3"
+                size="sm"
+              >
+                {savingLinkedCampaigns ? 'Salvando...' : 'Salvar campanhas agregadas'}
+              </Button>
             </div>
           )}
 

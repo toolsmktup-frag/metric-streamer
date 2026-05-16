@@ -16,7 +16,7 @@ export function useLeadFunnels(campaignId?: string | null) {
       try {
         let query = (supabase as any)
           .from('lead_funnels')
-          .select('*, lead_funnel_stages(*), stage_transition_rules(*)')
+          .select('*, lead_funnel_stages(*), stage_transition_rules(*), lead_funnel_campaigns(lead_campaign_id)')
           .order('sort_order', { ascending: true });
         if (campaignId) query = query.eq('campaign_id', campaignId);
         const { data, error } = await query;
@@ -41,7 +41,7 @@ export function useLeadFunnel(id: string | null) {
       try {
         const { data, error } = await (supabase as any)
           .from('lead_funnels')
-          .select('*, lead_funnel_stages(*), stage_transition_rules(*)')
+          .select('*, lead_funnel_stages(*), stage_transition_rules(*), lead_funnel_campaigns(lead_campaign_id)')
           .eq('id', id)
           .single();
         if (error) {
@@ -281,6 +281,31 @@ export function useSaveFunnelEdges() {
     },
     onSuccess: (_, { funnelId }) => {
       qc.invalidateQueries({ queryKey: ['funnel-edges', funnelId] });
+    },
+  });
+}
+
+// ===========================================================
+// Campanhas agregadas pelo funil (M:N) — funil "Visão Geral"
+// ===========================================================
+export function useUpsertLeadFunnelCampaigns() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ funnelId, campaignIds }: { funnelId: string; campaignIds: string[] }) => {
+      await (supabase as any).from('lead_funnel_campaigns').delete().eq('lead_funnel_id', funnelId);
+      if (campaignIds.length === 0) return [];
+      const { data, error } = await (supabase as any)
+        .from('lead_funnel_campaigns')
+        .insert(campaignIds.map(cid => ({ lead_funnel_id: funnelId, lead_campaign_id: cid })))
+        .select();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (_, { funnelId }) => {
+      qc.invalidateQueries({ queryKey: ['lead-funnel', funnelId] });
+      qc.invalidateQueries({ queryKey: ['lead-funnels'] });
+      qc.invalidateQueries({ queryKey: ['leads-by-funnel', funnelId] });
+      qc.invalidateQueries({ queryKey: ['funnel-lead-counts', funnelId] });
     },
   });
 }
