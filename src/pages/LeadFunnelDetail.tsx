@@ -76,10 +76,20 @@ const LeadFunnelDetail: React.FC = () => {
     return map;
   }, [funnel?.lead_funnel_stages]);
 
+  const { data: stageMappings = [] } = useLeadFunnelStageMappings(id ?? null);
+  const upsertStageMappings = useUpsertLeadFunnelStageMappings();
+
+  const sourceStageIdToTargetStageIdMap = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const row of stageMappings) m[row.source_stage_id] = row.target_stage_id;
+    return m;
+  }, [stageMappings]);
+
   const { data: positions = [] } = useLeadsByFunnel(id ?? null, {
     refetchInterval: isAdmin ? false : 5000,
     aggregateFromFunnelIds,
     stageNameToIdMap,
+    sourceStageIdToTargetStageIdMap,
   });
   const { data: leadCounts = {} } = useFunnelLeadCounts(id ?? null);
   const { data: historicalLeadCounts = {} } = useFunnelStageHistoryCounts(id ?? null);
