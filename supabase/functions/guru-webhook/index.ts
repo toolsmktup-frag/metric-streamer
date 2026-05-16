@@ -387,6 +387,7 @@ Deno.serve(async (req) => {
           p_funnel_id: funnelId,
           p_metadata: {
             platform: "guru",
+            guru_account: guruAccountSlug,
             transaction_id: String(transactionId || ""),
             product_name: productName,
             status: normalizedStatus,
