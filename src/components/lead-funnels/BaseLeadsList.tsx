@@ -13,6 +13,8 @@ import {
 } from '@/components/ui/pagination';
 import { Search, Users, DollarSign, ShoppingCart, TrendingUp, MessageCircle, ChevronUp, ChevronDown, Timer } from 'lucide-react';
 import { useBulkLeadPurchases, type PurchaseSummary } from '@/hooks/useBulkLeadPurchases';
+import { useGuruAccounts } from '@/hooks/useGuruAccounts';
+import GuruAccountBadge from '@/components/GuruAccountBadge';
 import { formatCurrency } from '@/lib/formatters';
 import type { Lead, LeadStagePosition } from '@/types/leadFunnels';
 import type { RecontactInfo } from '@/hooks/useRecontactDeadlines';
