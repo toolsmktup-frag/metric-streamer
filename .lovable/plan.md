@@ -1,57 +1,52 @@
-# Conferir se webhooks da Guru estão vindo de contas diferentes
+# Marcar origem da conta Guru (Soulnaturi vs Articulabem)
 
-Sem alteração de código. Só queries SQL pra rodar no Supabase Dashboard → SQL Editor e analisar o tráfego que já chegou.
+Mantém **1 funil só**, mas cada venda e cada lead passam a carregar a conta Guru de origem, para que dashboards, Kanban e relatórios consigam filtrar/segmentar por marca.
 
-## 1. Ver últimos webhooks brutos da Guru (com identificador do produtor)
+## Mapeamento das contas
 
-```sql
-SELECT
-  created_at,
-  payload->'producer'->>'id'          AS producer_id,
-  payload->'producer'->>'name'        AS producer_name,
-  payload->'producer'->>'document'    AS producer_doc,
-  payload->>'event'                   AS event,
-  payload->'product'->>'name'         AS product_name
-FROM public.webhook_audit_log
-WHERE source = 'guru'
-  AND created_at > now() - interval '7 days'
-ORDER BY created_at DESC
-LIMIT 50;
-```
+| api_token (Guru) | Conta / Marca |
+|---|---|
+| `9fmDLyGxbcXGqcZyTJb8Kcb1BjhY8xwfrEprE7t6` | **Soulnaturi** |
+| `O3yB6USrrplTojFXy7jltjhviNujOHUE35ITGYjz` | **Articulabem** |
 
-Se `producer_id` / `producer_doc` aparecer **com valores diferentes** entre as linhas → tá entrando webhook de mais de uma conta Guru. Se só aparecer um valor → ainda é uma conta só.
+Mapa fica configurável (não hardcoded no código) — guardado em uma tabela ou JSON de config para você poder adicionar/renomear contas futuramente sem precisar redeployar edge function.
 
-## 2. Contagem agrupada por conta Guru (últimos 30 dias)
+## O que muda
 
-```sql
-SELECT
-  payload->'producer'->>'id'   AS producer_id,
-  payload->'producer'->>'name' AS producer_name,
-  count(*)                     AS webhooks
-FROM public.webhook_audit_log
-WHERE source = 'guru'
-  AND created_at > now() - interval '30 days'
-GROUP BY 1, 2
-ORDER BY webhooks DESC;
-```
+### 1. Banco — nova coluna + tabela de mapa
+- Nova tabela `guru_accounts` (`api_token` PK, `account_slug`, `display_name`, `color`) — cadastro das duas contas.
+- Nova coluna `customer_purchases.guru_account_slug` (text, nullable, indexada).
+- Atualizar a view `v_all_sales` para expor `guru_account_slug` e `guru_account_name` (JOIN com `guru_accounts`).
 
-## 3. Cruzar com `customer_purchases` (vendas já processadas)
+### 2. Webhook Guru (`supabase/functions/guru-webhook/index.ts`)
+- Extrair `payload.api_token`, resolver contra `guru_accounts`, gravar `guru_account_slug` no `customer_purchases`.
+- Passar `guru_account: <slug>` dentro do `p_metadata` do `sync_lead_from_sale` → fica salvo no `lead.metadata` e no `lead_events.metadata`.
+- Aplicar tag automática no lead: `origem:soulnaturi` ou `origem:articulabem` (via `lead_tags`), pra usar em filtros e router de automações WhatsApp.
 
-```sql
-SELECT
-  funnel_id,
-  count(*) AS vendas,
-  min(purchased_at) AS primeira,
-  max(purchased_at) AS ultima
-FROM public.customer_purchases
-WHERE platform = 'guru'
-  AND purchased_at > now() - interval '7 days'
-GROUP BY funnel_id
-ORDER BY vendas DESC;
-```
+### 3. Backfill (1x)
+Script SQL que percorre `customer_purchases` onde `platform='guru'` e popula `guru_account_slug` a partir de `raw_data->>'api_token'`. Também tagueia os leads associados.
 
-Confirma que as vendas das duas contas Guru estão caindo no mesmo `funnel_id` (Articulabem - 1).
+### 4. UI — visibilidade da origem
+- **Vendas** (`/vendas`): novo filtro "Conta Guru" no topo (Todas / Soulnaturi / Articulabem) + coluna/badge colorido na linha da venda.
+- **Lead Detail** (drawer/sidebar): badge da conta Guru visível ao lado do nome do produto na timeline de compras.
+- **Kanban**: badge pequeno (cor por conta) no card do lead quando ele tem origem Guru identificada.
+- **Dashboard CRM**: card de KPI "Vendas por conta" (Soulnaturi vs Articulabem) — split simples por contagem e receita.
 
-## Se as queries acima não retornarem nada
+### 5. Automações WhatsApp (preparação, sem alterar fluxos existentes)
+A tag `origem:soulnaturi` / `origem:articulabem` aplicada no lead já permite que você use o **Router por Tag** nas automações existentes — não precisa mexer em flow nenhum agora, só ganha a capacidade de bifurcar quando quiser.
 
-Os nomes dos campos podem variar (`producer` vs `seller` vs `account_id`). Nesse caso me manda 1 print de uma linha bruta do `webhook_audit_log` (campo `payload` inteiro) que eu ajusto as queries.
+## Ordem de execução
+
+1. Migration: cria `guru_accounts`, coluna `guru_account_slug`, atualiza `v_all_sales`.
+2. Seed: insere as 2 contas (Soulnaturi e Articulabem) na `guru_accounts`.
+3. Patch no `guru-webhook` (deploy manual no Supabase Dashboard — você cola).
+4. Backfill SQL (você roda no Dashboard).
+5. UI: filtro e badges em Vendas, Lead Detail, Kanban, KPI.
+
+## Detalhes técnicos
+
+- `guru_account_slug` em vez de `account_id` direto pra ficar legível em filtros/URLs (`?conta=soulnaturi`).
+- View `v_all_sales` resolve o `display_name` no JOIN para o front consumir já formatado.
+- Tag aplicada via insert idempotente em `lead_tags` (não duplica se já existir).
+- Cores das contas guardadas em `guru_accounts.color` (HSL) → frontend usa direto, sem hardcode.
+- Nada quebra retroativo: coluna nullable, view tolera NULL, UI mostra "—" quando origem desconhecida.
