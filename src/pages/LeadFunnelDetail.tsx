@@ -497,6 +497,17 @@ const LeadFunnelDetail: React.FC = () => {
                 }
               }}
               savingMetaPixel={updateLeadFunnel.isPending}
+              allCampaigns={allCampaigns}
+              linkedCampaignIds={linkedCampaignIds}
+              onSaveLinkedCampaigns={async (ids) => {
+                try {
+                  await upsertLeadFunnelCampaigns.mutateAsync({ funnelId: funnel.id, campaignIds: ids });
+                  toast.success('Campanhas agregadas atualizadas!');
+                } catch {
+                  toast.error('Erro ao salvar campanhas agregadas');
+                }
+              }}
+              savingLinkedCampaigns={upsertLeadFunnelCampaigns.isPending}
             />
           </TabsContent>
         )}
