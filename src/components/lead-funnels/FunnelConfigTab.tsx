@@ -498,6 +498,17 @@ const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSave
             </div>
           )}
 
+          {funnelId && onSaveStageMappings && aggregatedSourceFunnelIds.length > 0 && (
+            <StageMappingConfig
+              targetFunnelId={funnelId}
+              targetStages={stages as any}
+              sourceFunnelIds={aggregatedSourceFunnelIds}
+              existingMappings={stageMappings}
+              onSave={onSaveStageMappings}
+              saving={savingStageMappings}
+            />
+          )}
+
           {onMetaPixelChange && (
             <div>
               <h3 className="text-lg font-semibold text-foreground mb-2">Meta Conversions API (CAPI)</h3>
