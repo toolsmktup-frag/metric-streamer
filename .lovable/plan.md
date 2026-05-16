@@ -1,75 +1,107 @@
-# Revisão da lógica de recontato (Pote → Abordar Hoje)
+# Auditoria: Funil de Tráfego x Funil de Leads (CRM)
 
-## Como funciona hoje
+## TL;DR
 
-O campo **`recontact_days`** significa literalmente:
+Você não está viajando, mas também não precisa escolher entre um e outro. **Os dois já são integrados automaticamente** — o que está confuso é a UI, que faz parecer que são mundos separados. Hoje a regra real é:
 
-> "Depois de X dias da compra, mover o lead de **Compra Aprovada** para **Para abordar hoje**."
+> Toda venda que cai no funil de tráfego é automaticamente sincronizada como lead no CRM, no `lead_funnel` cujo produto bate com o produto vendido.
 
-O cron `recontact-cron` roda, pega a data da última compra do lead, soma `recontact_days` e, se passou, move pra etapa de destino. Só mexe se o lead ainda estiver na etapa "De" (protege quem já tá em negociação).
+Ou seja: você **não precisa** transformar um no outro. Precisa entender o vínculo e, no máximo, simplificar a UI pra parar de pedir a mesma config em dois lugares.
 
-Sua interpretação está **correta**. Os números na tela são "dias após a compra pra ir pra Abordar Hoje".
+---
 
-## O que tá inconsistente nos valores atuais
+## Como funciona hoje (auditado no código)
 
-| Produto         | Pote dura | Configurado | Offset (dias antes do pote acabar) |
-|-----------------|-----------|-------------|-------------------------------------|
-| Pote 30 dias    | 30        | 25          | 5 dias antes                        |
-| Pote 90 dias    | 90        | 75          | 15 dias antes                       |
-| Pote 180 dias   | 180       | 155         | 25 dias antes                       |
-| Pote 360 dias   | 360       | 330         | 30 dias antes                       |
-| Grátis 30 dias  | 30        | 25          | 5 dias antes                        |
-| 9 Potes         | 270 (?)   | 250         | 20 dias antes                       |
+### 1. Tabela `funnels` = Funil de Tráfego
+- Onde vivem: vendas (`sales`), ROI, CAC, atribuição de campanhas Meta.
+- Recebe vendas via webhook das plataformas (Ticto, Guru, Kiwify, etc.) → `funnel_platforms.webhook_token`.
+- Mapeia produto → funil via `funnel_products` (match por `product_id` ou `product_name_contains`).
+- **Não tem Kanban, não tem etapas, não tem lead.**
 
-Cada produto usa um "lembrete" diferente (5, 15, 25, 30 dias antes). Não tem regra clara — fica difícil de manter e de explicar pra equipe.
+### 2. Tabela `lead_funnels` = Funil de Leads (CRM)
+- Onde vivem: leads, Kanban, etapas, automações WhatsApp, recontato, LTV.
+- Mapeia produto → funil via `lead_funnel_products` (mesma lógica, tabela diferente).
+- Recebe lead via:
+  - Webhook próprio (`webhook-lead` + `X-Funnel-Token`) usado por captura/checkout.
+  - **Sync automático** de vendas (RPC `sync_leads_from_sales`).
 
-## Risco extra que vale você saber
+### 3. A ponte: RPC `sync_leads_from_sales` (já está rodando)
+Para cada venda nova em `sales`:
+1. Cria/atualiza o lead (por phone/email).
+2. Posiciona no funil "Base de Leads".
+3. Procura em `lead_product_mappings` + `lead_funnel_products` qual `lead_funnel` aceita aquele produto.
+4. Posiciona o lead nesse funil, dispara `stage_transition_rules` (compra_aprovada → etapa Comprador, etc.).
 
-Quando um cliente compra **vários potes na mesma compra**, o sistema **soma os dias linearmente** (90 + 180 = 270d a partir da última compra). Se ele acumular muitos potes, o recontato pode nunca disparar dentro de um prazo útil.
+**Resultado prático:** uma venda de "Recompra de Potes" que chega no funil de tráfego "Articulabem" já cai sozinha no funil CRM "Recompra de Potes", se você mapeou o produto lá.
 
-## Recomendação (3 opções)
+### 4. O campo `traffic_funnel_id` em `lead_funnels`
+É só um **ponteiro de atribuição de ROI**: "as vendas deste funil CRM contam como receita de qual funil de tráfego pro cálculo de CAC".  
+Regra `traffic-funnel-link`: tráfego pago é atribuído ao funil onde acontece a **1ª compra** do lead. Recompra herda atribuição do funil de aquisição.
 
-### Opção A — Padronizar offset único (mais simples)
+---
 
-Define **um único valor de "dias antes do pote acabar"** pra todos os produtos (ex: 25 dias). O sistema continua igual, só os números ficam consistentes:
+## Por que está parecendo confuso
 
-- Pote 30  → 5  (30 − 25, mas como é pote curto, talvez 15)
-- Pote 90  → 65 (90 − 25)
-- Pote 180 → 155 (180 − 25)
-- Pote 360 → 335 (360 − 25)
+Você configura **a mesma coisa em dois lugares**:
 
-Vantagem: zero código novo, só ajustar números na UI.
-Desvantagem: pote de 30 dias com offset de 25 dá só 5 dias de uso, então precisa de exceção.
+| Configuração         | Funil de Tráfego (`funnels`) | Funil CRM (`lead_funnels`) |
+|----------------------|------------------------------|----------------------------|
+| Produtos             | `funnel_products`            | `lead_funnel_products`     |
+| Webhook plataforma   | `funnel_platforms` (1 token) | `webhook_token` (1 token)  |
+| Match por product_id | sim                          | sim                        |
 
-### Opção B — Adicionar 2 colunas separadas (mais explícito)
+Dois lugares pra dizer "este produto pertence a este funil". Aí dá a sensação de que precisa escolher.
 
-Em vez de um campo confuso `recontact_days`, separar em 2:
+---
 
-- **`pot_duration_days`**: quanto tempo o pote dura (30, 90, 180...)
-- **`reminder_days_before`**: quantos dias antes do fim mandar o lembrete (ex: 25)
+## Opções (escolha uma)
 
-Na UI vira:
-> "Pote 90 dias — Lembrar **25 dias antes** de acabar"
+### Opção A — Não muda nada, só documenta
+Hoje já funciona. Você só precisa garantir:
+- Webhook das 2 contas Guru cadastrado em **um** funil de tráfego.
+- Produto "Recompra de Potes" mapeado em `lead_funnel_products` do CRM "Recompra".
+- `traffic_funnel_id` do CRM "Recompra" apontando pro funil de tráfego "Articulabem" (porque a 1ª compra é Articulabem).
 
-O cron calcula sozinho: `move_at = compra + (pot_duration − reminder_days_before)`.
+**Custo:** zero. **Ganho:** zero (continua a sensação de duplicação).
 
-Vantagem: a vendedora entende na hora o que tá configurando. Mudou a regra de "25d antes"? Edita 1 campo e aplica pra todos.
-Desvantagem: precisa migração de schema + ajuste no cron + UI.
+### Opção B — Unificar produtos numa tabela só
+Migrar `funnel_products` e `lead_funnel_products` pra uma tabela única `products` com FK pros dois funis. UI única "Produtos deste funil" que serve tanto pra atribuir receita quanto pra rotear lead.
 
-### Opção C — Manter como está
+**Custo:** migração grande, mexe em RPCs de sync, atribuição, dashboards. **Ganho:** UI deixa de mentir.
 
-Deixa do jeito que tá, só padroniza os valores manualmente seguindo uma regra mental sua.
+### Opção C — Auto-vincular ao criar
+Quando criar um `lead_funnel`, oferecer "vincular a um funil de tráfego" e copiar os produtos automaticamente. Mantém as duas tabelas, mas a UI esconde a duplicação.
 
-## Sobre a etapa "Lembrete 25d antes"
+**Custo:** médio. Só mexe em UI + 1 RPC de cópia. **Ganho:** boa parte da confusão some sem migração de dados.
 
-Aquele SQL anterior assumiu que existia uma etapa intermediária ("Base de Recontato") e queria criar "Lembrete 25d antes" no meio. Mas o funil real **não tem** "Base de Recontato" — o destino atual é direto **"Para abordar hoje"**.
+### Opção D — Eliminar `funnels` (funil de tráfego)
+Transformar `lead_funnels` no único funil. Receita, CAC, ROI, Kanban tudo no mesmo objeto. `traffic_funnel_id` vira o próprio `lead_funnel.id`.
 
-Então a ideia de criar uma etapa intermediária só faz sentido se você quiser **2 disparos de WhatsApp**: um "faltam 25 dias" (na etapa Lembrete) e outro "acabou hoje" (em Abordar Hoje). Se 1 disparo só já basta, **não precisa de etapa nova**.
+**Custo:** altíssimo. Reescreve dashboards, atribuição Meta, KPIs, CAC, escada de valor. **Ganho:** modelo mental simples, mas semanas de trabalho.
 
-## O que eu sugiro fazer
+---
 
-1. Você me confirma qual o offset padrão que faz sentido (ex: "quero lembrar 25 dias antes do pote acabar pra todo mundo, exceto pote de 30d que é 7 dias antes").
-2. Decide entre **Opção A** (rápido, só ajusta números) ou **Opção B** (mais limpo, mexe no schema).
-3. Decide se quer **1 ou 2 disparos de WhatsApp** (etapa intermediária ou não).
+## Recomendação
 
-Com essas 3 respostas eu monto o plano de execução final.
+**Opção C** resolve 80% da dor com 10% do esforço da B/D:
+- Você continua com 2 funis (tráfego pra ROI, CRM pra operação) — útil porque os papéis são diferentes.
+- Mas a UI deixa de pedir produto duas vezes.
+- Mantém compatibilidade com tudo que existe (Meta Ads, CAC, automações, atribuição).
+
+Para o seu caso específico de "Recompra de Potes":
+- Funil de tráfego: **Articulabem** (recebe webhook das 2 contas Guru, conta a receita).
+- Funil CRM "Recompra de Potes": `traffic_funnel_id` → Articulabem. Produtos mapeados aqui só pra rotear o Kanban.
+- Zero anúncio novo, zero campanha duplicada.
+
+---
+
+## Detalhes técnicos
+
+Arquivos relevantes:
+- `supabase/functions/webhook-lead/index.ts` — entrada de lead via captura.
+- `supabase/functions/sync-leads-from-sales/index.ts` + `docs/rpc-sync-lead-from-sale-v5.sql` — ponte venda → CRM.
+- `src/hooks/useFunnels.ts` — funil de tráfego.
+- `src/hooks/useLeadFunnels.ts` + `useLeadFunnelProducts.ts` — funil CRM.
+- `src/pages/LeadCampaigns.tsx` (linhas 251-401) — UI atual do `traffic_funnel_id`.
+
+Me diga qual opção você quer e eu monto o plano de implementação detalhado.
