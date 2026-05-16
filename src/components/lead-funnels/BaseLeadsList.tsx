@@ -69,6 +69,10 @@ const BaseLeadsList: React.FC<BaseLeadsListProps> = ({ positions, onLeadClick, o
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
     let list = positions.filter(p => {
+      if (guruFilter !== 'all') {
+        const slug = (p.lead.metadata as any)?.guru_account;
+        if (slug !== guruFilter) return false;
+      }
       if (!q) return true;
       const name = p.lead.name || '';
       return (
