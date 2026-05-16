@@ -70,6 +70,8 @@ export function useUpsertLeadFunnelProducts() {
             product_name_contains: p.product_name_contains,
             display_name: p.display_name,
             recontact_days: p.recontact_days,
+            pot_duration_days: p.pot_duration_days,
+            reminder_days_before: p.reminder_days_before,
             auto_move_stage_id: p.auto_move_stage_id,
             auto_move_from_stage_id: p.auto_move_from_stage_id,
           })
@@ -86,6 +88,8 @@ export function useUpsertLeadFunnelProducts() {
             product_name_contains: p.product_name_contains,
             display_name: p.display_name,
             recontact_days: p.recontact_days,
+            pot_duration_days: p.pot_duration_days,
+            reminder_days_before: p.reminder_days_before,
             auto_move_stage_id: p.auto_move_stage_id,
             auto_move_from_stage_id: p.auto_move_from_stage_id,
           })));
