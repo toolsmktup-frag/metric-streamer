@@ -185,110 +185,79 @@ const FunnelProductsConfig: React.FC<FunnelProductsConfigProps> = ({
       </div>
 
       <p className="text-xs text-muted-foreground mb-3">
-        Configure: <strong>quanto tempo o pote dura</strong> e <strong>quantos dias antes do fim</strong> mandar o lembrete.
-        O sistema move o lead automaticamente da etapa "De" para "Para" no momento certo.
-        Só move se o lead estiver na etapa "De" (default: Compra Aprovada), preservando trabalho da vendedora em negociações.
+        Configure <strong>quantos dias após a compra</strong> o lead deve sair de "Compra Aprovada" e ir pra "Abordar hoje".
+        Só move se o lead ainda estiver na etapa de origem, preservando negociações em andamento.
       </p>
 
       <div className="space-y-2">
-        {localProducts.map((prod, idx) => {
-          const computedDays =
-            prod.pot_duration_days != null && prod.reminder_days_before != null
-              ? Math.max(prod.pot_duration_days - prod.reminder_days_before, 1)
-              : prod.recontact_days;
-
-          return (
-            <div key={idx} className="bg-muted/50 rounded-lg p-2 space-y-2">
-              <div className="flex items-center gap-2">
-                {prod.source_funnel_product_id && (
-                  <span title="Vinculado ao catálogo"><Link2 className="h-4 w-4 text-primary shrink-0" /></span>
-                )}
-                <Input
-                  value={prod.product_name_contains}
-                  onChange={e => updateProduct(idx, 'product_name_contains', e.target.value)}
-                  placeholder="Contém no nome (ex: 1 pote)"
-                  className="flex-1"
-                />
-                <Input
-                  value={prod.display_name}
-                  onChange={e => updateProduct(idx, 'display_name', e.target.value)}
-                  placeholder="Nome exibido (opcional)"
-                  className="flex-1"
-                />
-                <Button variant="ghost" size="icon" onClick={() => removeProduct(idx)} className="shrink-0">
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
-              </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs text-muted-foreground">Pote dura</span>
-                  <Input
-                    type="number"
-                    min={1}
-                    value={prod.pot_duration_days ?? ''}
-                    onChange={e => {
-                      const val = e.target.value ? parseInt(e.target.value, 10) : null;
-                      updateProduct(idx, 'pot_duration_days', val);
-                    }}
-                    placeholder="90"
-                    title="Quantos dias o pote dura"
-                    className="w-20"
-                  />
-                  <span className="text-xs text-muted-foreground">dias</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs text-muted-foreground">Lembrar</span>
-                  <Input
-                    type="number"
-                    min={0}
-                    value={prod.reminder_days_before ?? ''}
-                    onChange={e => {
-                      const val = e.target.value ? parseInt(e.target.value, 10) : null;
-                      updateProduct(idx, 'reminder_days_before', val);
-                    }}
-                    placeholder="15"
-                    title="Quantos dias antes do pote acabar mandar o lembrete"
-                    className="w-20"
-                  />
-                  <span className="text-xs text-muted-foreground">dias antes</span>
-                </div>
-                <Select
-                  value={prod.auto_move_from_stage_id || 'none'}
-                  onValueChange={v => updateProduct(idx, 'auto_move_from_stage_id', v === 'none' ? null : v)}
-                >
-                  <SelectTrigger className="w-40" title="Só move o lead se ele estiver nesta etapa">
-                    <SelectValue placeholder="De: etapa" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">De: qualquer etapa</SelectItem>
-                    {stages.map(s => (
-                      <SelectItem key={s.id} value={s.id}>De: {s.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select
-                  value={prod.auto_move_stage_id || 'none'}
-                  onValueChange={v => updateProduct(idx, 'auto_move_stage_id', v === 'none' ? null : v)}
-                >
-                  <SelectTrigger className="w-44" title="Mover lead vencido para esta etapa">
-                    <SelectValue placeholder="Para: etapa" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Sem auto-mover</SelectItem>
-                    {stages.map(s => (
-                      <SelectItem key={s.id} value={s.id}>Para: {s.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              {computedDays != null && (
-                <p className="text-xs text-muted-foreground pl-1">
-                  → Move pra etapa "Para" <strong>{computedDays} dias após a compra</strong>
-                </p>
+        {localProducts.map((prod, idx) => (
+          <div key={idx} className="bg-muted/50 rounded-lg p-2 space-y-2">
+            <div className="flex items-center gap-2">
+              {prod.source_funnel_product_id && (
+                <span title="Vinculado ao catálogo"><Link2 className="h-4 w-4 text-primary shrink-0" /></span>
               )}
+              <Input
+                value={prod.product_name_contains}
+                onChange={e => updateProduct(idx, 'product_name_contains', e.target.value)}
+                placeholder="Contém no nome (ex: 1 pote)"
+                className="flex-1"
+              />
+              <Input
+                value={prod.display_name}
+                onChange={e => updateProduct(idx, 'display_name', e.target.value)}
+                placeholder="Nome exibido (opcional)"
+                className="flex-1"
+              />
+              <Button variant="ghost" size="icon" onClick={() => removeProduct(idx)} className="shrink-0">
+                <Trash2 className="h-4 w-4 text-destructive" />
+              </Button>
             </div>
-          );
-        })}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs text-muted-foreground">Mover</span>
+              <Input
+                type="number"
+                min={1}
+                value={prod.recontact_days ?? ''}
+                onChange={e => {
+                  const val = e.target.value ? parseInt(e.target.value, 10) : null;
+                  updateProduct(idx, 'recontact_days', val);
+                }}
+                placeholder="75"
+                title="Quantos dias após a compra mover o lead"
+                className="w-20"
+              />
+              <span className="text-xs text-muted-foreground">dias após a compra</span>
+              <Select
+                value={prod.auto_move_from_stage_id || 'none'}
+                onValueChange={v => updateProduct(idx, 'auto_move_from_stage_id', v === 'none' ? null : v)}
+              >
+                <SelectTrigger className="w-40" title="Só move o lead se ele estiver nesta etapa">
+                  <SelectValue placeholder="De: etapa" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">De: qualquer etapa</SelectItem>
+                  {stages.map(s => (
+                    <SelectItem key={s.id} value={s.id}>De: {s.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select
+                value={prod.auto_move_stage_id || 'none'}
+                onValueChange={v => updateProduct(idx, 'auto_move_stage_id', v === 'none' ? null : v)}
+              >
+                <SelectTrigger className="w-44" title="Mover lead vencido para esta etapa">
+                  <SelectValue placeholder="Para: etapa" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Sem auto-mover</SelectItem>
+                  {stages.map(s => (
+                    <SelectItem key={s.id} value={s.id}>Para: {s.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        ))}
 
         {localProducts.length === 0 && (
           <p className="text-sm text-muted-foreground py-4">
