@@ -359,6 +359,29 @@ const LeadCampaignsPage: React.FC = () => {
                           <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
                         </Button>
                         <select
+                          value={funnel.ignore_traffic_funnel ? IGNORE_VALUE : (funnel.traffic_funnel_id || '')}
+                          onChange={async (e) => {
+                            e.stopPropagation();
+                            const raw = e.target.value;
+                            const isIgnore = raw === IGNORE_VALUE;
+                            const tfId = isIgnore ? null : (raw || null);
+                            try {
+                              await updateLeadFunnel.mutateAsync({
+                                id: funnel.id,
+                                traffic_funnel_id: tfId,
+                                ignore_traffic_funnel: isIgnore,
+                              } as any);
+                              toast.success(
+                                isIgnore
+                                  ? 'Funil de tráfego ignorado'
+                                  : tfId
+                                    ? 'Funil de tráfego associado!'
+                                    : 'Herdando funil da campanha'
+                              );
+                            } catch {
+                              toast.error('Erro ao atualizar funil');
+                            }
+                          }}
                                     ? 'Funil de tráfego associado!'
                                     : 'Herdando funil da campanha'
                               );
