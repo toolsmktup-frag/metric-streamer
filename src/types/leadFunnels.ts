@@ -5,6 +5,7 @@ export interface LeadCampaign {
   description: string | null;
   color: string;
   traffic_funnel_id: string | null;
+  ignore_traffic_funnel?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -20,6 +21,7 @@ export interface LeadFunnel {
   is_active: boolean;
   sort_order: number;
   traffic_funnel_id: string | null;
+  ignore_traffic_funnel?: boolean;
   meta_pixel_id: string | null;
   meta_access_token: string | null;
   created_at: string;

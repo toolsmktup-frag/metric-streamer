@@ -400,7 +400,7 @@ const LeadFunnelDetail: React.FC = () => {
               stages={stages}
               rules={rules}
               trafficFunnels={paymentFunnels}
-              currentTrafficFunnelId={funnel.traffic_funnel_id ?? campaign?.traffic_funnel_id ?? null}
+              currentTrafficFunnelId={(funnel as any).ignore_traffic_funnel ? null : (funnel.traffic_funnel_id ?? ((campaign as any)?.ignore_traffic_funnel ? null : campaign?.traffic_funnel_id) ?? null)}
               onTrafficFunnelChange={async (tfId) => {
                 try {
                   await updateLeadFunnel.mutateAsync({ id: funnel.id, traffic_funnel_id: tfId });
