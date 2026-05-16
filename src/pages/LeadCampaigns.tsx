@@ -382,13 +382,7 @@ const LeadCampaignsPage: React.FC = () => {
                               toast.error('Erro ao atualizar funil');
                             }
                           }}
-                                    ? 'Funil de tráfego associado!'
-                                    : 'Herdando funil da campanha'
-                              );
-                            } catch {
-                              toast.error('Erro ao atualizar funil');
-                            }
-                          }}
+                          onClick={(e) => e.stopPropagation()}
                           onClick={(e) => e.stopPropagation()}
                           className="border border-input rounded-md px-2 py-1 text-xs bg-background max-w-[180px]"
                           title="Funil de tráfego"
