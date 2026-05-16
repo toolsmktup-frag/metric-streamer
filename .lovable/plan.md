@@ -1,68 +1,70 @@
-## Auditoria — sincronização Funil de Tráfego ↔ Funil de Leads (CRM) ↔ Automações
+# Auditoria — Botão "Atualizar Funil" e lembrete de recontato (potes)
 
-### O que eu olhei
-- `FunisConfigurar` (funis de tráfego/pagamento + plataformas + produtos)
-- `LeadFunnelDetail` com 7 abas: Kanban, Funil, Flow, Métricas, **Configuração**, Automações, Webhook
-- `FunnelConfigTab` (577 linhas) que **dentro dele** ainda agrupa: etapas, regras de transição, produtos, mappings, redistribuição, WhatsApp Group Sync, Meta CAPI, traffic_funnel link
-- Webhooks por plataforma (`ticto-webhook`, `guru-webhook`, `eduzz-webhook`) → `webhook-lead` → regras → `lead_stage_positions`
-- `wz-executor` / `wz-scheduler` / `wz_flows` + `lead_funnel_automations` (vínculo flow ↔ funil)
-- Memórias do projeto (event-naming, dual-pipeline-webhooks, automation-integration, product-identification, traffic-funnel-link)
-
-### Diagnóstico honesto
-
-**1. A arquitetura por baixo está boa.** Os pilares estão certos:
-- nomes canônicos de eventos (`purchase`, `pix_generated`...) ✅
-- regras de transição declarativas em `stage_transition_rules` ✅
-- automações desacopladas em `wz_flows` linkadas via `lead_funnel_automations` ✅
-- webhook → CRM antes de disparar automação (dual-pipeline) ✅
-- traffic_funnel link para ROI ✅
-
-O problema **não é arquitetural, é de UX de configuração**. Hoje, pra colocar um funil novo no ar, o usuário precisa visitar **6+ telas** e entender **4 conceitos diferentes** (funil de tráfego, funil de leads, produtos do funil, mappings raw→produto, regras de transição, vínculo de automação).
-
-**2. Onde dói mais (ranqueado por fricção):**
-
-| # | Fricção | Por quê dói |
-|---|---|---|
-| 1 | Aba **Configuração** virou um "tudo aqui dentro" de 577 linhas com 7 sub-seções empilhadas | Sem hierarquia visual, sem "passo 1/2/3", o usuário rola e perde contexto |
-| 2 | **Funis de Tráfego e Funis de Leads são entidades separadas** que precisam ser ligadas manualmente em 2 lugares (campanha OU funil) | Duplica trabalho. 90% dos casos: 1 funil de tráfego = 1 funil de leads |
-| 3 | **Produtos** existem em 3 lugares: `funnel_products` (catálogo de tráfego), `lead_funnel_products` (do CRM) e `lead_product_mappings` (raw→canonical) | Mesmo conceito modelado 3x. Usuário não sabe qual mexer |
-| 4 | **Regras de transição** são montadas evento-a-evento, etapa-a-etapa, manualmente | Funil novo = 5 etapas × 4 eventos = 20 regras pra clicar. Deveria ter template |
-| 5 | **Automações** ficam em 2 abas distintas (`Automações` no CRM e `/wz/automacoes` global) sem visão unificada de "o que dispara quando" | Difícil saber se um lead vai cair em automação ou não |
-| 6 | **Webhook por plataforma** exige criar plataforma → copiar URL → colar no Ticto/Guru/Eduzz, um por um | Onboarding de 15-20 min antes de ver o 1º lead |
-| 7 | **Meta Pixel + CAPI** está enterrado dentro da aba Configuração do CRM, não na integração de tráfego | Quem configura Meta espera achar em Integrações ou no funil de tráfego |
-
-**3. O que NÃO está em boas práticas:**
-- Falta um **wizard de criação de funil** ("plataforma → produtos → etapas-padrão → automação opcional") que entregue um funil funcionando em 3 cliques
-- Falta **templates de funil** (ex.: "Lançamento", "Perpétuo com bump+upsell", "Recompra") que pré-criem etapas + regras + produtos
-- Falta **auto-vínculo tráfego↔leads**: quando o usuário cria um funil de leads escolhendo a mesma plataforma+produto principal de um funil de tráfego, deveria ligar sozinho
-- Falta **status visual de saúde do funil** ("3 webhooks recebendo OK, 0 leads sem etapa, última automação rodou 2min atrás") — hoje a única forma de saber é ir em logs
-
-### Plano de simplificação (3 ondas)
+## Como funciona hoje (mapa rápido)
 
 ```text
-Onda 1 (alto impacto, baixo risco) ─ UX da configuração
- ├─ Quebrar FunnelConfigTab em sub-rotas/sub-abas: Etapas · Produtos · Regras · Integrações
- ├─ Mover Meta Pixel/CAPI da aba "Configuração" do CRM pra aba do Funil de Tráfego
- ├─ Adicionar painel "Saúde do funil" no topo do LeadFunnelDetail
- └─ Botão "Aplicar template" (Lançamento / Perpétuo / Recompra) que cria etapas+regras de uma vez
-
-Onda 2 (médio risco) ─ Reduzir conceitos duplicados
- ├─ Auto-vincular funil de leads ↔ funil de tráfego pelo product_id (já temos a infra)
- ├─ Unificar lead_funnel_products + lead_product_mappings numa UI só ("Produtos do funil" com sub-tab "Variações detectadas")
- └─ Wizard de "Novo funil" (4 passos) que cria tráfego + leads + webhook + 1ª automação opcional
-
-Onda 3 (visão de longo prazo) ─ Observabilidade
- ├─ Tela única "Status de sincronização" (último webhook por plataforma, leads sem etapa, automações falhando)
- ├─ Visão "linha do tempo do lead" mostrando evento → regra aplicada → automação disparada
- └─ Alertas proativos (token Meta expirando, plataforma sem webhook há 24h, regra que nunca disparou)
+                       ┌──────────────────────────────┐
+   lead_funnel_products│ recontact_days (ex.: 30, 90) │
+                       │ auto_move_from_stage_id      │  ← origem permitida
+                       │ auto_move_stage_id           │  ← destino (Recontato)
+                       └─────────────┬────────────────┘
+                                     │
+        ┌────────────────────────────┴──────────────────────────────┐
+        │                                                            │
+  Botão "Atualizar Funil"                              cron recontact-daily
+  (KanbanBoard → LeadFunnelDetail.                    (03:00 UTC todo dia)
+   handleBulkMoveOverdue)                              supabase/functions/
+                                                       recontact-cron
+        │                                                            │
+        └─────── mesma regra: só move se VENCIDO ───────────────────┘
+                 (daysRemaining < 0, isOverdue)
 ```
 
-### Detalhe técnico (referência)
-- A onda 1 é só refator de UI — não toca em DB nem em edge functions. Risco baixo
-- A onda 2 reaproveita `useLeadProductMappings` + `useLeadFunnelProducts` num único hook composto; auto-link usa `funnel_products.product_id` que já casa com `lead_funnel_products.product_id`
-- A onda 3 precisa de: `meta_sync_log` (já existe), `wz_executions` (já existe), e uma view nova `v_funnel_health` agregando os dois + webhook timestamps
+UI mostra badge "faltam Xd / atrasado Yd" em cada card (`useRecontactDeadlines`) e permite ordenar a coluna por recontato. Não existe disparo automático de mensagem 25 dias antes — o sistema **só age depois que vence**.
 
-### O que eu recomendo começar agora
-**Onda 1 inteira** numa única story — entrega ganho de UX visível em 1-2 dias de trabalho sem mexer em nada crítico. Depois decidimos onda 2 com base no feedback.
+## Achados (do mais importante pro menor)
 
-Quer que eu detalhe a Onda 1 em sub-tarefas concretas pra implementar, ou prefere ajustar o escopo antes (ex.: tirar templates, adicionar algo)?
+### 1. "Lembrar 25 dias antes" NÃO existe hoje
+Tanto o botão quanto o cron só fazem uma coisa: **mover** o lead pra etapa de recontato **depois** que `purchase_date + recontact_days` já passou. Não há gatilho proativo "faltam N dias → manda WhatsApp" nem mudança de cor/etapa antecipada. A UI mostra o countdown, mas o sistema não dispara nada com base nele.
+
+Opções pra resolver (decidir depois):
+- a) Campo novo `remind_days_before` no `lead_funnel_products` + cron lê e dispara automação WhatsApp.
+- b) Etapa intermediária "Lembrete enviado" com `auto_move_stage_id` separado e `recontact_days = original − 25`. Reaproveita 100% da infra atual.
+- c) Trigger nativo na automação WZ por "dias desde última compra" (mais flexível, mais trabalho).
+
+### 2. Botão e cron rodam regras LIGEIRAMENTE diferentes
+- **Botão** (`handleBulkMoveOverdue`, linha 95-141 de `LeadFunnelDetail.tsx`) chama `moveLeadStage.mutateAsync` → passa por toda a cadeia de regras (registra `stage_transition`, dispara realtime, pode acionar automações).
+- **Cron** (`recontact-cron/index.ts` linha 203-227) faz `UPDATE` direto em `lead_stage_positions` e só registra `lead_events { event_name: 'auto_recontact_move' }`.
+
+Consequência: um lead movido pelo cron não aparece nos relatórios de movimentação por etapa do mesmo jeito que um movido pelo botão. Risco médio — dashboards de transição podem subcontar.
+
+### 3. Soma de `recontact_days` pode confundir
+Ambos somam: se o lead comprou Pote 30d + Pote 90d, o deadline = última compra + 120 dias. Isso é a memória `recontact-system` (linear accumulation) — mas pro caso "vendi 30d e quero recontatar pra vender 90d" o usuário talvez espere **30 dias do produto inicial**, não 120. Vale confirmar a intenção com a Gabi.
+
+### 4. Match por substring é frágil
+`product_name_contains` usa `includes()` case-insensitive sem ordenação. Se houver dois produtos cadastrados ("Articulabem" e "Articulabem Premium"), o primeiro a casar ganha — pode pegar o errado. Já existem `lead_product_mappings` (match explícito) com prioridade correta, então só dá problema quando o mapping não está preenchido.
+
+### 5. Date parsing diverge entre UI e cron
+- UI usa `parseLocalDateTime` (timezone local consistente).
+- Cron faz parsing manual: `dd/MM/yyyy` vira meia-noite **local do servidor (UTC)**, ISO usa UTC direto. Em datas de borda (compra às 22h BRT do dia X) pode dar 1 dia de diferença entre o que aparece na UI e o que o cron decide.
+
+### 6. Sem feedback de saúde
+Hoje não dá pra saber, sem ler logs do cron, **se ele rodou ontem** ou quantos leads moveu. Único sinal é o `lead_events.event_name = 'auto_recontact_move'`.
+
+## Sugestão de próximos passos (escolher um)
+
+1. **Implementar lembrete proativo (#1)** — mais valor pro negócio, é a dor real (avisar antes do pote acabar). Opção (b) é a mais barata: criar uma etapa "Lembrete 25d antes" e configurar `recontact_days = produto_dias − 25`. Zero código novo.
+2. **Unificar botão + cron (#2)** — fazer o cron chamar a mesma RPC/rota que o botão, garantindo logs consistentes.
+3. **Painel de saúde** — pequeno card no topo do funil mostrando "última execução do cron, X leads movidos, Y vencidos pendentes".
+4. **Tudo junto** — escopo médio, ~1 dia de trabalho.
+
+Não recomendo mexer nos itens 3-5 agora a menos que apareça caso concreto — são riscos teóricos.
+
+## Detalhes técnicos (referência)
+
+- Arquivos centrais: `src/pages/LeadFunnelDetail.tsx` (95-141), `src/components/lead-funnels/KanbanBoard.tsx` (298-318), `src/hooks/useRecontactDeadlines.ts`, `supabase/functions/recontact-cron/index.ts`.
+- Schema: `lead_funnel_products.{recontact_days, auto_move_stage_id, auto_move_from_stage_id}` (migrações em `docs/migration_recontact_cron.sql` + `docs/sql/setup-recompra-compra-aprovada-to-base-recontato.sql`).
+- Cron: `pg_cron` `'recontact-daily'`, `0 3 * * *` (00h BRT) chamando edge function via `pg_net`.
+- Filtro de origem: se `auto_move_from_stage_id` está setado, só move leads naquela etapa (protege quem está em negociação) — já funciona corretamente nos dois caminhos.
+
+Me diz qual dos 4 caminhos seguir e eu detalho.
