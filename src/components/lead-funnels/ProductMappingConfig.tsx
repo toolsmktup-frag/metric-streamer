@@ -86,20 +86,40 @@ const ProductMappingConfig: React.FC<ProductMappingConfigProps> = ({
 
   const renderProductRow = (rawName: string) => {
     const crossMappings = crossFunnelMap?.[rawName] || [];
+    const isMapped = !!localMappings[rawName];
+    const hasHint = !isMapped && crossMappings.length > 0;
     return (
-      <div key={rawName} className="flex items-center gap-3 bg-muted/50 rounded-lg p-3">
-        <Package className="h-4 w-4 text-muted-foreground shrink-0" />
+      <div
+        key={rawName}
+        className={`flex items-start gap-3 rounded-lg p-3 border ${
+          hasHint
+            ? 'bg-sky-500/5 border-sky-500/30'
+            : 'bg-muted/50 border-transparent'
+        }`}
+      >
+        <Package className="h-4 w-4 text-muted-foreground shrink-0 mt-1" />
         <div className="flex-1 min-w-0">
           <span className="text-sm truncate block" title={rawName}>
             {rawName}
           </span>
           {crossMappings.length > 0 && (
-            <div className="flex flex-wrap gap-1 mt-1">
-              {crossMappings.map((cm, i) => (
-                <Badge key={i} variant="outline" className="text-[10px] px-1.5 py-0 text-muted-foreground">
-                  Também em: {cm.funnel_name}
-                </Badge>
-              ))}
+            <div className="flex items-start gap-1.5 mt-1.5 text-[11px] text-sky-700 dark:text-sky-400">
+              <Lightbulb className="h-3 w-3 shrink-0 mt-0.5" />
+              <div className="flex flex-wrap gap-1">
+                <span className="opacity-80">
+                  {isMapped ? 'Também vinculado em:' : 'Já vinculado em outros funis como:'}
+                </span>
+                {crossMappings.map((cm, i) => (
+                  <Badge
+                    key={i}
+                    variant="outline"
+                    className="text-[10px] px-1.5 py-0 border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300 font-normal"
+                  >
+                    <span className="font-medium">{cm.product_display_name}</span>
+                    <span className="opacity-60 ml-1">· {cm.funnel_name}</span>
+                  </Badge>
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -107,7 +127,7 @@ const ProductMappingConfig: React.FC<ProductMappingConfigProps> = ({
           value={localMappings[rawName] || 'none'}
           onValueChange={v => handleChange(rawName, v)}
         >
-          <SelectTrigger className="w-56">
+          <SelectTrigger className="w-56 shrink-0">
             <SelectValue placeholder="Vincular a..." />
           </SelectTrigger>
           <SelectContent>
