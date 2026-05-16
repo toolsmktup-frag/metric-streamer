@@ -1,69 +1,75 @@
-# Plano — Lembrete "25 dias antes do pote acabar"
+# Revisão da lógica de recontato (Pote → Abordar Hoje)
 
-## Objetivo
+## Como funciona hoje
 
-Avisar a vendedora (via Kanban + WhatsApp) que um cliente está prestes a ficar sem o pote, antes do prazo acabar — sem código novo, reusando a infra de recontato que já existe.
+O campo **`recontact_days`** significa literalmente:
 
-## Abordagem (opção 1b)
+> "Depois de X dias da compra, mover o lead de **Compra Aprovada** para **Para abordar hoje**."
 
-Criar uma **etapa intermediária "Lembrete 25d antes"** no funil RECOMPRA - POTES e configurar produtos espelhados com `recontact_days = produto_dias − 25`. O cron e o botão "Atualizar Funil" já existentes movem os leads automaticamente pra essa etapa quando faltam 25 dias.
+O cron `recontact-cron` roda, pega a data da última compra do lead, soma `recontact_days` e, se passou, move pra etapa de destino. Só mexe se o lead ainda estiver na etapa "De" (protege quem já tá em negociação).
 
-```text
-Compra Aprovada ──(produto_dias − 25)──▶ Lembrete 25d antes ──(25 dias)──▶ Base de Recontato
-       │                                          │                                │
-       └─ lead comprou Pote 30d                   └─ vendedora vê card             └─ pote acabou,
-          dia 01/01                                  no dia 06/01 e                   move pra negociação
-                                                     manda WhatsApp
-```
+Sua interpretação está **correta**. Os números na tela são "dias após a compra pra ir pra Abordar Hoje".
 
-## Passos
+## O que tá inconsistente nos valores atuais
 
-1. **Criar etapa nova no Kanban** do funil `19f75912...` (RECOMPRA - POTES):
-   - Nome: `Lembrete 25d antes`
-   - Posição: entre "Compra Aprovada" e "Base de Recontato"
-   - Cor: laranja/amarelo (atenção, não urgência)
+| Produto         | Pote dura | Configurado | Offset (dias antes do pote acabar) |
+|-----------------|-----------|-------------|-------------------------------------|
+| Pote 30 dias    | 30        | 25          | 5 dias antes                        |
+| Pote 90 dias    | 90        | 75          | 15 dias antes                       |
+| Pote 180 dias   | 180       | 155         | 25 dias antes                       |
+| Pote 360 dias   | 360       | 330         | 30 dias antes                       |
+| Grátis 30 dias  | 30        | 25          | 5 dias antes                        |
+| 9 Potes         | 270 (?)   | 250         | 20 dias antes                       |
 
-2. **Duplicar configuração de produtos** em `lead_funnel_products`:
-   - Para cada produto com `recontact_days` (Pote 30, Pote 90, Pote 180, etc.), criar um segundo registro:
-     - `product_name_contains`: mesmo
-     - `recontact_days`: original − 25 (ex.: 30 → 5, 90 → 65, 180 → 155)
-     - `auto_move_from_stage_id`: "Compra Aprovada"
-     - `auto_move_stage_id`: nova etapa "Lembrete 25d antes"
-   - Os registros originais continuam levando de "Lembrete 25d antes" → "Base de Recontato" depois dos 25 dias finais.
-     - Ajustar `auto_move_from_stage_id` dos registros originais para apontar para "Lembrete 25d antes" (em vez de "Compra Aprovada").
-     - Ajustar `recontact_days` dos registros originais para `25` (os 25 dias restantes).
+Cada produto usa um "lembrete" diferente (5, 15, 25, 30 dias antes). Não tem regra clara — fica difícil de manter e de explicar pra equipe.
 
-3. **Conferir a soma linear**: a memória `recontact-system` soma `recontact_days` quando há múltiplas compras. Confirmar que o comportamento esperado para o lembrete também é cumulativo (cliente que comprou Pote 30 + Pote 90 vai pra "Lembrete" quando faltam 25d do total = dia 95).
+## Risco extra que vale você saber
 
-4. **(Opcional, mesma sessão) Ligar automação WhatsApp** na entrada da etapa "Lembrete 25d antes":
-   - Trigger: `lead_entered_stage` = "Lembrete 25d antes"
-   - Mensagem: "Oi {{nome}}, seu pote está acabando em ~25 dias. Quer já garantir o próximo?"
-   - Reusa a infra `wz-automation` que já existe.
+Quando um cliente compra **vários potes na mesma compra**, o sistema **soma os dias linearmente** (90 + 180 = 270d a partir da última compra). Se ele acumular muitos potes, o recontato pode nunca disparar dentro de um prazo útil.
 
-## Riscos / pontos de atenção
+## Recomendação (3 opções)
 
-- **Mexe na produção do funil mais crítico** — fazer numa janela de baixo movimento e validar com 1-2 leads de teste antes.
-- **Cards vão acumular numa etapa nova** — pré-aviso pra Gabi de que vai aparecer coluna nova no Kanban.
-- **Soma linear** (item 3) pode surpreender: confirmar com a Gabi se "25d antes do total acumulado" é o que ela quer, ou se prefere "25d antes da próxima compra individual".
-- **Não unifica botão + cron** — os relatórios de transição continuam com leve inconsistência (achado #2 da auditoria). Fica pra um próximo passo se necessário.
+### Opção A — Padronizar offset único (mais simples)
 
-## O que NÃO vai ser feito agora
+Define **um único valor de "dias antes do pote acabar"** pra todos os produtos (ex: 25 dias). O sistema continua igual, só os números ficam consistentes:
 
-- Painel de saúde do cron (achado #6)
-- Unificar lógica botão vs cron (achado #2)
-- Reescrever date parsing (achado #5)
-- Refinar match por substring (achado #4)
+- Pote 30  → 5  (30 − 25, mas como é pote curto, talvez 15)
+- Pote 90  → 65 (90 − 25)
+- Pote 180 → 155 (180 − 25)
+- Pote 360 → 335 (360 − 25)
 
-## Detalhes técnicos (referência)
+Vantagem: zero código novo, só ajustar números na UI.
+Desvantagem: pote de 30 dias com offset de 25 dá só 5 dias de uso, então precisa de exceção.
 
-- Tabela: `public.lead_funnel_products` (colunas `recontact_days`, `auto_move_from_stage_id`, `auto_move_stage_id`)
-- Etapas: `public.lead_funnel_stages` (criar nova com `funnel_id = 19f75912...`)
-- Cron: `recontact-daily` já roda 00h BRT, não precisa mudar
-- Botão: `handleBulkMoveOverdue` em `LeadFunnelDetail.tsx` já cobre o novo fluxo
-- SQL de setup: criar arquivo `docs/sql/setup-lembrete-25d-antes.sql` espelhando o padrão de `setup-recompra-compra-aprovada-to-base-recontato.sql`
+### Opção B — Adicionar 2 colunas separadas (mais explícito)
 
-## Entrega
+Em vez de um campo confuso `recontact_days`, separar em 2:
 
-1. SQL pronto pra colar no Supabase Dashboard (criação da etapa + upsert dos `lead_funnel_products`)
-2. Instruções curtas pra Gabi de como configurar a automação WhatsApp na nova etapa
-3. Checklist de validação com 1-2 leads de teste
+- **`pot_duration_days`**: quanto tempo o pote dura (30, 90, 180...)
+- **`reminder_days_before`**: quantos dias antes do fim mandar o lembrete (ex: 25)
+
+Na UI vira:
+> "Pote 90 dias — Lembrar **25 dias antes** de acabar"
+
+O cron calcula sozinho: `move_at = compra + (pot_duration − reminder_days_before)`.
+
+Vantagem: a vendedora entende na hora o que tá configurando. Mudou a regra de "25d antes"? Edita 1 campo e aplica pra todos.
+Desvantagem: precisa migração de schema + ajuste no cron + UI.
+
+### Opção C — Manter como está
+
+Deixa do jeito que tá, só padroniza os valores manualmente seguindo uma regra mental sua.
+
+## Sobre a etapa "Lembrete 25d antes"
+
+Aquele SQL anterior assumiu que existia uma etapa intermediária ("Base de Recontato") e queria criar "Lembrete 25d antes" no meio. Mas o funil real **não tem** "Base de Recontato" — o destino atual é direto **"Para abordar hoje"**.
+
+Então a ideia de criar uma etapa intermediária só faz sentido se você quiser **2 disparos de WhatsApp**: um "faltam 25 dias" (na etapa Lembrete) e outro "acabou hoje" (em Abordar Hoje). Se 1 disparo só já basta, **não precisa de etapa nova**.
+
+## O que eu sugiro fazer
+
+1. Você me confirma qual o offset padrão que faz sentido (ex: "quero lembrar 25 dias antes do pote acabar pra todo mundo, exceto pote de 30d que é 7 dias antes").
+2. Decide entre **Opção A** (rápido, só ajusta números) ou **Opção B** (mais limpo, mexe no schema).
+3. Decide se quer **1 ou 2 disparos de WhatsApp** (etapa intermediária ou não).
+
+Com essas 3 respostas eu monto o plano de execução final.
