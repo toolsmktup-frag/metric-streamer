@@ -454,6 +454,44 @@ const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSave
             </div>
           )}
 
+          {onSaveLinkedCampaigns && allCampaigns.length > 0 && (
+            <div>
+              <h3 className="text-lg font-semibold text-foreground mb-2">Campanhas agregadas (Visão Geral)</h3>
+              <p className="text-sm text-muted-foreground mb-3">
+                Selecione campanhas adicionais para que este funil mostre leads vindos delas, agrupados pelas etapas com nome igual.
+                Útil para criar um funil "Geral" que junta várias campanhas num só Kanban.
+              </p>
+              <div className="space-y-2 border border-border rounded-md p-3 max-h-64 overflow-y-auto bg-background">
+                {allCampaigns.map(c => {
+                  const checked = localLinkedCampaigns.includes(c.id);
+                  return (
+                    <label key={c.id} className="flex items-center gap-2 cursor-pointer text-sm">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={e => {
+                          setLocalLinkedCampaigns(prev =>
+                            e.target.checked ? [...prev, c.id] : prev.filter(x => x !== c.id)
+                          );
+                        }}
+                      />
+                      <span className="h-3 w-3 rounded-full" style={{ backgroundColor: c.color }} />
+                      <span className="text-foreground">{c.name}</span>
+                    </label>
+                  );
+                })}
+              </div>
+              <Button
+                onClick={() => onSaveLinkedCampaigns(localLinkedCampaigns)}
+                disabled={savingLinkedCampaigns}
+                className="mt-3"
+                size="sm"
+              >
+                {savingLinkedCampaigns ? 'Salvando...' : 'Salvar campanhas agregadas'}
+              </Button>
+            </div>
+          )}
+
           {onMetaPixelChange && (
             <div>
               <h3 className="text-lg font-semibold text-foreground mb-2">Meta Conversions API (CAPI)</h3>
