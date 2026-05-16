@@ -1,48 +1,57 @@
-# Fix: "Ignorar funil de tráfego" quebra com erro
+# Conferir se webhooks da Guru estão vindo de contas diferentes
 
-## Diagnóstico
+Sem alteração de código. Só queries SQL pra rodar no Supabase Dashboard → SQL Editor e analisar o tráfego que já chegou.
 
-Em `src/pages/LeadCampaigns.tsx` o seletor "🚫 Ignorar funil de tráfego" grava um UUID fake (`00000000-0000-0000-0000-000000000000`) na coluna `lead_funnels.traffic_funnel_id`.
-
-Essa coluna é uma **foreign key** para `funnels(id)` (veja `docs/migration_traffic_funnel_link.sql`). Como esse UUID zero não existe na tabela `funnels`, o Postgres rejeita o update com violação de FK — daí o toast "Erro ao atualizar funil".
-
-Resultado: clicar em "Ignorar" sempre falha, no caso do "Dia das Maes/26" e em qualquer outro funil/campanha.
-
-## Solução
-
-Trocar o sentinel UUID por uma coluna booleana dedicada `ignore_traffic_funnel`.
-
-### Banco (SQL para rodar no Supabase Dashboard)
+## 1. Ver últimos webhooks brutos da Guru (com identificador do produtor)
 
 ```sql
-ALTER TABLE public.lead_funnels
-  ADD COLUMN IF NOT EXISTS ignore_traffic_funnel boolean NOT NULL DEFAULT false;
-
-ALTER TABLE public.lead_campaigns
-  ADD COLUMN IF NOT EXISTS ignore_traffic_funnel boolean NOT NULL DEFAULT false;
+SELECT
+  created_at,
+  payload->'producer'->>'id'          AS producer_id,
+  payload->'producer'->>'name'        AS producer_name,
+  payload->'producer'->>'document'    AS producer_doc,
+  payload->>'event'                   AS event,
+  payload->'product'->>'name'         AS product_name
+FROM public.webhook_audit_log
+WHERE source = 'guru'
+  AND created_at > now() - interval '7 days'
+ORDER BY created_at DESC
+LIMIT 50;
 ```
 
-### Frontend (`src/pages/LeadCampaigns.tsx`)
+Se `producer_id` / `producer_doc` aparecer **com valores diferentes** entre as linhas → tá entrando webhook de mais de uma conta Guru. Se só aparecer um valor → ainda é uma conta só.
 
-- Remover constante `IGNORE_FUNNEL_ID`.
-- No `<select>` do funil:
-  - `value` = `'__ignore__'` se `funnel.ignore_traffic_funnel`, senão `funnel.traffic_funnel_id || ''`.
-  - Ao escolher `__ignore__`: chamar `updateLeadFunnel.mutateAsync({ id, ignore_traffic_funnel: true, traffic_funnel_id: null })`.
-  - Ao escolher um funil real: `{ ignore_traffic_funnel: false, traffic_funnel_id: val }`.
-  - Ao escolher vazio (herdar/sem): `{ ignore_traffic_funnel: false, traffic_funnel_id: null }`.
-- Mesma lógica no `<select>` da campanha (linha 251).
+## 2. Contagem agrupada por conta Guru (últimos 30 dias)
 
-### Tipos / hooks
+```sql
+SELECT
+  payload->'producer'->>'id'   AS producer_id,
+  payload->'producer'->>'name' AS producer_name,
+  count(*)                     AS webhooks
+FROM public.webhook_audit_log
+WHERE source = 'guru'
+  AND created_at > now() - interval '30 days'
+GROUP BY 1, 2
+ORDER BY webhooks DESC;
+```
 
-- `src/types/leadFunnels.ts`: adicionar `ignore_traffic_funnel: boolean` em `LeadFunnel` e `LeadCampaign`.
-- `useUpdateLeadFunnel` / `useUpdateLeadCampaign` já fazem spread, então só passa o campo novo.
+## 3. Cruzar com `customer_purchases` (vendas já processadas)
 
-### Atribuição de ROI (consumidores do traffic_funnel_id)
+```sql
+SELECT
+  funnel_id,
+  count(*) AS vendas,
+  min(purchased_at) AS primeira,
+  max(purchased_at) AS ultima
+FROM public.customer_purchases
+WHERE platform = 'guru'
+  AND purchased_at > now() - interval '7 days'
+GROUP BY funnel_id
+ORDER BY vendas DESC;
+```
 
-Pontos a revisar para respeitar o flag (qualquer leitura que faça "herdar da campanha quando funil é null"):
-- `src/pages/LeadFunnelDetail.tsx:403` — usa `funnel.traffic_funnel_id ?? campaign?.traffic_funnel_id`. Precisa virar: se `funnel.ignore_traffic_funnel` → `null`; senão se `funnel.traffic_funnel_id` → usa; senão se `campaign.ignore_traffic_funnel` → `null`; senão `campaign.traffic_funnel_id`.
-- Qualquer query de relatório que faça o mesmo "coalesce" (a buscar via grep antes de editar).
+Confirma que as vendas das duas contas Guru estão caindo no mesmo `funnel_id` (Articulabem - 1).
 
-## Escopo
+## Se as queries acima não retornarem nada
 
-Apenas o fluxo "Ignorar funil de tráfego". Nenhuma alteração em webhooks, automações, ou outras telas.
+Os nomes dos campos podem variar (`producer` vs `seller` vs `account_id`). Nesse caso me manda 1 print de uma linha bruta do `webhook_audit_log` (campo `payload` inteiro) que eu ajusto as queries.
