@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Badge } from '@/components/ui/badge';
-import { Link2, Package, ChevronDown, ChevronRight, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Link2, Package, ChevronDown, ChevronRight, AlertCircle, CheckCircle2, Lightbulb } from 'lucide-react';
 import type { LeadFunnelProduct } from '@/hooks/useLeadFunnelProducts';
 import type { LeadProductMapping, CrossFunnelMapping } from '@/hooks/useLeadProductMappings';
 import { useAllLeadProductMappings } from '@/hooks/useLeadProductMappings';
