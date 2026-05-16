@@ -41,17 +41,58 @@ async function fetchAllRows<T>(
 
 export function useLeadsByFunnel(
   funnelId: string | null,
-  options?: { refetchInterval?: number | false }
+  options?: {
+    refetchInterval?: number | false;
+    /** Funis adicionais cujos lead_stage_positions devem ser agregados (visão geral). */
+    aggregateFromFunnelIds?: string[];
+    /** Mapa stage_name (lowercase) → stage_id do funil destino. Posições agregadas com stage_name não-mapeado são descartadas. */
+    stageNameToIdMap?: Record<string, string>;
+  }
 ) {
+  const extraIds = (options?.aggregateFromFunnelIds || []).filter(Boolean);
+  const stageMap = options?.stageNameToIdMap || {};
+  const stageMapKey = Object.keys(stageMap).sort().map(k => `${k}:${stageMap[k]}`).join('|');
   return useQuery({
-    queryKey: ['leads-by-funnel', funnelId],
+    queryKey: ['leads-by-funnel', funnelId, extraIds.slice().sort().join(','), stageMapKey],
     queryFn: async () => {
       if (!funnelId) return [];
-      return fetchAllRows<LeadStagePosition & { lead: Lead }>(
+      const own = await fetchAllRows<LeadStagePosition & { lead: Lead }>(
         'lead_stage_positions',
         '*, lead:leads(*)',
         { column: 'funnel_id', value: funnelId },
       );
+      if (extraIds.length === 0) return own;
+
+      // Agrega posições dos funis selecionados, remapeando stage_id pelo nome da etapa do funil destino
+      const aggregated: (LeadStagePosition & { lead: Lead })[] = [];
+      for (const srcId of extraIds) {
+        if (srcId === funnelId) continue;
+        const [srcStagesRes, srcPositions] = await Promise.all([
+          (supabase as any).from('lead_funnel_stages').select('id, name').eq('funnel_id', srcId),
+          fetchAllRows<LeadStagePosition & { lead: Lead }>(
+            'lead_stage_positions',
+            '*, lead:leads(*)',
+            { column: 'funnel_id', value: srcId },
+          ),
+        ]);
+        const srcStageIdToName: Record<string, string> = {};
+        for (const s of (srcStagesRes.data || []) as { id: string; name: string }[]) {
+          srcStageIdToName[s.id] = (s.name || '').trim().toLowerCase();
+        }
+        for (const p of srcPositions) {
+          const nm = srcStageIdToName[p.stage_id];
+          const remapped = nm ? stageMap[nm] : undefined;
+          if (!remapped) continue;
+          aggregated.push({ ...p, stage_id: remapped, funnel_id: funnelId });
+        }
+      }
+      // Dedupe por lead_id (mantém a posição mais recente)
+      const byLead = new Map<string, LeadStagePosition & { lead: Lead }>();
+      for (const p of [...own, ...aggregated]) {
+        const cur = byLead.get(p.lead_id);
+        if (!cur || new Date(p.entered_at) > new Date(cur.entered_at)) byLead.set(p.lead_id, p);
+      }
+      return Array.from(byLead.values());
     },
     enabled: !!funnelId,
     refetchInterval: options?.refetchInterval ?? false,
