@@ -1,11 +1,22 @@
 import React, { useState } from 'react';
-import { useLeadFunnelAutomations } from '@/hooks/useLeadFunnelAutomations';
+import { useLeadFunnelAutomations, useUnlinkFunnelAutomation } from '@/hooks/useLeadFunnelAutomations';
 import { useWzExecutions } from '@/hooks/useWzExecutions';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ExternalLink, Zap, Eye, EyeOff, Plus, Loader2 } from 'lucide-react';
+import { ExternalLink, Zap, Eye, EyeOff, Plus, Loader2, Trash2 } from 'lucide-react';
 import { useUpdateFunnelAutomation } from '@/hooks/useLeadFunnelAutomations';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
