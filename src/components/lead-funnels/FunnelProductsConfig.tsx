@@ -14,8 +14,6 @@ interface ProductRow {
   product_name_contains: string;
   display_name: string;
   recontact_days: number | null;
-  pot_duration_days: number | null;
-  reminder_days_before: number | null;
   auto_move_stage_id: string | null;
   auto_move_from_stage_id: string | null;
 }
