@@ -601,7 +601,8 @@ export default function FunisConfigurar() {
         </Card>
       )}
 
-      {/* Lista de funis */}
+      {/* Lista de funis (oculta no modo "edição focada" via ?editar=) */}
+      {!focusedEditId && (
       <div className="space-y-3">
         {funnels.map((funnel) => {
           const platforms = funnel.funnel_platforms || [];
