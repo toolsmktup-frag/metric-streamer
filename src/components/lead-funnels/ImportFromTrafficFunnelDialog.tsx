@@ -54,20 +54,31 @@ async function fetchLeadsByUtm(trafficFunnelId: string, organizationId: string, 
   const names = Array.from(new Set(((campaigns || []) as { name: string }[]).map(c => c.name).filter(Boolean)));
   if (names.length === 0) return [];
 
+  // Chunk em batches pequenos pra evitar URL gigante (PostgREST → 400 Bad Request)
+  const NAMES_CHUNK = 25;
+  const seen = new Set<string>();
   const rows: any[] = [];
-  for (let from = 0; ; from += PAGE_SIZE) {
-    const { data, error } = await (supabase as any)
-      .from('leads')
-      .select('name, email, phone, utm_source, utm_medium, utm_campaign, utm_content, utm_term, created_at')
-      .eq('organization_id', organizationId)
-      .in('utm_campaign', names)
-      .gte('created_at', dayStartISO(dateFrom))
-      .lte('created_at', dayEndISO(dateTo))
-      .range(from, from + PAGE_SIZE - 1);
-    if (error) throw error;
-    const batch = (data || []) as any[];
-    rows.push(...batch);
-    if (batch.length < PAGE_SIZE) break;
+
+  for (let i = 0; i < names.length; i += NAMES_CHUNK) {
+    const chunk = names.slice(i, i + NAMES_CHUNK);
+    for (let from = 0; ; from += PAGE_SIZE) {
+      const { data, error } = await (supabase as any)
+        .from('leads')
+        .select('id, name, email, phone, utm_source, utm_medium, utm_campaign, utm_content, utm_term, created_at')
+        .eq('organization_id', organizationId)
+        .in('utm_campaign', chunk)
+        .gte('created_at', dayStartISO(dateFrom))
+        .lte('created_at', dayEndISO(dateTo))
+        .range(from, from + PAGE_SIZE - 1);
+      if (error) throw error;
+      const batch = (data || []) as any[];
+      for (const r of batch) {
+        if (seen.has(r.id)) continue;
+        seen.add(r.id);
+        rows.push(r);
+      }
+      if (batch.length < PAGE_SIZE) break;
+    }
   }
   return rows;
 }
