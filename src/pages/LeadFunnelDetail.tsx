@@ -15,7 +15,7 @@ import { useCurrentUserRole } from '@/hooks/useCurrentUserRole';
 import { useHasFunnelAccess } from '@/hooks/useLeadFunnelAccess';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Upload, Trash2, Layers } from 'lucide-react';
+import { ArrowLeft, Upload, Trash2, Layers, TrendingUp } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   AlertDialog,
