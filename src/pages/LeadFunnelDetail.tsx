@@ -38,6 +38,7 @@ import FunnelMetricsTab from '@/components/lead-funnels/FunnelMetricsTab';
 import FunnelAutomationsTab from '@/components/lead-funnels/FunnelAutomationsTab';
 import LeadTimeline from '@/components/lead-funnels/LeadTimeline';
 import ImportLeadsDialog from '@/components/lead-funnels/ImportLeadsDialog';
+import ImportFromTrafficFunnelDialog from '@/components/lead-funnels/ImportFromTrafficFunnelDialog';
 import { Lead } from '@/types/leadFunnels';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
