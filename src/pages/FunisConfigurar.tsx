@@ -474,8 +474,12 @@ export default function FunisConfigurar() {
   return (
     <div className="space-y-6 max-w-3xl">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Gerenciar Funis</h1>
-        {!editingId && (
+        <h1 className="text-2xl font-bold">
+          {focusedEditId
+            ? `Editar Funil${editingFunnel ? ` — ${editingFunnel.name}` : ''}`
+            : 'Gerenciar Funis'}
+        </h1>
+        {!editingId && !focusedEditId && (
           <Button onClick={startNew} size="sm">
             <Plus className="h-4 w-4 mr-2" /> Novo Funil
           </Button>
