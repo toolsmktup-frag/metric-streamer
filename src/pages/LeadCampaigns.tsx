@@ -29,6 +29,7 @@ const LeadCampaignsPage: React.FC = () => {
   const createFunnel = useCreateLeadFunnel();
   const deleteFunnel = useDeleteLeadFunnel();
   const updateLeadFunnel = useUpdateLeadFunnel();
+  const upsertFunnelTrafficFunnels = useUpsertLeadFunnelTrafficFunnels();
 
   const IGNORE_VALUE = '__ignore__';
 
