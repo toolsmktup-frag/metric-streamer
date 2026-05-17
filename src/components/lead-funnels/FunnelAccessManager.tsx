@@ -38,11 +38,13 @@ export default function FunnelAccessManager({ campaignId, funnelId, title }: Fun
 
       const { data: profiles } = await (supabase as any)
         .from('user_profiles')
-        .select('id, full_name, role')
+        .select('id, full_name, role, status')
         .eq('organization_id', orgId);
 
-      // Only show sellers (vendedor/suporte) — admins/gestors always have access
-      const sellers = (profiles || []).filter((p: any) => !['admin', 'gestor'].includes(p.role));
+      // Only show ACTIVE sellers (vendedor/suporte) — admins/gestors always have access; bloqueados/pendentes ficam fora
+      const sellers = (profiles || []).filter(
+        (p: any) => !['admin', 'gestor'].includes(p.role) && p.status === 'active'
+      );
 
       const mapped: UserAccess[] = sellers.map((p: any) => ({
         user_id: p.id,
