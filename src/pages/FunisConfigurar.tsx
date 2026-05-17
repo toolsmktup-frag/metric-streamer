@@ -455,7 +455,11 @@ export default function FunisConfigurar() {
       });
 
       toast({ title: 'Funil salvo com sucesso!' });
-      setEditingId(null);
+      if (focusedEditId) {
+        navigate(-1);
+      } else {
+        setEditingId(null);
+      }
     } catch (err) {
       toast({ title: 'Erro ao salvar', description: String(err), variant: 'destructive' });
     }
