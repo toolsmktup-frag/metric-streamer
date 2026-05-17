@@ -465,40 +465,12 @@ const LeadCampaignsPage: React.FC = () => {
                 <div className="flex items-center gap-2 shrink-0">
                   {isAdmin && (
                     <>
-                      <select
-                        value={funnel.ignore_traffic_funnel ? IGNORE_VALUE : (funnel.traffic_funnel_id || '')}
-                        onChange={async (e) => {
-                          e.stopPropagation();
-                          const raw = e.target.value;
-                          const isIgnore = raw === IGNORE_VALUE;
-                          const tfId = isIgnore ? null : (raw || null);
-                          try {
-                            await updateLeadFunnel.mutateAsync({
-                              id: funnel.id,
-                              traffic_funnel_id: tfId,
-                              ignore_traffic_funnel: isIgnore,
-                            } as any);
-                            toast.success(
-                              isIgnore
-                                ? 'Funil de tráfego ignorado'
-                                : tfId
-                                  ? 'Funil de tráfego associado!'
-                                  : 'Funil de tráfego removido'
-                            );
-                          } catch {
-                            toast.error('Erro ao atualizar funil');
-                          }
-                        }}
-                        onClick={(e) => e.stopPropagation()}
-                        className="border border-input rounded-md px-2 py-1 text-xs bg-background max-w-[180px]"
-                        title="Funil de tráfego"
-                      >
-                        <option value="">Sem funil de tráfego</option>
-                        <option value={IGNORE_VALUE}>🚫 Ignorar funil de tráfego</option>
-                        {trafficFunnels.map(tf => (
-                          <option key={tf.id} value={tf.id}>{tf.name}</option>
-                        ))}
-                      </select>
+                      <TrafficFunnelsMultiSelect
+                        options={trafficFunnelOptions}
+                        selectedIds={getFunnelTrafficIds(funnel)}
+                        ignore={!!funnel.ignore_traffic_funnel}
+                        onChange={(ids, ignore) => handleFunnelTrafficChange(funnel, ids, ignore)}
+                      />
                       <Button
                         variant="ghost"
                         size="sm"
