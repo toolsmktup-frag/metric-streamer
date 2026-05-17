@@ -16,7 +16,7 @@ export function useLeadFunnels(campaignId?: string | null) {
       try {
         let query = (supabase as any)
           .from('lead_funnels')
-          .select('*, lead_funnel_stages(*), stage_transition_rules(*), lead_funnel_campaigns(lead_campaign_id)')
+          .select('*, lead_funnel_stages(*), stage_transition_rules(*), lead_funnel_campaigns(lead_campaign_id), lead_funnel_traffic_funnels(traffic_funnel_id)')
           .order('sort_order', { ascending: true });
         if (campaignId) query = query.eq('campaign_id', campaignId);
         const { data, error } = await query;
