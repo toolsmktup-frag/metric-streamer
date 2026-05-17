@@ -377,6 +377,10 @@ export default function FunisConfigurar() {
   }
 
   function cancelEdit() {
+    if (focusedEditId) {
+      navigate(-1);
+      return;
+    }
     setEditingId(null);
     setConfirmDelete(false);
   }
