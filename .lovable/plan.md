@@ -1,40 +1,52 @@
-# Importar leads do funil de tráfego para o funil de leads
+# Reorganizar funil Infoprodutos via SQL
 
-Adicionar um botão na configuração do funil de leads que importa, em massa, leads vindos de um funil de tráfego (ex: Guia de Tinturas) para a primeira etapa do funil de leads atual.
+## Objetivo
 
-## O que o usuário vê
+Hoje os 3.223 leads do funil **Infoprodutos** estão todos parados na etapa **Novo Lead**, mesmo tendo status diferentes (Aprovado, Cancelado, Pendente, etc.) vindos das vendas reais. Quero distribuir cada lead na etapa correta do Kanban olhando o **status da última venda** dele.
 
-- Na aba **Editar** do funil de leads, um novo card "Importar do funil de tráfego".
-- Campos:
-  - Select: funil de tráfego origem (lista `funnels` ativos).
-  - Date range: período (default 01/01/2026 → hoje).
-  - Checkbox: ✅ Incluir vendas atribuídas | ✅ Incluir leads com UTM/campanha do funil.
-- Botão **Importar leads**.
-- Após rodar: toast "X leads importados, Y já existiam no funil".
+## Como o SQL vai decidir
 
-## Comportamento
+Para cada lead que está no funil Infoprodutos, pegar a venda mais recente em `v_all_sales` (cruzando por e-mail OU telefone) e mover o lead para:
 
-1. Busca no Supabase:
-   - **Vendas**: `v_all_sales` onde `funnel_id = <trafego>` e `created_at >= período`. Extrai `email`/`phone` de cada venda.
-   - **UTM**: `leads` onde `utm_campaign` bate com keywords das campanhas do funil de tráfego (`meta_campaigns.name` cujo `funnel_id = <trafego>`), filtrado por `created_at >= período`.
-2. Faz upsert em `leads` (por phone/email) — sem sobrescrever nome existente.
-3. Para cada lead resolvido, cria `lead_stage_positions` no funil novo na **primeira etapa** (`sort_order ASC LIMIT 1`), pulando se já existe posição nesse funil.
-4. Registra `lead_events` com `event_name = 'imported_from_traffic_funnel'` e metadata `{ source_funnel_id, period }`.
+| Status da venda                                              | Etapa de destino     |
+|--------------------------------------------------------------|----------------------|
+| `authorized`, `approved`, `paid`                             | Compra Aprovada      |
+| `pix_created`, `bank_slip_created`, `pending`, `waiting_payment` | PIX / Boleto Gerado  |
+| `refused`, `rejected`, `canceled`, `cancelled`, `refunded`   | Compra Recusada      |
+| `abandoned`, `abandoned_cart`                                | Cariinho Abandonado  |
+| sem venda encontrada                                          | fica em Novo Lead    |
+
+A etapa **Entrar em Contato** não recebe nada automático (é manual, do vendedor).
+
+As etapas são descobertas pelo nome dentro do próprio funil (`ILIKE '%aprovad%'`, `'%pix%'`, etc.), então não preciso colar UUID nenhum.
+
+## O que rodar
+
+Um único script SQL no SQL Editor do Supabase, com o ID do funil no topo. Estrutura:
+
+```text
+1. CTE `funnel` → ID do Infoprodutos (b4452a0a-...)
+2. CTE `stages` → mapa nome→id das etapas do funil
+3. CTE `last_sale` → DISTINCT ON (lead_id) ORDER BY purchased_at DESC
+   cruzando leads do funil com v_all_sales por email/phone normalizado
+4. UPDATE lead_stage_positions  SET stage_id = CASE status ... END
+   WHERE funnel_id = funnel AND lead_id IN (...)
+5. SELECT de conferência: quantos leads ficaram em cada etapa
+```
+
+Execução: 1 vez, manual, no SQL Editor. Não cria trigger nem cron — você falou que não precisa rodar com frequência.
 
 ## Detalhes técnicos
 
-- **Arquivo novo**: `src/components/lead-funnels/ImportFromTrafficFunnel.tsx` — card com form + botão.
-- **Hook novo**: `src/hooks/useImportFromTrafficFunnel.ts` — mutation que:
-  - Paginada (batches de 500) para evitar limite de 1000 do Supabase.
-  - Resolve leads via `useEnsureLead` lógica reutilizada.
-  - Insere posições em chunks.
-- **Onde plugar**: dentro do `LeadFunnelEditor` (aba Editar do funil), abaixo de `ProductMappingConfig`.
-- **Filtro de data**: usa `created_at` com offset de timezone local (padrão do projeto).
-- **Dedupe**: confia no UNIQUE `(lead_id, funnel_id)` de `lead_stage_positions` — usa `upsert` com `ignoreDuplicates: true`.
-- **Sem migração SQL** — todas as tabelas e constraints já existem.
+- Tabela alterada: `public.lead_stage_positions` (só `stage_id`, mantém `entered_at` se a etapa não mudou).
+- Match lead ↔ venda: `lower(email)` OU `regexp_replace(phone, '\D','','g')` (mesma normalização que o resto do app já usa — ver memory `phone-formats`).
+- Reversível: antes do UPDATE, faço `CREATE TABLE backup_lead_stage_positions_infoprodutos AS SELECT * FROM lead_stage_positions WHERE funnel_id = ...` pra poder reverter se algo sair errado.
+- Não dispara automações (UPDATE direto no banco não passa pelos triggers de `lead_events`).
 
-## Fora de escopo
+## Próximo passo
 
-- Não atribui sellers automaticamente (lead entra como unassigned).
-- Não dispara automações WhatsApp no import (evita disparo em massa indesejado).
-- Não aplica mapeamentos product→stage (todos vão pra primeira etapa, como pedido).
+Se você aprovar, eu gero o SQL final pronto pra colar no SQL Editor com:
+- O UUID do funil Infoprodutos já preenchido
+- O backup automático
+- O UPDATE
+- O SELECT de conferência no final mostrando a distribuição por etapa
