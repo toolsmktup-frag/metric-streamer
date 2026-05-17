@@ -15,7 +15,7 @@ import { useCurrentUserRole } from '@/hooks/useCurrentUserRole';
 import { useHasFunnelAccess } from '@/hooks/useLeadFunnelAccess';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Upload, Trash2, Layers } from 'lucide-react';
+import { ArrowLeft, Upload, Trash2, Layers, TrendingUp } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   AlertDialog,
@@ -38,6 +38,7 @@ import FunnelMetricsTab from '@/components/lead-funnels/FunnelMetricsTab';
 import FunnelAutomationsTab from '@/components/lead-funnels/FunnelAutomationsTab';
 import LeadTimeline from '@/components/lead-funnels/LeadTimeline';
 import ImportLeadsDialog from '@/components/lead-funnels/ImportLeadsDialog';
+import ImportFromTrafficFunnelDialog from '@/components/lead-funnels/ImportFromTrafficFunnelDialog';
 import { Lead } from '@/types/leadFunnels';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -130,6 +131,7 @@ const LeadFunnelDetail: React.FC = () => {
   }, [selectedLeadId, positions]);
   const [timelineOpen, setTimelineOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [importTrafficOpen, setImportTrafficOpen] = useState(false);
   const [clearing, setClearing] = useState(false);
 
   const handleBulkMoveOverdue = useCallback(async () => {
@@ -349,6 +351,10 @@ const LeadFunnelDetail: React.FC = () => {
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setImportTrafficOpen(true)}>
+            <TrendingUp className="h-4 w-4" />
+            Do funil de tráfego
+          </Button>
           <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setImportOpen(true)}>
             <Upload className="h-4 w-4" />
             Importar Leads
@@ -556,6 +562,14 @@ const LeadFunnelDetail: React.FC = () => {
       <ImportLeadsDialog
         open={importOpen}
         onOpenChange={setImportOpen}
+        stages={stages}
+        funnelId={funnel.id}
+        organizationId={funnel.organization_id}
+      />
+
+      <ImportFromTrafficFunnelDialog
+        open={importTrafficOpen}
+        onOpenChange={setImportTrafficOpen}
         stages={stages}
         funnelId={funnel.id}
         organizationId={funnel.organization_id}
