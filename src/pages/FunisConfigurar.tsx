@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
   useFunnels,
   useCreateFunnel,
@@ -322,6 +322,8 @@ function ProductsEditor({
 // ────────────────────────────────────────────────────────────
 export default function FunisConfigurar() {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const focusedEditId = searchParams.get('editar');
   const { data: funnels = [], isLoading } = useFunnels();
   const createFunnel = useCreateFunnel();
   const updateFunnel = useUpdateFunnel();
@@ -375,6 +377,10 @@ export default function FunisConfigurar() {
   }
 
   function cancelEdit() {
+    if (focusedEditId) {
+      navigate(-1);
+      return;
+    }
     setEditingId(null);
     setConfirmDelete(false);
   }
@@ -449,7 +455,11 @@ export default function FunisConfigurar() {
       });
 
       toast({ title: 'Funil salvo com sucesso!' });
-      setEditingId(null);
+      if (focusedEditId) {
+        navigate(-1);
+      } else {
+        setEditingId(null);
+      }
     } catch (err) {
       toast({ title: 'Erro ao salvar', description: String(err), variant: 'destructive' });
     }
@@ -464,8 +474,12 @@ export default function FunisConfigurar() {
   return (
     <div className="space-y-6 max-w-3xl">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Gerenciar Funis</h1>
-        {!editingId && (
+        <h1 className="text-2xl font-bold">
+          {focusedEditId
+            ? `Editar Funil${editingFunnel ? ` — ${editingFunnel.name}` : ''}`
+            : 'Gerenciar Funis'}
+        </h1>
+        {!editingId && !focusedEditId && (
           <Button onClick={startNew} size="sm">
             <Plus className="h-4 w-4 mr-2" /> Novo Funil
           </Button>
@@ -587,7 +601,8 @@ export default function FunisConfigurar() {
         </Card>
       )}
 
-      {/* Lista de funis */}
+      {/* Lista de funis (oculta no modo "edição focada" via ?editar=) */}
+      {!focusedEditId && (
       <div className="space-y-3">
         {funnels.map((funnel) => {
           const platforms = funnel.funnel_platforms || [];
@@ -657,6 +672,7 @@ export default function FunisConfigurar() {
           </Card>
         )}
       </div>
+      )}
     </div>
   );
 }
