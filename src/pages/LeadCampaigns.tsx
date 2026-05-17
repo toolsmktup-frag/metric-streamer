@@ -69,6 +69,44 @@ const LeadCampaignsPage: React.FC = () => {
 
   const orphanFunnels = visibleFunnels.filter(f => !f.campaign_id);
 
+  const trafficFunnelOptions = useMemo(
+    () => trafficFunnels.map(f => ({ id: f.id, name: f.name, color: f.color })),
+    [trafficFunnels]
+  );
+
+  const getFunnelTrafficIds = (funnel: any): string[] => {
+    const ids = new Set<string>();
+    (funnel.lead_funnel_traffic_funnels || []).forEach((x: any) => {
+      if (x?.traffic_funnel_id) ids.add(x.traffic_funnel_id);
+    });
+    if (funnel.traffic_funnel_id) ids.add(funnel.traffic_funnel_id);
+    return Array.from(ids);
+  };
+
+  const handleFunnelTrafficChange = async (funnel: any, ids: string[], ignore: boolean) => {
+    try {
+      const primary = ignore ? null : (ids[0] || null);
+      await updateLeadFunnel.mutateAsync({
+        id: funnel.id,
+        traffic_funnel_id: primary,
+        ignore_traffic_funnel: ignore,
+      } as any);
+      await upsertFunnelTrafficFunnels.mutateAsync({
+        funnelId: funnel.id,
+        trafficFunnelIds: ignore ? [] : ids,
+      });
+      toast.success(
+        ignore
+          ? 'Funil de tráfego ignorado'
+          : ids.length === 0
+            ? 'Funis de tráfego desvinculados'
+            : `${ids.length} funil(is) de tráfego vinculado(s)`
+      );
+    } catch (err: any) {
+      toast.error(err?.message || 'Erro ao atualizar funis de tráfego');
+    }
+  };
+
   const handleCreateCampaign = async () => {
     if (!newName.trim()) return;
     try {
