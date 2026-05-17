@@ -41,7 +41,7 @@ export function useLeadFunnel(id: string | null) {
       try {
         const { data, error } = await (supabase as any)
           .from('lead_funnels')
-          .select('*, lead_funnel_stages(*), stage_transition_rules(*), lead_funnel_campaigns(lead_campaign_id)')
+          .select('*, lead_funnel_stages(*), stage_transition_rules(*), lead_funnel_campaigns(lead_campaign_id), lead_funnel_traffic_funnels(traffic_funnel_id)')
           .eq('id', id)
           .single();
         if (error) {
