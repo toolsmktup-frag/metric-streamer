@@ -566,6 +566,14 @@ const LeadFunnelDetail: React.FC = () => {
         funnelId={funnel.id}
         organizationId={funnel.organization_id}
       />
+
+      <ImportFromTrafficFunnelDialog
+        open={importTrafficOpen}
+        onOpenChange={setImportTrafficOpen}
+        stages={stages}
+        funnelId={funnel.id}
+        organizationId={funnel.organization_id}
+      />
     </div>
   );
 };
