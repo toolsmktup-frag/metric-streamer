@@ -573,6 +573,19 @@ const LeadFunnelDetail: React.FC = () => {
         stages={stages}
         funnelId={funnel.id}
         organizationId={funnel.organization_id}
+        defaultTrafficFunnelIds={(() => {
+          const ids = new Set<string>();
+          ((funnel as any).lead_funnel_traffic_funnels || []).forEach((x: any) => {
+            if (x?.traffic_funnel_id) ids.add(x.traffic_funnel_id);
+          });
+          if (!(funnel as any).ignore_traffic_funnel && funnel.traffic_funnel_id) {
+            ids.add(funnel.traffic_funnel_id);
+          }
+          if (ids.size === 0 && !((campaign as any)?.ignore_traffic_funnel) && campaign?.traffic_funnel_id) {
+            ids.add(campaign.traffic_funnel_id);
+          }
+          return Array.from(ids);
+        })()}
       />
     </div>
   );
