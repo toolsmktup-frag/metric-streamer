@@ -672,6 +672,7 @@ export default function FunisConfigurar() {
           </Card>
         )}
       </div>
+      )}
     </div>
   );
 }
