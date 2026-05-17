@@ -39,12 +39,13 @@ export default function InstanceAccessManager({ instances, selectedInstanceId }:
 
       if (!currentProfile?.organization_id) return;
 
-      // Get all org members (exclude admins — they always have access)
+      // Get all org members (exclude admins — they always have access; exclude bloqueados/pendentes)
       const { data: profiles } = await (supabase as any)
         .from('user_profiles')
-        .select('id, full_name, role')
+        .select('id, full_name, role, status')
         .eq('organization_id', currentProfile.organization_id)
-        .neq('role', 'admin');
+        .neq('role', 'admin')
+        .eq('status', 'active');
 
       // Get existing access records for this instance
       const { data: accessRecords } = await (supabase as any)
