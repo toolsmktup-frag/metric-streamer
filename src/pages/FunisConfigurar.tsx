@@ -322,6 +322,8 @@ function ProductsEditor({
 // ────────────────────────────────────────────────────────────
 export default function FunisConfigurar() {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const focusedEditId = searchParams.get('editar');
   const { data: funnels = [], isLoading } = useFunnels();
   const createFunnel = useCreateFunnel();
   const updateFunnel = useUpdateFunnel();
