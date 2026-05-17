@@ -351,6 +351,10 @@ const LeadFunnelDetail: React.FC = () => {
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setImportTrafficOpen(true)}>
+            <TrendingUp className="h-4 w-4" />
+            Do funil de tráfego
+          </Button>
           <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setImportOpen(true)}>
             <Upload className="h-4 w-4" />
             Importar Leads
