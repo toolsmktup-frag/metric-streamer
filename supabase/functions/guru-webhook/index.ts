@@ -212,8 +212,12 @@ Deno.serve(async (req) => {
       }
     }
 
-    if (!funnelId && productName) {
-      const { data } = await supabase.rpc("resolve_funnel_id", { p_product_name: productName });
+    if (!funnelId && (productName || product.id || product.product_id || product.marketplace_id)) {
+      const earlyProductId = String(product.id || product.product_id || product.marketplace_id || "") || null;
+      const { data } = await supabase.rpc("resolve_funnel_id", {
+        p_product_name: productName,
+        p_product_id:   earlyProductId,
+      });
       funnelId = data || null;
     }
 
