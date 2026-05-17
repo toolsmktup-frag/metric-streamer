@@ -29,6 +29,7 @@ export interface LeadFunnel {
   lead_funnel_stages?: LeadFunnelStage[];
   stage_transition_rules?: StageTransitionRule[];
   lead_funnel_campaigns?: { lead_campaign_id: string }[];
+  lead_funnel_traffic_funnels?: { traffic_funnel_id: string }[];
 }
 
 export type PageType = 'capture' | 'sales' | 'checkout' | 'thankyou' | 'upsell' | 'downsell' | 'content';
