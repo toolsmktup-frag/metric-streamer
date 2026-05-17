@@ -16,7 +16,7 @@ export function useLeadFunnels(campaignId?: string | null) {
       try {
         let query = (supabase as any)
           .from('lead_funnels')
-          .select('*, lead_funnel_stages(*), stage_transition_rules(*), lead_funnel_campaigns(lead_campaign_id)')
+          .select('*, lead_funnel_stages(*), stage_transition_rules(*), lead_funnel_campaigns(lead_campaign_id), lead_funnel_traffic_funnels(traffic_funnel_id)')
           .order('sort_order', { ascending: true });
         if (campaignId) query = query.eq('campaign_id', campaignId);
         const { data, error } = await query;
@@ -41,7 +41,7 @@ export function useLeadFunnel(id: string | null) {
       try {
         const { data, error } = await (supabase as any)
           .from('lead_funnels')
-          .select('*, lead_funnel_stages(*), stage_transition_rules(*), lead_funnel_campaigns(lead_campaign_id)')
+          .select('*, lead_funnel_stages(*), stage_transition_rules(*), lead_funnel_campaigns(lead_campaign_id), lead_funnel_traffic_funnels(traffic_funnel_id)')
           .eq('id', id)
           .single();
         if (error) {
@@ -306,6 +306,29 @@ export function useUpsertLeadFunnelCampaigns() {
       qc.invalidateQueries({ queryKey: ['lead-funnels'] });
       qc.invalidateQueries({ queryKey: ['leads-by-funnel', funnelId] });
       qc.invalidateQueries({ queryKey: ['funnel-lead-counts', funnelId] });
+    },
+  });
+}
+
+// ===========================================================
+// Funis de tráfego agregados (M:N) — lead_funnel_traffic_funnels
+// ===========================================================
+export function useUpsertLeadFunnelTrafficFunnels() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ funnelId, trafficFunnelIds }: { funnelId: string; trafficFunnelIds: string[] }) => {
+      await (supabase as any).from('lead_funnel_traffic_funnels').delete().eq('lead_funnel_id', funnelId);
+      if (trafficFunnelIds.length === 0) return [];
+      const { data, error } = await (supabase as any)
+        .from('lead_funnel_traffic_funnels')
+        .insert(trafficFunnelIds.map(tfId => ({ lead_funnel_id: funnelId, traffic_funnel_id: tfId })))
+        .select();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (_, { funnelId }) => {
+      qc.invalidateQueries({ queryKey: ['lead-funnel', funnelId] });
+      qc.invalidateQueries({ queryKey: ['lead-funnels'] });
     },
   });
 }

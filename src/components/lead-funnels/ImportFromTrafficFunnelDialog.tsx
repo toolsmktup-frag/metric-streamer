@@ -1,10 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -22,17 +21,20 @@ interface Props {
   stages: LeadFunnelStage[];
   funnelId: string;
   organizationId: string;
+  /** Funis de tráfego pré-selecionados (vinculados ao funil de lead). */
+  defaultTrafficFunnelIds?: string[];
 }
 
 const PAGE_SIZE = 1000;
 
-async function fetchAllSales(trafficFunnelId: string, dateFrom: string, dateTo: string) {
+async function fetchAllSales(trafficFunnelIds: string[], dateFrom: string, dateTo: string) {
+  if (trafficFunnelIds.length === 0) return [];
   const rows: any[] = [];
   for (let from = 0; ; from += PAGE_SIZE) {
     const { data, error } = await (supabase as any)
       .from('v_all_sales')
-      .select('customer_email, customer_name, utm_source, utm_medium, utm_campaign, utm_content, product_name, platform, purchased_at, status, revenue')
-      .eq('funnel_id', trafficFunnelId)
+      .select('customer_email, customer_name, utm_source, utm_medium, utm_campaign, utm_content, product_name, platform, purchased_at, status, revenue, funnel_id')
+      .in('funnel_id', trafficFunnelIds)
       .gte('purchased_at', dayStartISO(dateFrom))
       .lte('purchased_at', dayEndISO(dateTo))
       .range(from, from + PAGE_SIZE - 1);
@@ -44,12 +46,13 @@ async function fetchAllSales(trafficFunnelId: string, dateFrom: string, dateTo: 
   return rows;
 }
 
-async function fetchLeadsByUtm(trafficFunnelId: string, organizationId: string, dateFrom: string, dateTo: string) {
-  // Pega nomes de campanhas Meta atribuídas ao funil de tráfego
+async function fetchLeadsByUtm(trafficFunnelIds: string[], organizationId: string, dateFrom: string, dateTo: string) {
+  if (trafficFunnelIds.length === 0) return [];
+  // Pega nomes de campanhas Meta atribuídas aos funis de tráfego selecionados
   const { data: campaigns, error: campErr } = await (supabase as any)
     .from('meta_campaigns')
     .select('name')
-    .eq('funnel_id', trafficFunnelId);
+    .in('funnel_id', trafficFunnelIds);
   if (campErr) throw campErr;
   const names = Array.from(new Set(((campaigns || []) as { name: string }[]).map(c => c.name).filter(Boolean)));
   if (names.length === 0) return [];
@@ -84,12 +87,12 @@ async function fetchLeadsByUtm(trafficFunnelId: string, organizationId: string, 
 }
 
 const ImportFromTrafficFunnelDialog: React.FC<Props> = ({
-  open, onOpenChange, stages, funnelId, organizationId,
+  open, onOpenChange, stages, funnelId, organizationId, defaultTrafficFunnelIds = [],
 }) => {
   const { data: trafficFunnels = [] } = useFunnels();
   const importMutation = useImportLeads();
 
-  const [trafficFunnelId, setTrafficFunnelId] = useState<string>('');
+  const [selectedIds, setSelectedIds] = useState<string[]>(defaultTrafficFunnelIds);
   const [dateFrom, setDateFrom] = useState<string>('2026-01-01');
   const [dateTo, setDateTo] = useState<string>(new Date().toISOString().slice(0, 10));
   const [includeSales, setIncludeSales] = useState(true);
@@ -98,10 +101,20 @@ const ImportFromTrafficFunnelDialog: React.FC<Props> = ({
   const [progress, setProgress] = useState(0);
   const [result, setResult] = useState<{ imported: number; skipped: number; fetched: number } | null>(null);
 
+  // Atualiza seleção default quando o dialog abre ou os defaults mudam
+  useEffect(() => {
+    if (open) setSelectedIds(defaultTrafficFunnelIds);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, defaultTrafficFunnelIds.join('|')]);
+
   const firstStage = useMemo(
     () => [...stages].sort((a, b) => a.sort_order - b.sort_order)[0],
     [stages],
   );
+
+  const toggle = (id: string) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
 
   const handleClose = () => {
     if (loading) return;
@@ -111,15 +124,15 @@ const ImportFromTrafficFunnelDialog: React.FC<Props> = ({
   };
 
   const handleImport = async () => {
-    if (!trafficFunnelId || !firstStage) return;
+    if (selectedIds.length === 0 || !firstStage) return;
     setLoading(true);
     setProgress(0);
     setResult(null);
 
     try {
       const fetches: Promise<any[]>[] = [];
-      if (includeSales) fetches.push(fetchAllSales(trafficFunnelId, dateFrom, dateTo));
-      if (includeUtm) fetches.push(fetchLeadsByUtm(trafficFunnelId, organizationId, dateFrom, dateTo));
+      if (includeSales) fetches.push(fetchAllSales(selectedIds, dateFrom, dateTo));
+      if (includeUtm) fetches.push(fetchLeadsByUtm(selectedIds, organizationId, dateFrom, dateTo));
       const results = await Promise.all(fetches);
 
       const importLeads: any[] = [];
@@ -139,7 +152,8 @@ const ImportFromTrafficFunnelDialog: React.FC<Props> = ({
             utm_term: null,
             metadata: {
               source: 'traffic_funnel_import',
-              traffic_funnel_id: trafficFunnelId,
+              traffic_funnel_id: s.funnel_id || null,
+              traffic_funnel_ids: selectedIds,
               product_name: s.product_name || null,
               platform: s.platform || null,
               purchased_at: s.purchased_at || null,
@@ -166,7 +180,7 @@ const ImportFromTrafficFunnelDialog: React.FC<Props> = ({
             utm_term: l.utm_term || null,
             metadata: {
               source: 'traffic_funnel_import_utm',
-              traffic_funnel_id: trafficFunnelId,
+              traffic_funnel_ids: selectedIds,
             },
           });
         }
@@ -195,6 +209,8 @@ const ImportFromTrafficFunnelDialog: React.FC<Props> = ({
     }
   };
 
+  const allChecked = trafficFunnels.length > 0 && selectedIds.length === trafficFunnels.length;
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-lg">
@@ -204,28 +220,50 @@ const ImportFromTrafficFunnelDialog: React.FC<Props> = ({
             Importar do funil de tráfego
           </DialogTitle>
           <DialogDescription>
-            Traz leads (vendas + UTM) de um funil de tráfego para a primeira etapa deste funil de leads.
+            Selecione um ou mais funis de tráfego. Vendas e leads via UTM serão trazidos para a primeira etapa deste funil.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label>Funil de tráfego origem</Label>
-            <Select value={trafficFunnelId} onValueChange={setTrafficFunnelId} disabled={loading}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione um funil..." />
-              </SelectTrigger>
-              <SelectContent>
-                {trafficFunnels.map(f => (
-                  <SelectItem key={f.id} value={f.id}>
-                    <div className="flex items-center gap-2">
-                      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: f.color }} />
-                      {f.name}
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="flex items-center justify-between">
+              <Label>Funis de tráfego origem</Label>
+              <button
+                type="button"
+                onClick={() => setSelectedIds(allChecked ? [] : trafficFunnels.map(f => f.id))}
+                className="text-xs text-primary hover:underline"
+                disabled={loading}
+              >
+                {allChecked ? 'Limpar' : 'Selecionar todos'}
+              </button>
+            </div>
+            <div className="rounded-lg border border-border max-h-48 overflow-y-auto divide-y divide-border">
+              {trafficFunnels.length === 0 && (
+                <p className="text-xs text-muted-foreground p-3">Nenhum funil de tráfego disponível.</p>
+              )}
+              {trafficFunnels.map(f => {
+                const checked = selectedIds.includes(f.id);
+                const wasDefault = defaultTrafficFunnelIds.includes(f.id);
+                return (
+                  <label
+                    key={f.id}
+                    className="flex items-center gap-2 px-3 py-2 hover:bg-muted/40 cursor-pointer text-sm"
+                  >
+                    <Checkbox checked={checked} onCheckedChange={() => toggle(f.id)} disabled={loading} />
+                    <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: f.color }} />
+                    <span className="flex-1 truncate">{f.name}</span>
+                    {wasDefault && (
+                      <span className="text-[10px] uppercase tracking-wide text-primary/80">vinculado</span>
+                    )}
+                  </label>
+                );
+              })}
+            </div>
+            {selectedIds.length > 0 && (
+              <p className="text-xs text-muted-foreground">
+                {selectedIds.length} funil(is) selecionado(s). Duplicados (mesmo email) são ignorados.
+              </p>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -243,7 +281,7 @@ const ImportFromTrafficFunnelDialog: React.FC<Props> = ({
             <div className="flex items-center gap-2">
               <Checkbox id="sales" checked={includeSales} onCheckedChange={v => setIncludeSales(!!v)} disabled={loading} />
               <Label htmlFor="sales" className="cursor-pointer text-sm font-normal">
-                Incluir vendas atribuídas ao funil
+                Incluir vendas atribuídas aos funis
               </Label>
             </div>
             <div className="flex items-center gap-2">
@@ -275,7 +313,7 @@ const ImportFromTrafficFunnelDialog: React.FC<Props> = ({
                 <strong>{result.imported}</strong> leads importados
               </div>
               <p className="text-xs text-muted-foreground">
-                {result.fetched} encontrados no funil de tráfego
+                {result.fetched} encontrados nos funis de tráfego
                 {result.skipped > 0 && ` · ${result.skipped} ignorados`}
               </p>
             </div>
@@ -288,7 +326,7 @@ const ImportFromTrafficFunnelDialog: React.FC<Props> = ({
           </Button>
           <Button
             onClick={handleImport}
-            disabled={loading || !trafficFunnelId || !firstStage || (!includeSales && !includeUtm)}
+            disabled={loading || selectedIds.length === 0 || !firstStage || (!includeSales && !includeUtm)}
           >
             {loading ? (
               <>
