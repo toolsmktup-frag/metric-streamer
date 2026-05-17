@@ -1,10 +1,11 @@
 import React, { useState, useMemo } from 'react';
 import { useLeadCampaigns, useCreateLeadCampaign, useDeleteLeadCampaign, useUpdateLeadCampaign } from '@/hooks/useLeadCampaigns';
-import { useLeadFunnels, useCreateLeadFunnel, useDeleteLeadFunnel, useUpdateLeadFunnel } from '@/hooks/useLeadFunnels';
+import { useLeadFunnels, useCreateLeadFunnel, useDeleteLeadFunnel, useUpdateLeadFunnel, useUpsertLeadFunnelTrafficFunnels } from '@/hooks/useLeadFunnels';
 import { useFunnels } from '@/hooks/useFunnels';
 import { useCurrentUserRole } from '@/hooks/useCurrentUserRole';
 import { useMyFunnelAccess } from '@/hooks/useLeadFunnelAccess';
 import FunnelAccessManager from '@/components/lead-funnels/FunnelAccessManager';
+import TrafficFunnelsMultiSelect from '@/components/lead-funnels/TrafficFunnelsMultiSelect';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
