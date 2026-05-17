@@ -309,3 +309,26 @@ export function useUpsertLeadFunnelCampaigns() {
     },
   });
 }
+
+// ===========================================================
+// Funis de tráfego agregados (M:N) — lead_funnel_traffic_funnels
+// ===========================================================
+export function useUpsertLeadFunnelTrafficFunnels() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ funnelId, trafficFunnelIds }: { funnelId: string; trafficFunnelIds: string[] }) => {
+      await (supabase as any).from('lead_funnel_traffic_funnels').delete().eq('lead_funnel_id', funnelId);
+      if (trafficFunnelIds.length === 0) return [];
+      const { data, error } = await (supabase as any)
+        .from('lead_funnel_traffic_funnels')
+        .insert(trafficFunnelIds.map(tfId => ({ lead_funnel_id: funnelId, traffic_funnel_id: tfId })))
+        .select();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (_, { funnelId }) => {
+      qc.invalidateQueries({ queryKey: ['lead-funnel', funnelId] });
+      qc.invalidateQueries({ queryKey: ['lead-funnels'] });
+    },
+  });
+}
