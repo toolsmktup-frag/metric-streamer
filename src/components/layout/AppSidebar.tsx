@@ -74,6 +74,7 @@ const CONFIG_ITEMS = [
   { path: '/agente-ia',     label: 'Agente IA',    icon: Bot },
   { path: '/configuracoes/copiloto-vendas', label: 'Copiloto de Vendas', icon: Sparkles },
   { path: '/funis/configurar', label: 'Gerenciar Funis', icon: Settings },
+  { path: '/produtos',         label: 'Produtos',        icon: Package },
 ];
 
 const AppSidebar = React.memo(function AppSidebar({ collapsed, onToggle, onNavigate }: AppSidebarProps) {
