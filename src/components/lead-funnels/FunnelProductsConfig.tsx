@@ -132,10 +132,12 @@ const FunnelProductsConfig: React.FC<FunnelProductsConfigProps> = ({
             <Select onValueChange={(v) => {
               const cat = catalogProducts.find(c => c.id === v);
               if (!cat) return;
+              const isStandalone = String(cat.id).startsWith('catalog:');
               setLocalProducts(prev => [
                 ...prev,
                 {
-                  source_funnel_product_id: cat.id,
+                  // produtos avulsos do catálogo não têm FK pra funnel_products
+                  source_funnel_product_id: isStandalone ? null : cat.id,
                   product_name_contains: cat.product_name_contains,
                   display_name: cat.display_name || '',
                   recontact_days: cat.recontact_days,

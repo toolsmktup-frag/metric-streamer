@@ -8,6 +8,7 @@ import { useBulkLeadPurchases } from '@/hooks/useBulkLeadPurchases';
 import { useBulkLeadPurchaseProducts } from '@/hooks/useBulkLeadPurchaseProducts';
 import { useFunnels } from '@/hooks/useFunnels';
 import { useLeadFunnelProducts, useUpsertLeadFunnelProducts } from '@/hooks/useLeadFunnelProducts';
+import { useProductsCatalog } from '@/hooks/useProductsCatalog';
 import { useLeadProductMappings, useDistinctLeadProducts, useSaveLeadProductMappings } from '@/hooks/useLeadProductMappings';
 import { useRecontactDeadlines } from '@/hooks/useRecontactDeadlines';
 import { useMoveLeadStage } from '@/hooks/useMoveLeadStage';
@@ -122,7 +123,29 @@ const LeadFunnelDetail: React.FC = () => {
   const { data: purchaseMap } = useBulkLeadPurchases(positions);
   const { data: leadPurchaseInfoMap } = useBulkLeadPurchaseProducts(id, positions);
   const recontactMap = useRecontactDeadlines(positions, leadFunnelProducts, productMappings, purchaseMap, leadPurchaseInfoMap);
-  const allCatalogProducts = paymentFunnels.flatMap(f => f.funnel_products || []);
+  const { data: catalogItems = [] } = useProductsCatalog();
+  const allCatalogProducts = useMemo(() => {
+    const fromFunnels = paymentFunnels.flatMap(f => f.funnel_products || []);
+    const existingKeys = new Set(
+      fromFunnels
+        .filter(p => p.product_id)
+        .map(p => `${p.product_id}|${p.platform || (paymentFunnels.find(f => f.id === p.funnel_id) as any)?.platform || 'outro'}`)
+    );
+    // Itens do catálogo avulso, em forma compatível com FunnelProduct
+    const fromCatalog = catalogItems
+      .filter(c => !c.product_id || !existingKeys.has(`${c.product_id}|${c.platform}`))
+      .map(c => ({
+        id: `catalog:${c.id}`,
+        funnel_id: '',
+        product_id: c.product_id,
+        product_name_contains: c.product_name_contains,
+        role: c.default_role || 'front',
+        display_name: c.display_name,
+        recontact_days: c.recontact_days,
+        platform: c.platform,
+      } as any));
+    return [...fromFunnels, ...fromCatalog];
+  }, [paymentFunnels, catalogItems]);
 
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const selectedLead = useMemo(() => {
