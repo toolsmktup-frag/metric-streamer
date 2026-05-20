@@ -27,6 +27,7 @@ import {
   Zap,
   Trophy,
   Sparkles,
+  Package,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useFunnels } from '@/hooks/useFunnels';
