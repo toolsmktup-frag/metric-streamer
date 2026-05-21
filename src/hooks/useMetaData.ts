@@ -371,7 +371,11 @@ export function useMetaDailyInsights(funnelId?: string | null) {
     queryKey: ['meta-daily-insights', dateFrom, dateTo, funnelId ?? 'all', lastUpdated.getTime()],
     queryFn: async () => {
       const campaignIds = funnelId ? await fetchCampaignIdsForFunnel(funnelId) : undefined;
-      const insights = await fetchInsightsByType('campaign', dateFrom, dateTo, campaignIds);
+      const campaignInsights = await fetchInsightsByType('campaign', dateFrom, dateTo, campaignIds);
+      const accountFallbackInsights = funnelId && campaignInsights.reduce((s, r) => s + Number(r.spend || 0), 0) === 0
+        ? await fetchAccountInsightsForFunnel(funnelId, dateFrom, dateTo)
+        : [];
+      const insights = campaignInsights.length > 0 ? campaignInsights : accountFallbackInsights;
 
       const byDate: Record<string, InsightRow[]> = {};
       for (const row of insights) {
@@ -407,7 +411,12 @@ export function useMetaKPISummary(funnelId?: string | null) {
     queryKey: ['meta-kpi', dateFrom, dateTo, funnelId ?? 'all', lastUpdated.getTime()],
     queryFn: async () => {
       const campaignIds = funnelId ? await fetchCampaignIdsForFunnel(funnelId) : undefined;
-      const insights = await fetchInsightsByType('campaign', dateFrom, dateTo, campaignIds);
+      const campaignInsights = await fetchInsightsByType('campaign', dateFrom, dateTo, campaignIds);
+      const campaignAgg = aggregateInsights(campaignInsights);
+      const accountFallbackInsights = funnelId && campaignAgg.spend === 0
+        ? await fetchAccountInsightsForFunnel(funnelId, dateFrom, dateTo)
+        : [];
+      const insights = campaignAgg.spend > 0 || accountFallbackInsights.length === 0 ? campaignInsights : accountFallbackInsights;
       const agg = aggregateInsights(insights);
       const totalRevenue = agg.revenue;
       const totalSpend = agg.spend;
