@@ -19,7 +19,8 @@ DECLARE
   adsets_updated integer := 0;
   ads_updated integer := 0;
 BEGIN
-  -- 1. Match campaigns sem funnel_id usando keywords dos funnel_products
+  -- 1. Match campaigns por keywords dos funnel_products, mesmo quando já têm funnel_id.
+  --    Isso corrige contas Meta compartilhadas onde trigger por account_id grudou a campanha no funil errado.
   --    Prioriza o match mais longo (mais específico)
   UPDATE meta_campaigns mc
   SET funnel_id = matched.funnel_id
@@ -30,17 +31,18 @@ BEGIN
     FROM meta_campaigns mc2
     CROSS JOIN funnels f
     JOIN funnel_products fp ON fp.funnel_id = f.id
-    WHERE mc2.funnel_id IS NULL
-      AND f.is_active = true
+    WHERE f.is_active = true
+      AND mc2.account_id = ANY(string_to_array(replace(replace(f.meta_account_id, 'act_', ''), ' ', ''), ','))
       AND length(fp.product_name_contains) >= 3
       AND mc2.name ILIKE '%' || fp.product_name_contains || '%'
     ORDER BY mc2.id, length(fp.product_name_contains) DESC
   ) matched
-  WHERE mc.id = matched.campaign_id;
+  WHERE mc.id = matched.campaign_id
+    AND (mc.funnel_id IS NULL OR mc.funnel_id != matched.funnel_id);
 
   GET DIAGNOSTICS campaigns_updated = ROW_COUNT;
 
-  -- 1b. Fallback: match pelo nome do funil (ex: "articulabem" no nome da campanha)
+  -- 1b. Fallback: match pelo nome base do funil (ex: "Articulabem - 1" => "articulabem")
   UPDATE meta_campaigns mc
   SET funnel_id = matched.funnel_id
   FROM (
@@ -49,13 +51,14 @@ BEGIN
       f.id   AS funnel_id
     FROM meta_campaigns mc2
     CROSS JOIN funnels f
-    WHERE mc2.funnel_id IS NULL
-      AND f.is_active = true
-      AND length(f.name) >= 3
-      AND mc2.name ILIKE '%' || f.name || '%'
-    ORDER BY mc2.id, length(f.name) DESC
+    WHERE f.is_active = true
+      AND mc2.account_id = ANY(string_to_array(replace(replace(f.meta_account_id, 'act_', ''), ' ', ''), ','))
+      AND length(trim(regexp_replace(f.name, '\\s*-\\s*\\d+\\s*$', '', 'i'))) >= 3
+      AND mc2.name ILIKE '%' || trim(regexp_replace(f.name, '\\s*-\\s*\\d+\\s*$', '', 'i')) || '%'
+    ORDER BY mc2.id, length(trim(regexp_replace(f.name, '\\s*-\\s*\\d+\\s*$', '', 'i'))) DESC
   ) matched
-  WHERE mc.id = matched.campaign_id;
+  WHERE mc.id = matched.campaign_id
+    AND (mc.funnel_id IS NULL OR mc.funnel_id != matched.funnel_id);
 
   GET DIAGNOSTICS adsets_updated = ROW_COUNT;
   campaigns_updated := campaigns_updated + adsets_updated;
