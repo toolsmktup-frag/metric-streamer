@@ -317,7 +317,7 @@ export function useMetaCampaigns(funnelId?: string | null) {
         all.push(...await fetchCampaignRowsForFunnel(funnelId));
       } else {
       while (true) {
-        let q = (supabase as any).from('meta_campaigns').select('*').order('name');
+        const q = (supabase as any).from('meta_campaigns').select('*').order('name');
         const { data } = await q.range(from, from + pageSize - 1);
         if (!data || data.length === 0) break;
         all.push(...data);
