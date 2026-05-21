@@ -103,11 +103,68 @@ function aggregateInsights(rows: InsightRow[]) {
 // ─── Helpers para isolamento por funil ──────────────────────────────
 /** Retorna IDs das campanhas de um funil para filtrar insights */
 async function fetchCampaignIdsForFunnel(funnelId: string): Promise<string[]> {
-  const { data } = await (supabase as any)
-    .from('meta_campaigns')
-    .select('id')
-    .eq('funnel_id', funnelId);
-  return (data || []).map((c: any) => c.id);
+  const rows = await fetchCampaignRowsForFunnel(funnelId);
+  return rows.map((c: any) => c.id);
+}
+
+function keywordMatches(name: string, keywords: string[]): boolean {
+  const normalizedName = name.toLowerCase();
+  return keywords.some((keyword) => normalizedName.includes(keyword.toLowerCase()));
+}
+
+async function fetchCampaignRowsForFunnel(funnelId: string): Promise<any[]> {
+  const direct: any[] = [];
+  let from = 0;
+  const pageSize = 1000;
+  while (true) {
+    const { data } = await (supabase as any)
+      .from('meta_campaigns')
+      .select('*')
+      .eq('funnel_id', funnelId)
+      .order('name')
+      .range(from, from + pageSize - 1);
+    if (!data || data.length === 0) break;
+    direct.push(...data);
+    if (data.length < pageSize) break;
+    from += pageSize;
+  }
+  if (direct.length > 0) return direct;
+
+  const { data: funnel } = await (supabase as any)
+    .from('funnels')
+    .select('name, meta_account_id, funnel_products(product_name_contains, display_name)')
+    .eq('id', funnelId)
+    .maybeSingle();
+
+  const accountIds = String(funnel?.meta_account_id || '')
+    .split(',')
+    .map((id) => id.trim().replace(/^act_/, ''))
+    .filter(Boolean);
+  if (accountIds.length === 0) return [];
+
+  const baseName = String(funnel?.name || '').replace(/\s*-\s*\d+\s*$/, '').trim();
+  const keywords = [
+    baseName,
+    ...(funnel?.funnel_products || []).flatMap((p: any) => [p.product_name_contains, p.display_name]),
+  ].filter((v: string | null | undefined) => String(v || '').trim().length >= 3) as string[];
+  if (keywords.length === 0) return [];
+
+  const fallback: any[] = [];
+  from = 0;
+  while (true) {
+    let query = (supabase as any)
+      .from('meta_campaigns')
+      .select('*')
+      .order('name')
+      .range(from, from + pageSize - 1);
+    query = accountIds.length === 1 ? query.eq('account_id', accountIds[0]) : query.in('account_id', accountIds);
+    const { data } = await query;
+    if (!data || data.length === 0) break;
+    fallback.push(...data.filter((c: any) => keywordMatches(c.name || '', keywords)));
+    if (data.length < pageSize) break;
+    from += pageSize;
+  }
+  return fallback;
 }
 
 async function fetchAccountIdsForFunnel(funnelId: string): Promise<string[]> {
