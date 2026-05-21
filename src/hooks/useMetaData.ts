@@ -372,10 +372,11 @@ export function useMetaDailyInsights(funnelId?: string | null) {
     queryFn: async () => {
       const campaignIds = funnelId ? await fetchCampaignIdsForFunnel(funnelId) : undefined;
       const campaignInsights = await fetchInsightsByType('campaign', dateFrom, dateTo, campaignIds);
-      const accountFallbackInsights = funnelId && campaignInsights.reduce((s, r) => s + Number(r.spend || 0), 0) === 0
+      const campaignSpend = campaignInsights.reduce((s, r) => s + Number(r.spend || 0), 0);
+      const accountFallbackInsights = funnelId && campaignSpend === 0
         ? await fetchAccountInsightsForFunnel(funnelId, dateFrom, dateTo)
         : [];
-      const insights = campaignInsights.length > 0 ? campaignInsights : accountFallbackInsights;
+      const insights = campaignSpend > 0 || accountFallbackInsights.length === 0 ? campaignInsights : accountFallbackInsights;
 
       const byDate: Record<string, InsightRow[]> = {};
       for (const row of insights) {
