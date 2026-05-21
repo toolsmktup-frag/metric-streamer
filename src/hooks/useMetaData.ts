@@ -472,13 +472,9 @@ export function useMetaDailyInsights(funnelId?: string | null) {
   return useQuery({
     queryKey: ['meta-daily-insights', dateFrom, dateTo, funnelId ?? 'all', lastUpdated.getTime()],
     queryFn: async () => {
-      const campaignIds = funnelId ? await fetchCampaignIdsForFunnel(funnelId) : undefined;
-      const campaignInsights = await fetchInsightsByType('campaign', dateFrom, dateTo, campaignIds);
-      const campaignSpend = campaignInsights.reduce((s, r) => s + Number(r.spend || 0), 0);
-      const accountFallbackInsights = funnelId && campaignSpend === 0
-        ? await fetchAccountInsightsForFunnel(funnelId, dateFrom, dateTo)
-        : [];
-      const insights = campaignSpend > 0 || accountFallbackInsights.length === 0 ? campaignInsights : accountFallbackInsights;
+      const insights = funnelId
+        ? await fetchBestInsightsForFunnel(funnelId, dateFrom, dateTo)
+        : await fetchInsightsByType('campaign', dateFrom, dateTo);
 
       const byDate: Record<string, InsightRow[]> = {};
       for (const row of insights) {
@@ -513,13 +509,9 @@ export function useMetaKPISummary(funnelId?: string | null) {
   return useQuery({
     queryKey: ['meta-kpi', dateFrom, dateTo, funnelId ?? 'all', lastUpdated.getTime()],
     queryFn: async () => {
-      const campaignIds = funnelId ? await fetchCampaignIdsForFunnel(funnelId) : undefined;
-      const campaignInsights = await fetchInsightsByType('campaign', dateFrom, dateTo, campaignIds);
-      const campaignAgg = aggregateInsights(campaignInsights);
-      const accountFallbackInsights = funnelId && campaignAgg.spend === 0
-        ? await fetchAccountInsightsForFunnel(funnelId, dateFrom, dateTo)
-        : [];
-      const insights = campaignAgg.spend > 0 || accountFallbackInsights.length === 0 ? campaignInsights : accountFallbackInsights;
+      const insights = funnelId
+        ? await fetchBestInsightsForFunnel(funnelId, dateFrom, dateTo)
+        : await fetchInsightsByType('campaign', dateFrom, dateTo);
       const agg = aggregateInsights(insights);
       const totalRevenue = agg.revenue;
       const totalSpend = agg.spend;
