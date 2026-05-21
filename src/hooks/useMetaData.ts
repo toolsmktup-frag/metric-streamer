@@ -128,7 +128,6 @@ async function fetchCampaignRowsForFunnel(funnelId: string): Promise<any[]> {
     if (data.length < pageSize) break;
     from += pageSize;
   }
-  if (direct.length > 0) return direct;
 
   const { data: funnel } = await (supabase as any)
     .from('funnels')
@@ -140,14 +139,14 @@ async function fetchCampaignRowsForFunnel(funnelId: string): Promise<any[]> {
     .split(',')
     .map((id) => id.trim().replace(/^act_/, ''))
     .filter(Boolean);
-  if (accountIds.length === 0) return [];
+  if (accountIds.length === 0) return direct;
 
   const baseName = String(funnel?.name || '').replace(/\s*-\s*\d+\s*$/, '').trim();
   const keywords = [
     baseName,
     ...(funnel?.funnel_products || []).flatMap((p: any) => [p.product_name_contains, p.display_name]),
   ].filter((v: string | null | undefined) => String(v || '').trim().length >= 3) as string[];
-  if (keywords.length === 0) return [];
+  if (keywords.length === 0) return direct;
 
   const fallback: any[] = [];
   from = 0;
@@ -164,7 +163,32 @@ async function fetchCampaignRowsForFunnel(funnelId: string): Promise<any[]> {
     if (data.length < pageSize) break;
     from += pageSize;
   }
-  return fallback;
+  const byId = new Map<string, any>();
+  for (const row of [...direct, ...fallback]) byId.set(row.id, row);
+  return Array.from(byId.values()).sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+}
+
+async function fetchRowsByFieldValues(table: string, field: string, values: string[], orderBy = 'name'): Promise<any[]> {
+  if (values.length === 0) return [];
+  const byId = new Map<string, any>();
+  for (let i = 0; i < values.length; i += MAX_IDS_PER_QUERY) {
+    const chunk = values.slice(i, i + MAX_IDS_PER_QUERY);
+    let from = 0;
+    const pageSize = 1000;
+    while (true) {
+      const { data } = await (supabase as any)
+        .from(table)
+        .select('*')
+        .in(field, chunk)
+        .order(orderBy)
+        .range(from, from + pageSize - 1);
+      if (!data || data.length === 0) break;
+      for (const row of data) byId.set(row.id, row);
+      if (data.length < pageSize) break;
+      from += pageSize;
+    }
+  }
+  return Array.from(byId.values()).sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
 }
 
 async function fetchAccountIdsForFunnel(funnelId: string): Promise<string[]> {
@@ -181,19 +205,15 @@ async function fetchAccountIdsForFunnel(funnelId: string): Promise<string[]> {
 }
 
 async function fetchAdsetIdsForFunnel(funnelId: string): Promise<string[]> {
-  const { data } = await (supabase as any)
-    .from('meta_adsets')
-    .select('id')
-    .eq('funnel_id', funnelId);
-  return (data || []).map((a: any) => a.id);
+  const campaignIds = await fetchCampaignIdsForFunnel(funnelId);
+  const rows = await fetchRowsByFieldValues('meta_adsets', 'campaign_id', campaignIds);
+  return rows.map((a: any) => a.id);
 }
 
 async function fetchAdIdsForFunnel(funnelId: string): Promise<string[]> {
-  const { data } = await (supabase as any)
-    .from('meta_ads')
-    .select('id')
-    .eq('funnel_id', funnelId);
-  return (data || []).map((a: any) => a.id);
+  const campaignIds = await fetchCampaignIdsForFunnel(funnelId);
+  const rows = await fetchRowsByFieldValues('meta_ads', 'campaign_id', campaignIds);
+  return rows.map((a: any) => a.id);
 }
 
 // ─── Shared insight fetcher with pagination (avoids 1000-row limit) ───
@@ -252,6 +272,22 @@ async function fetchAccountInsightsForFunnel(funnelId: string, dateFrom: string,
   return fetchInsightsByType('account', dateFrom, dateTo, accountIds);
 }
 
+async function fetchBestInsightsForFunnel(funnelId: string, dateFrom: string, dateTo: string): Promise<InsightRow[]> {
+  const campaignIds = await fetchCampaignIdsForFunnel(funnelId);
+  const campaignInsights = await fetchInsightsByType('campaign', dateFrom, dateTo, campaignIds);
+  if (campaignInsights.reduce((s, r) => s + Number(r.spend || 0), 0) > 0) return campaignInsights;
+
+  const adsetIds = await fetchAdsetIdsForFunnel(funnelId);
+  const adsetInsights = await fetchInsightsByType('adset', dateFrom, dateTo, adsetIds);
+  if (adsetInsights.reduce((s, r) => s + Number(r.spend || 0), 0) > 0) return adsetInsights;
+
+  const adIds = await fetchAdIdsForFunnel(funnelId);
+  const adInsights = await fetchInsightsByType('ad', dateFrom, dateTo, adIds);
+  if (adInsights.reduce((s, r) => s + Number(r.spend || 0), 0) > 0) return adInsights;
+
+  return fetchAccountInsightsForFunnel(funnelId, dateFrom, dateTo);
+}
+
 function groupInsightsById(insights: InsightRow[]): Record<string, InsightRow[]> {
   const map: Record<string, InsightRow[]> = {};
   for (const ins of insights) {
@@ -297,7 +333,7 @@ export function useMetaCampaigns(funnelId?: string | null) {
         all.push(...await fetchCampaignRowsForFunnel(funnelId));
       } else {
       while (true) {
-        let q = (supabase as any).from('meta_campaigns').select('*').order('name');
+        const q = (supabase as any).from('meta_campaigns').select('*').order('name');
         const { data } = await q.range(from, from + pageSize - 1);
         if (!data || data.length === 0) break;
         all.push(...data);
@@ -340,14 +376,17 @@ export function useMetaAdsets(funnelId?: string | null) {
       const all: any[] = [];
       let from = 0;
       const pageSize = 1000;
-      while (true) {
-        let q = (supabase as any).from('meta_adsets').select('*').order('name');
-        if (funnelId) q = q.eq('funnel_id', funnelId);
-        const { data } = await q.range(from, from + pageSize - 1);
-        if (!data || data.length === 0) break;
-        all.push(...data);
-        if (data.length < pageSize) break;
-        from += pageSize;
+      if (funnelId) {
+        const campaignIds = await fetchCampaignIdsForFunnel(funnelId);
+        all.push(...await fetchRowsByFieldValues('meta_adsets', 'campaign_id', campaignIds));
+      } else {
+        while (true) {
+          const { data } = await (supabase as any).from('meta_adsets').select('*').order('name').range(from, from + pageSize - 1);
+          if (!data || data.length === 0) break;
+          all.push(...data);
+          if (data.length < pageSize) break;
+          from += pageSize;
+        }
       }
       if (!all.length) return [];
 
@@ -386,14 +425,17 @@ export function useMetaAds(funnelId?: string | null) {
       const all: any[] = [];
       let from = 0;
       const pageSize = 1000;
-      while (true) {
-        let q = (supabase as any).from('meta_ads').select('*').order('name');
-        if (funnelId) q = q.eq('funnel_id', funnelId);
-        const { data } = await q.range(from, from + pageSize - 1);
-        if (!data || data.length === 0) break;
-        all.push(...data);
-        if (data.length < pageSize) break;
-        from += pageSize;
+      if (funnelId) {
+        const campaignIds = await fetchCampaignIdsForFunnel(funnelId);
+        all.push(...await fetchRowsByFieldValues('meta_ads', 'campaign_id', campaignIds));
+      } else {
+        while (true) {
+          const { data } = await (supabase as any).from('meta_ads').select('*').order('name').range(from, from + pageSize - 1);
+          if (!data || data.length === 0) break;
+          all.push(...data);
+          if (data.length < pageSize) break;
+          from += pageSize;
+        }
       }
       if (!all.length) return [];
 
@@ -430,13 +472,9 @@ export function useMetaDailyInsights(funnelId?: string | null) {
   return useQuery({
     queryKey: ['meta-daily-insights', dateFrom, dateTo, funnelId ?? 'all', lastUpdated.getTime()],
     queryFn: async () => {
-      const campaignIds = funnelId ? await fetchCampaignIdsForFunnel(funnelId) : undefined;
-      const campaignInsights = await fetchInsightsByType('campaign', dateFrom, dateTo, campaignIds);
-      const campaignSpend = campaignInsights.reduce((s, r) => s + Number(r.spend || 0), 0);
-      const accountFallbackInsights = funnelId && campaignSpend === 0
-        ? await fetchAccountInsightsForFunnel(funnelId, dateFrom, dateTo)
-        : [];
-      const insights = campaignSpend > 0 || accountFallbackInsights.length === 0 ? campaignInsights : accountFallbackInsights;
+      const insights = funnelId
+        ? await fetchBestInsightsForFunnel(funnelId, dateFrom, dateTo)
+        : await fetchInsightsByType('campaign', dateFrom, dateTo);
 
       const byDate: Record<string, InsightRow[]> = {};
       for (const row of insights) {
@@ -471,13 +509,9 @@ export function useMetaKPISummary(funnelId?: string | null) {
   return useQuery({
     queryKey: ['meta-kpi', dateFrom, dateTo, funnelId ?? 'all', lastUpdated.getTime()],
     queryFn: async () => {
-      const campaignIds = funnelId ? await fetchCampaignIdsForFunnel(funnelId) : undefined;
-      const campaignInsights = await fetchInsightsByType('campaign', dateFrom, dateTo, campaignIds);
-      const campaignAgg = aggregateInsights(campaignInsights);
-      const accountFallbackInsights = funnelId && campaignAgg.spend === 0
-        ? await fetchAccountInsightsForFunnel(funnelId, dateFrom, dateTo)
-        : [];
-      const insights = campaignAgg.spend > 0 || accountFallbackInsights.length === 0 ? campaignInsights : accountFallbackInsights;
+      const insights = funnelId
+        ? await fetchBestInsightsForFunnel(funnelId, dateFrom, dateTo)
+        : await fetchInsightsByType('campaign', dateFrom, dateTo);
       const agg = aggregateInsights(insights);
       const totalRevenue = agg.revenue;
       const totalSpend = agg.spend;
