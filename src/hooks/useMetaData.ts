@@ -272,6 +272,22 @@ async function fetchAccountInsightsForFunnel(funnelId: string, dateFrom: string,
   return fetchInsightsByType('account', dateFrom, dateTo, accountIds);
 }
 
+async function fetchBestInsightsForFunnel(funnelId: string, dateFrom: string, dateTo: string): Promise<InsightRow[]> {
+  const campaignIds = await fetchCampaignIdsForFunnel(funnelId);
+  const campaignInsights = await fetchInsightsByType('campaign', dateFrom, dateTo, campaignIds);
+  if (campaignInsights.reduce((s, r) => s + Number(r.spend || 0), 0) > 0) return campaignInsights;
+
+  const adsetIds = await fetchAdsetIdsForFunnel(funnelId);
+  const adsetInsights = await fetchInsightsByType('adset', dateFrom, dateTo, adsetIds);
+  if (adsetInsights.reduce((s, r) => s + Number(r.spend || 0), 0) > 0) return adsetInsights;
+
+  const adIds = await fetchAdIdsForFunnel(funnelId);
+  const adInsights = await fetchInsightsByType('ad', dateFrom, dateTo, adIds);
+  if (adInsights.reduce((s, r) => s + Number(r.spend || 0), 0) > 0) return adInsights;
+
+  return fetchAccountInsightsForFunnel(funnelId, dateFrom, dateTo);
+}
+
 function groupInsightsById(insights: InsightRow[]): Record<string, InsightRow[]> {
   const map: Record<string, InsightRow[]> = {};
   for (const ins of insights) {
