@@ -110,6 +110,19 @@ async function fetchCampaignIdsForFunnel(funnelId: string): Promise<string[]> {
   return (data || []).map((c: any) => c.id);
 }
 
+async function fetchAccountIdsForFunnel(funnelId: string): Promise<string[]> {
+  const { data } = await (supabase as any)
+    .from('funnels')
+    .select('meta_account_id')
+    .eq('id', funnelId)
+    .maybeSingle();
+
+  return String(data?.meta_account_id || '')
+    .split(',')
+    .map((id) => id.trim().replace(/^act_/, ''))
+    .filter(Boolean);
+}
+
 async function fetchAdsetIdsForFunnel(funnelId: string): Promise<string[]> {
   const { data } = await (supabase as any)
     .from('meta_adsets')
@@ -174,6 +187,12 @@ async function fetchInsightsByType(
     from += pageSize;
   }
   return all;
+}
+
+async function fetchAccountInsightsForFunnel(funnelId: string, dateFrom: string, dateTo: string): Promise<InsightRow[]> {
+  const accountIds = await fetchAccountIdsForFunnel(funnelId);
+  if (accountIds.length === 0) return [];
+  return fetchInsightsByType('account', dateFrom, dateTo, accountIds);
 }
 
 function groupInsightsById(insights: InsightRow[]): Record<string, InsightRow[]> {
