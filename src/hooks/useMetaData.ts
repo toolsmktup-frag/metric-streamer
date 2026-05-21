@@ -128,7 +128,6 @@ async function fetchCampaignRowsForFunnel(funnelId: string): Promise<any[]> {
     if (data.length < pageSize) break;
     from += pageSize;
   }
-  if (direct.length > 0) return direct;
 
   const { data: funnel } = await (supabase as any)
     .from('funnels')
@@ -140,14 +139,14 @@ async function fetchCampaignRowsForFunnel(funnelId: string): Promise<any[]> {
     .split(',')
     .map((id) => id.trim().replace(/^act_/, ''))
     .filter(Boolean);
-  if (accountIds.length === 0) return [];
+  if (accountIds.length === 0) return direct;
 
   const baseName = String(funnel?.name || '').replace(/\s*-\s*\d+\s*$/, '').trim();
   const keywords = [
     baseName,
     ...(funnel?.funnel_products || []).flatMap((p: any) => [p.product_name_contains, p.display_name]),
   ].filter((v: string | null | undefined) => String(v || '').trim().length >= 3) as string[];
-  if (keywords.length === 0) return [];
+  if (keywords.length === 0) return direct;
 
   const fallback: any[] = [];
   from = 0;
@@ -164,7 +163,32 @@ async function fetchCampaignRowsForFunnel(funnelId: string): Promise<any[]> {
     if (data.length < pageSize) break;
     from += pageSize;
   }
-  return fallback;
+  const byId = new Map<string, any>();
+  for (const row of [...direct, ...fallback]) byId.set(row.id, row);
+  return Array.from(byId.values()).sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+}
+
+async function fetchRowsByFieldValues(table: string, field: string, values: string[], orderBy = 'name'): Promise<any[]> {
+  if (values.length === 0) return [];
+  const byId = new Map<string, any>();
+  for (let i = 0; i < values.length; i += MAX_IDS_PER_QUERY) {
+    const chunk = values.slice(i, i + MAX_IDS_PER_QUERY);
+    let from = 0;
+    const pageSize = 1000;
+    while (true) {
+      const { data } = await (supabase as any)
+        .from(table)
+        .select('*')
+        .in(field, chunk)
+        .order(orderBy)
+        .range(from, from + pageSize - 1);
+      if (!data || data.length === 0) break;
+      for (const row of data) byId.set(row.id, row);
+      if (data.length < pageSize) break;
+      from += pageSize;
+    }
+  }
+  return Array.from(byId.values()).sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
 }
 
 async function fetchAccountIdsForFunnel(funnelId: string): Promise<string[]> {
