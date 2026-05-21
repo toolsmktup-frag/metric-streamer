@@ -103,11 +103,81 @@ function aggregateInsights(rows: InsightRow[]) {
 // ─── Helpers para isolamento por funil ──────────────────────────────
 /** Retorna IDs das campanhas de um funil para filtrar insights */
 async function fetchCampaignIdsForFunnel(funnelId: string): Promise<string[]> {
+  const rows = await fetchCampaignRowsForFunnel(funnelId);
+  return rows.map((c: any) => c.id);
+}
+
+function keywordMatches(name: string, keywords: string[]): boolean {
+  const normalizedName = name.toLowerCase();
+  return keywords.some((keyword) => normalizedName.includes(keyword.toLowerCase()));
+}
+
+async function fetchCampaignRowsForFunnel(funnelId: string): Promise<any[]> {
+  const direct: any[] = [];
+  let from = 0;
+  const pageSize = 1000;
+  while (true) {
+    const { data } = await (supabase as any)
+      .from('meta_campaigns')
+      .select('*')
+      .eq('funnel_id', funnelId)
+      .order('name')
+      .range(from, from + pageSize - 1);
+    if (!data || data.length === 0) break;
+    direct.push(...data);
+    if (data.length < pageSize) break;
+    from += pageSize;
+  }
+  if (direct.length > 0) return direct;
+
+  const { data: funnel } = await (supabase as any)
+    .from('funnels')
+    .select('name, meta_account_id, funnel_products(product_name_contains, display_name)')
+    .eq('id', funnelId)
+    .maybeSingle();
+
+  const accountIds = String(funnel?.meta_account_id || '')
+    .split(',')
+    .map((id) => id.trim().replace(/^act_/, ''))
+    .filter(Boolean);
+  if (accountIds.length === 0) return [];
+
+  const baseName = String(funnel?.name || '').replace(/\s*-\s*\d+\s*$/, '').trim();
+  const keywords = [
+    baseName,
+    ...(funnel?.funnel_products || []).flatMap((p: any) => [p.product_name_contains, p.display_name]),
+  ].filter((v: string | null | undefined) => String(v || '').trim().length >= 3) as string[];
+  if (keywords.length === 0) return [];
+
+  const fallback: any[] = [];
+  from = 0;
+  while (true) {
+    let query = (supabase as any)
+      .from('meta_campaigns')
+      .select('*')
+      .order('name')
+      .range(from, from + pageSize - 1);
+    query = accountIds.length === 1 ? query.eq('account_id', accountIds[0]) : query.in('account_id', accountIds);
+    const { data } = await query;
+    if (!data || data.length === 0) break;
+    fallback.push(...data.filter((c: any) => keywordMatches(c.name || '', keywords)));
+    if (data.length < pageSize) break;
+    from += pageSize;
+  }
+  return fallback;
+}
+
+async function fetchAccountIdsForFunnel(funnelId: string): Promise<string[]> {
   const { data } = await (supabase as any)
-    .from('meta_campaigns')
-    .select('id')
-    .eq('funnel_id', funnelId);
-  return (data || []).map((c: any) => c.id);
+    .from('funnels')
+    .select('meta_account_id')
+    .eq('id', funnelId)
+    .maybeSingle();
+
+  return String(data?.meta_account_id || '')
+    .split(',')
+    .map((id) => id.trim().replace(/^act_/, ''))
+    .filter(Boolean);
 }
 
 async function fetchAdsetIdsForFunnel(funnelId: string): Promise<string[]> {
@@ -176,6 +246,12 @@ async function fetchInsightsByType(
   return all;
 }
 
+async function fetchAccountInsightsForFunnel(funnelId: string, dateFrom: string, dateTo: string): Promise<InsightRow[]> {
+  const accountIds = await fetchAccountIdsForFunnel(funnelId);
+  if (accountIds.length === 0) return [];
+  return fetchInsightsByType('account', dateFrom, dateTo, accountIds);
+}
+
 function groupInsightsById(insights: InsightRow[]): Record<string, InsightRow[]> {
   const map: Record<string, InsightRow[]> = {};
   for (const ins of insights) {
@@ -215,16 +291,19 @@ export function useMetaCampaigns(funnelId?: string | null) {
     queryFn: async () => {
       // Buscar campanhas com filtro de funil quando aplicável
       const all: any[] = [];
-      let from = 0;
       const pageSize = 1000;
+      let from = 0;
+      if (funnelId) {
+        all.push(...await fetchCampaignRowsForFunnel(funnelId));
+      } else {
       while (true) {
         let q = (supabase as any).from('meta_campaigns').select('*').order('name');
-        if (funnelId) q = q.eq('funnel_id', funnelId);
         const { data } = await q.range(from, from + pageSize - 1);
         if (!data || data.length === 0) break;
         all.push(...data);
         if (data.length < pageSize) break;
         from += pageSize;
+      }
       }
       if (!all.length) return [];
 
@@ -352,7 +431,12 @@ export function useMetaDailyInsights(funnelId?: string | null) {
     queryKey: ['meta-daily-insights', dateFrom, dateTo, funnelId ?? 'all', lastUpdated.getTime()],
     queryFn: async () => {
       const campaignIds = funnelId ? await fetchCampaignIdsForFunnel(funnelId) : undefined;
-      const insights = await fetchInsightsByType('campaign', dateFrom, dateTo, campaignIds);
+      const campaignInsights = await fetchInsightsByType('campaign', dateFrom, dateTo, campaignIds);
+      const campaignSpend = campaignInsights.reduce((s, r) => s + Number(r.spend || 0), 0);
+      const accountFallbackInsights = funnelId && campaignSpend === 0
+        ? await fetchAccountInsightsForFunnel(funnelId, dateFrom, dateTo)
+        : [];
+      const insights = campaignSpend > 0 || accountFallbackInsights.length === 0 ? campaignInsights : accountFallbackInsights;
 
       const byDate: Record<string, InsightRow[]> = {};
       for (const row of insights) {
@@ -388,7 +472,12 @@ export function useMetaKPISummary(funnelId?: string | null) {
     queryKey: ['meta-kpi', dateFrom, dateTo, funnelId ?? 'all', lastUpdated.getTime()],
     queryFn: async () => {
       const campaignIds = funnelId ? await fetchCampaignIdsForFunnel(funnelId) : undefined;
-      const insights = await fetchInsightsByType('campaign', dateFrom, dateTo, campaignIds);
+      const campaignInsights = await fetchInsightsByType('campaign', dateFrom, dateTo, campaignIds);
+      const campaignAgg = aggregateInsights(campaignInsights);
+      const accountFallbackInsights = funnelId && campaignAgg.spend === 0
+        ? await fetchAccountInsightsForFunnel(funnelId, dateFrom, dateTo)
+        : [];
+      const insights = campaignAgg.spend > 0 || accountFallbackInsights.length === 0 ? campaignInsights : accountFallbackInsights;
       const agg = aggregateInsights(insights);
       const totalRevenue = agg.revenue;
       const totalSpend = agg.spend;

@@ -196,14 +196,20 @@ Deno.serve(async (req) => {
         { onConflict: "account_id" }
       );
 
-      // ── PHASE 1: Campaigns + Campaign Insights (always) ──
+        // ── PHASE 1: Campaigns + Account/Campaign Insights (always) ──
       try {
         console.log("Phase 1: Campaigns + Campaign Insights...");
         const t1 = Date.now();
 
-        const [campaigns, campaignInsights] = await Promise.all([
+        const [campaigns, accountInsights, campaignInsights] = await Promise.all([
           metaFetchAll(`/${actId}/campaigns`, META_TOKEN, {
             fields: "id,name,status,effective_status,objective,daily_budget,lifetime_budget",
+          }),
+          metaFetchAll(`/${actId}/insights`, META_TOKEN, {
+            fields: INLINE_FIELDS,
+            level: "account",
+            time_range: timeRange,
+            time_increment: "1",
           }),
           metaFetchAll(`/${actId}/insights`, META_TOKEN, {
             fields: `${INLINE_FIELDS},campaign_id`,
@@ -227,14 +233,16 @@ Deno.serve(async (req) => {
         const campaignInsightRows = campaignInsights
           .filter((ins: any) => ins.campaign_id)
           .map((ins: any) => mapInsightRow(ins, "campaign_id", "campaign"));
+        const accountInsightRows = accountInsights
+          .map((ins: any) => ({ ...mapInsightRow(ins, "account_id", "account"), object_id: configuredAccountId }));
 
         await Promise.all([
           batchUpsert(supabase, "meta_campaigns", campaignRows, "id"),
-          batchUpsert(supabase, "meta_insights", campaignInsightRows, "object_id,object_type,date_start,date_stop"),
+          batchUpsert(supabase, "meta_insights", [...accountInsightRows, ...campaignInsightRows], "object_id,object_type,date_start,date_stop"),
         ]);
 
-        totalRecords += campaigns.length + campaignInsightRows.length;
-        console.log(`Phase 1 done: ${campaigns.length} campaigns, ${campaignInsightRows.length} insights (${Date.now() - t1}ms)`);
+        totalRecords += campaigns.length + accountInsightRows.length + campaignInsightRows.length;
+        console.log(`Phase 1 done: ${campaigns.length} campaigns, ${accountInsightRows.length} account insights, ${campaignInsightRows.length} campaign insights (${Date.now() - t1}ms)`);
 
         // Auto-assign funnel_id to campaigns based on funnel_products keywords
         try {
@@ -362,6 +370,14 @@ Deno.serve(async (req) => {
       } catch (e) { console.error("Phase 4 error:", e); phaseErrors.push(`P4:${e instanceof Error ? e.message : String(e)}`); }
 
     } // fim do for (accountIds)
+
+      // Reaplica a atribuição depois que campanhas, conjuntos e anúncios já foram inseridos/atualizados.
+      // Isso evita que funis que compartilham a mesma conta Meta fiquem sem adsets/ads vinculados.
+      try {
+        const { data: assigned, error: assignErr } = await supabase.rpc("auto_assign_campaign_funnels");
+        if (assignErr) console.error("Final auto-assign error:", assignErr);
+        else console.log(`Final auto-assign propagated ${assigned ?? 0} records`);
+      } catch (e) { console.error("Final auto-assign error:", e); }
 
       // Se 0 registros e houve erros, marcar como failed para o usuário ver o motivo (token inválido, etc.)
       const allFailed = totalRecords === 0 && phaseErrors.length > 0;
