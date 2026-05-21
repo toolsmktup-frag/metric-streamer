@@ -205,19 +205,15 @@ async function fetchAccountIdsForFunnel(funnelId: string): Promise<string[]> {
 }
 
 async function fetchAdsetIdsForFunnel(funnelId: string): Promise<string[]> {
-  const { data } = await (supabase as any)
-    .from('meta_adsets')
-    .select('id')
-    .eq('funnel_id', funnelId);
-  return (data || []).map((a: any) => a.id);
+  const campaignIds = await fetchCampaignIdsForFunnel(funnelId);
+  const rows = await fetchRowsByFieldValues('meta_adsets', 'campaign_id', campaignIds);
+  return rows.map((a: any) => a.id);
 }
 
 async function fetchAdIdsForFunnel(funnelId: string): Promise<string[]> {
-  const { data } = await (supabase as any)
-    .from('meta_ads')
-    .select('id')
-    .eq('funnel_id', funnelId);
-  return (data || []).map((a: any) => a.id);
+  const campaignIds = await fetchCampaignIdsForFunnel(funnelId);
+  const rows = await fetchRowsByFieldValues('meta_ads', 'campaign_id', campaignIds);
+  return rows.map((a: any) => a.id);
 }
 
 // ─── Shared insight fetcher with pagination (avoids 1000-row limit) ───
@@ -364,14 +360,17 @@ export function useMetaAdsets(funnelId?: string | null) {
       const all: any[] = [];
       let from = 0;
       const pageSize = 1000;
-      while (true) {
-        let q = (supabase as any).from('meta_adsets').select('*').order('name');
-        if (funnelId) q = q.eq('funnel_id', funnelId);
-        const { data } = await q.range(from, from + pageSize - 1);
-        if (!data || data.length === 0) break;
-        all.push(...data);
-        if (data.length < pageSize) break;
-        from += pageSize;
+      if (funnelId) {
+        const campaignIds = await fetchCampaignIdsForFunnel(funnelId);
+        all.push(...await fetchRowsByFieldValues('meta_adsets', 'campaign_id', campaignIds));
+      } else {
+        while (true) {
+          const { data } = await (supabase as any).from('meta_adsets').select('*').order('name').range(from, from + pageSize - 1);
+          if (!data || data.length === 0) break;
+          all.push(...data);
+          if (data.length < pageSize) break;
+          from += pageSize;
+        }
       }
       if (!all.length) return [];
 
