@@ -363,6 +363,14 @@ Deno.serve(async (req) => {
 
     } // fim do for (accountIds)
 
+      // Reaplica a atribuição depois que campanhas, conjuntos e anúncios já foram inseridos/atualizados.
+      // Isso evita que funis que compartilham a mesma conta Meta fiquem sem adsets/ads vinculados.
+      try {
+        const { data: assigned, error: assignErr } = await supabase.rpc("auto_assign_campaign_funnels");
+        if (assignErr) console.error("Final auto-assign error:", assignErr);
+        else console.log(`Final auto-assign propagated ${assigned ?? 0} records`);
+      } catch (e) { console.error("Final auto-assign error:", e); }
+
       // Se 0 registros e houve erros, marcar como failed para o usuário ver o motivo (token inválido, etc.)
       const allFailed = totalRecords === 0 && phaseErrors.length > 0;
       if (syncLog) {
