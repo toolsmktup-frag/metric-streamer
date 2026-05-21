@@ -291,16 +291,19 @@ export function useMetaCampaigns(funnelId?: string | null) {
     queryFn: async () => {
       // Buscar campanhas com filtro de funil quando aplicável
       const all: any[] = [];
-      let from = 0;
       const pageSize = 1000;
+      let from = 0;
+      if (funnelId) {
+        all.push(...await fetchCampaignRowsForFunnel(funnelId));
+      } else {
       while (true) {
         let q = (supabase as any).from('meta_campaigns').select('*').order('name');
-        if (funnelId) q = q.eq('funnel_id', funnelId);
         const { data } = await q.range(from, from + pageSize - 1);
         if (!data || data.length === 0) break;
         all.push(...data);
         if (data.length < pageSize) break;
         from += pageSize;
+      }
       }
       if (!all.length) return [];
 
