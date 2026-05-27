@@ -473,17 +473,34 @@ Deno.serve(async (req) => {
     }
 
     if (!body.funnel_id) return json({ error: 'funnel_id é obrigatório' }, 400)
+    const readOnlyModes = new Set(['get_config', 'list_runs', 'webhook_status'])
+    const readOnlyFallback = (mode: string) => {
+      if (mode === 'get_config') return json({ config: null })
+      if (mode === 'list_runs') return json({ runs: [] })
+      if (mode === 'webhook_status') return json({ status: { registered: false, hasGroups: false, error: 'unavailable' } })
+      return null
+    }
+
     let user: { userId: string; orgId: string }
     try {
       user = await requireUser(req, supabaseUrl, anonKey)
     } catch (authErr) {
+      if (readOnlyModes.has(body.mode)) return readOnlyFallback(body.mode)!
       return json({ error: authErr instanceof Error ? authErr.message : 'Sessão inválida' }, 401)
     }
-    await ensureFunnelAccess(admin, body.funnel_id, user.orgId)
+    try {
+      await ensureFunnelAccess(admin, body.funnel_id, user.orgId)
+    } catch (accessErr) {
+      if (readOnlyModes.has(body.mode)) return readOnlyFallback(body.mode)!
+      throw accessErr
+    }
 
     if (body.mode === 'get_config') {
       const { data, error } = await admin.from('lead_funnel_group_sync_configs').select('*').eq('funnel_id', body.funnel_id).maybeSingle()
-      if (error) throw error
+      if (error) {
+        console.error('[wz-group-sync] get_config error:', error)
+        return json({ config: null })
+      }
       return json({ config: data })
     }
 
@@ -494,7 +511,10 @@ Deno.serve(async (req) => {
         .eq('funnel_id', body.funnel_id)
         .order('created_at', { ascending: false })
         .limit(15)
-      if (error) throw error
+      if (error) {
+        console.error('[wz-group-sync] list_runs error:', error)
+        return json({ runs: [] })
+      }
       return json({ runs: data || [] })
     }
 
