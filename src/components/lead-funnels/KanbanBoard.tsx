@@ -137,10 +137,15 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
     });
   }, [visiblePositions, search]);
 
-  const filteredPositions = useMemo(() => {
-    if (filters.products.length === 0 && filters.financial.length === 0) return searchedPositions;
-    return searchedPositions.filter(p => matchesFilters(p, filters, purchaseProductsMap));
-  }, [searchedPositions, filters, purchaseProductsMap]);
+  // Per-column filtering: each column applies its own filters to its own leads
+  const matchesColumnFilters = useCallback(
+    (p: LeadStagePosition & { lead: Lead }) => {
+      const f = columnFilters[p.stage_id];
+      if (!f || isFiltersEmpty(f)) return true;
+      return matchesFilters(p, f, purchaseProductsMap);
+    },
+    [columnFilters, purchaseProductsMap],
+  );
 
   const getPurchaseSummary = useCallback((leadId: string): PurchaseSummary | undefined => {
     return purchaseMap?.get(leadId);
