@@ -154,10 +154,11 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
   // Memoize sorted leads per stage
   const sortedLeadsByStage = useMemo(() => {
     const map = new Map<string, (LeadStagePosition & { lead: Lead })[]>();
-    
-    // Group by stage
+
+    // Group by stage, applying per-column filters here
     const grouped = new Map<string, (LeadStagePosition & { lead: Lead })[]>();
-    for (const p of filteredPositions) {
+    for (const p of searchedPositions) {
+      if (!matchesColumnFilters(p)) continue;
       const arr = grouped.get(p.stage_id) || [];
       arr.push(p);
       grouped.set(p.stage_id, arr);
@@ -192,22 +193,25 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
       map.set(stageId, sorted);
     }
     return map;
-  }, [filteredPositions, sortMode, purchaseMap, recontactMap]);
+  }, [searchedPositions, matchesColumnFilters, sortMode, purchaseMap, recontactMap]);
 
   const getStageRevenue = (leads: (LeadStagePosition & { lead: Lead })[]) => {
     return leads.reduce((sum, p) => sum + extractMetadataAmount(p.lead.metadata), 0);
   };
 
-  // Counts per stage ignoring filters (denominator for "X de Y")
+  // Total per stage ignoring column filter (denominator for "X de Y")
   const stageTotalCounts = useMemo(() => {
     const m = new Map<string, number>();
-    for (const p of visiblePositions) {
+    for (const p of searchedPositions) {
       m.set(p.stage_id, (m.get(p.stage_id) || 0) + 1);
     }
     return m;
-  }, [visiblePositions]);
+  }, [searchedPositions]);
 
-  const filtersActive = filters.products.length > 0 || filters.financial.length > 0;
+  const isColumnFiltered = (stageId: string) => {
+    const f = columnFilters[stageId];
+    return !!f && !isFiltersEmpty(f);
+  };
 
   // Build a map: stageId -> classification from transition rules (with name-based fallback)
   const stageClassificationMap = useMemo(() => {
