@@ -20,9 +20,12 @@ import {
 } from '@dnd-kit/core';
 import { useMoveLeadStage } from '@/hooks/useMoveLeadStage';
 import { useBulkLeadPurchases, type PurchaseSummary } from '@/hooks/useBulkLeadPurchases';
+import { useBulkLeadPurchaseProducts } from '@/hooks/useBulkLeadPurchaseProducts';
 import type { RecontactInfo } from '@/hooks/useRecontactDeadlines';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
+import { KanbanFiltersBar } from './KanbanFiltersBar';
+import { EMPTY_FILTERS, matchesFilters, type KanbanFilters } from '@/lib/kanbanFilters';
 
 const CARDS_PER_PAGE = 50;
 
@@ -109,9 +112,11 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
   const [activeId, setActiveId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
   const [visibleCounts, setVisibleCounts] = useState<Record<string, number>>({});
+  const [filters, setFilters] = useState<KanbanFilters>(EMPTY_FILTERS);
 
   const moveLeadStage = useMoveLeadStage();
   const { data: purchaseMap } = useBulkLeadPurchases(visiblePositions);
+  const { data: purchaseProductsMap } = useBulkLeadPurchaseProducts(funnelId, visiblePositions);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
@@ -119,7 +124,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
 
   const sortedStages = useMemo(() => [...stages].sort((a, b) => a.sort_order - b.sort_order), [stages]);
 
-  const filteredPositions = useMemo(() => {
+  const searchedPositions = useMemo(() => {
     if (!search.trim()) return visiblePositions;
     const q = search.toLowerCase().trim();
     return visiblePositions.filter(p => {
@@ -131,6 +136,11 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
       );
     });
   }, [visiblePositions, search]);
+
+  const filteredPositions = useMemo(() => {
+    if (filters.products.length === 0 && filters.financial.length === 0) return searchedPositions;
+    return searchedPositions.filter(p => matchesFilters(p, filters, purchaseProductsMap));
+  }, [searchedPositions, filters, purchaseProductsMap]);
 
   const getPurchaseSummary = useCallback((leadId: string): PurchaseSummary | undefined => {
     return purchaseMap?.get(leadId);
@@ -182,6 +192,17 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
   const getStageRevenue = (leads: (LeadStagePosition & { lead: Lead })[]) => {
     return leads.reduce((sum, p) => sum + extractMetadataAmount(p.lead.metadata), 0);
   };
+
+  // Counts per stage ignoring filters (denominator for "X de Y")
+  const stageTotalCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const p of visiblePositions) {
+      m.set(p.stage_id, (m.get(p.stage_id) || 0) + 1);
+    }
+    return m;
+  }, [visiblePositions]);
+
+  const filtersActive = filters.products.length > 0 || filters.financial.length > 0;
 
   // Build a map: stageId -> classification from transition rules (with name-based fallback)
   const stageClassificationMap = useMemo(() => {
@@ -341,6 +362,9 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
         )}
       </div>
 
+      {/* Filters bar */}
+      <KanbanFiltersBar funnelId={funnelId} filters={filters} onChange={setFilters} />
+
       {/* Kanban Columns */}
       <DndContext
         sensors={sensors}
@@ -371,7 +395,9 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
                       {stage.name}
                     </h3>
                     <span className="text-xs text-muted-foreground bg-background rounded-full px-2 py-0.5">
-                      {stageLeads.length}
+                      {filtersActive && stageTotalCounts.get(stage.id) !== stageLeads.length
+                        ? `${stageLeads.length} de ${stageTotalCounts.get(stage.id) || 0}`
+                        : stageLeads.length}
                     </span>
                   </div>
                   {!shouldHideValues && (() => {
