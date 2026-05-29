@@ -23,6 +23,17 @@ export function useBulkLeadPurchaseProducts(
     [positions],
   );
 
+  const leadMetadataProducts = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const p of positions || []) {
+      const productName = p.lead.metadata?.product_name;
+      if (typeof productName === 'string' && productName.trim()) {
+        map.set(p.lead_id, [productName.trim()]);
+      }
+    }
+    return map;
+  }, [positions]);
+
   const stableKey = useMemo(() => {
     if (!leadIds.length) return 'empty';
     let h = 0;
@@ -39,7 +50,9 @@ export function useBulkLeadPurchaseProducts(
       const result = new Map<string, LeadPurchaseInfo>();
       if (!funnelId || leadIds.length === 0) return result;
 
-      // Fetch purchase events from lead_events in batches
+      // Fetch purchase events from lead_events in batches.
+      // Do not filter by funnel_id here: purchase events can be attributed to another funnel,
+      // while the Kanban column must filter by products purchased by the leads currently in it.
       const BATCH = 500;
       const purchaseEventNames = ['purchase', 'Purchase', 'pago', 'authorized', 'autorizado'];
 
@@ -48,7 +61,6 @@ export function useBulkLeadPurchaseProducts(
         const { data, error } = await (supabase as any)
           .from('lead_events')
           .select('lead_id, metadata, created_at')
-          .eq('funnel_id', funnelId)
           .in('lead_id', batch)
           .in('event_name', purchaseEventNames)
           .order('created_at', { ascending: false })
@@ -74,6 +86,19 @@ export function useBulkLeadPurchaseProducts(
               existing.productNames.push(productName);
             }
             // lastPurchaseDate is already set from first (most recent) row
+          }
+        }
+      }
+
+      for (const [leadId, productNames] of leadMetadataProducts) {
+        const existing = result.get(leadId);
+        if (!existing) {
+          result.set(leadId, { productNames, lastPurchaseDate: '' });
+          continue;
+        }
+        for (const productName of productNames) {
+          if (!existing.productNames.includes(productName)) {
+            existing.productNames.push(productName);
           }
         }
       }
