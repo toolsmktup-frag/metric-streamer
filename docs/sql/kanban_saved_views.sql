@@ -53,8 +53,8 @@ CREATE POLICY "kanban_views_delete"
   ON public.kanban_saved_views FOR DELETE TO authenticated
   USING (
     created_by = auth.uid()
-    OR public.has_role(auth.uid(), 'admin')
-    OR public.has_role(auth.uid(), 'gestor')
+    OR public.has_role(auth.uid(), 'admin'::app_role)
+    OR public.has_role(auth.uid(), 'gestor'::app_role)
   );
 
 -- Trigger updated_at
