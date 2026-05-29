@@ -402,8 +402,13 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
                     <h3 className="font-semibold text-sm text-foreground flex-1 truncate">
                       {stage.name}
                     </h3>
+                    <KanbanColumnFilter
+                      funnelId={funnelId}
+                      filters={columnFilters[stage.id] || EMPTY_FILTERS}
+                      onChange={(f) => setColumnFilters(prev => ({ ...prev, [stage.id]: f }))}
+                    />
                     <span className="text-xs text-muted-foreground bg-background rounded-full px-2 py-0.5">
-                      {filtersActive && stageTotalCounts.get(stage.id) !== stageLeads.length
+                      {isColumnFiltered(stage.id) && stageTotalCounts.get(stage.id) !== stageLeads.length
                         ? `${stageLeads.length} de ${stageTotalCounts.get(stage.id) || 0}`
                         : stageLeads.length}
                     </span>
