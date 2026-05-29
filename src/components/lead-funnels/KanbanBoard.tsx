@@ -395,7 +395,9 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
                       {stage.name}
                     </h3>
                     <span className="text-xs text-muted-foreground bg-background rounded-full px-2 py-0.5">
-                      {stageLeads.length}
+                      {filtersActive && stageTotalCounts.get(stage.id) !== stageLeads.length
+                        ? `${stageLeads.length} de ${stageTotalCounts.get(stage.id) || 0}`
+                        : stageLeads.length}
                     </span>
                   </div>
                   {!shouldHideValues && (() => {
