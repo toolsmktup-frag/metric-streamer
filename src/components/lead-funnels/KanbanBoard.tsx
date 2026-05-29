@@ -24,8 +24,8 @@ import { useBulkLeadPurchaseProducts } from '@/hooks/useBulkLeadPurchaseProducts
 import type { RecontactInfo } from '@/hooks/useRecontactDeadlines';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
-import { KanbanFiltersBar } from './KanbanFiltersBar';
-import { EMPTY_FILTERS, matchesFilters, type KanbanFilters } from '@/lib/kanbanFilters';
+import { KanbanColumnFilter } from './KanbanColumnFilter';
+import { EMPTY_FILTERS, matchesFilters, isFiltersEmpty, type KanbanFilters } from '@/lib/kanbanFilters';
 
 const CARDS_PER_PAGE = 50;
 
