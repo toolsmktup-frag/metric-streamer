@@ -24,8 +24,8 @@ import { useBulkLeadPurchaseProducts } from '@/hooks/useBulkLeadPurchaseProducts
 import type { RecontactInfo } from '@/hooks/useRecontactDeadlines';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
-import { KanbanFiltersBar } from './KanbanFiltersBar';
-import { EMPTY_FILTERS, matchesFilters, type KanbanFilters } from '@/lib/kanbanFilters';
+import { KanbanColumnFilter } from './KanbanColumnFilter';
+import { EMPTY_FILTERS, matchesFilters, isFiltersEmpty, type KanbanFilters } from '@/lib/kanbanFilters';
 
 const CARDS_PER_PAGE = 50;
 
@@ -112,7 +112,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
   const [activeId, setActiveId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
   const [visibleCounts, setVisibleCounts] = useState<Record<string, number>>({});
-  const [filters, setFilters] = useState<KanbanFilters>(EMPTY_FILTERS);
+  const [columnFilters, setColumnFilters] = useState<Record<string, KanbanFilters>>({});
 
   const moveLeadStage = useMoveLeadStage();
   const { data: purchaseMap } = useBulkLeadPurchases(visiblePositions);
@@ -137,10 +137,15 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
     });
   }, [visiblePositions, search]);
 
-  const filteredPositions = useMemo(() => {
-    if (filters.products.length === 0 && filters.financial.length === 0) return searchedPositions;
-    return searchedPositions.filter(p => matchesFilters(p, filters, purchaseProductsMap));
-  }, [searchedPositions, filters, purchaseProductsMap]);
+  // Per-column filtering: each column applies its own filters to its own leads
+  const matchesColumnFilters = useCallback(
+    (p: LeadStagePosition & { lead: Lead }) => {
+      const f = columnFilters[p.stage_id];
+      if (!f || isFiltersEmpty(f)) return true;
+      return matchesFilters(p, f, purchaseProductsMap);
+    },
+    [columnFilters, purchaseProductsMap],
+  );
 
   const getPurchaseSummary = useCallback((leadId: string): PurchaseSummary | undefined => {
     return purchaseMap?.get(leadId);
@@ -149,10 +154,11 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
   // Memoize sorted leads per stage
   const sortedLeadsByStage = useMemo(() => {
     const map = new Map<string, (LeadStagePosition & { lead: Lead })[]>();
-    
-    // Group by stage
+
+    // Group by stage, applying per-column filters here
     const grouped = new Map<string, (LeadStagePosition & { lead: Lead })[]>();
-    for (const p of filteredPositions) {
+    for (const p of searchedPositions) {
+      if (!matchesColumnFilters(p)) continue;
       const arr = grouped.get(p.stage_id) || [];
       arr.push(p);
       grouped.set(p.stage_id, arr);
@@ -187,22 +193,25 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
       map.set(stageId, sorted);
     }
     return map;
-  }, [filteredPositions, sortMode, purchaseMap, recontactMap]);
+  }, [searchedPositions, matchesColumnFilters, sortMode, purchaseMap, recontactMap]);
 
   const getStageRevenue = (leads: (LeadStagePosition & { lead: Lead })[]) => {
     return leads.reduce((sum, p) => sum + extractMetadataAmount(p.lead.metadata), 0);
   };
 
-  // Counts per stage ignoring filters (denominator for "X de Y")
+  // Total per stage ignoring column filter (denominator for "X de Y")
   const stageTotalCounts = useMemo(() => {
     const m = new Map<string, number>();
-    for (const p of visiblePositions) {
+    for (const p of searchedPositions) {
       m.set(p.stage_id, (m.get(p.stage_id) || 0) + 1);
     }
     return m;
-  }, [visiblePositions]);
+  }, [searchedPositions]);
 
-  const filtersActive = filters.products.length > 0 || filters.financial.length > 0;
+  const isColumnFiltered = (stageId: string) => {
+    const f = columnFilters[stageId];
+    return !!f && !isFiltersEmpty(f);
+  };
 
   // Build a map: stageId -> classification from transition rules (with name-based fallback)
   const stageClassificationMap = useMemo(() => {
@@ -300,7 +309,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
     }));
   };
 
-  const totalFiltered = filteredPositions.length;
+  const totalFiltered = Array.from(sortedLeadsByStage.values()).reduce((a, b) => a + b.length, 0);
   const totalAll = visiblePositions.length;
 
   return (
@@ -362,8 +371,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
         )}
       </div>
 
-      {/* Filters bar */}
-      <KanbanFiltersBar funnelId={funnelId} filters={filters} onChange={setFilters} />
+      {/* (Filtros agora ficam por coluna, no header de cada uma) */}
 
       {/* Kanban Columns */}
       <DndContext
@@ -394,8 +402,13 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
                     <h3 className="font-semibold text-sm text-foreground flex-1 truncate">
                       {stage.name}
                     </h3>
+                    <KanbanColumnFilter
+                      funnelId={funnelId}
+                      filters={columnFilters[stage.id] || EMPTY_FILTERS}
+                      onChange={(f) => setColumnFilters(prev => ({ ...prev, [stage.id]: f }))}
+                    />
                     <span className="text-xs text-muted-foreground bg-background rounded-full px-2 py-0.5">
-                      {filtersActive && stageTotalCounts.get(stage.id) !== stageLeads.length
+                      {isColumnFiltered(stage.id) && stageTotalCounts.get(stage.id) !== stageLeads.length
                         ? `${stageLeads.length} de ${stageTotalCounts.get(stage.id) || 0}`
                         : stageLeads.length}
                     </span>
