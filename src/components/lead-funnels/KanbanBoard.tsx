@@ -362,6 +362,9 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
         )}
       </div>
 
+      {/* Filters bar */}
+      <KanbanFiltersBar funnelId={funnelId} filters={filters} onChange={setFilters} />
+
       {/* Kanban Columns */}
       <DndContext
         sensors={sensors}
