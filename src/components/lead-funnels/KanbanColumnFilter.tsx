@@ -28,7 +28,7 @@ const FINANCIAL_LABELS: Record<FinancialFilter, string> = {
 };
 
 export const KanbanColumnFilter: React.FC<Props> = ({ funnelId, filters, onChange }) => {
-  const { data: products = [] } = useDistinctProductNames(funnelId);
+  const { data: products = [] } = useDistinctLeadProducts(funnelId);
   const [open, setOpen] = useState(false);
   const [productSearch, setProductSearch] = useState('');
   const activeCount = countActiveFilters(filters);
