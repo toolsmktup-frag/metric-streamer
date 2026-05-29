@@ -371,8 +371,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
         )}
       </div>
 
-      {/* Filters bar */}
-      <KanbanFiltersBar funnelId={funnelId} filters={filters} onChange={setFilters} />
+      {/* (Filtros agora ficam por coluna, no header de cada uma) */}
 
       {/* Kanban Columns */}
       <DndContext
