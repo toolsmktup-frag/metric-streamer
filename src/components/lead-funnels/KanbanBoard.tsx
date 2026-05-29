@@ -112,9 +112,11 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
   const [activeId, setActiveId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
   const [visibleCounts, setVisibleCounts] = useState<Record<string, number>>({});
+  const [filters, setFilters] = useState<KanbanFilters>(EMPTY_FILTERS);
 
   const moveLeadStage = useMoveLeadStage();
   const { data: purchaseMap } = useBulkLeadPurchases(visiblePositions);
+  const { data: purchaseProductsMap } = useBulkLeadPurchaseProducts(funnelId, visiblePositions);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
