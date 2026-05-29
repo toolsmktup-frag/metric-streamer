@@ -193,6 +193,17 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
     return leads.reduce((sum, p) => sum + extractMetadataAmount(p.lead.metadata), 0);
   };
 
+  // Counts per stage ignoring filters (denominator for "X de Y")
+  const stageTotalCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const p of visiblePositions) {
+      m.set(p.stage_id, (m.get(p.stage_id) || 0) + 1);
+    }
+    return m;
+  }, [visiblePositions]);
+
+  const filtersActive = filters.products.length > 0 || filters.financial.length > 0;
+
   // Build a map: stageId -> classification from transition rules (with name-based fallback)
   const stageClassificationMap = useMemo(() => {
     const map = new Map<string, ValueClassification>();
