@@ -20,9 +20,12 @@ import {
 } from '@dnd-kit/core';
 import { useMoveLeadStage } from '@/hooks/useMoveLeadStage';
 import { useBulkLeadPurchases, type PurchaseSummary } from '@/hooks/useBulkLeadPurchases';
+import { useBulkLeadPurchaseProducts } from '@/hooks/useBulkLeadPurchaseProducts';
 import type { RecontactInfo } from '@/hooks/useRecontactDeadlines';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
+import { KanbanFiltersBar } from './KanbanFiltersBar';
+import { EMPTY_FILTERS, matchesFilters, type KanbanFilters } from '@/lib/kanbanFilters';
 
 const CARDS_PER_PAGE = 50;
 
