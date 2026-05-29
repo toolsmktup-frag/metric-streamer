@@ -309,7 +309,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
     }));
   };
 
-  const totalFiltered = filteredPositions.length;
+  const totalFiltered = Array.from(sortedLeadsByStage.values()).reduce((a, b) => a + b.length, 0);
   const totalAll = visiblePositions.length;
 
   return (
