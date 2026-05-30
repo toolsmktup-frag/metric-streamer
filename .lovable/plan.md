@@ -1,121 +1,31 @@
-# Filtros de Coluna no Kanban do Funil
+## Disparar webhook de teste para o n8n
 
-Adicionar uma barra de filtros no Kanban (logo abaixo da busca atual) que afeta a renderização dos cards em todas as colunas simultaneamente, com salvar/compartilhar visões.
+Vou simular um signup do lead do print 02 (`+5544998685747`) chamando o endpoint público de captura do funnel Influencers, que por sua vez vai disparar a automação e enviar o payload pro webhook do n8n.
 
-## UX
+### Passos
 
-**Local:** entre a busca "Buscar por nome..." e o botão "Recontato".
+1. **POST no endpoint de captura do funnel** usando o token fornecido:
+   ```
+   POST https://emfbocpmphtftqcezaib.supabase.co/functions/v1/public-lead-capture
+   Body: {
+     "token": "3a9b5990ed26751eb832f572a6d64b3e338ccfe1aec40fca",
+     "name": "<nome do lead do print>",
+     "phone": "+5544998685747",
+     "email": "<email do lead, se houver>",
+     "event": "signup"
+   }
+   ```
 
-**Botão:** `🎚️ Filtros` (com badge mostrando quantos filtros ativos). Abre um Popover.
+2. **Verificar resposta** (status 200 + lead_id retornado).
 
-**Dentro do popover — 2 grupos:**
+3. **Conferir no banco** se a execução da automação foi disparada (tabela `wz_executions` / `wz_node_executions`) e se o nó Webhook HTTP rodou com sucesso (status code da resposta do n8n).
 
-### 1. Produto comprado
-- Input multi-select com lista de produtos (vinda de `customer_purchases` + mapeamentos do funil via `useDistinctProductNames` / `useLeadProductMappings`).
-- Toggle por produto: `Tem` / `Não tem` / `Ignorar`.
-- Combinação entre produtos = AND (ex: "tem Tinturas E não tem Chás").
+4. **Reportar resultado**: status do disparo + se o n8n recebeu (você confirma do lado de lá clicando em "Listen for test event" antes, ou olhando o histórico de execuções).
 
-### 2. Status financeiro
-- Checkboxes:
-  - [ ] Tem pendência (PIX/Boleto em aberto)
-  - [ ] Sem pendência
-  - [ ] Só "recuperar" (abandonado/recusado/reembolsado)
-  - [ ] Aprovado (compra confirmada)
+### Antes de eu disparar, preciso confirmar:
 
-**Chips ativos:** abaixo da busca, mostrando filtros aplicados com `x` pra remover individual + botão "Limpar tudo".
+- Você já configurou o nó **Webhook HTTP** dentro da automação ligada ao funnel Influencers com a URL/body que te mandei? Se não, o disparo vai criar o lead mas não vai mandar nada pro n8n.
+- A automação está **ativa** e tem o trigger configurado pra `signup` (ou pra criação de lead nesse funnel)?
+- Você quer que eu use a **Production URL** (`/webhook/...`) ou prefere trocar pra **Test URL** (`/webhook-test/...`) antes do disparo pra você ver chegando ao vivo no editor do n8n?
 
-### Visões salvas (compartilhadas no time)
-- Dropdown ao lado do botão Filtros: `📁 Visões ▾`
-- Lista visões do funil: "Compradores Tinturas sem Chás", "PIX pendente últimos 7d" etc.
-- Ações: `Aplicar`, `Salvar atual como...`, `Atualizar`, `Excluir`.
-- Toda visão fica visível pra todos com acesso ao funil.
-
-### Comportamento nos totais
-- Header da coluna passa de `204` para `47 de 204`.
-- Valores em R$ da coluna recalculados só com os cards visíveis.
-- Header geral "786 leads / R$ 14.626" também recalcula.
-
-## Dados (Lovable Cloud)
-
-### Nova tabela: `kanban_saved_views`
-```
-id              uuid pk
-funnel_id       uuid fk lead_funnels
-name            text
-filters         jsonb         -- { products: [{name, mode}], financial: [...] }
-created_by      uuid fk auth.users
-org_id          uuid          -- pra RLS por organização
-created_at      timestamptz
-updated_at      timestamptz
-```
-- RLS: SELECT/INSERT/UPDATE/DELETE para membros com acesso ao funil (reaproveita `has_funnel_access`).
-- GRANT pra `authenticated` + `service_role`.
-
-### Sem mudança em outras tabelas
-- Filtros aplicados no client em cima dos hooks já existentes:
-  - `useLeadsByFunnel` (cards do funil)
-  - `useBulkLeadPurchases` / `useBulkLeadPurchaseProducts` (produtos comprados — já bulk fetch)
-  - `lead_events` + `metadata` (status financeiro pendente)
-
-## Implementação (frontend)
-
-### Novos arquivos
-- `src/components/kanban/KanbanFilters.tsx` — popover com os 2 grupos.
-- `src/components/kanban/KanbanFilterChips.tsx` — chips ativos.
-- `src/components/kanban/KanbanSavedViews.tsx` — dropdown de visões.
-- `src/hooks/useKanbanFilters.ts` — estado dos filtros (Zustand ou contexto local) + função `applyFilters(leads, purchasesMap)` pura.
-- `src/hooks/useKanbanSavedViews.ts` — CRUD da tabela `kanban_saved_views`.
-
-### Tipo dos filtros
-```ts
-type KanbanFilters = {
-  products: { name: string; mode: 'has' | 'not_has' }[];
-  financial: ('has_pending' | 'no_pending' | 'recover' | 'approved')[];
-};
-```
-
-### Onde aplicar
-- Página do Kanban do funil (provavelmente `src/components/lead-funnels/FunnelKanbanBoard.tsx` — verificar no build).
-- Aplicar `applyFilters` antes de agrupar leads por `stage_id`.
-- Recalcular totais da coluna a partir do array filtrado.
-
-### Performance
-- Produtos por lead já vêm via `useBulkLeadPurchases` (cache 5min) — sem novas queries.
-- Filtro 100% no client (operação O(n) sobre ~1k leads, instantâneo).
-- Visões salvas: 1 fetch ao abrir o funil + invalidação no save.
-
-## Migration SQL
-
-```sql
-CREATE TABLE public.kanban_saved_views (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  funnel_id uuid NOT NULL REFERENCES public.lead_funnels(id) ON DELETE CASCADE,
-  org_id uuid NOT NULL,
-  name text NOT NULL,
-  filters jsonb NOT NULL DEFAULT '{}'::jsonb,
-  created_by uuid REFERENCES auth.users(id),
-  created_at timestamptz DEFAULT now(),
-  updated_at timestamptz DEFAULT now()
-);
-
-CREATE INDEX idx_kanban_saved_views_funnel ON public.kanban_saved_views(funnel_id);
-
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.kanban_saved_views TO authenticated;
-GRANT ALL ON public.kanban_saved_views TO service_role;
-
-ALTER TABLE public.kanban_saved_views ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "members_funnel_access_select"
-  ON public.kanban_saved_views FOR SELECT TO authenticated
-  USING (public.has_funnel_access(auth.uid(), funnel_id));
-
-CREATE POLICY "members_funnel_access_write"
-  ON public.kanban_saved_views FOR ALL TO authenticated
-  USING (public.has_funnel_access(auth.uid(), funnel_id))
-  WITH CHECK (public.has_funnel_access(auth.uid(), funnel_id));
-```
-
-## Fora do escopo (v2 futuro)
-- Período de compra, UTM, Tags, Recontato, Vendedor — adicionar depois.
-- Filtros server-side (só se passar de ~5k leads por funil).
-- Compartilhar visão por link.
+Confirma esses 3 pontos que eu mando o disparo na sequência.
