@@ -309,12 +309,28 @@ const LeadTimeline: React.FC<LeadTimelineProps> = ({ lead, open, onClose }) => {
                       const eventDate = getEventDate(ev);
                       const meta = ev.metadata as any;
 
-                      // Label with product name for purchase events
+                      // Label with product name for purchase / pix / boleto events
                       const productName = meta?.product_name;
-                      const isPurchaseEvent = ['purchase', 'compra', 'pago', 'authorized'].includes(ev.event_name);
-                      const displayLabel = isPurchaseEvent && productName
+                      const PRODUCT_IN_LABEL_EVENTS = [
+                        'purchase', 'compra', 'pago', 'authorized',
+                        'pix_generated', 'pix', 'boleto_generated', 'boleto',
+                        'abandoned_cart', 'cart_abandoned',
+                      ];
+                      const showProductInLabel = PRODUCT_IN_LABEL_EVENTS.includes(ev.event_name);
+                      const displayLabel = showProductInLabel && productName
                         ? `${mapping.label}: ${productName}`
                         : mapping.label;
+
+                      // Resolve value with fallback across metadata keys
+                      const rawValue =
+                        meta?.amount ??
+                        meta?.gross_amount ??
+                        meta?.net_amount ??
+                        meta?.value ??
+                        meta?.total ??
+                        meta?.price;
+                      const numericValue = rawValue != null ? Number(rawValue) : NaN;
+                      const hasValue = Number.isFinite(numericValue) && numericValue > 0;
 
                       // Time delta from the chronologically previous event (next in array since sorted desc)
                       let timeDelta: string | null = null;
@@ -346,15 +362,15 @@ const LeadTimeline: React.FC<LeadTimelineProps> = ({ lead, open, onClose }) => {
                             )}
                             {meta && Object.keys(meta).length > 0 && (
                               <div className="flex items-center gap-2 mt-1 text-[10px] flex-wrap">
-                                {!isPurchaseEvent && productName && (
+                                {!showProductInLabel && productName && (
                                   <span className="text-muted-foreground">{productName}</span>
                                 )}
                                 {meta.offer_name && (
                                   <span className="text-muted-foreground/80">({meta.offer_name})</span>
                                 )}
-                                {meta.amount && (
+                                {hasValue && (
                                   <span className="font-semibold text-emerald-600 dark:text-emerald-400">
-                                    {formatCurrency(Number(meta.amount))}
+                                    {formatCurrency(numericValue)}
                                   </span>
                                 )}
                                 {meta.payment_method && (

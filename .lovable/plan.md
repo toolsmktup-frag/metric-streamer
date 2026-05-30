@@ -1,57 +1,53 @@
 ## Problema
 
-A página `/captura` envia pro nosso `webhook-lead` um payload com `event: "abandoned_cart"` (por isso o card do Lucas aparece com essa tag). O `webhook-lead` cria o lead direitinho no Kanban, mas depois encaminha pro `wz-receiver` usando exatamente esse mesmo nome:
+No painel de detalhes do lead, os eventos do Timeline (ex.: `pix_generated`) mostram o nome do produto ("3 Potes Articulabem") mas **não exibem o valor** que o cliente está comprando. A Gabi precisa ver o valor ali na hora do atendimento.
 
-```ts
-status: event   // = "abandoned_cart"
+## Causa
+
+Em `src/components/lead-funnels/LeadTimeline.tsx` (linhas 347–370), a renderização do valor só checa `meta.amount`:
+
+```tsx
+{meta.amount && (
+  <span>{formatCurrency(Number(meta.amount))}</span>
+)}
 ```
 
-A "Automação - Influencers" tem trigger configurado pra **`signup`**. No `wz-receiver` (linha 352) a comparação é estrita: `triggerType !== event.status` → não bate → nenhuma execução criada → nada chega no n8n.
+Mas os webhooks (Ticto/Guru) salvam o valor em `metadata` sob outras chaves: `gross_amount`, `net_amount`, `value`, `total`. Quando o evento é `pix_generated`, normalmente vem `gross_amount` — por isso não aparece.
 
-É exatamente isso que explica por que o lead aparece no funil mas a automação não dispara e as "últimas execuções" param em 04:52.
+Também: para `pix_generated` o nome do produto aparece, mas seria mais útil colocá-lo junto do label (como já é feito para `purchase`), deixando o valor em destaque.
 
-## Correção
+## Mudança
 
-Mapear no `webhook-lead`, **antes do forward pro wz-receiver**, qualquer evento de entrada de lead (capture/optin/lead/abandoned_cart/etc.) para o nome canônico **`signup`**. O evento original continua sendo gravado em `lead_events` (preserva histórico e tag no card) — só o que vai pro motor de automação é normalizado.
+Arquivo único: `src/components/lead-funnels/LeadTimeline.tsx`
 
-### Alteração única em `supabase/functions/webhook-lead/index.ts`
+1. **Resolver o valor com fallback** entre as chaves possíveis do metadata:
+   ```
+   meta.amount ?? meta.gross_amount ?? meta.net_amount ?? meta.value ?? meta.total
+   ```
+   Renderizar o `formatCurrency` se qualquer um existir e for > 0.
 
-Adicionar logo antes do bloco "Forward lead events" (linha 200):
+2. **Incluir `pix_generated` (e `pix`, `boleto_generated`) na lista de eventos "com produto no label"** — assim o label vira `Pix gerado: 3 Potes Articulabem` e o valor aparece logo abaixo em verde, igual aos eventos de compra.
 
-```ts
-// Map lead-capture events to canonical 'signup' for the automation engine.
-// The original event name is preserved in lead_events (tag in the card).
-const LEAD_CAPTURE_EVENTS = new Set([
-  'capture', 'optin', 'lead', 'signup', 'abandoned_cart', 'cart_abandoned',
-])
-const automationStatus = LEAD_CAPTURE_EVENTS.has(event) ? 'signup' : event
+3. Manter todo o resto (ícones, cores, datas, deltas, badges) inalterado.
+
+## Resultado visual
+
+Antes:
+```
+pix_generated
+27/05/2026 19:58:48
+3 Potes Articulabem  [ticto]
 ```
 
-E trocar no body do forward:
-```ts
-status: automationStatus,
-event: automationStatus,
+Depois:
+```
+pix_generated: 3 Potes Articulabem
+27/05/2026 19:58:48
+R$ 197,00  [ticto]
 ```
 
-Mantém `metadata.original_event = event` pra não perder rastreio.
+## Escopo
 
-## Por que essa abordagem
-
-- Não exige mudar a página `vivendonatural` (que está fazendo o trabalho dela certinho).
-- Não exige reconfigurar trigger da automação (continua semântico = `signup`).
-- Não quebra nenhum outro caminho: `purchase`, `pix_generated`, etc. (que entram por outros webhooks como `ticto-webhook`, `guru-webhook`) continuam passando direto, sem mapeamento.
-- A tag `abandoned_cart` no card continua aparecendo (vem de `lead_events`, não do forward).
-
-## Validação
-
-Depois do deploy manual da edge function no Supabase Dashboard:
-1. Apaga o Lucas do funil pelo ContactPanel.
-2. Faz novo cadastro em `vivendonatural.lovable.app/captura`.
-3. Confere em **Automações do Funil → Últimas execuções** se aparece uma nova entrada com status `completed` (ou `running`).
-4. Confere se o n8n recebeu o disparo.
-
-## Detalhes técnicos
-
-- Único arquivo alterado: `supabase/functions/webhook-lead/index.ts` (~6 linhas).
-- Deploy: **manual** no Supabase Dashboard (regra do projeto — edge functions não são auto-deployadas).
-- Nenhuma migration, nenhuma mudança no `wz-receiver`/`wz-executor`, nenhuma mudança de UI.
+- Apenas frontend (presentation).
+- Não mexe em webhook, edge function, banco ou estrutura de dados.
+- Não altera comportamento de outros funis nem das automações.
