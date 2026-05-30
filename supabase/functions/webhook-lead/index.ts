@@ -197,6 +197,42 @@ Deno.serve(async (req) => {
       }
     }
 
+    // 5. Forward lead events to WhatsApp automation engine (non-fatal)
+    try {
+      const receiverUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/wz-receiver`
+      const automationRes = await fetch(receiverUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+        },
+        body: JSON.stringify({
+          platform: body.platform || 'webhook_lead',
+          status: event,
+          event,
+          phone,
+          name,
+          email,
+          product_name: body.product_name || body.product || null,
+          product_id: body.product_id || null,
+          offer_name: body.offer_name || body.offer || null,
+          amount: body.amount || body.gross_amount || 0,
+          payment_method: body.payment_method || null,
+          id: body.id || body.event_id || null,
+          metadata: {
+            ...(metadata || {}),
+            lead_id: lead.id,
+            funnel_id: funnel.id,
+            source: 'webhook-lead',
+          },
+        }),
+      })
+      const automationBody = await automationRes.text()
+      console.log('[webhook-lead] wz-receiver response:', automationRes.status, automationBody.slice(0, 500))
+    } catch (automationErr) {
+      console.error('[webhook-lead] wz-receiver forwarding failed:', automationErr)
+    }
+
     return new Response(
       JSON.stringify({ success: true, lead_id: lead.id }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
