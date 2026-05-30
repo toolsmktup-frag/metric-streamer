@@ -162,8 +162,21 @@ async function uazapi(instance: any, path: string, init?: RequestInit) {
       ...(init?.headers || {}),
     },
   })
-  const data = await res.json().catch(() => null)
-  if (!res.ok) throw new Error(data?.error || data?.message || `UAZAPI retornou ${res.status}`)
+  const text = await res.text()
+  let data: any = null
+  try { data = text ? JSON.parse(text) : null } catch { data = text }
+
+  const errField = data && typeof data === 'object' ? data.error : null
+  const hasError = !res.ok || errField === true || (typeof errField === 'string' && errField.length > 0)
+  if (hasError) {
+    const msg =
+      (typeof errField === 'string' && errField) ||
+      (data && typeof data === 'object' && (data.message || data.response || data.reason || data.detail)) ||
+      (typeof data === 'string' && data) ||
+      `UAZAPI ${res.status} em ${path}`
+    console.error('[uazapi] error', { path, status: res.status, body: data })
+    throw new Error(String(msg))
+  }
   return data
 }
 
