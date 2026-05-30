@@ -198,6 +198,13 @@ Deno.serve(async (req) => {
     }
 
     // 5. Forward lead events to WhatsApp automation engine (non-fatal)
+    // Map lead-capture events to canonical 'signup' for the automation engine.
+    // The original event name is preserved in lead_events (tag visible in the card).
+    const LEAD_CAPTURE_EVENTS = new Set([
+      'capture', 'optin', 'lead', 'signup', 'abandoned_cart', 'cart_abandoned',
+    ])
+    const automationStatus = LEAD_CAPTURE_EVENTS.has(event) ? 'signup' : event
+
     try {
       const receiverUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/wz-receiver`
       const automationRes = await fetch(receiverUrl, {
@@ -208,8 +215,8 @@ Deno.serve(async (req) => {
         },
         body: JSON.stringify({
           platform: body.platform || 'webhook_lead',
-          status: event,
-          event,
+          status: automationStatus,
+          event: automationStatus,
           phone,
           name,
           email,
@@ -224,9 +231,11 @@ Deno.serve(async (req) => {
             lead_id: lead.id,
             funnel_id: funnel.id,
             source: 'webhook-lead',
+            original_event: event,
           },
         }),
       })
+
       const automationBody = await automationRes.text()
       console.log('[webhook-lead] wz-receiver response:', automationRes.status, automationBody.slice(0, 500))
     } catch (automationErr) {

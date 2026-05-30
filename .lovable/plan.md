@@ -1,31 +1,57 @@
-## Disparar webhook de teste para o n8n
+## Problema
 
-Vou simular um signup do lead do print 02 (`+5544998685747`) chamando o endpoint público de captura do funnel Influencers, que por sua vez vai disparar a automação e enviar o payload pro webhook do n8n.
+A página `/captura` envia pro nosso `webhook-lead` um payload com `event: "abandoned_cart"` (por isso o card do Lucas aparece com essa tag). O `webhook-lead` cria o lead direitinho no Kanban, mas depois encaminha pro `wz-receiver` usando exatamente esse mesmo nome:
 
-### Passos
+```ts
+status: event   // = "abandoned_cart"
+```
 
-1. **POST no endpoint de captura do funnel** usando o token fornecido:
-   ```
-   POST https://emfbocpmphtftqcezaib.supabase.co/functions/v1/public-lead-capture
-   Body: {
-     "token": "3a9b5990ed26751eb832f572a6d64b3e338ccfe1aec40fca",
-     "name": "<nome do lead do print>",
-     "phone": "+5544998685747",
-     "email": "<email do lead, se houver>",
-     "event": "signup"
-   }
-   ```
+A "Automação - Influencers" tem trigger configurado pra **`signup`**. No `wz-receiver` (linha 352) a comparação é estrita: `triggerType !== event.status` → não bate → nenhuma execução criada → nada chega no n8n.
 
-2. **Verificar resposta** (status 200 + lead_id retornado).
+É exatamente isso que explica por que o lead aparece no funil mas a automação não dispara e as "últimas execuções" param em 04:52.
 
-3. **Conferir no banco** se a execução da automação foi disparada (tabela `wz_executions` / `wz_node_executions`) e se o nó Webhook HTTP rodou com sucesso (status code da resposta do n8n).
+## Correção
 
-4. **Reportar resultado**: status do disparo + se o n8n recebeu (você confirma do lado de lá clicando em "Listen for test event" antes, ou olhando o histórico de execuções).
+Mapear no `webhook-lead`, **antes do forward pro wz-receiver**, qualquer evento de entrada de lead (capture/optin/lead/abandoned_cart/etc.) para o nome canônico **`signup`**. O evento original continua sendo gravado em `lead_events` (preserva histórico e tag no card) — só o que vai pro motor de automação é normalizado.
 
-### Antes de eu disparar, preciso confirmar:
+### Alteração única em `supabase/functions/webhook-lead/index.ts`
 
-- Você já configurou o nó **Webhook HTTP** dentro da automação ligada ao funnel Influencers com a URL/body que te mandei? Se não, o disparo vai criar o lead mas não vai mandar nada pro n8n.
-- A automação está **ativa** e tem o trigger configurado pra `signup` (ou pra criação de lead nesse funnel)?
-- Você quer que eu use a **Production URL** (`/webhook/...`) ou prefere trocar pra **Test URL** (`/webhook-test/...`) antes do disparo pra você ver chegando ao vivo no editor do n8n?
+Adicionar logo antes do bloco "Forward lead events" (linha 200):
 
-Confirma esses 3 pontos que eu mando o disparo na sequência.
+```ts
+// Map lead-capture events to canonical 'signup' for the automation engine.
+// The original event name is preserved in lead_events (tag in the card).
+const LEAD_CAPTURE_EVENTS = new Set([
+  'capture', 'optin', 'lead', 'signup', 'abandoned_cart', 'cart_abandoned',
+])
+const automationStatus = LEAD_CAPTURE_EVENTS.has(event) ? 'signup' : event
+```
+
+E trocar no body do forward:
+```ts
+status: automationStatus,
+event: automationStatus,
+```
+
+Mantém `metadata.original_event = event` pra não perder rastreio.
+
+## Por que essa abordagem
+
+- Não exige mudar a página `vivendonatural` (que está fazendo o trabalho dela certinho).
+- Não exige reconfigurar trigger da automação (continua semântico = `signup`).
+- Não quebra nenhum outro caminho: `purchase`, `pix_generated`, etc. (que entram por outros webhooks como `ticto-webhook`, `guru-webhook`) continuam passando direto, sem mapeamento.
+- A tag `abandoned_cart` no card continua aparecendo (vem de `lead_events`, não do forward).
+
+## Validação
+
+Depois do deploy manual da edge function no Supabase Dashboard:
+1. Apaga o Lucas do funil pelo ContactPanel.
+2. Faz novo cadastro em `vivendonatural.lovable.app/captura`.
+3. Confere em **Automações do Funil → Últimas execuções** se aparece uma nova entrada com status `completed` (ou `running`).
+4. Confere se o n8n recebeu o disparo.
+
+## Detalhes técnicos
+
+- Único arquivo alterado: `supabase/functions/webhook-lead/index.ts` (~6 linhas).
+- Deploy: **manual** no Supabase Dashboard (regra do projeto — edge functions não são auto-deployadas).
+- Nenhuma migration, nenhuma mudança no `wz-receiver`/`wz-executor`, nenhuma mudança de UI.
