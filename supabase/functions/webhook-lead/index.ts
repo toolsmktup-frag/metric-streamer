@@ -201,7 +201,7 @@ Deno.serve(async (req) => {
     // Map lead-capture events to canonical 'signup' for the automation engine.
     // The original event name is preserved in lead_events (tag visible in the card).
     const LEAD_CAPTURE_EVENTS = new Set([
-      'capture', 'optin', 'lead', 'signup', 'abandoned_cart', 'cart_abandoned',
+      'capture', 'optin', 'lead', 'signup',
     ])
     const automationStatus = LEAD_CAPTURE_EVENTS.has(event) ? 'signup' : event
 
