@@ -225,6 +225,7 @@ function TriggerConfig({ data, update }: { data: any; update: (k: string, v: any
             <SelectItem value="any">Qualquer</SelectItem>
             <SelectItem value="ticto">Ticto</SelectItem>
             <SelectItem value="guru">Guru</SelectItem>
+            <SelectItem value="webhook_lead">Webhook do funil (captura)</SelectItem>
           </SelectContent>
         </Select>
       </div>
