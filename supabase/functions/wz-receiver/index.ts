@@ -535,6 +535,18 @@ Deno.serve(async (req) => {
     for (const flow of flows) {
       const nodes = (flow.nodes || []) as Record<string, any>[];
       const edges = (flow.edges || []) as Record<string, any>[];
+
+      // Funnel scope enforcement: if flow is linked to funnels, event's product
+      // must belong to one of them. Flows with NO funnel link remain global.
+      const linkedFunnels = flowToFunnels.get(flow.id);
+      if (linkedFunnels && linkedFunnels.length > 0) {
+        const inScope = linkedFunnels.some((fid) => eventFunnelIds.has(fid));
+        if (!inScope) {
+          console.log(`[wz-receiver] Flow ${flow.id} SKIPPED — linked to funnels [${linkedFunnels.join(",")}] but product ${event.product_id} not in any of them`);
+          continue;
+        }
+      }
+
       // Find ALL trigger nodes in this flow (multiple triggers per flow supported)
       const triggerNodes = nodes.filter((n) => n.type === "trigger");
       if (triggerNodes.length === 0) continue;
