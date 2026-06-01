@@ -459,6 +459,34 @@ Deno.serve(async (req) => {
       return jsonResponse({ message: "No active flows", matched: 0 });
     }
 
+    // ─── FUNNEL SCOPE FILTER ───
+    // If a flow is linked to one or more funnels via lead_funnel_automations,
+    // the event's product_id MUST belong to one of those funnels (via
+    // lead_funnel_products). This prevents an "Influencers" flow from firing
+    // on an "Articulabem" purchase just because both share the same trigger type.
+    const flowIds = flows.map((f: any) => f.id);
+    const { data: funnelLinks } = await supabase
+      .from("lead_funnel_automations")
+      .select("wz_flow_id, funnel_id")
+      .in("wz_flow_id", flowIds);
+
+    const flowToFunnels = new Map<string, string[]>();
+    for (const link of (funnelLinks || []) as any[]) {
+      const arr = flowToFunnels.get(link.wz_flow_id) || [];
+      arr.push(link.funnel_id);
+      flowToFunnels.set(link.wz_flow_id, arr);
+    }
+
+    const eventFunnelIds = new Set<string>();
+    if (event.product_id) {
+      const { data: prodLinks } = await supabase
+        .from("lead_funnel_products")
+        .select("funnel_id")
+        .eq("product_id", String(event.product_id));
+      for (const r of (prodLinks || []) as any[]) eventFunnelIds.add(r.funnel_id);
+    }
+    console.log(`[wz-receiver] Funnel scope: product=${event.product_id} belongs to funnels=[${[...eventFunnelIds].join(",")}]`);
+
     // ─── Auto-cancel: compra aprovada cancela execuções pendentes de pré-venda ───
     const preSaleTriggers = ["pix_generated", "boleto_generated", "cart_abandoned", "pix_expired", "payment_refused"];
     if (event.status === "purchase_approved" && event.contact_phone) {
@@ -507,6 +535,18 @@ Deno.serve(async (req) => {
     for (const flow of flows) {
       const nodes = (flow.nodes || []) as Record<string, any>[];
       const edges = (flow.edges || []) as Record<string, any>[];
+
+      // Funnel scope enforcement: if flow is linked to funnels, event's product
+      // must belong to one of them. Flows with NO funnel link remain global.
+      const linkedFunnels = flowToFunnels.get(flow.id);
+      if (linkedFunnels && linkedFunnels.length > 0) {
+        const inScope = linkedFunnels.some((fid) => eventFunnelIds.has(fid));
+        if (!inScope) {
+          console.log(`[wz-receiver] Flow ${flow.id} SKIPPED — linked to funnels [${linkedFunnels.join(",")}] but product ${event.product_id} not in any of them`);
+          continue;
+        }
+      }
+
       // Find ALL trigger nodes in this flow (multiple triggers per flow supported)
       const triggerNodes = nodes.filter((n) => n.type === "trigger");
       if (triggerNodes.length === 0) continue;
