@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils';
 import WzNodeToolbar from './WzNodeToolbar';
 
 const triggerLabels: Record<string, string> = {
+  signup: 'Captura de lead (webhook do funil)',
   purchase_approved: 'Compra aprovada',
   pix_generated: 'PIX/Boleto gerado',
   boleto_generated: 'Boleto gerado',
