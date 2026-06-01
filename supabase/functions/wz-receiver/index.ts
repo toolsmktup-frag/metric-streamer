@@ -480,7 +480,7 @@ Deno.serve(async (req) => {
     const eventFunnelIds = new Set<string>();
     if (event.product_id) {
       const { data: prodLinks } = await supabase
-        .from("lead_funnel_products")
+        .from("funnel_products")
         .select("funnel_id")
         .eq("product_id", String(event.product_id));
       for (const r of (prodLinks || []) as any[]) eventFunnelIds.add(r.funnel_id);
