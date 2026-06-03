@@ -84,6 +84,7 @@ export default function WzFlowCanvasEditor() {
   const [saving, setSaving] = useState(false);
   const [flowId, setFlowId] = useState<string | null>(isNew ? null : id!);
   const [reactFlowInstance, setReactFlowInstance] = useState<any>(null);
+  const [bulkEnrollOpen, setBulkEnrollOpen] = useState(false);
 
   const { data: nodeStatsMap } = useWzFlowNodeStats(flowId);
   const [clipboard, setClipboard] = useState<{ nodes: Node[]; edges: Edge[] }>({ nodes: [], edges: [] });
