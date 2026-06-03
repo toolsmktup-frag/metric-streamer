@@ -34,6 +34,7 @@ import WzSmartDelayNode from './nodes/WzSmartDelayNode';
 import WzWebhookNode from './nodes/WzWebhookNode';
 import WzTagNode from './nodes/WzTagNode';
 import WzGotoNode from './nodes/WzGotoNode';
+import WzMoveStageNode from './nodes/WzMoveStageNode';
 import { useWzFlow, useCreateWzFlow, useUpdateWzFlow } from '@/hooks/useWzFlows';
 import { useWzFlowNodeStats } from '@/hooks/useWzFlowNodeStats';
 
@@ -49,6 +50,7 @@ const nodeTypes: NodeTypes = {
   webhook: WzWebhookNode,
   tag: WzTagNode,
   goto: WzGotoNode,
+  move_stage: WzMoveStageNode,
 };
 
 const defaultEdgeOptions = {
