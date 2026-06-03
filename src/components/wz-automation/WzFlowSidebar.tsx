@@ -3,12 +3,12 @@ import {
   Zap, MessageCircle, Clock, GitBranch, XCircle, Ban,
   ShoppingCart, CreditCard, FileText, Timer, AlertTriangle,
   RotateCcw, X, ShoppingBag, Sparkles, StickyNote, Wrench,
-  Split, CalendarClock, Globe, Tag, CornerDownRight,
+  Split, CalendarClock, Globe, Tag, CornerDownRight, Columns3,
 } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 export interface WzDragData {
-  nodeType: 'trigger' | 'whatsapp' | 'timer' | 'condition' | 'stop' | 'note' | 'ab_split' | 'smart_delay' | 'webhook' | 'tag' | 'goto';
+  nodeType: 'trigger' | 'whatsapp' | 'timer' | 'condition' | 'stop' | 'note' | 'ab_split' | 'smart_delay' | 'webhook' | 'tag' | 'goto' | 'move_stage';
   triggerType?: string;
   stopType?: string;
   label: string;
