@@ -1048,4 +1048,76 @@ function GotoConfig({ data, update, node }: { data: any; update: (k: string, v: 
   );
 }
 
+function MoveStageConfig({ data, update }: { data: any; update: (k: string, v: any) => void }) {
+  const { data: funnels = [] } = useFunnels();
+  const funnelId = data.funnelId || '';
+  const { data: stagesMap = {} } = useLeadFunnelStages(funnelId ? [funnelId] : []);
+  const stages = funnelId ? (stagesMap[funnelId] || []) : [];
+
+  const onFunnelChange = (id: string) => {
+    const f = funnels.find((x: any) => x.id === id);
+    update('funnelSelection', {
+      funnelId: id,
+      funnelName: f?.name || '',
+      stageId: '',
+      stageName: '',
+    });
+  };
+
+  const onStageChange = (id: string) => {
+    const s = stages.find((x: any) => x.id === id);
+    update('stageSelection', {
+      stageId: id,
+      stageName: s?.name || '',
+    });
+  };
+
+  return (
+    <>
+      <div className="space-y-2">
+        <Label>Funil</Label>
+        <Select value={funnelId} onValueChange={onFunnelChange}>
+          <SelectTrigger><SelectValue placeholder="Selecione o funil" /></SelectTrigger>
+          <SelectContent>
+            {funnels.map((f: any) => (
+              <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Coluna destino</Label>
+        <Select value={data.stageId || ''} onValueChange={onStageChange} disabled={!funnelId}>
+          <SelectTrigger>
+            <SelectValue placeholder={funnelId ? 'Selecione a coluna' : 'Selecione o funil primeiro'} />
+          </SelectTrigger>
+          <SelectContent>
+            {stages.map((s: any) => (
+              <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/30">
+        <div className="space-y-0.5">
+          <Label className="text-sm">Registrar evento no lead</Label>
+          <p className="text-[11px] text-muted-foreground">
+            Cria um `stage_change` no histórico do lead.
+          </p>
+        </div>
+        <Switch
+          checked={data.registerEvent !== false}
+          onCheckedChange={(v) => update('registerEvent', v)}
+        />
+      </div>
+
+      <p className="text-[11px] text-muted-foreground">
+        Se o lead ainda não estiver neste funil, será inserido diretamente na coluna escolhida.
+      </p>
+    </>
+  );
+}
+
 export default WzNodeConfigPanel;
