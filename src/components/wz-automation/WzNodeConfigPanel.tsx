@@ -140,6 +140,9 @@ const WzNodeConfigPanel: React.FC<WzNodeConfigPanelProps> = ({
           {/* GOTO CONFIG */}
           {nodeType === 'goto' && <GotoConfig data={data} update={update} node={node} />}
 
+          {/* MOVE STAGE CONFIG */}
+          {nodeType === 'move_stage' && <MoveStageConfig data={data} update={update} />}
+
           {/* Notas */}
           <div className="space-y-2">
             <Label>Notas</Label>
