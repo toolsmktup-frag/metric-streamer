@@ -14,6 +14,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useWhatsAppInstances, getInstanceDisplayName } from '@/hooks/useWhatsApp';
 import { useWzInstances } from '@/hooks/useWzInstances';
 import { useTeamMembers } from '@/hooks/useTeamMembers';
+import { useFunnels } from '@/hooks/useFunnels';
+import { useLeadFunnelStages } from '@/hooks/useLeadFunnelStages';
 import { triggerLabels } from './nodes/WzTriggerNode';
 import WzProductSelector from './WzProductSelector';
 import type { Node } from '@xyflow/react';
