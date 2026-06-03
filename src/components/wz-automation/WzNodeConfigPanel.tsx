@@ -14,6 +14,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useWhatsAppInstances, getInstanceDisplayName } from '@/hooks/useWhatsApp';
 import { useWzInstances } from '@/hooks/useWzInstances';
 import { useTeamMembers } from '@/hooks/useTeamMembers';
+import { useFunnels } from '@/hooks/useFunnels';
+import { useLeadFunnelStages } from '@/hooks/useLeadFunnelStages';
 import { triggerLabels } from './nodes/WzTriggerNode';
 import WzProductSelector from './WzProductSelector';
 import type { Node } from '@xyflow/react';
@@ -81,7 +83,7 @@ const WzNodeConfigPanel: React.FC<WzNodeConfigPanelProps> = ({
       <SheetContent className="w-[400px] sm:w-[440px] overflow-y-auto">
         <SheetHeader>
           <SheetTitle className="text-foreground">
-            Configurar {nodeType === 'trigger' ? 'Gatilho' : nodeType === 'whatsapp' ? 'WhatsApp' : nodeType === 'timer' ? 'Timer' : nodeType === 'condition' ? 'Condição' : nodeType === 'note' ? 'Anotação' : nodeType === 'ab_split' ? 'Divisor A/B' : nodeType === 'smart_delay' ? 'Delay Inteligente' : nodeType === 'webhook' ? 'Webhook' : nodeType === 'tag' ? 'Tag' : nodeType === 'goto' ? 'Goto' : 'Nó'}
+            Configurar {nodeType === 'trigger' ? 'Gatilho' : nodeType === 'whatsapp' ? 'WhatsApp' : nodeType === 'timer' ? 'Timer' : nodeType === 'condition' ? 'Condição' : nodeType === 'note' ? 'Anotação' : nodeType === 'ab_split' ? 'Divisor A/B' : nodeType === 'smart_delay' ? 'Delay Inteligente' : nodeType === 'webhook' ? 'Webhook' : nodeType === 'tag' ? 'Tag' : nodeType === 'goto' ? 'Goto' : nodeType === 'move_stage' ? 'Mover para coluna' : 'Nó'}
           </SheetTitle>
         </SheetHeader>
 
@@ -139,6 +141,9 @@ const WzNodeConfigPanel: React.FC<WzNodeConfigPanelProps> = ({
 
           {/* GOTO CONFIG */}
           {nodeType === 'goto' && <GotoConfig data={data} update={update} node={node} />}
+
+          {/* MOVE STAGE CONFIG */}
+          {nodeType === 'move_stage' && <MoveStageConfig data={data} update={update} />}
 
           {/* Notas */}
           <div className="space-y-2">
@@ -1038,6 +1043,78 @@ function GotoConfig({ data, update, node }: { data: any; update: (k: string, v: 
       </div>
       <p className="text-[11px] text-muted-foreground">
         Copie o ID do nó destino clicando nele. O Goto redireciona o fluxo sem criar conexão visual.
+      </p>
+    </>
+  );
+}
+
+function MoveStageConfig({ data, update }: { data: any; update: (k: string, v: any) => void }) {
+  const { data: funnels = [] } = useFunnels();
+  const funnelId = data.funnelId || '';
+  const { data: stagesMap = {} } = useLeadFunnelStages(funnelId ? [funnelId] : []);
+  const stages = funnelId ? (stagesMap[funnelId] || []) : [];
+
+  const onFunnelChange = (id: string) => {
+    const f = funnels.find((x: any) => x.id === id);
+    update('funnelSelection', {
+      funnelId: id,
+      funnelName: f?.name || '',
+      stageId: '',
+      stageName: '',
+    });
+  };
+
+  const onStageChange = (id: string) => {
+    const s = stages.find((x: any) => x.id === id);
+    update('stageSelection', {
+      stageId: id,
+      stageName: s?.name || '',
+    });
+  };
+
+  return (
+    <>
+      <div className="space-y-2">
+        <Label>Funil</Label>
+        <Select value={funnelId} onValueChange={onFunnelChange}>
+          <SelectTrigger><SelectValue placeholder="Selecione o funil" /></SelectTrigger>
+          <SelectContent>
+            {funnels.map((f: any) => (
+              <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Coluna destino</Label>
+        <Select value={data.stageId || ''} onValueChange={onStageChange} disabled={!funnelId}>
+          <SelectTrigger>
+            <SelectValue placeholder={funnelId ? 'Selecione a coluna' : 'Selecione o funil primeiro'} />
+          </SelectTrigger>
+          <SelectContent>
+            {stages.map((s: any) => (
+              <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/30">
+        <div className="space-y-0.5">
+          <Label className="text-sm">Registrar evento no lead</Label>
+          <p className="text-[11px] text-muted-foreground">
+            Cria um `stage_change` no histórico do lead.
+          </p>
+        </div>
+        <Switch
+          checked={data.registerEvent !== false}
+          onCheckedChange={(v) => update('registerEvent', v)}
+        />
+      </div>
+
+      <p className="text-[11px] text-muted-foreground">
+        Se o lead ainda não estiver neste funil, será inserido diretamente na coluna escolhida.
       </p>
     </>
   );

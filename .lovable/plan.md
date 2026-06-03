@@ -1,53 +1,74 @@
-## Problema
+# Automações por coluna do funil — 3 peças que faltam
 
-No painel de detalhes do lead, os eventos do Timeline (ex.: `pix_generated`) mostram o nome do produto ("3 Potes Articulabem") mas **não exibem o valor** que o cliente está comprando. A Gabi precisa ver o valor ali na hora do atendimento.
+Hoje os triggers da automação são todos por **evento** (signup, purchase, pix...). Não tem trigger "entrou na coluna X", nem "está na coluna X" pra puxar lead que já existe. Pra fechar o caso do Webinário (e qualquer outro funil de cadência), precisamos de **3 peças**:
 
-## Causa
+## Peça 1 — Novo gatilho: "Entrou na coluna"
 
-Em `src/components/lead-funnels/LeadTimeline.tsx` (linhas 347–370), a renderização do valor só checa `meta.amount`:
+No `WzTriggerNode`, adicionar opção `stage_entered`:
+- Seletor de **funil**
+- Seletor de **coluna(s)** (multi)
+- Toggle: "Disparar também pra leads que já estão" → faz **backfill** (opcional, ver Peça 3)
 
-```tsx
-{meta.amount && (
-  <span>{formatCurrency(Number(meta.amount))}</span>
-)}
+**Como dispara:** sempre que `lead_stage_positions` é inserido/atualizado pra uma das colunas selecionadas, o `wz-receiver` cria uma execução do flow com `trigger_event = 'stage_entered'` e contexto do lead.
+
+Implementação: trigger de banco em `lead_stage_positions` (AFTER INSERT/UPDATE de `stage_id`) que chama `pg_net` → edge function `wz-stage-trigger` → cria execução.
+
+## Peça 2 — Novo nó: "Mover para coluna"
+
+`WzMoveStageNode`:
+- Seletor de funil (default: do trigger)
+- Seletor de coluna destino
+- Executor no `wz-scheduler`: upsert em `lead_stage_positions` + grava `lead_events` (`stage_change`, `moved_by: 'automation'`).
+
+Com isso + o `WzWebhookNode` que já existe, você monta:
+
+```
+[Trigger: entrou em "Aula do Dia 1"]
+   ↓
+[Aguardar 24h]
+   ↓
+[Mover para "Aula do Dia 2"]
+   ↓
+[HTTP → n8n com {{phone}}, {{stage_name}}]
+   ↓
+[Aguardar 24h]
+   ↓
+[Mover para "Aula do Dia 3"]
+   ↓ ...
 ```
 
-Mas os webhooks (Ticto/Guru) salvam o valor em `metadata` sob outras chaves: `gross_amount`, `net_amount`, `value`, `total`. Quando o evento é `pix_generated`, normalmente vem `gross_amount` — por isso não aparece.
+## Peça 3 — "Enrolar" leads existentes na automação
 
-Também: para `pix_generated` o nome do produto aparece, mas seria mais útil colocá-lo junto do label (como já é feito para `purchase`), deixando o valor em destaque.
+Esse é o ponto que você levantou: "como faço o lead que JÁ está no webinário entrar no fluxo agora?".
 
-## Mudança
+Botão no flow editor: **"Aplicar a leads existentes"**, abre modal com:
+- Filtro por **funil + coluna(s)** (multi-select)
+- Filtros extras: data de entrada na coluna (últimos X dias), tags, UTM
+- Preview: "X leads serão adicionados"
+- Botão **"Adicionar à automação"** → cria N execuções (uma por lead), começando do nó após o trigger
 
-Arquivo único: `src/components/lead-funnels/LeadTimeline.tsx`
+Backend: nova edge function `wz-bulk-enroll`:
+- Recebe `flow_id` + filtros
+- Faz `SELECT lead_id FROM lead_stage_positions WHERE funnel_id = ? AND stage_id IN (?)`
+- Cria execuções em batch (chunks de 500) com deduplicação (não enrola lead que já tem execução ativa naquele flow)
 
-1. **Resolver o valor com fallback** entre as chaves possíveis do metadata:
-   ```
-   meta.amount ?? meta.gross_amount ?? meta.net_amount ?? meta.value ?? meta.total
-   ```
-   Renderizar o `formatCurrency` se qualquer um existir e for > 0.
+## Resumo do que muda
 
-2. **Incluir `pix_generated` (e `pix`, `boleto_generated`) na lista de eventos "com produto no label"** — assim o label vira `Pix gerado: 3 Potes Articulabem` e o valor aparece logo abaixo em verde, igual aos eventos de compra.
+| Arquivo | Mudança |
+|---|---|
+| `WzTriggerNode` + config panel | Adicionar tipo `stage_entered` com funil/colunas |
+| `WzMoveStageNode` (novo) | Nó visual + ícone + paleta |
+| `wz-scheduler` (edge function) | Handler pro `node_type === 'move_stage'` |
+| `wz-stage-trigger` (edge function nova) | Cria execução quando lead entra em coluna mapeada |
+| Migration | Trigger SQL em `lead_stage_positions` → `pg_net` |
+| `wz-bulk-enroll` (edge function nova) | Enrolar leads existentes em batch |
+| `BulkEnrollModal` (componente novo) | UI dos filtros + preview + confirmar |
+| Botão no canvas/lista de flows | Abre o modal |
 
-3. Manter todo o resto (ícones, cores, datas, deltas, badges) inalterado.
+## Ordem sugerida de entrega
+1. **Peça 2** primeiro (nó "Mover para coluna") — sozinho já vale pra fluxos que começam de `signup`/`purchase`
+2. **Peça 3** (bulk enroll) — destrava o caso "tenho 500 leads parados, joga eles no fluxo"
+3. **Peça 1** (trigger `stage_entered`) — fecha o ciclo, automação reage quando você arrasta lead manual no kanban
 
-## Resultado visual
-
-Antes:
-```
-pix_generated
-27/05/2026 19:58:48
-3 Potes Articulabem  [ticto]
-```
-
-Depois:
-```
-pix_generated: 3 Potes Articulabem
-27/05/2026 19:58:48
-R$ 197,00  [ticto]
-```
-
-## Escopo
-
-- Apenas frontend (presentation).
-- Não mexe em webhook, edge function, banco ou estrutura de dados.
-- Não altera comportamento de outros funis nem das automações.
+## Pergunta pra fechar
+Topa essa ordem (Mover → Bulk Enroll → Trigger de coluna), ou prefere atacar primeiro o **Bulk Enroll** que é o que mais te dói agora pros leads já parados no Webinário?

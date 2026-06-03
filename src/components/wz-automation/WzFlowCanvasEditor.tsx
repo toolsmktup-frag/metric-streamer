@@ -16,13 +16,14 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import dagre from '@dagrejs/dagre';
-import { ArrowLeft, Save, Loader2, LayoutGrid } from 'lucide-react';
+import { ArrowLeft, Save, Loader2, LayoutGrid, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import WzFlowSidebar, { type WzDragData } from './WzFlowSidebar';
 import WzNodeConfigPanel from './WzNodeConfigPanel';
+import BulkEnrollDialog from './BulkEnrollDialog';
 import WzTriggerNode from './nodes/WzTriggerNode';
 import WzWhatsAppNode from './nodes/WzWhatsAppNode';
 import WzTimerNode from './nodes/WzTimerNode';
@@ -34,6 +35,7 @@ import WzSmartDelayNode from './nodes/WzSmartDelayNode';
 import WzWebhookNode from './nodes/WzWebhookNode';
 import WzTagNode from './nodes/WzTagNode';
 import WzGotoNode from './nodes/WzGotoNode';
+import WzMoveStageNode from './nodes/WzMoveStageNode';
 import { useWzFlow, useCreateWzFlow, useUpdateWzFlow } from '@/hooks/useWzFlows';
 import { useWzFlowNodeStats } from '@/hooks/useWzFlowNodeStats';
 
@@ -49,6 +51,7 @@ const nodeTypes: NodeTypes = {
   webhook: WzWebhookNode,
   tag: WzTagNode,
   goto: WzGotoNode,
+  move_stage: WzMoveStageNode,
 };
 
 const defaultEdgeOptions = {
@@ -81,6 +84,7 @@ export default function WzFlowCanvasEditor() {
   const [saving, setSaving] = useState(false);
   const [flowId, setFlowId] = useState<string | null>(isNew ? null : id!);
   const [reactFlowInstance, setReactFlowInstance] = useState<any>(null);
+  const [bulkEnrollOpen, setBulkEnrollOpen] = useState(false);
 
   const { data: nodeStatsMap } = useWzFlowNodeStats(flowId);
   const [clipboard, setClipboard] = useState<{ nodes: Node[]; edges: Edge[] }>({ nodes: [], edges: [] });
@@ -281,6 +285,12 @@ export default function WzFlowCanvasEditor() {
     } else if (dragData.nodeType === 'goto') {
       nodeData.targetNodeId = '';
       nodeData.targetNodeLabel = '';
+    } else if (dragData.nodeType === 'move_stage') {
+      nodeData.funnelId = '';
+      nodeData.funnelName = '';
+      nodeData.stageId = '';
+      nodeData.stageName = '';
+      nodeData.registerEvent = true;
     }
 
     const newNode: Node = {
@@ -383,6 +393,17 @@ export default function WzFlowCanvasEditor() {
             <LayoutGrid className="h-4 w-4" />
             Organizar
           </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setBulkEnrollOpen(true)}
+            disabled={!flowId}
+            className="gap-2"
+            title={!flowId ? 'Salve o fluxo primeiro' : 'Aplicar a leads existentes'}
+          >
+            <Users className="h-4 w-4" />
+            Aplicar a leads
+          </Button>
           <Button size="sm" onClick={handleSave} disabled={saving} className="gap-2">
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             Salvar
@@ -448,6 +469,14 @@ export default function WzFlowCanvasEditor() {
           onDuplicate={handleNodeDuplicate}
         />
       </div>
+
+      <BulkEnrollDialog
+        open={bulkEnrollOpen}
+        onOpenChange={setBulkEnrollOpen}
+        flowId={flowId}
+        flowName={flowName}
+        isFlowActive={isActive}
+      />
     </div>
   );
 }
