@@ -283,6 +283,12 @@ export default function WzFlowCanvasEditor() {
     } else if (dragData.nodeType === 'goto') {
       nodeData.targetNodeId = '';
       nodeData.targetNodeLabel = '';
+    } else if (dragData.nodeType === 'move_stage') {
+      nodeData.funnelId = '';
+      nodeData.funnelName = '';
+      nodeData.stageId = '';
+      nodeData.stageName = '';
+      nodeData.registerEvent = true;
     }
 
     const newNode: Node = {
