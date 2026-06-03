@@ -81,7 +81,7 @@ const WzNodeConfigPanel: React.FC<WzNodeConfigPanelProps> = ({
       <SheetContent className="w-[400px] sm:w-[440px] overflow-y-auto">
         <SheetHeader>
           <SheetTitle className="text-foreground">
-            Configurar {nodeType === 'trigger' ? 'Gatilho' : nodeType === 'whatsapp' ? 'WhatsApp' : nodeType === 'timer' ? 'Timer' : nodeType === 'condition' ? 'Condição' : nodeType === 'note' ? 'Anotação' : nodeType === 'ab_split' ? 'Divisor A/B' : nodeType === 'smart_delay' ? 'Delay Inteligente' : nodeType === 'webhook' ? 'Webhook' : nodeType === 'tag' ? 'Tag' : nodeType === 'goto' ? 'Goto' : 'Nó'}
+            Configurar {nodeType === 'trigger' ? 'Gatilho' : nodeType === 'whatsapp' ? 'WhatsApp' : nodeType === 'timer' ? 'Timer' : nodeType === 'condition' ? 'Condição' : nodeType === 'note' ? 'Anotação' : nodeType === 'ab_split' ? 'Divisor A/B' : nodeType === 'smart_delay' ? 'Delay Inteligente' : nodeType === 'webhook' ? 'Webhook' : nodeType === 'tag' ? 'Tag' : nodeType === 'goto' ? 'Goto' : nodeType === 'move_stage' ? 'Mover para coluna' : 'Nó'}
           </SheetTitle>
         </SheetHeader>
 
