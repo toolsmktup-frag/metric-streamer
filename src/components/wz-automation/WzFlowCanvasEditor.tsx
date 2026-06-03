@@ -16,13 +16,14 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import dagre from '@dagrejs/dagre';
-import { ArrowLeft, Save, Loader2, LayoutGrid } from 'lucide-react';
+import { ArrowLeft, Save, Loader2, LayoutGrid, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import WzFlowSidebar, { type WzDragData } from './WzFlowSidebar';
 import WzNodeConfigPanel from './WzNodeConfigPanel';
+import BulkEnrollDialog from './BulkEnrollDialog';
 import WzTriggerNode from './nodes/WzTriggerNode';
 import WzWhatsAppNode from './nodes/WzWhatsAppNode';
 import WzTimerNode from './nodes/WzTimerNode';
