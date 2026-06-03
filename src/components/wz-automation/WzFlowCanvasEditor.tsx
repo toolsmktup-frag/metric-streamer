@@ -469,6 +469,14 @@ export default function WzFlowCanvasEditor() {
           onDuplicate={handleNodeDuplicate}
         />
       </div>
+
+      <BulkEnrollDialog
+        open={bulkEnrollOpen}
+        onOpenChange={setBulkEnrollOpen}
+        flowId={flowId}
+        flowName={flowName}
+        isFlowActive={isActive}
+      />
     </div>
   );
 }
