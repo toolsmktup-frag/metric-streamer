@@ -510,6 +510,113 @@ Deno.serve(async (req) => {
           return jsonResponse({ message: "Goto end — no target" });
         }
 
+      } else if (nodeType === "move_stage") {
+        const funnelId: string | undefined = nodeData.funnelId;
+        const stageId: string | undefined = nodeData.stageId;
+        const registerEvent = nodeData.registerEvent !== false;
+
+        if (!funnelId || !stageId) {
+          await logNodeEnd(supabase, logId, "skipped", { summary: "Funil/coluna não configurado" });
+        } else {
+          // Resolve lead via phone (primary) or email (fallback)
+          let leadId: string | null = null;
+          if (execution.contact_phone) {
+            const { data: leads } = await supabase
+              .from("leads").select("id").eq("phone", execution.contact_phone).limit(1);
+            if (leads && leads.length > 0) leadId = leads[0].id;
+          }
+          if (!leadId && execution.contact_email) {
+            const { data: leads } = await supabase
+              .from("leads").select("id").ilike("email", execution.contact_email).limit(1);
+            if (leads && leads.length > 0) leadId = leads[0].id;
+          }
+
+          if (!leadId) {
+            await logNodeEnd(supabase, logId, "skipped", { summary: "Lead não encontrado" });
+          } else {
+            // Find existing position in this funnel
+            const { data: currentPos } = await supabase
+              .from("lead_stage_positions")
+              .select("id, stage_id")
+              .eq("lead_id", leadId)
+              .eq("funnel_id", funnelId)
+              .maybeSingle();
+
+            const fromStageId: string | null = currentPos?.stage_id || null;
+            const enteredAt = new Date().toISOString();
+
+            if (currentPos) {
+              if (currentPos.stage_id === stageId) {
+                await logNodeEnd(supabase, logId, "skipped", {
+                  summary: "Lead já está na coluna",
+                  lead_id: leadId, stage_id: stageId,
+                });
+              } else {
+                const { error: upErr } = await supabase
+                  .from("lead_stage_positions")
+                  .update({ stage_id: stageId, entered_at: enteredAt })
+                  .eq("id", currentPos.id);
+                if (upErr) throw upErr;
+
+                if (registerEvent) {
+                  await supabase.from("lead_events").insert({
+                    lead_id: leadId,
+                    funnel_id: funnelId,
+                    event_name: "stage_change",
+                    metadata: {
+                      from_stage_id: fromStageId,
+                      to_stage_id: stageId,
+                      moved_by: "automation",
+                      flow_id,
+                      execution_id,
+                      node_id: current_node_id,
+                    },
+                  });
+                }
+
+                await logNodeEnd(supabase, logId, "success", {
+                  summary: `Movido → ${nodeData.stageName || stageId}`,
+                  lead_id: leadId,
+                  from_stage_id: fromStageId,
+                  to_stage_id: stageId,
+                });
+              }
+            } else {
+              const { error: insErr } = await supabase
+                .from("lead_stage_positions")
+                .insert({
+                  lead_id: leadId,
+                  funnel_id: funnelId,
+                  stage_id: stageId,
+                  entered_at: enteredAt,
+                });
+              if (insErr) throw insErr;
+
+              if (registerEvent) {
+                await supabase.from("lead_events").insert({
+                  lead_id: leadId,
+                  funnel_id: funnelId,
+                  event_name: "stage_change",
+                  metadata: {
+                    from_stage_id: null,
+                    to_stage_id: stageId,
+                    moved_by: "automation",
+                    flow_id,
+                    execution_id,
+                    node_id: current_node_id,
+                  },
+                });
+              }
+
+              await logNodeEnd(supabase, logId, "success", {
+                summary: `Inserido em ${nodeData.stageName || stageId}`,
+                lead_id: leadId,
+                to_stage_id: stageId,
+              });
+            }
+          }
+        }
+
       } else if (nodeType === "note" || nodeType === "trigger") {
         await logNodeEnd(supabase, logId, "skipped", { summary: "Nó não-executável" });
       } else {
