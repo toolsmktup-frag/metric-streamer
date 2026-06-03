@@ -393,6 +393,17 @@ export default function WzFlowCanvasEditor() {
             <LayoutGrid className="h-4 w-4" />
             Organizar
           </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setBulkEnrollOpen(true)}
+            disabled={!flowId}
+            className="gap-2"
+            title={!flowId ? 'Salve o fluxo primeiro' : 'Aplicar a leads existentes'}
+          >
+            <Users className="h-4 w-4" />
+            Aplicar a leads
+          </Button>
           <Button size="sm" onClick={handleSave} disabled={saving} className="gap-2">
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             Salvar
