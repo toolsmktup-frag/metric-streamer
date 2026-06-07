@@ -212,8 +212,8 @@ const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, onWhatsAppClick,
             <ShoppingBag className="h-3 w-3" />
             ×{purchaseSummary!.totalOrders}
           </span>
-          {purchaseSummary!.firstPurchaseDate && (
-            <span className="inline-flex items-center gap-1 text-[10px] font-medium text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+          {purchaseSummary!.firstPurchaseDate && !recontactInfo && (
+            <span className="inline-flex items-center gap-1 text-[10px] font-medium text-muted-foreground bg-muted px-1.5 py-0.5 rounded" title="Dias desde a primeira compra">
               <CalendarClock className="h-3 w-3" />
               {differenceInDays(new Date(), new Date(purchaseSummary!.firstPurchaseDate))}d
             </span>
