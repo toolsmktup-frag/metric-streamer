@@ -74,19 +74,25 @@ export function useBulkLeadPurchaseProducts(
 
         for (const row of data || []) {
           const productName = row.metadata?.product_name as string;
+          // Prefer real purchase timestamp from metadata; fall back to event row time.
+          const purchaseDate =
+            (row.metadata?.purchased_at as string) ||
+            (row.metadata?.transaction_purchased_at as string) ||
+            (row.metadata?.created_at as string) ||
+            row.created_at;
           const existing = result.get(row.lead_id);
           if (!existing) {
             result.set(row.lead_id, {
               productNames: productName ? [productName] : [],
-              lastPurchaseDate: row.created_at,
-              purchases: productName ? [{ productName, date: row.created_at }] : [],
+              lastPurchaseDate: purchaseDate,
+              purchases: productName ? [{ productName, date: purchaseDate }] : [],
             });
           } else {
             if (productName && !existing.productNames.includes(productName)) {
               existing.productNames.push(productName);
             }
             if (productName) {
-              existing.purchases.push({ productName, date: row.created_at });
+              existing.purchases.push({ productName, date: purchaseDate });
             }
           }
         }
