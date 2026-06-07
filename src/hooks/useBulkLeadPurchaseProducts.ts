@@ -6,6 +6,7 @@ import type { Lead, LeadStagePosition } from '@/types/leadFunnels';
 export interface LeadPurchaseInfo {
   productNames: string[];
   lastPurchaseDate: string;
+  purchases: Array<{ productName: string; date: string }>;
 }
 
 /**
