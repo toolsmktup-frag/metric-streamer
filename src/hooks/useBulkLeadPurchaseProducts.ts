@@ -95,7 +95,7 @@ export function useBulkLeadPurchaseProducts(
       for (const [leadId, productNames] of leadMetadataProducts) {
         const existing = result.get(leadId);
         if (!existing) {
-          result.set(leadId, { productNames, lastPurchaseDate: '' });
+          result.set(leadId, { productNames, lastPurchaseDate: '', purchases: [] });
           continue;
         }
         for (const productName of productNames) {
