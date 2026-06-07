@@ -10,111 +10,173 @@ export interface LeadPurchaseInfo {
 }
 
 /**
- * Fetches all purchase-related events for leads in a funnel,
- * returning a Map<leadId, LeadPurchaseInfo> with ALL products each lead purchased
- * and the date of their MOST RECENT purchase.
- * Used by useRecontactDeadlines to sum recontact_days across products.
+ * Builds a Map<leadId, LeadPurchaseInfo> with the REAL purchases of each lead,
+ * sourced from `customer_purchases` (via `unified_customers` matched by email/phone) —
+ * NOT from `lead_events`, which can be out of order or include stale/foreign events.
+ *
+ * Each entry contains the list of authorized purchases with their actual `purchased_at`
+ * timestamp, so `useRecontactDeadlines` can compute deadlines per matched product and
+ * pick the most recent one.
  */
 export function useBulkLeadPurchaseProducts(
-  funnelId: string | null | undefined,
+  _funnelId: string | null | undefined,
   positions: (LeadStagePosition & { lead: Lead })[] | undefined,
 ) {
-  const leadIds = useMemo(
-    () => (positions || []).map(p => p.lead_id),
-    [positions],
-  );
+  const { emailToLeads, phoneToLeads, emails, phones, leadIdsKey } = useMemo(() => {
+    const e2l = new Map<string, Set<string>>();
+    const p2l = new Map<string, Set<string>>();
+    const ids: string[] = [];
 
-  const leadMetadataProducts = useMemo(() => {
-    const map = new Map<string, string[]>();
-    for (const p of positions || []) {
-      const productName = p.lead.metadata?.product_name;
-      if (typeof productName === 'string' && productName.trim()) {
-        map.set(p.lead_id, [productName.trim()]);
+    const addPhoneVariants = (raw: string, leadId: string) => {
+      const digits = raw.replace(/\D/g, '');
+      const variants = new Set<string>([raw, digits, `+${digits}`]);
+      if (digits.startsWith('55') && digits.length >= 12) {
+        variants.add(digits.slice(2));
+      } else if (digits.length >= 10 && digits.length <= 11) {
+        variants.add(`55${digits}`);
+        variants.add(`+55${digits}`);
       }
+      for (const v of variants) {
+        if (!v) continue;
+        const s = p2l.get(v) || new Set<string>();
+        s.add(leadId);
+        p2l.set(v, s);
+      }
+    };
+
+    for (const pos of positions || []) {
+      ids.push(pos.lead_id);
+      const email = pos.lead.email?.toLowerCase().trim();
+      const phone = pos.lead.phone?.trim();
+      if (email && email.includes('@')) {
+        const s = e2l.get(email) || new Set<string>();
+        s.add(pos.lead_id);
+        e2l.set(email, s);
+      }
+      if (phone) addPhoneVariants(phone, pos.lead_id);
     }
-    return map;
+
+    return {
+      emailToLeads: e2l,
+      phoneToLeads: p2l,
+      emails: Array.from(e2l.keys()),
+      phones: Array.from(p2l.keys()),
+      leadIdsKey: ids.sort().join(','),
+    };
   }, [positions]);
 
   const stableKey = useMemo(() => {
-    if (!leadIds.length) return 'empty';
     let h = 0;
-    const str = leadIds.sort().join(',');
+    const str = `${emails.length}|${phones.length}|${leadIdsKey}`;
     for (let i = 0; i < str.length; i++) {
       h = ((h << 5) - h + str.charCodeAt(i)) | 0;
     }
-    return `${leadIds.length}-${h}`;
-  }, [leadIds]);
+    return `${emails.length}-${phones.length}-${h}`;
+  }, [emails, phones, leadIdsKey]);
 
   return useQuery({
-    queryKey: ['bulk-lead-purchase-products', funnelId, stableKey],
+    queryKey: ['bulk-lead-purchase-products-v2', stableKey],
     queryFn: async (): Promise<Map<string, LeadPurchaseInfo>> => {
       const result = new Map<string, LeadPurchaseInfo>();
-      if (!funnelId || leadIds.length === 0) return result;
+      if (emails.length === 0 && phones.length === 0) return result;
 
-      // Fetch purchase events from lead_events in batches.
-      // Do not filter by funnel_id here: purchase events can be attributed to another funnel,
-      // while the Kanban column must filter by products purchased by the leads currently in it.
-      const BATCH = 500;
-      const purchaseEventNames = ['purchase', 'Purchase', 'pago', 'authorized', 'autorizado'];
+      // 1) Resolve unified_customers by email/phone in batches
+      const BATCH = 400;
+      const customerIdToLeadIds = new Map<string, Set<string>>();
 
-      for (let i = 0; i < leadIds.length; i += BATCH) {
-        const batch = leadIds.slice(i, i + BATCH);
+      const collectCustomers = async (column: 'primary_email' | 'primary_phone', values: string[], lookup: Map<string, Set<string>>) => {
+        for (let i = 0; i < values.length; i += BATCH) {
+          const chunk = values.slice(i, i + BATCH);
+          const { data, error } = await (supabase as any)
+            .from('unified_customers')
+            .select(`id, ${column}`)
+            .in(column, chunk)
+            .limit(100000);
+          if (error) {
+            console.error('[useBulkLeadPurchaseProducts] unified_customers error:', error.message);
+            continue;
+          }
+          for (const row of data || []) {
+            const key = (row[column] as string | null)?.toString();
+            if (!key) continue;
+            const normalizedKey = column === 'primary_email' ? key.toLowerCase().trim() : key.trim();
+            const leadIds = lookup.get(normalizedKey);
+            if (!leadIds) continue;
+            const s = customerIdToLeadIds.get(row.id) || new Set<string>();
+            for (const lid of leadIds) s.add(lid);
+            customerIdToLeadIds.set(row.id, s);
+          }
+        }
+      };
+
+      await collectCustomers('primary_email', emails, emailToLeads);
+      await collectCustomers('primary_phone', phones, phoneToLeads);
+
+      if (customerIdToLeadIds.size === 0) return result;
+
+      // 2) Fetch purchases for resolved customers in batches
+      const customerIds = Array.from(customerIdToLeadIds.keys());
+      const purchasesByLead = new Map<string, Array<{ productName: string; date: string }>>();
+
+      for (let i = 0; i < customerIds.length; i += BATCH) {
+        const chunk = customerIds.slice(i, i + BATCH);
         const { data, error } = await (supabase as any)
-          .from('lead_events')
-          .select('lead_id, metadata, created_at')
-          .in('lead_id', batch)
-          .in('event_name', purchaseEventNames)
-          .order('created_at', { ascending: false })
+          .from('customer_purchases')
+          .select('unified_customer_id, product_name, purchased_at, status')
+          .in('unified_customer_id', chunk)
+          .eq('status', 'authorized')
+          .order('purchased_at', { ascending: false })
           .limit(100000);
-
         if (error) {
-          console.error('[useBulkLeadPurchaseProducts] error:', error.message);
+          console.error('[useBulkLeadPurchaseProducts] customer_purchases error:', error.message);
           continue;
         }
-
         for (const row of data || []) {
-          const productName = row.metadata?.product_name as string;
-          // Prefer real purchase timestamp from metadata; fall back to event row time.
-          const purchaseDate =
-            (row.metadata?.purchased_at as string) ||
-            (row.metadata?.transaction_purchased_at as string) ||
-            (row.metadata?.created_at as string) ||
-            row.created_at;
-          const existing = result.get(row.lead_id);
-          if (!existing) {
-            result.set(row.lead_id, {
-              productNames: productName ? [productName] : [],
-              lastPurchaseDate: purchaseDate,
-              purchases: productName ? [{ productName, date: purchaseDate }] : [],
-            });
-          } else {
-            if (productName && !existing.productNames.includes(productName)) {
-              existing.productNames.push(productName);
-            }
-            if (productName) {
-              existing.purchases.push({ productName, date: purchaseDate });
-            }
+          const productName = (row.product_name as string | null)?.trim();
+          const date = row.purchased_at as string | null;
+          if (!productName || !date) continue;
+          const leadIds = customerIdToLeadIds.get(row.unified_customer_id);
+          if (!leadIds) continue;
+          for (const lid of leadIds) {
+            const arr = purchasesByLead.get(lid) || [];
+            arr.push({ productName, date });
+            purchasesByLead.set(lid, arr);
           }
         }
       }
 
-      for (const [leadId, productNames] of leadMetadataProducts) {
-        const existing = result.get(leadId);
-        if (!existing) {
-          result.set(leadId, { productNames, lastPurchaseDate: '', purchases: [] });
-          continue;
-        }
-        for (const productName of productNames) {
-          if (!existing.productNames.includes(productName)) {
-            existing.productNames.push(productName);
-          }
-        }
+      // 3) Build LeadPurchaseInfo per lead
+      for (const [leadId, purchases] of purchasesByLead) {
+        // Sort desc by date
+        purchases.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+        const productNames = Array.from(new Set(purchases.map(p => p.productName)));
+        result.set(leadId, {
+          productNames,
+          lastPurchaseDate: purchases[0]?.date ?? '',
+          purchases,
+        });
       }
 
-      console.log(`[useBulkLeadPurchaseProducts] ${result.size} leads with products`);
+      // 4) Fallback: include leads with metadata.product_name even without customer match
+      for (const pos of positions || []) {
+        if (result.has(pos.lead_id)) continue;
+        const metaName = (pos.lead.metadata?.product_name as string | undefined)?.trim();
+        if (!metaName) continue;
+        const metaDate =
+          (pos.lead.metadata?.purchased_at as string | undefined) ||
+          (pos.lead.metadata?.transaction_purchased_at as string | undefined) ||
+          '';
+        result.set(pos.lead_id, {
+          productNames: [metaName],
+          lastPurchaseDate: metaDate,
+          purchases: metaDate ? [{ productName: metaName, date: metaDate }] : [],
+        });
+      }
+
+      console.log(`[useBulkLeadPurchaseProducts v2] ${result.size} leads resolved via customer_purchases`);
       return result;
     },
-    enabled: !!funnelId && leadIds.length > 0,
+    enabled: (emails.length > 0 || phones.length > 0),
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
     structuralSharing: false,
