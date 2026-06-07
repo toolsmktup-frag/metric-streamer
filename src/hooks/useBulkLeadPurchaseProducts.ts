@@ -76,17 +76,18 @@ export function useBulkLeadPurchaseProducts(
           const productName = row.metadata?.product_name as string;
           const existing = result.get(row.lead_id);
           if (!existing) {
-            // First row for this lead (most recent due to ordering)
             result.set(row.lead_id, {
               productNames: productName ? [productName] : [],
               lastPurchaseDate: row.created_at,
+              purchases: productName ? [{ productName, date: row.created_at }] : [],
             });
           } else {
-            // Add product name if not duplicate
             if (productName && !existing.productNames.includes(productName)) {
               existing.productNames.push(productName);
             }
-            // lastPurchaseDate is already set from first (most recent) row
+            if (productName) {
+              existing.purchases.push({ productName, date: row.created_at });
+            }
           }
         }
       }
