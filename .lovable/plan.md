@@ -1,51 +1,32 @@
-## Problema
+## Problema real
 
-No card da Ana Maria (funil RECOMPRA - POTES / Articulabem) aparece `1097d` e `-1074d 🔥`, mas:
-- Ela tem 3 compras: Pote Grátis ArticulaBEM (19/02/26), SUPER COMBO Erveiro (08/11/24), Guia de Tinturas (06/06/23).
-- Só **Pote Grátis ArticulaBEM** casa com a config do funil (Articulabem Pote Grátis → 23d).
-- O deadline deveria ser **19/02/26 + 23d**, não baseado na compra mais antiga.
+Não precisa rodar nada no Supabase para o último ajuste que fiz, mas ele não resolveu porque a tela ainda pode estar calculando o badge a partir de `lead_events` do lead atual. Esse caminho é frágil: evento sincronizado antigo/fora de ordem ou de outro produto consegue puxar o prazo para `-1074d`.
 
-## Causa
+No caso da Ana, a fonte confiável que aparece no detalhe é a lista de compras do cliente: ArticulaBEM em `19/02/26`, SUPER COMBO em `08/11/24`, Guia em `06/06/23`. Para esse funil, o badge deve usar somente a compra real mais recente que casa com o produto configurado no funil.
 
-Em `useBulkLeadPurchaseProducts.ts`, `lastPurchaseDate` é a data do evento mais recente **entre TODAS as compras do lead**, e em `useRecontactDeadlines.ts` essa data é usada como base para somar os `recontact_days` dos produtos que casam. Como `lead_events.created_at` pode divergir da ordem de compra real (eventos sincronizados em momentos diferentes), a "data mais recente" acaba sendo de um produto que nem participa do recontato — no caso da Ana, provavelmente o evento do Guia de Tinturas (06/2023) foi gravado por último na linha do tempo, puxando o cálculo para ~1097 dias atrás.
+## Plano de correção
 
-A regra correta: **considerar apenas as datas dos produtos que casam com a config do funil**, e usar a **mais recente entre elas** como base — e somar apenas os `recontact_days` desses produtos casados.
+1. **Parar de depender de `lead_events` para o prazo do card**
+   - Criar/ajustar a busca em lote para trazer as compras reais por email/telefone a partir da mesma fonte do detalhe de compras (`customer_purchases` / identidade unificada), não da timeline de eventos.
+   - Cada compra terá `{ productName, purchasedAt, status }`.
 
-## Solução
+2. **Calcular recontato por compra casada com o produto do funil**
+   - Para cada lead, filtrar só compras aprovadas/autorizadas.
+   - Casar o produto comprado com a configuração do funil (`lead_funnel_products` + mapeamentos).
+   - Calcular: `data_da_compra_real + recontact_days`.
+   - Se houver várias compras que casam, usar a compra/deadline mais recente.
 
-### 1) `src/hooks/useBulkLeadPurchaseProducts.ts`
-Expandir `LeadPurchaseInfo` para guardar a lista de compras com data por produto:
-```ts
-export interface LeadPurchaseInfo {
-  productNames: string[];           // mantém para compat
-  lastPurchaseDate: string;         // mantém para compat
-  purchases: Array<{ productName: string; date: string }>;
-}
-```
-- No loop de eventos, montar `purchases` com `{ productName, date: created_at }`.
-- Quando vier de `metadata.product_name` do lead (fallback), incluir com `date: ''`.
+3. **Garantir que ArticulaBEM não use Guia de Tinturas**
+   - Compra `Guia de Tinturas` não deve influenciar o badge do funil ArticulaBEM se ela não casa com o produto configurado.
+   - Para a Ana, o esperado é usar `Pote Grátis ArticulaBEM - Soulnaturi` de `19/02/26` + `23 dias`.
 
-### 2) `src/hooks/useRecontactDeadlines.ts`
-Trocar a lógica de cálculo:
-- Para cada lead, iterar `purchaseInfo.purchases` (em vez de `productNames` + uma única data).
-- Para cada compra, rodar `matchProduct(purchase.productName)`. Se casar:
-  - Calcular o `deadline` desse item = `parseLocalDateTime(purchase.date || fallbacks) + recontact_days`.
-  - Guardar `{ deadline, product, days }`.
-- Se houver itens casados:
-  - Escolher o **deadline mais recente (max)** — esse vira o `deadlineDate` exibido.
-  - `productName` exibido = display name do produto vencedor.
-  - `recontactDays` = `recontact_days` do vencedor.
-  - `daysRemaining = differenceInDays(deadlineDate, today)`.
-- Fallback: se nenhuma compra tiver data válida, usar `metadata.purchased_at` ou `purchaseMap.firstPurchaseDate` como hoje.
+4. **Remover ruído visual do badge antigo**
+   - Manter oculto o badge genérico de “dias desde primeira compra” quando existir recontato configurado, para não confundir com o prazo de reabordagem.
 
-Isso elimina a "soma linear" entre produtos diferentes (que inflacionava deadlines como `Pote Grátis + 9 Potes = 273d`) e passa a usar a regra: **cada produto comprado gera seu próprio deadline a partir da SUA data; o card mostra o mais distante (mais recente vence)**.
+5. **Adicionar logs temporários direcionados para esse caso**
+   - Logar no navegador, só em desenvolvimento, qual compra/produto/data venceu o cálculo do recontato.
+   - Assim dá para confirmar se a Ana está vindo de `19/02/26` e não de `06/06/23`.
 
-> Se você quiser manter a soma linear quando o lead tem múltiplas compras do **mesmo produto da config**, eu adapto — mas pela imagem o que faz sentido é "deadline por produto, escolher o mais futuro".
+## Sem migration
 
-### 3) Sem mudança de schema / sem migration / sem edge function
-
-## Validação
-
-- Ana Maria (lead no funil 2fcd2f48…): deve passar a mostrar `~ -82d 🔥` (19/02/26 + 23d ≈ 14/03/26 vs hoje 07/06/26), em vez de `-1074d`.
-- Cards que só têm 1 compra matched continuam idênticos.
-- Cards sem produto matched continuam sem badge.
+Não vou pedir para você rodar SQL agora. A correção é no frontend/fonte de dados da consulta. Só precisaria Supabase se descobrirmos que a função RPC atual retorna a primeira compra em vez da última, mas dá para contornar direto pela consulta de compras reais.

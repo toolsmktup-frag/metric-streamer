@@ -136,6 +136,14 @@ export function useRecontactDeadlines(
       const daysRemaining = differenceInDays(bestDeadline, today);
       const displayName = bestProduct.display_name || bestProduct.product_name_contains;
 
+      if (import.meta.env.DEV) {
+        console.debug(
+          `[recontact] lead=${pos.lead_id} email=${pos.lead.email} → ${displayName} ` +
+          `deadline=${bestDeadline.toISOString().slice(0, 10)} (${daysRemaining}d) ` +
+          `cycle=${bestProduct.recontact_days}d`,
+        );
+      }
+
       map.set(pos.lead_id, {
         daysRemaining,
         isOverdue: daysRemaining < 0,
