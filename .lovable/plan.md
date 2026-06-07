@@ -1,74 +1,51 @@
-# Automações por coluna do funil — 3 peças que faltam
+## Problema
 
-Hoje os triggers da automação são todos por **evento** (signup, purchase, pix...). Não tem trigger "entrou na coluna X", nem "está na coluna X" pra puxar lead que já existe. Pra fechar o caso do Webinário (e qualquer outro funil de cadência), precisamos de **3 peças**:
+No card da Ana Maria (funil RECOMPRA - POTES / Articulabem) aparece `1097d` e `-1074d 🔥`, mas:
+- Ela tem 3 compras: Pote Grátis ArticulaBEM (19/02/26), SUPER COMBO Erveiro (08/11/24), Guia de Tinturas (06/06/23).
+- Só **Pote Grátis ArticulaBEM** casa com a config do funil (Articulabem Pote Grátis → 23d).
+- O deadline deveria ser **19/02/26 + 23d**, não baseado na compra mais antiga.
 
-## Peça 1 — Novo gatilho: "Entrou na coluna"
+## Causa
 
-No `WzTriggerNode`, adicionar opção `stage_entered`:
-- Seletor de **funil**
-- Seletor de **coluna(s)** (multi)
-- Toggle: "Disparar também pra leads que já estão" → faz **backfill** (opcional, ver Peça 3)
+Em `useBulkLeadPurchaseProducts.ts`, `lastPurchaseDate` é a data do evento mais recente **entre TODAS as compras do lead**, e em `useRecontactDeadlines.ts` essa data é usada como base para somar os `recontact_days` dos produtos que casam. Como `lead_events.created_at` pode divergir da ordem de compra real (eventos sincronizados em momentos diferentes), a "data mais recente" acaba sendo de um produto que nem participa do recontato — no caso da Ana, provavelmente o evento do Guia de Tinturas (06/2023) foi gravado por último na linha do tempo, puxando o cálculo para ~1097 dias atrás.
 
-**Como dispara:** sempre que `lead_stage_positions` é inserido/atualizado pra uma das colunas selecionadas, o `wz-receiver` cria uma execução do flow com `trigger_event = 'stage_entered'` e contexto do lead.
+A regra correta: **considerar apenas as datas dos produtos que casam com a config do funil**, e usar a **mais recente entre elas** como base — e somar apenas os `recontact_days` desses produtos casados.
 
-Implementação: trigger de banco em `lead_stage_positions` (AFTER INSERT/UPDATE de `stage_id`) que chama `pg_net` → edge function `wz-stage-trigger` → cria execução.
+## Solução
 
-## Peça 2 — Novo nó: "Mover para coluna"
-
-`WzMoveStageNode`:
-- Seletor de funil (default: do trigger)
-- Seletor de coluna destino
-- Executor no `wz-scheduler`: upsert em `lead_stage_positions` + grava `lead_events` (`stage_change`, `moved_by: 'automation'`).
-
-Com isso + o `WzWebhookNode` que já existe, você monta:
-
+### 1) `src/hooks/useBulkLeadPurchaseProducts.ts`
+Expandir `LeadPurchaseInfo` para guardar a lista de compras com data por produto:
+```ts
+export interface LeadPurchaseInfo {
+  productNames: string[];           // mantém para compat
+  lastPurchaseDate: string;         // mantém para compat
+  purchases: Array<{ productName: string; date: string }>;
+}
 ```
-[Trigger: entrou em "Aula do Dia 1"]
-   ↓
-[Aguardar 24h]
-   ↓
-[Mover para "Aula do Dia 2"]
-   ↓
-[HTTP → n8n com {{phone}}, {{stage_name}}]
-   ↓
-[Aguardar 24h]
-   ↓
-[Mover para "Aula do Dia 3"]
-   ↓ ...
-```
+- No loop de eventos, montar `purchases` com `{ productName, date: created_at }`.
+- Quando vier de `metadata.product_name` do lead (fallback), incluir com `date: ''`.
 
-## Peça 3 — "Enrolar" leads existentes na automação
+### 2) `src/hooks/useRecontactDeadlines.ts`
+Trocar a lógica de cálculo:
+- Para cada lead, iterar `purchaseInfo.purchases` (em vez de `productNames` + uma única data).
+- Para cada compra, rodar `matchProduct(purchase.productName)`. Se casar:
+  - Calcular o `deadline` desse item = `parseLocalDateTime(purchase.date || fallbacks) + recontact_days`.
+  - Guardar `{ deadline, product, days }`.
+- Se houver itens casados:
+  - Escolher o **deadline mais recente (max)** — esse vira o `deadlineDate` exibido.
+  - `productName` exibido = display name do produto vencedor.
+  - `recontactDays` = `recontact_days` do vencedor.
+  - `daysRemaining = differenceInDays(deadlineDate, today)`.
+- Fallback: se nenhuma compra tiver data válida, usar `metadata.purchased_at` ou `purchaseMap.firstPurchaseDate` como hoje.
 
-Esse é o ponto que você levantou: "como faço o lead que JÁ está no webinário entrar no fluxo agora?".
+Isso elimina a "soma linear" entre produtos diferentes (que inflacionava deadlines como `Pote Grátis + 9 Potes = 273d`) e passa a usar a regra: **cada produto comprado gera seu próprio deadline a partir da SUA data; o card mostra o mais distante (mais recente vence)**.
 
-Botão no flow editor: **"Aplicar a leads existentes"**, abre modal com:
-- Filtro por **funil + coluna(s)** (multi-select)
-- Filtros extras: data de entrada na coluna (últimos X dias), tags, UTM
-- Preview: "X leads serão adicionados"
-- Botão **"Adicionar à automação"** → cria N execuções (uma por lead), começando do nó após o trigger
+> Se você quiser manter a soma linear quando o lead tem múltiplas compras do **mesmo produto da config**, eu adapto — mas pela imagem o que faz sentido é "deadline por produto, escolher o mais futuro".
 
-Backend: nova edge function `wz-bulk-enroll`:
-- Recebe `flow_id` + filtros
-- Faz `SELECT lead_id FROM lead_stage_positions WHERE funnel_id = ? AND stage_id IN (?)`
-- Cria execuções em batch (chunks de 500) com deduplicação (não enrola lead que já tem execução ativa naquele flow)
+### 3) Sem mudança de schema / sem migration / sem edge function
 
-## Resumo do que muda
+## Validação
 
-| Arquivo | Mudança |
-|---|---|
-| `WzTriggerNode` + config panel | Adicionar tipo `stage_entered` com funil/colunas |
-| `WzMoveStageNode` (novo) | Nó visual + ícone + paleta |
-| `wz-scheduler` (edge function) | Handler pro `node_type === 'move_stage'` |
-| `wz-stage-trigger` (edge function nova) | Cria execução quando lead entra em coluna mapeada |
-| Migration | Trigger SQL em `lead_stage_positions` → `pg_net` |
-| `wz-bulk-enroll` (edge function nova) | Enrolar leads existentes em batch |
-| `BulkEnrollModal` (componente novo) | UI dos filtros + preview + confirmar |
-| Botão no canvas/lista de flows | Abre o modal |
-
-## Ordem sugerida de entrega
-1. **Peça 2** primeiro (nó "Mover para coluna") — sozinho já vale pra fluxos que começam de `signup`/`purchase`
-2. **Peça 3** (bulk enroll) — destrava o caso "tenho 500 leads parados, joga eles no fluxo"
-3. **Peça 1** (trigger `stage_entered`) — fecha o ciclo, automação reage quando você arrasta lead manual no kanban
-
-## Pergunta pra fechar
-Topa essa ordem (Mover → Bulk Enroll → Trigger de coluna), ou prefere atacar primeiro o **Bulk Enroll** que é o que mais te dói agora pros leads já parados no Webinário?
+- Ana Maria (lead no funil 2fcd2f48…): deve passar a mostrar `~ -82d 🔥` (19/02/26 + 23d ≈ 14/03/26 vs hoje 07/06/26), em vez de `-1074d`.
+- Cards que só têm 1 compra matched continuam idênticos.
+- Cards sem produto matched continuam sem badge.
