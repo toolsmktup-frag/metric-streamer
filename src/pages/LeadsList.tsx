@@ -144,8 +144,9 @@ const LeadsList: React.FC = () => {
           <h1 className="text-2xl font-bold">Todos os Leads</h1>
           {isFetching && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
         </div>
-        <Button variant="outline" size="sm" onClick={exportCSV}>
-          <Download className="h-4 w-4 mr-2" /> Exportar CSV
+        <Button variant="outline" size="sm" onClick={exportCSV} disabled={isExporting}>
+          {isExporting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
+          {isExporting ? `Exportando... ${exportProgress}%` : 'Exportar CSV'}
         </Button>
       </div>
 
