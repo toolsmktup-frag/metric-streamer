@@ -22,6 +22,8 @@ const LeadsList: React.FC = () => {
   const [page, setPage] = useState(1);
   const [selectedLead, setSelectedLead] = useState<PaginatedLead | null>(null);
   const [timelineOpen, setTimelineOpen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState(0);
 
   // Debounce search input
   useEffect(() => {
@@ -72,18 +74,52 @@ const LeadsList: React.FC = () => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cents / 100);
   };
 
-  const exportCSV = () => {
-    const header = 'Nome,Email,Telefone,Fonte,Meio,Funil,Etapa,Total Gasto,Entrada\n';
-    const rows = leads.map(l => {
-      const pos = l.positions[0];
-      const spent = l.email ? (spentMap[l.email] || 0) : 0;
-      return [l.name, l.email, l.phone, l.utm_source, l.utm_medium, pos?.funnel_name, pos?.stage_name, formatCurrency(spent), l.created_at].map(v => `"${v || ''}"`).join(',');
-    }).join('\n');
-    const blob = new Blob([header + rows], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = 'leads.csv'; a.click();
-    URL.revokeObjectURL(url);
+  const exportCSV = async () => {
+    if (isExporting) return;
+    setIsExporting(true);
+    setExportProgress(0);
+    try {
+      const BATCH = 1000;
+      const all: PaginatedLead[] = [];
+      let offset = 0;
+      let totalCount = total || 0;
+
+      while (true) {
+        const { data: res, error } = await (supabase as any).rpc('search_leads_paginated', {
+          p_search: debouncedSearch || null,
+          p_funnel_id: funnelFilter === 'all' ? null : funnelFilter,
+          p_source: sourceFilter === 'all' ? null : sourceFilter,
+          p_limit: BATCH,
+          p_offset: offset,
+        });
+        if (error) throw error;
+        const batch = ((res?.leads || []) as PaginatedLead[]).map(l => ({ ...l, positions: l.positions || [] }));
+        all.push(...batch);
+        totalCount = res?.total || totalCount;
+        setExportProgress(Math.min(100, Math.round((all.length / Math.max(1, totalCount)) * 100)));
+        if (batch.length < BATCH || all.length >= totalCount) break;
+        offset += BATCH;
+      }
+
+      const header = 'Nome,Email,Telefone,Fonte,Meio,Funil,Etapa,Total Gasto,Entrada\n';
+      const rows = all.map(l => {
+        const pos = l.positions[0];
+        const spent = l.email ? ((spentMap as Record<string, number>)[l.email] || 0) : 0;
+        return [l.name, l.email, l.phone, l.utm_source, l.utm_medium, pos?.funnel_name, pos?.stage_name, formatCurrency(spent), l.created_at]
+          .map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',');
+      }).join('\n');
+      const blob = new Blob(['\uFEFF' + header + rows], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `leads-${new Date().toISOString().slice(0, 10)}.csv`; a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error('Erro ao exportar CSV:', e);
+      alert('Erro ao exportar CSV. Veja o console.');
+    } finally {
+      setIsExporting(false);
+      setExportProgress(0);
+    }
   };
 
   // Generate page numbers to show
@@ -108,8 +144,9 @@ const LeadsList: React.FC = () => {
           <h1 className="text-2xl font-bold">Todos os Leads</h1>
           {isFetching && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
         </div>
-        <Button variant="outline" size="sm" onClick={exportCSV}>
-          <Download className="h-4 w-4 mr-2" /> Exportar CSV
+        <Button variant="outline" size="sm" onClick={exportCSV} disabled={isExporting}>
+          {isExporting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
+          {isExporting ? `Exportando... ${exportProgress}%` : 'Exportar CSV'}
         </Button>
       </div>
 
