@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
-import { differenceInDays, addDays } from 'date-fns';
 import { parseLocalDateTime } from '@/lib/localDate';
+import { computeRecompra, pickTier, type DurationTier, type RecompraPurchase } from '@/lib/recompra';
 import type { Lead, LeadStagePosition } from '@/types/leadFunnels';
 import type { LeadProductMapping } from '@/hooks/useLeadProductMappings';
 import type { PurchaseSummary } from '@/hooks/useBulkLeadPurchases';
@@ -11,6 +11,8 @@ export interface RecontactProduct {
   product_name_contains: string;
   display_name?: string | null;
   recontact_days: number | null;
+  pot_duration_days?: number | null;
+  reminder_days_before?: number | null;
 }
 
 export interface RecontactInfo {
@@ -20,140 +22,85 @@ export interface RecontactInfo {
   productName: string;
   recontactDays: number;
   matchedProductId?: string;
+  totalPots: number;
+}
+
+/** Compras cuja quantidade foi resolvida como potes (encapsulados). */
+const POT_SOURCES = new Set(['mapping', 'parser_potes', 'parser_dias']);
+
+interface FunnelTier extends DurationTier {
+  productId?: string;
 }
 
 /**
- * For each lead, match their purchased products against configured products
- * with recontact_days, then calculate countdown.
+ * Para cada lead, calcula o dia de recontato com base na QUANTIDADE de potes
+ * comprada (1 pote = 30 dias), somando o estoque de múltiplas compras e
+ * recontatando a antecedência configurada antes de o estoque acabar.
  *
- * SOMA LINEAR: When a lead has multiple purchases in the same funnel,
- * the recontact_days are SUMMED and counted from the MOST RECENT purchase date.
- * Ex: Product A (90d) + Product B (180d) = 270 days from last purchase.
+ * Fonte de data: SOMENTE compras reais de `customer_purchases` (via
+ * useBulkLeadPurchaseProducts). Sem fallback de metadata — leads sem compra
+ * de pote simplesmente não recebem badge (em vez do antigo "-979d").
  *
- * Priority for product matching:
- * 1. Explicit mapping (lead_product_mappings table)
- * 2. Substring match (product_name_contains) as fallback
- *
- * Date source priority:
- * 1. lastPurchaseDate from bulk purchase events (most recent event)
- * 2. metadata.purchased_at (parsed with BR date support)
- * 3. purchaseMap.firstPurchaseDate (from customer_purchases table)
+ * A config do funil define as faixas (pot_duration_days / reminder_days_before).
  */
 export function useRecontactDeadlines(
   positions: (LeadStagePosition & { lead: Lead })[],
   products: RecontactProduct[] | undefined,
-  mappings?: LeadProductMapping[],
-  purchaseMap?: Map<string, PurchaseSummary>,
+  _mappings?: LeadProductMapping[],
+  _purchaseMap?: Map<string, PurchaseSummary>,
   leadPurchaseInfoMap?: Map<string, LeadPurchaseInfo>,
 ): Map<string, RecontactInfo> {
   return useMemo(() => {
     const map = new Map<string, RecontactInfo>();
 
-    const productsWithRecontact = (products || []).filter(
-      fp => fp.recontact_days != null && fp.recontact_days > 0,
-    );
-
-    if (productsWithRecontact.length === 0) return map;
-
-    // Build mapping lookup: raw_product_name -> lead_funnel_product_id
-    const mappingLookup = new Map<string, string>();
-    for (const m of mappings || []) {
-      mappingLookup.set(m.raw_product_name, m.lead_funnel_product_id);
+    // Faixas de duração/antecedência a partir da config do funil.
+    const tiers: FunnelTier[] = [];
+    for (const p of products || []) {
+      if (p.pot_duration_days != null && p.reminder_days_before != null) {
+        tiers.push({
+          durationDays: p.pot_duration_days,
+          reminderDaysBefore: p.reminder_days_before,
+          productId: p.id,
+        });
+      }
     }
-
-    // Build product lookup by id
-    const productById = new Map<string, RecontactProduct>();
-    for (const p of productsWithRecontact) {
-      if (p.id) productById.set(p.id, p);
-    }
+    // Funil sem config de duração → sem badges de recompra.
+    if (tiers.length === 0) return map;
 
     const today = new Date();
 
-    // Helper: match a product name against configured products
-    const matchProduct = (productName: string): RecontactProduct | undefined => {
-      // 1. Explicit mapping first
-      const mappedId = mappingLookup.get(productName);
-      if (mappedId) {
-        const found = productById.get(mappedId);
-        if (found) return found;
-      }
-      // 2. Substring match
-      return productsWithRecontact.find(fp =>
-        productName.toLowerCase().includes(fp.product_name_contains.toLowerCase()),
-      );
-    };
-
     for (const pos of positions) {
-      const lead = pos.lead;
-      const purchaseInfo = leadPurchaseInfoMap?.get(pos.lead_id);
+      const info = leadPurchaseInfoMap?.get(pos.lead_id);
+      if (!info?.purchases?.length) continue;
 
-      // Build list of {productName, date} pairs to evaluate.
-      // Priority: per-purchase events (with their own dates) > metadata.product_name + fallback date.
-      const fallbackDate =
-        (lead.metadata?.purchased_at as string) ||
-        purchaseMap?.get(pos.lead_id)?.firstPurchaseDate ||
-        purchaseInfo?.lastPurchaseDate ||
-        '';
-
-      let purchasesToCheck: Array<{ productName: string; date: string }> = [];
-      if (purchaseInfo?.purchases && purchaseInfo.purchases.length > 0) {
-        purchasesToCheck = purchaseInfo.purchases;
-      } else {
-        const metadataProductName = (lead.metadata?.product_name as string) || '';
-        if (metadataProductName) {
-          purchasesToCheck = [{ productName: metadataProductName, date: fallbackDate }];
-        }
+      // Apenas compras identificadas como potes, com data e quantidade válidas.
+      const potPurchases: RecompraPurchase[] = [];
+      for (const pur of info.purchases) {
+        if (!pur.quantitySource || !POT_SOURCES.has(pur.quantitySource)) continue;
+        if (!pur.quantity || pur.quantity <= 0) continue;
+        const d = parseLocalDateTime(pur.date);
+        if (!d) continue;
+        potPurchases.push({ date: d, quantity: pur.quantity });
       }
+      if (potPurchases.length === 0) continue;
 
-      if (purchasesToCheck.length === 0) continue;
+      const r = computeRecompra(potPurchases, tiers, today);
+      if (!r) continue;
 
-      // For each purchase that matches a configured recontact product,
-      // compute its own deadline = purchaseDate + recontact_days.
-      // Pick the FURTHEST deadline (max) — that becomes the card's countdown.
-      let bestDeadline: Date | null = null;
-      let bestProduct: RecontactProduct | undefined;
-
-      for (const p of purchasesToCheck) {
-        const matched = matchProduct(p.productName);
-        if (!matched) continue;
-
-        const dateRaw = p.date || fallbackDate;
-        const purchaseDate = parseLocalDateTime(dateRaw);
-        if (!purchaseDate) continue;
-
-        const deadline = addDays(purchaseDate, matched.recontact_days!);
-        if (!bestDeadline || deadline > bestDeadline) {
-          bestDeadline = deadline;
-          bestProduct = matched;
-        }
-      }
-
-      if (!bestDeadline || !bestProduct) {
-        console.debug(`[recontact] lead=${pos.lead_id}: no matched purchase with valid date`);
-        continue;
-      }
-
-      const daysRemaining = differenceInDays(bestDeadline, today);
-      const displayName = bestProduct.display_name || bestProduct.product_name_contains;
-
-      if (import.meta.env.DEV) {
-        console.debug(
-          `[recontact] lead=${pos.lead_id} email=${pos.lead.email} → ${displayName} ` +
-          `deadline=${bestDeadline.toISOString().slice(0, 10)} (${daysRemaining}d) ` +
-          `cycle=${bestProduct.recontact_days}d`,
-        );
-      }
+      // Produto da faixa correspondente ao total (usado pelo auto-move).
+      const tier = pickTier(tiers, r.totalDays);
 
       map.set(pos.lead_id, {
-        daysRemaining,
-        isOverdue: daysRemaining < 0,
-        deadlineDate: bestDeadline,
-        productName: displayName,
-        recontactDays: bestProduct.recontact_days!,
-        matchedProductId: bestProduct.id,
+        daysRemaining: r.daysRemaining,
+        isOverdue: r.daysRemaining < 0,
+        deadlineDate: r.recontactAt,
+        productName: `${r.totalPots} pote${r.totalPots > 1 ? 's' : ''}`,
+        recontactDays: r.totalDays - r.reminderDaysBefore,
+        matchedProductId: tier?.productId,
+        totalPots: r.totalPots,
       });
     }
 
     return map;
-  }, [positions, products, mappings, purchaseMap, leadPurchaseInfoMap]);
+  }, [positions, products, leadPurchaseInfoMap]);
 }

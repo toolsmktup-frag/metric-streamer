@@ -86,3 +86,6 @@ verify_jwt = false
 
 [functions.wz-bulk-enroll]
 verify_jwt = false
+
+[functions.process-import]
+verify_jwt = false

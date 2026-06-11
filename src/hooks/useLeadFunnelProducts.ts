@@ -8,6 +8,8 @@ export interface LeadFunnelProduct {
   product_name_contains: string;
   display_name: string | null;
   recontact_days: number | null;
+  pot_duration_days: number | null;
+  reminder_days_before: number | null;
   auto_move_stage_id: string | null;
   auto_move_from_stage_id: string | null;
   created_at: string;
@@ -67,7 +69,9 @@ export function useUpsertLeadFunnelProducts() {
             source_funnel_product_id: p.source_funnel_product_id,
             product_name_contains: p.product_name_contains,
             display_name: p.display_name,
-            recontact_days: p.recontact_days,
+            // recontact_days é recalculado pelo trigger a partir de duração − antecedência
+            pot_duration_days: p.pot_duration_days,
+            reminder_days_before: p.reminder_days_before,
             auto_move_stage_id: p.auto_move_stage_id,
             auto_move_from_stage_id: p.auto_move_from_stage_id,
           })
@@ -84,6 +88,8 @@ export function useUpsertLeadFunnelProducts() {
             product_name_contains: p.product_name_contains,
             display_name: p.display_name,
             recontact_days: p.recontact_days,
+            pot_duration_days: p.pot_duration_days,
+            reminder_days_before: p.reminder_days_before,
             auto_move_stage_id: p.auto_move_stage_id,
             auto_move_from_stage_id: p.auto_move_from_stage_id,
           })));

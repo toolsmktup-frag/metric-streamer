@@ -6,7 +6,7 @@ import type { Lead, LeadStagePosition } from '@/types/leadFunnels';
 export interface LeadPurchaseInfo {
   productNames: string[];
   lastPurchaseDate: string;
-  purchases: Array<{ productName: string; date: string }>;
+  purchases: Array<{ productName: string; date: string; quantity?: number; quantitySource?: string }>;
 }
 
 /**
@@ -122,7 +122,7 @@ export function useBulkLeadPurchaseProducts(
         const chunk = customerIds.slice(i, i + BATCH);
         const { data, error } = await (supabase as any)
           .from('customer_purchases')
-          .select('unified_customer_id, product_name, purchased_at, status')
+          .select('unified_customer_id, product_name, purchased_at, status, quantity, quantity_source')
           .in('unified_customer_id', chunk)
           .eq('status', 'authorized')
           .order('purchased_at', { ascending: false })
@@ -137,9 +137,11 @@ export function useBulkLeadPurchaseProducts(
           if (!productName || !date) continue;
           const leadIds = customerIdToLeadIds.get(row.unified_customer_id);
           if (!leadIds) continue;
+          const quantity = typeof row.quantity === 'number' ? row.quantity : undefined;
+          const quantitySource = (row.quantity_source as string | null) ?? undefined;
           for (const lid of leadIds) {
             const arr = purchasesByLead.get(lid) || [];
-            arr.push({ productName, date });
+            arr.push({ productName, date, quantity, quantitySource });
             purchasesByLead.set(lid, arr);
           }
         }
