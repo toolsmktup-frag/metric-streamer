@@ -1,48 +1,46 @@
--- ============================================================
--- Cron job: recontact-daily (move leads vencidos automaticamente)
--- Rodar no Supabase SQL Editor
--- Executa todo dia à meia-noite (horário de Brasília) = 03:00 UTC
--- ============================================================
+-- ============================================================================
+-- Recompra automática (cron) — Fase 1B — JÁ ATIVADO em 2026-06-11
+-- ============================================================================
+-- A edge function `recontact-cron` está deployada com a lógica corrigida
+-- (lê customer_purchases + quantidade de potes; ver
+-- supabase/functions/recontact-cron/index.ts) e o cron já está agendado e ativo.
+--
+-- Autenticação: a função aceita um SEGREDO DEDICADO (env RECONTACT_CRON_SECRET,
+-- baixo privilégio — só dispara esta função), em vez da service_role key. O cron
+-- envia esse segredo no header Authorization. Foi assim que se evitou expor a
+-- chave-mestra do projeto.
+--
+-- Este arquivo é REFERÊNCIA/gerência. O agendamento já foi feito.
+-- ============================================================================
 
--- 1. Habilitar extensões necessárias (se ainda não ativas)
+-- Extensões (idempotente — já ativas)
 CREATE EXTENSION IF NOT EXISTS pg_cron;
 CREATE EXTENSION IF NOT EXISTS pg_net;
 
--- 2. Criar cron job que chama recontact-cron diariamente às 03:00 UTC (00:00 BRT)
-SELECT cron.schedule(
-  'recontact-daily',              -- nome do job
-  '0 3 * * *',                    -- todo dia às 03:00 UTC = 00:00 BRT
-  $$
-  SELECT net.http_post(
-    url := 'https://emfbocpmphtftqcezaib.supabase.co/functions/v1/recontact-cron',
-    headers := jsonb_build_object(
-      'Content-Type', 'application/json',
-      'Authorization', 'Bearer ' || current_setting('app.settings.service_role_key', true)
-    ),
-    body := '{}'::jsonb
-  );
-  $$
-);
-
--- ============================================================
--- ALTERNATIVA: Se current_setting não funcionar, cole a
--- service_role_key diretamente (menos seguro):
+-- ─────────────────────────────────────────────────────────────────────────────
+-- COMO FOI AGENDADO (diário às 11:00 UTC = 08:00 BRT). Para REagendar, troque
+-- <RECONTACT_CRON_SECRET> pelo valor do secret da função:
 --
--- SELECT cron.schedule(
---   'recontact-daily',
---   '0 3 * * *',
---   $$
---   SELECT net.http_post(
---     url := 'https://emfbocpmphtftqcezaib.supabase.co/functions/v1/recontact-cron',
---     headers := '{"Content-Type":"application/json","Authorization":"Bearer SUA_SERVICE_ROLE_KEY"}'::jsonb,
---     body := '{}'::jsonb
---   );
---   $$
--- );
--- ============================================================
+--   SELECT cron.unschedule(jobid) FROM cron.job WHERE jobname='recontact-daily';
+--   SELECT cron.schedule('recontact-daily', '0 11 * * *', $cron$
+--     SELECT net.http_post(
+--       url := 'https://emfbocpmphtftqcezaib.supabase.co/functions/v1/recontact-cron',
+--       headers := jsonb_build_object('Content-Type','application/json',
+--                                     'Authorization','Bearer <RECONTACT_CRON_SECRET>'),
+--       body := '{}'::jsonb
+--     );
+--   $cron$);
+-- ─────────────────────────────────────────────────────────────────────────────
 
--- Para verificar se o job foi criado:
--- SELECT * FROM cron.job;
+-- TESTAR em ensaio (não move nada). No terminal, com o segredo do cron:
+--   curl -s -X POST 'https://emfbocpmphtftqcezaib.supabase.co/functions/v1/recontact-cron' \
+--     -H 'Authorization: Bearer <RECONTACT_CRON_SECRET>' \
+--     -H 'Content-Type: application/json' -d '{"dry_run": true}'
 
--- Para remover o job se necessário:
--- SELECT cron.unschedule('recontact-daily');
+-- ============================================================================
+-- Verificar:        SELECT jobname, schedule, active FROM cron.job WHERE jobname='recontact-daily';
+-- Ver execuções:    SELECT * FROM cron.job_run_details WHERE command LIKE '%recontact-cron%' ORDER BY start_time DESC LIMIT 10;
+-- Desligar:         SELECT cron.unschedule('recontact-daily');
+-- Trocar o segredo: supabase secrets set RECONTACT_CRON_SECRET=<novo> --project-ref emfbocpmphtftqcezaib
+--                   (depois reagende o cron com o novo valor)
+-- ============================================================================

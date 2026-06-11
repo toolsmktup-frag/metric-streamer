@@ -1,5 +1,8 @@
 project_id = "emfbocpmphtftqcezaib"
 
+[functions.recontact-cron]
+verify_jwt = false
+
 [functions.sync-meta]
 verify_jwt = false
 
