@@ -14,9 +14,17 @@ interface ProductRow {
   product_name_contains: string;
   display_name: string;
   recontact_days: number | null;
+  pot_duration_days: number | null;
+  reminder_days_before: number | null;
   auto_move_stage_id: string | null;
   auto_move_from_stage_id: string | null;
 }
+
+/** recontato = duração do estoque − antecedência (mín. 1). Igual ao trigger do banco. */
+const calcRecontact = (duration: number | null, reminder: number | null): number | null => {
+  if (duration == null || reminder == null) return null;
+  return Math.max(duration - reminder, 1);
+};
 
 interface FunnelProductsConfigProps {
   products: LeadFunnelProduct[];
@@ -47,6 +55,8 @@ const FunnelProductsConfig: React.FC<FunnelProductsConfigProps> = ({
         product_name_contains: p.product_name_contains,
         display_name: p.display_name || '',
         recontact_days: p.recontact_days,
+        pot_duration_days: p.pot_duration_days,
+        reminder_days_before: p.reminder_days_before,
         auto_move_stage_id: p.auto_move_stage_id,
         auto_move_from_stage_id: p.auto_move_from_stage_id,
       }))
@@ -68,6 +78,8 @@ const FunnelProductsConfig: React.FC<FunnelProductsConfigProps> = ({
         product_name_contains: '',
         display_name: '',
         recontact_days: null,
+        pot_duration_days: null,
+        reminder_days_before: null,
         auto_move_stage_id: null,
         auto_move_from_stage_id: defaultFromStageId,
       },
@@ -96,7 +108,10 @@ const FunnelProductsConfig: React.FC<FunnelProductsConfigProps> = ({
         source_funnel_product_id: p.source_funnel_product_id,
         product_name_contains: p.product_name_contains.trim(),
         display_name: p.display_name.trim() || null,
-        recontact_days: p.recontact_days,
+        // recontact_days é recalculado pelo trigger do banco a partir de duração − antecedência
+        recontact_days: calcRecontact(p.pot_duration_days, p.reminder_days_before),
+        pot_duration_days: p.pot_duration_days,
+        reminder_days_before: p.reminder_days_before,
         auto_move_stage_id: p.auto_move_stage_id,
         auto_move_from_stage_id: p.auto_move_from_stage_id,
       }))
@@ -141,6 +156,8 @@ const FunnelProductsConfig: React.FC<FunnelProductsConfigProps> = ({
                   product_name_contains: cat.product_name_contains,
                   display_name: cat.display_name || '',
                   recontact_days: cat.recontact_days,
+                  pot_duration_days: null,
+                  reminder_days_before: null,
                   auto_move_stage_id: null,
                   auto_move_from_stage_id: defaultFromStageId,
                 },
@@ -167,8 +184,9 @@ const FunnelProductsConfig: React.FC<FunnelProductsConfigProps> = ({
       </div>
 
       <p className="text-xs text-muted-foreground mb-3">
-        Configure <strong>quantos dias após a compra</strong> o lead deve sair de "Compra Aprovada" e ir pra "Abordar hoje".
-        Só move se o lead ainda estiver na etapa de origem, preservando negociações em andamento.
+        Configure <strong>quanto tempo o estoque dura</strong> (nº de potes × 30 dias) e <strong>quantos dias antes</strong> de
+        acabar recontatar. O sistema soma as compras do cliente e calcula o dia certo automaticamente. Só move se o lead ainda
+        estiver na etapa de origem, preservando negociações em andamento.
       </p>
 
       <div className="space-y-2">
@@ -181,7 +199,7 @@ const FunnelProductsConfig: React.FC<FunnelProductsConfigProps> = ({
               <Input
                 value={prod.product_name_contains}
                 onChange={e => updateProduct(idx, 'product_name_contains', e.target.value)}
-                placeholder="Contém no nome (ex: 1 pote)"
+                placeholder="Rótulo (ex: 3 potes / 90 dias)"
                 className="flex-1"
               />
               <Input
@@ -195,20 +213,33 @@ const FunnelProductsConfig: React.FC<FunnelProductsConfigProps> = ({
               </Button>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs text-muted-foreground">Mover</span>
+              <span className="text-xs text-muted-foreground">Estoque dura</span>
               <Input
                 type="number"
                 min={1}
-                value={prod.recontact_days ?? ''}
-                onChange={e => {
-                  const val = e.target.value ? parseInt(e.target.value, 10) : null;
-                  updateProduct(idx, 'recontact_days', val);
-                }}
-                placeholder="75"
-                title="Quantos dias após a compra mover o lead"
+                value={prod.pot_duration_days ?? ''}
+                onChange={e => updateProduct(idx, 'pot_duration_days', e.target.value ? parseInt(e.target.value, 10) : null)}
+                placeholder="90"
+                title="Quantos dias o estoque dura (nº de potes × 30)"
                 className="w-20"
               />
-              <span className="text-xs text-muted-foreground">dias após a compra</span>
+              <span className="text-xs text-muted-foreground">dias · avisar</span>
+              <Input
+                type="number"
+                min={0}
+                value={prod.reminder_days_before ?? ''}
+                onChange={e => updateProduct(idx, 'reminder_days_before', e.target.value ? parseInt(e.target.value, 10) : null)}
+                placeholder="15"
+                title="Quantos dias antes de o estoque acabar recontatar"
+                className="w-20"
+              />
+              <span className="text-xs text-muted-foreground">
+                antes →{' '}
+                <strong className="text-foreground">
+                  {calcRecontact(prod.pot_duration_days, prod.reminder_days_before) ?? '—'}d
+                </strong>{' '}
+                após a compra
+              </span>
               <Select
                 value={prod.auto_move_from_stage_id || 'none'}
                 onValueChange={v => updateProduct(idx, 'auto_move_from_stage_id', v === 'none' ? null : v)}
