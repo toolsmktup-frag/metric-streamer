@@ -37,7 +37,7 @@ const EVENT_MAP: Record<string, EventMapping> = {
   pix_created: { label: 'PIX Gerado', icon: CreditCard, colorClass: 'bg-amber-500/10 text-amber-500' },
   rejeitado: { label: 'Pagamento Rejeitado', icon: XCircle, colorClass: 'bg-destructive/10 text-destructive' },
   cancelado: { label: 'Cancelado', icon: XCircle, colorClass: 'bg-destructive/10 text-destructive' },
-  expirado: { label: 'Expirado', icon: Clock, colorClass: 'bg-muted text-muted-foreground' },
+  expirado: { label: 'Expirado', icon: Clock, colorClass: 'bg-destructive/10 text-destructive' },
   reembolsado: { label: 'Reembolsado', icon: RotateCcw, colorClass: 'bg-amber-500/10 text-amber-500' },
   chargeback: { label: 'Chargeback', icon: AlertTriangle, colorClass: 'bg-destructive/10 text-destructive' },
   purchase: { label: 'Compra', icon: ShoppingCart, colorClass: 'bg-emerald-500/10 text-emerald-500' },
@@ -49,6 +49,26 @@ const EVENT_MAP: Record<string, EventMapping> = {
   open: { label: 'Checkout Aberto', icon: Eye, colorClass: 'bg-muted text-muted-foreground' },
   waiting_payment: { label: 'Aguardando Pagamento', icon: Clock, colorClass: 'bg-amber-500/10 text-amber-500' },
   import: { label: 'Importado', icon: UserPlus, colorClass: 'bg-muted text-muted-foreground' },
+  // pagamento aprovado (verde)
+  autorizado: { label: 'Pagamento Aprovado', icon: CheckCircle2, colorClass: 'bg-emerald-500/10 text-emerald-500' },
+  aprovada: { label: 'Pagamento Aprovado', icon: CheckCircle2, colorClass: 'bg-emerald-500/10 text-emerald-500' },
+  // tentativa de pagamento — gerado/aguardando/abandonado (amarelo)
+  pix_generated: { label: 'PIX Gerado', icon: CreditCard, colorClass: 'bg-amber-500/10 text-amber-500' },
+  boleto_generated: { label: 'Boleto Gerado', icon: FileText, colorClass: 'bg-amber-500/10 text-amber-500' },
+  abandoned_cart: { label: 'Carrinho Abandonado', icon: ShoppingCart, colorClass: 'bg-amber-500/10 text-amber-500' },
+  subscription_delayed: { label: 'Assinatura Atrasada', icon: Clock, colorClass: 'bg-amber-500/10 text-amber-500' },
+  refunded: { label: 'Reembolsado', icon: RotateCcw, colorClass: 'bg-amber-500/10 text-amber-500' },
+  // NÃO pago / falhou / expirou (vermelho — destaque)
+  canceled: { label: 'Cancelado', icon: XCircle, colorClass: 'bg-destructive/10 text-destructive' },
+  pix_expired: { label: 'PIX Expirado', icon: Clock, colorClass: 'bg-destructive/10 text-destructive' },
+  refused: { label: 'Pagamento Recusado', icon: XCircle, colorClass: 'bg-destructive/10 text-destructive' },
+  dispute: { label: 'Disputa', icon: AlertTriangle, colorClass: 'bg-destructive/10 text-destructive' },
+  reclamada: { label: 'Reclamada', icon: AlertTriangle, colorClass: 'bg-destructive/10 text-destructive' },
+  // neutros (param de aparecer como evento "importante" roxo)
+  signup: { label: 'Cadastro', icon: UserPlus, colorClass: 'bg-muted text-muted-foreground' },
+  live: { label: 'Entrou na Live', icon: Eye, colorClass: 'bg-muted text-muted-foreground' },
+  stage_change: { label: 'Mudou de Etapa', icon: Activity, colorClass: 'bg-muted text-muted-foreground' },
+  whatsapp_group_sync: { label: 'Sync WhatsApp', icon: Activity, colorClass: 'bg-muted text-muted-foreground' },
 };
 
 const DEFAULT_EVENT: EventMapping = { label: '', icon: Activity, colorClass: 'bg-primary/10 text-primary' };
