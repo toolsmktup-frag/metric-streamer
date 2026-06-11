@@ -212,6 +212,16 @@ Deno.serve(async (req) => {
       }
     }
 
+    // 🔒 Webhook token obrigatório e válido — anti-injeção de vendas falsas.
+    // Todos os funis guru têm webhook_token configurado; payloads sem token válido são rejeitados.
+    if (!funnelId) {
+      console.warn("[guru-webhook] Rejeitado: webhook_token ausente ou inválido");
+      return new Response(JSON.stringify({ error: "Invalid or missing webhook token" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     if (!funnelId && (productName || product.id || product.product_id || product.marketplace_id)) {
       const earlyProductId = String(product.id || product.product_id || product.marketplace_id || "") || null;
       const { data } = await supabase.rpc("resolve_funnel_id", {

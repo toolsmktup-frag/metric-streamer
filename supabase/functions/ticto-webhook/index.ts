@@ -341,6 +341,16 @@ Deno.serve(async (req) => {
       funnelId = byPlatform?.funnel_id ?? null;
     }
 
+    // 🔒 Webhook token obrigatório e válido — anti-injeção de vendas falsas.
+    // Todos os funis ticto têm webhook_token configurado; payloads sem token válido são rejeitados.
+    if (!funnelId) {
+      console.warn("[ticto-webhook] Rejeitado: webhook_token ausente ou inválido");
+      return new Response(JSON.stringify({ error: "Invalid or missing webhook token" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     if (!funnelId && (productName || productId)) {
       const { data: funnelData } = await supabase
         .rpc("resolve_funnel_id", {

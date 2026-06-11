@@ -65,6 +65,20 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     )
 
+    // 🔒 Org do usuário autenticado — impede operar instâncias de outra organização (anti-IDOR)
+    const { data: callerProfile } = await supabase
+      .from('user_profiles')
+      .select('organization_id')
+      .eq('id', user.id)
+      .single()
+    const userOrgId = callerProfile?.organization_id ?? null
+    if (!userOrgId) {
+      return new Response(JSON.stringify({ error: 'No organization for user' }), {
+        status: 403,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
     const url = new URL(req.url)
     let action = url.searchParams.get('action')
     let instanceId = url.searchParams.get('instance_id')
@@ -271,6 +285,7 @@ Deno.serve(async (req) => {
       .from('whatsapp_instances')
       .select('*')
       .eq('id', instanceId)
+      .eq('organization_id', userOrgId) // 🔒 anti-IDOR: só instâncias da própria organização
       .single()
 
     if (instErr || !instance) {

@@ -127,6 +127,13 @@ Deno.serve(async (req) => {
   }
   const supabase = createClient(supabaseUrl, serviceRoleKey);
 
+  // 🔒 Função interna: aceita apenas chamadas autenticadas com a service_role key
+  // (invocada por wz-scheduler, wz-receiver, wz-bulk-enroll e por si mesma). Bloqueia chamadas externas.
+  const authHeader = req.headers.get("Authorization") || "";
+  if (authHeader !== `Bearer ${serviceRoleKey}`) {
+    return jsonResponse({ error: "Unauthorized" }, 401);
+  }
+
   try {
     const body = await req.json();
     const { execution_id, flow_id, current_node_id, replay_execution_id } = body;

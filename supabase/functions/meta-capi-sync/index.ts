@@ -24,6 +24,16 @@ Deno.serve(async (req) => {
   const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(supabaseUrl, supabaseKey);
 
+  // 🔒 Função interna: aceita apenas chamadas autenticadas com a service_role key
+  // (invocada internamente pelos webhooks de venda ticto/guru/eduzz). Bloqueia chamadas externas.
+  const authHeader = req.headers.get("Authorization") || "";
+  if (authHeader !== `Bearer ${supabaseKey}`) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   try {
     const body = await req.json();
     const {
