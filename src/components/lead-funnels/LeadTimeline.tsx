@@ -183,14 +183,19 @@ const LeadTimeline: React.FC<LeadTimelineProps> = ({ lead, open, onClose }) => {
                   {purchaseData.purchases.slice(0, 10).map(p => {
                     const isPaid = p.status === 'authorized';
                     const isRefunded = p.status === 'refunded' || p.status === 'chargeback';
+                    // canceled / expired / pending / open… = código gerado mas NÃO pago
+                    const isNotPaid = !isPaid && !isRefunded;
+                    const notPaidLabel = (p.status === 'pending' || p.status === 'open' || p.status === 'waiting_payment')
+                      ? 'Aguardando pgto'
+                      : 'Não paga';
                     const dotColor = isPaid ? 'bg-emerald-500' : isRefunded ? 'bg-destructive' : 'bg-muted-foreground/40';
                     const valueColor = isPaid ? 'text-emerald-600 dark:text-emerald-400' : isRefunded ? 'text-destructive' : 'text-muted-foreground';
-                    const tooltip = isRefunded ? (p.status === 'chargeback' ? 'Chargeback' : 'Reembolsado') : isPaid ? 'Aprovada' : p.status;
+                    const tooltip = isRefunded ? (p.status === 'chargeback' ? 'Chargeback' : 'Reembolsado') : isPaid ? 'Aprovada' : notPaidLabel;
                     return (
                       <div key={p.id} className="flex items-start gap-2 text-xs group/purchase" title={tooltip}>
                         <div className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${dotColor}`} />
                         <div className="flex-1 min-w-0">
-                          <p className="font-medium text-foreground truncate">{p.product_name}</p>
+                          <p className={`font-medium truncate ${isNotPaid ? 'text-muted-foreground line-through' : 'text-foreground'}`}>{p.product_name}</p>
                           <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                             <span className="text-muted-foreground">
                               {format(new Date(p.purchased_at), 'dd/MM/yy')}
@@ -209,9 +214,14 @@ const LeadTimeline: React.FC<LeadTimelineProps> = ({ lead, open, onClose }) => {
                                 {p.status === 'chargeback' ? 'Chargeback' : 'Reembolso'}
                               </Badge>
                             )}
+                            {isNotPaid && (
+                              <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 font-medium text-amber-600 border-amber-500/40">
+                                {notPaidLabel}
+                              </Badge>
+                            )}
                           </div>
                         </div>
-                        <span className={`shrink-0 font-semibold ml-1 ${valueColor}`}>
+                        <span className={`shrink-0 font-semibold ml-1 ${valueColor} ${isNotPaid ? 'line-through' : ''}`}>
                           {formatCurrency(p.net_amount ?? p.gross_amount)}
                         </span>
                       </div>
