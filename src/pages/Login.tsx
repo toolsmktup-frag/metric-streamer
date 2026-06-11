@@ -39,11 +39,11 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background px-4">
-      <div className="w-full max-w-sm space-y-6">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-foreground">📊 AdMetrics</h1>
-          <p className="text-sm text-muted-foreground mt-1">
+    <div className="min-h-screen flex items-center justify-center bg-background px-4 py-12">
+      <div className="w-full max-w-sm space-y-8">
+        <div className="text-center space-y-3">
+          <h1 className="text-3xl font-bold text-foreground tracking-tight">📊 AdMetrics</h1>
+          <p className="text-sm text-muted-foreground">
             {mode === 'login' ? 'Faça login para acessar o dashboard' : 'Crie sua conta'}
           </p>
         </div>
