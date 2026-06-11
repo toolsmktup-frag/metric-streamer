@@ -57,9 +57,12 @@ Deno.serve(async (req) => {
   try {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    // Segredo dedicado do cron (baixo privilégio — só dispara esta função).
+    // Permite agendar sem expor a service_role key no comando do cron.
+    const CRON_SECRET = Deno.env.get("RECONTACT_CRON_SECRET");
 
     const token = (req.headers.get("Authorization") || "").replace("Bearer ", "");
-    if (token !== SERVICE_ROLE_KEY) {
+    if (token !== SERVICE_ROLE_KEY && (!CRON_SECRET || token !== CRON_SECRET)) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

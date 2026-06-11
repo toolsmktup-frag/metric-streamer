@@ -29,7 +29,7 @@ recompra de encapsulados). Stack: Vite + React + TS + Supabase. Uso interno (1 o
 | Recompra | quantidade + backfill + config + 3 webhooks deployados | PR #2 (cálculo no front + UI) |
 | Modelagem de funis | — | auditado — plano faseado pronto (ver [auditoria](./AUDITORIA-FUNIS-2026-06-11.md)) |
 | Funis · Fase 1A (números) | métricas por pedido aplicadas no banco | PR `claude/fase1-funis` (migration) |
-| Funis · Fase 1B (recompra auto) | edge `recontact-cron` reescrita + deployada; cron a ligar pelo dono | PR `claude/fase1-funis` (edge + testes) |
+| Funis · Fase 1B (recompra auto) | edge `recontact-cron` reescrita + deployada + **cron ativo** (diário 08:00 BRT) | PR `claude/fase1-funis` (edge + testes) |
 
 ## ⚠️ Operacional
 - **Republicar pela Lovable:** sempre **mergear o PR antes** de republicar — senão a Lovable sobe a versão antiga e desfaz as correções de edge functions.
