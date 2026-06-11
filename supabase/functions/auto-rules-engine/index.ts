@@ -52,6 +52,16 @@ Deno.serve(async (req) => {
   const META_TOKEN = Deno.env.get("META_ACCESS_TOKEN") || null;
   const sb = createClient(supabaseUrl, serviceKey);
 
+  // 🔒 Função interna: aceita apenas chamadas autenticadas com a service_role key
+  // (invocada pelo cron auto-rules-engine-cron a cada 15min). Bloqueia chamadas externas.
+  const authHeader = req.headers.get("Authorization") || "";
+  if (authHeader !== `Bearer ${serviceKey}`) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { ..._corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   try {
     // 1. Fetch all active rules
     const { data: rules, error: rErr } = await sb

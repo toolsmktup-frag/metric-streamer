@@ -71,3 +71,18 @@ verify_jwt = false
 
 [functions.meta-diagnose]
 verify_jwt = false
+
+# Funções internas/manuais que validam a autenticação no próprio código
+# (service_role nas internas, getUser nas manuais). Mantê-las com verify_jwt=false
+# garante que qualquer redeploy (CLI ou Lovable) preserve o gateway aberto exigido.
+[functions.import-ticto-csv]
+verify_jwt = false
+
+[functions.meta-capi-sync]
+verify_jwt = false
+
+[functions.stock-deductor]
+verify_jwt = false
+
+[functions.wz-bulk-enroll]
+verify_jwt = false

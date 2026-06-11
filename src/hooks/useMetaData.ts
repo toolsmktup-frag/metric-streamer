@@ -71,11 +71,11 @@ interface InsightRow {
 }
 
 function aggregateInsights(rows: InsightRow[]) {
-  const spend = rows.reduce((s, r) => s + Number(r.spend), 0);
-  const impressions = rows.reduce((s, r) => s + Number(r.impressions), 0);
-  const reach = rows.reduce((s, r) => s + Number(r.reach), 0);
-  const clicks = rows.reduce((s, r) => s + Number(r.clicks), 0);
-  const link_clicks = rows.reduce((s, r) => s + Number(r.link_clicks), 0);
+  const spend = rows.reduce((s, r) => s + (Number(r.spend) || 0), 0);
+  const impressions = rows.reduce((s, r) => s + (Number(r.impressions) || 0), 0);
+  const reach = rows.reduce((s, r) => s + (Number(r.reach) || 0), 0);
+  const clicks = rows.reduce((s, r) => s + (Number(r.clicks) || 0), 0);
+  const link_clicks = rows.reduce((s, r) => s + (Number(r.link_clicks) || 0), 0);
   const sales = 0; // Sales come from Ticto webhook, not Meta pixel
   const leads = rows.reduce((s, r) => s + getActionValue(r.actions, 'lead'), 0);
   const initiate_checkout = rows.reduce((s, r) => s + getActionValue(r.actions, 'initiate_checkout'), 0);

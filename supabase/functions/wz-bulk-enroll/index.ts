@@ -24,6 +24,16 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return jsonResponse({ error: "Method not allowed" }, 405);
 
   try {
+    // 🔒 Exige usuário autenticado (acionado manualmente pela UI). Bloqueia disparo anônimo em massa de WhatsApp.
+    const authHeader = req.headers.get("Authorization") || "";
+    const authClient = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { Authorization: authHeader } } },
+    );
+    const { data: { user: authedUser }, error: authErr } = await authClient.auth.getUser();
+    if (authErr || !authedUser) return jsonResponse({ error: "Unauthorized" }, 401);
+
     const body = await req.json().catch(() => ({}));
     const flow_id: string | undefined = body.flow_id;
     const funnel_id: string | undefined = body.funnel_id;

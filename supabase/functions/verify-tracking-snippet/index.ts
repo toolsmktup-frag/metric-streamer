@@ -1,3 +1,5 @@
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -5,12 +7,43 @@ const corsHeaders = {
 
 const EXPECTED_ENDPOINT = 'https://emfbocpmphtftqcezaib.supabase.co/functions/v1/track-event'
 
+// 🔒 Bloqueia hosts internos/privados para mitigar SSRF
+function isBlockedHost(hostname: string): boolean {
+  const h = hostname.toLowerCase().replace(/\.$/, '')
+  if (h === 'localhost' || h.endsWith('.localhost') || h.endsWith('.internal') || h.endsWith('.local')) return true
+  if (h === '::1' || h.startsWith('fc') || h.startsWith('fd') || h.startsWith('fe80')) return true
+  const m = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
+  if (m) {
+    const a = +m[1], b = +m[2]
+    if (a === 0 || a === 127 || a === 10) return true
+    if (a === 192 && b === 168) return true
+    if (a === 172 && b >= 16 && b <= 31) return true
+    if (a === 169 && b === 254) return true // link-local + metadata de nuvem
+  }
+  return false
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
   try {
+    // 🔒 Exige usuário autenticado (ferramenta interna chamada pela UI)
+    const authHeader = req.headers.get('Authorization') || ''
+    const authClient = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_ANON_KEY')!,
+      { global: { headers: { Authorization: authHeader } } },
+    )
+    const { data: { user }, error: authErr } = await authClient.auth.getUser()
+    if (authErr || !user) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
     const { url, funnel_id, stage_id } = await req.json()
 
     if (!url || !stage_id) {
@@ -24,6 +57,23 @@ Deno.serve(async (req) => {
     let targetUrl = url.trim()
     if (!/^https?:\/\//i.test(targetUrl)) {
       targetUrl = 'https://' + targetUrl
+    }
+
+    // 🔒 Valida destino: só http/https público, bloqueia IPs internos/privados (anti-SSRF)
+    let parsedTarget: URL
+    try {
+      parsedTarget = new URL(targetUrl)
+    } catch {
+      return new Response(JSON.stringify({ error: 'invalid url' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+    if (!/^https?:$/.test(parsedTarget.protocol) || isBlockedHost(parsedTarget.hostname)) {
+      return new Response(JSON.stringify({ error: 'blocked url' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
     }
 
     let html: string

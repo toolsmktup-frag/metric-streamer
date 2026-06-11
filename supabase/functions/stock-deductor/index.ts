@@ -32,6 +32,13 @@ Deno.serve(async (req) => {
   const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(supabaseUrl, supabaseKey);
 
+  // 🔒 Função interna: aceita apenas chamadas autenticadas com a service_role key
+  // (invocada internamente pelos webhooks de venda). Bloqueia chamadas externas.
+  const authHeader = req.headers.get("Authorization") || "";
+  if (authHeader !== `Bearer ${supabaseKey}`) {
+    return jsonResponse({ error: "Unauthorized" }, 401);
+  }
+
   try {
     const { product_name, product_id: externalProductId, platform, order_id } = await req.json();
 

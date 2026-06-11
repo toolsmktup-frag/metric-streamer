@@ -52,6 +52,20 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // 🔒 Exige usuário autenticado (importação manual pela UI). Bloqueia injeção anônima de transações.
+    const authHeader = req.headers.get("Authorization") || "";
+    const authClient = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { Authorization: authHeader } } },
+    );
+    const { data: { user: authedUser }, error: authErr } = await authClient.auth.getUser();
+    if (authErr || !authedUser) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const { records: inputRecords, platform: inputPlatform } = await req.json();
 
     if (!inputRecords || !Array.isArray(inputRecords) || inputRecords.length === 0) {

@@ -167,6 +167,16 @@ Deno.serve(async (req) => {
       funnelId = byPlatform?.funnel_id ?? null;
     }
 
+    // 🔒 Webhook token obrigatório e válido — anti-injeção de vendas falsas.
+    // Payloads sem token válido (que não resolvem um funil) são rejeitados.
+    if (!funnelId) {
+      console.warn("[eduzz-webhook] Rejeitado: webhook_token ausente ou inválido");
+      return new Response(JSON.stringify({ error: "Invalid or missing webhook token" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     if (!funnelId && productName) {
       const { data } = await supabase.rpc("resolve_funnel_id", { p_product_name: productName });
       funnelId = data || null;
