@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { resolveQuantity } from "../_shared/potQuantity.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -233,10 +234,13 @@ Deno.serve(async (req) => {
           else console.error("Customer error:", cerr.message);
         }
 
+        const potQ = resolveQuantity({ offerName: record.offer_name, productName: record.product_name });
         cpRecords.push({
           organization_id: org_id,
           unified_customer_id,
           platform,
+          quantity: potQ.quantity,
+          quantity_source: potQ.source,
           platform_transaction_id: record.platform_transaction_id,
           platform_order_id: record.platform_order_id || null,
           product_name: record.product_name || 'Desconhecido',

@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { resolveQuantity } from "../_shared/potQuantity.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -200,10 +201,17 @@ Deno.serve(async (req) => {
     const checkoutUrl = tracking.checkout_url || data.checkout_url || invoice.checkout_url || queryParams.checkout_url || payload.checkout_url || null;
     const pageUrl = tracking.page_url || queryParams.page || data.page_url || payload.page_url || null;
 
+    const { quantity: potQty, source: potQtySource } = resolveQuantity({
+      offerName,
+      productName,
+    });
+
     const purchaseRecord = {
       organization_id:        "00000000-0000-0000-0000-000000000001",
       unified_customer_id:    unifiedCustomerId,
       platform:               "eduzz",
+      quantity:               potQty,
+      quantity_source:        potQtySource,
       platform_transaction_id: transactionHash,
       platform_order_id:      transactionHash,
       product_name:           productName,
