@@ -1,0 +1,61 @@
+-- ============================================================================
+-- REGISTRO: onboarding de infoprodutos no funil Infoprodutos (2026-06-12)
+-- ============================================================================
+-- Executado em prod via RPCs agent_* (ver docs/AGENT-RPCS-WZ.md).
+-- Funil: b4452a0a-1e4f-4e91-a53e-e873256e90c5 (Infoprodutos)
+-- Flow fonte dos clones: "Articulabem - Completo" (28 nós)
+-- Auditoria completa: SELECT * FROM agent_action_logs ORDER BY created_at;
+--
+-- Resultado: 20 produtos configurados, 28 mappings, 4 flows novos
+-- ("Entrega - Manual das Ervas para Dores", "Entrega - Programa Diabetes Sem
+-- Segredos", "Entrega - Despertar da Vida Plena", "Entrega - Portal Fluxo do
+-- Ser") — TODOS is_active=false aguardando revisão de copy + Cademi.
+--
+-- COM FLOW (recontact 90d) — chamadas no formato:
+--   SELECT agent_onboard_product(
+--     p_funnel_id => 'b4452a0a-1e4f-4e91-a53e-e873256e90c5',
+--     p_display_name => '<nome>', p_contains => '<CONTAINS>',
+--     p_raw_names => ARRAY[...], p_recontact_days => 90,
+--     p_source_flow_id => (SELECT id FROM wz_flows WHERE name='Articulabem - Completo'),
+--     p_text_replacements => '[
+--       {"from":"seu pote GRÁTIS do","to":"seu acesso ao"},
+--       {"from":"pote GRÁTIS do","to":"acesso ao"},
+--       {"from":"seu pote do","to":"seu acesso ao"},
+--       {"from":"separar seu pote","to":"liberar seu acesso"},
+--       {"from":"Articulabem","to":"<nome>"}]'::jsonb);
+--
+--   1. Manual das Ervas para Dores  | MANUAL DAS ERVAS       | 2 raw names
+--   2. Programa Diabetes Sem Segredos | DIABETES SEM SEGREDOS | 1
+--   3. Despertar da Vida Plena      | DESPERTAR DA VIDA      | 1
+--   4. Portal Fluxo do Ser          | FLUXO DO SER           | 1
+--
+-- SÓ MAPPING (sem flow):
+--   5. Apostilas do Erveiro   | APOSTILAS DO ERVEIRO | mensal+Anual | recontact NULL (assinatura)
+--   6. Revistas do Erveiro    | REVISTAS DO ERVEIRO  | mensal+Anual | NULL (assinatura)
+--   7. A Trilha do Despertar  | TRILHA DO DESPERTAR  | 2 variações  | NULL (assinatura)
+--   8. Mestre em Méis Medicinais | MÉIS MEDICINAIS   | 1 | 90
+--   9. Workshop Oficina das Ervas | OFICINA DAS ERVAS | 2 variações longas | 90 (não vende mais desde 2024-12)
+--  10. Pacote de Apostilas Tratamentos | PACOTE DE APOSTILAS | 1 | 90
+--  11. Limpeza Energética com as Ervas Sagradas | LIMPEZA ENERGÉTICA | 1 | 90
+--  12. Erveiro Master | ERVEIRO MASTER | "SUPER COMBO - Erveiro Master - VITALÍCIO" | 90
+--  13. Receitas de Xaropes Ancestrais | XAROPES ANCESTRAIS | 1 | 90
+--  14. Guia de Preparo de Tinturas de Ervas Medicinais → adicionado como raw name
+--      da config TINTURA já existente (agent_upsert_funnel_product).
+--
+-- AVISOS (relevantes na ATIVAÇÃO dos flows):
+--   • eduzz product_id 2216778 é compartilhado entre Apostilas e Revistas do
+--     Erveiro; 2028656 entre Portal Fluxo do Ser e Trilha do Despertar.
+--     O trigger do flow "Entrega - Portal Fluxo do Ser" usa esse id — se a
+--     Trilha voltar a vender pela Eduzz, dispararia também. Vendas Eduzz
+--     cessaram em 2026-03 (migração); ao ativar, conferir os product_ids
+--     ATUAIS do checkout (guru/ticto) e atualizar o filtro do trigger.
+--   • "Receitas de Xaropes Ancestrais" também casa o contains TINTURA
+--     (mesmo funil, mesmo prazo — inofensivo; mapping explícito aponta pra
+--     config própria).
+--   • Copy dos clones veio do Articulabem (produto físico) com substituições
+--     básicas ("pote GRÁTIS"→"acesso") — REVISAR antes de ativar; placeholders
+--     {{link_acesso}}/{{login_acesso}}/{{senha_acesso}} saem literais até a
+--     integração Cademi no wz-executor.
+--   • Fila restante (≥50 vendas/365d): só variantes Articulabem-potes (escopo
+--     do funil RECOMPRA - POTES) e um product_name vazio (artefato de import).
+-- ============================================================================
