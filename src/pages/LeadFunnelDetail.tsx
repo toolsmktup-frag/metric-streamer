@@ -13,6 +13,7 @@ import { useLeadProductMappings, useDistinctLeadProducts, useSaveLeadProductMapp
 import { useRecontactDeadlines } from '@/hooks/useRecontactDeadlines';
 import { useMoveLeadStage } from '@/hooks/useMoveLeadStage';
 import { useCurrentUserRole } from '@/hooks/useCurrentUserRole';
+import { useMyPermissions } from '@/hooks/useUserPermissions';
 import { useHasFunnelAccess } from '@/hooks/useLeadFunnelAccess';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -51,6 +52,10 @@ const LeadFunnelDetail: React.FC = () => {
   const { data: funnel, isLoading } = useLeadFunnel(id ?? null);
   const { data: userRole = 'vendedor' } = useCurrentUserRole();
   const isAdmin = userRole === 'admin' || userRole === 'gestor';
+  const { data: myPerms } = useMyPermissions();
+  // Vendedor com a permissão "Funil avançado" (página Equipe) vê todas as abas;
+  // ações destrutivas (ex.: Limpar Funil) continuam restritas a admin/gestor
+  const canAdvancedTabs = isAdmin || !!myPerms?.mod_funil_avancado;
   const { data: campaign } = useLeadCampaign(funnel?.campaign_id ?? null);
   const { data: allCampaigns = [] } = useLeadCampaigns();
   const { data: allLeadFunnels = [] } = useLeadFunnels();
@@ -348,6 +353,7 @@ const LeadFunnelDetail: React.FC = () => {
           <span className="text-xs bg-destructive/10 text-destructive px-2 py-1 rounded">Inativo</span>
         )}
         <div className="ml-auto flex items-center gap-2">
+          {isAdmin && (
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button variant="outline" size="sm" className="gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/10">
@@ -374,6 +380,7 @@ const LeadFunnelDetail: React.FC = () => {
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
+          )}
           <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setImportTrafficOpen(true)}>
             <TrendingUp className="h-4 w-4" />
             Do funil de tráfego
@@ -398,11 +405,11 @@ const LeadFunnelDetail: React.FC = () => {
             <TabsTrigger value="kanban">Kanban</TabsTrigger>
           )}
           <TabsTrigger value="visual">Funil</TabsTrigger>
-          {isAdmin && <TabsTrigger value="flow">Flow Editor</TabsTrigger>}
-          {isAdmin && <TabsTrigger value="metrics">Métricas</TabsTrigger>}
-          {isAdmin && <TabsTrigger value="config">Configuração</TabsTrigger>}
-          {isAdmin && <TabsTrigger value="automations">Automações</TabsTrigger>}
-          {isAdmin && <TabsTrigger value="webhook">Webhook</TabsTrigger>}
+          {canAdvancedTabs && <TabsTrigger value="flow">Flow Editor</TabsTrigger>}
+          {canAdvancedTabs && <TabsTrigger value="metrics">Métricas</TabsTrigger>}
+          {canAdvancedTabs && <TabsTrigger value="config">Configuração</TabsTrigger>}
+          {canAdvancedTabs && <TabsTrigger value="automations">Automações</TabsTrigger>}
+          {canAdvancedTabs && <TabsTrigger value="webhook">Webhook</TabsTrigger>}
         </TabsList>
 
         {isBaseFunnel ? (
@@ -437,7 +444,7 @@ const LeadFunnelDetail: React.FC = () => {
           <FunnelVisual stages={stages} leadCounts={leadCounts} historicalCounts={historicalLeadCounts} />
         </TabsContent>
 
-        {isAdmin && (
+        {canAdvancedTabs && (
           <TabsContent value="flow" className="mt-4">
             <FunnelFlowEditor
               stages={stages}
@@ -455,13 +462,13 @@ const LeadFunnelDetail: React.FC = () => {
           </TabsContent>
         )}
 
-        {isAdmin && (
+        {canAdvancedTabs && (
           <TabsContent value="metrics" className="mt-4">
             <FunnelMetricsTab stages={stages} positions={positions} funnelId={funnel.id} historicalCounts={historicalLeadCounts} />
           </TabsContent>
         )}
 
-        {isAdmin && (
+        {canAdvancedTabs && (
           <TabsContent value="config" className="mt-4">
             <FunnelConfigTab
               funnelId={funnel.id}
@@ -563,13 +570,13 @@ const LeadFunnelDetail: React.FC = () => {
           </TabsContent>
         )}
 
-        {isAdmin && (
+        {canAdvancedTabs && (
           <TabsContent value="automations" className="mt-4">
             <FunnelAutomationsTab funnelId={funnel.id} funnelName={funnel.name} />
           </TabsContent>
         )}
 
-        {isAdmin && (
+        {canAdvancedTabs && (
           <TabsContent value="webhook" className="mt-4">
             <WebhookConfig funnel={funnel} />
           </TabsContent>
