@@ -113,10 +113,19 @@ const LeadTimeline: React.FC<LeadTimelineProps> = ({ lead, open, onClose }) => {
     supabase.auth.getUser().then(({ data }) => setCurrentUid(data.user?.id ?? undefined));
   }, []);
 
-  const sortedEvents = useMemo(
-    () => [...events].sort((a, b) => getEventDate(a).getTime() - getEventDate(b).getTime()).reverse(),
-    [events],
-  );
+  const sortedEvents = useMemo(() => {
+    // O mesmo evento é gravado em mais de um funil (BASE DE LEADS + funil do
+    // produto) — colapsa por transação+nome para não duplicar na timeline
+    const seen = new Set<string>();
+    const unique = events.filter(ev => {
+      const txn = (ev.metadata as any)?.transaction_id;
+      const key = `${ev.event_name}|${txn || ev.created_at}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    return unique.sort((a, b) => getEventDate(a).getTime() - getEventDate(b).getTime()).reverse();
+  }, [events]);
 
   return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
