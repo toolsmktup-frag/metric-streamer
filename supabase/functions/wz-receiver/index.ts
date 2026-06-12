@@ -1,3 +1,4 @@
+// v2.2.0 - funnel scope filter resolve LEAD funnels (fix: automações mortas desde 2026-06-10) + respeita trigger.disabled
 // v2.1.0 - atomic dedup by external event id + improved Guru parsing
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -345,6 +346,9 @@ function detectPlatform(body: Record<string, any>, url: URL): string {
 // ─── Match trigger nodes ───
 
 function matchesTrigger(triggerData: Record<string, any>, event: NormalizedEvent): boolean {
+  // Triggers desativados no editor não disparam (v2.2.0 — antes era ignorado)
+  if (triggerData.disabled === true) return false;
+
   const triggerType = triggerData.triggerType;
 
   // "any_event" matches everything
@@ -466,11 +470,13 @@ Deno.serve(async (req) => {
       return jsonResponse({ message: "No active flows", matched: 0 });
     }
 
-    // ─── FUNNEL SCOPE FILTER ───
+    // ─── FUNNEL SCOPE FILTER (v2.2.0) ───
     // If a flow is linked to one or more funnels via lead_funnel_automations,
-    // the event's product_id MUST belong to one of those funnels (via
-    // lead_funnel_products). This prevents an "Influencers" flow from firing
-    // on an "Articulabem" purchase just because both share the same trigger type.
+    // the event MUST belong to one of those funnels. lead_funnel_automations
+    // references LEAD funnels (lead_funnels), so scope is resolved against the
+    // lead-funnel mapping tables — the same resolution sync_lead_from_sale uses.
+    // (v2.1.0 resolved against funnel_products/funnels — TRAFFIC funnel ids —
+    // which never intersect lead funnel ids, so every linked flow was skipped.)
     const flowIds = flows.map((f: any) => f.id);
     const { data: funnelLinks } = await supabase
       .from("lead_funnel_automations")
@@ -485,14 +491,53 @@ Deno.serve(async (req) => {
     }
 
     const eventFunnelIds = new Set<string>();
+
+    // (a) Caller-declared funnel: webhook-lead validates X-Funnel-Token and
+    // forwards metadata.funnel_id — trust it (internal service-role call).
+    const declaredFunnelId = body?.metadata?.funnel_id;
+    if (declaredFunnelId) eventFunnelIds.add(String(declaredFunnelId));
+
+    // (b) product_id → traffic funnels (legacy) + lead funnels linked via
+    // lead_funnel_products.source_funnel_product_id
     if (event.product_id) {
       const { data: prodLinks } = await supabase
         .from("funnel_products")
-        .select("funnel_id")
+        .select("id, funnel_id")
         .eq("product_id", String(event.product_id));
-      for (const r of (prodLinks || []) as any[]) eventFunnelIds.add(r.funnel_id);
+      const fpIds: string[] = [];
+      for (const r of (prodLinks || []) as any[]) {
+        eventFunnelIds.add(r.funnel_id);
+        fpIds.push(r.id);
+      }
+      if (fpIds.length > 0) {
+        const { data: lfpBySource } = await supabase
+          .from("lead_funnel_products")
+          .select("lead_funnel_id")
+          .in("source_funnel_product_id", fpIds);
+        for (const r of (lfpBySource || []) as any[]) eventFunnelIds.add(r.lead_funnel_id);
+      }
     }
-    console.log(`[wz-receiver] Funnel scope: product=${event.product_id} belongs to funnels=[${[...eventFunnelIds].join(",")}]`);
+
+    // (c) product_name → lead funnels (paridade com sync_lead_from_sale:
+    // igualdade case-insensitive em lead_product_mappings + contains em
+    // lead_funnel_products)
+    if (event.product_name) {
+      const { data: nameMaps } = await supabase
+        .from("lead_product_mappings")
+        .select("lead_funnel_id")
+        .ilike("raw_product_name", event.product_name);
+      for (const r of (nameMaps || []) as any[]) eventFunnelIds.add(r.lead_funnel_id);
+
+      const { data: lfpAll } = await supabase
+        .from("lead_funnel_products")
+        .select("lead_funnel_id, product_name_contains");
+      const pname = event.product_name.toLowerCase();
+      for (const r of (lfpAll || []) as any[]) {
+        const frag = (r.product_name_contains || "").toLowerCase();
+        if (frag && pname.includes(frag)) eventFunnelIds.add(r.lead_funnel_id);
+      }
+    }
+    console.log(`[wz-receiver] Funnel scope: product=${event.product_id}/"${event.product_name}" declared=${declaredFunnelId || "-"} belongs to funnels=[${[...eventFunnelIds].join(",")}]`);
 
     // ─── Auto-cancel: compra aprovada cancela execuções pendentes de pré-venda ───
     const preSaleTriggers = ["pix_generated", "boleto_generated", "cart_abandoned", "pix_expired", "payment_refused"];
