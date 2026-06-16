@@ -3,12 +3,12 @@ import {
   Zap, MessageCircle, Clock, GitBranch, XCircle, Ban,
   ShoppingCart, CreditCard, FileText, Timer, AlertTriangle,
   RotateCcw, X, ShoppingBag, Sparkles, StickyNote, Wrench,
-  Split, CalendarClock, Globe, Tag, CornerDownRight, Columns3,
+  Split, CalendarClock, Globe, Tag, CornerDownRight, Columns3, UserPlus,
 } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 export interface WzDragData {
-  nodeType: 'trigger' | 'whatsapp' | 'timer' | 'condition' | 'stop' | 'note' | 'ab_split' | 'smart_delay' | 'webhook' | 'tag' | 'goto' | 'move_stage';
+  nodeType: 'trigger' | 'whatsapp' | 'timer' | 'condition' | 'stop' | 'note' | 'ab_split' | 'smart_delay' | 'webhook' | 'tag' | 'goto' | 'move_stage' | 'manychat';
   triggerType?: string;
   stopType?: string;
   label: string;
@@ -33,6 +33,7 @@ const actions: { nodeType: WzDragData['nodeType']; label: string; icon: React.Re
   { nodeType: 'ab_split', label: 'Divisor / Roteador', icon: <Split className="h-4 w-4" />, color: '#8b5cf6' },
   { nodeType: 'smart_delay', label: 'Delay Inteligente', icon: <CalendarClock className="h-4 w-4" />, color: '#14b8a6' },
   { nodeType: 'webhook', label: 'Webhook HTTP', icon: <Globe className="h-4 w-4" />, color: '#6366f1' },
+  { nodeType: 'manychat', label: 'ManyChat (criar + tag)', icon: <UserPlus className="h-4 w-4" />, color: '#0084ff' },
   { nodeType: 'tag', label: 'Marcar Lead / Tag', icon: <Tag className="h-4 w-4" />, color: '#10b981' },
   { nodeType: 'move_stage', label: 'Mover para coluna', icon: <Columns3 className="h-4 w-4" />, color: '#f97316' },
   { nodeType: 'goto', label: 'Pular para (Goto)', icon: <CornerDownRight className="h-4 w-4" />, color: '#06b6d4' },
