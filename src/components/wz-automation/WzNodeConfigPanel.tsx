@@ -16,6 +16,7 @@ import { useWzInstances } from '@/hooks/useWzInstances';
 import { useTeamMembers } from '@/hooks/useTeamMembers';
 import { useFunnels } from '@/hooks/useFunnels';
 import { useLeadFunnelStages } from '@/hooks/useLeadFunnelStages';
+import { useManyChatTags } from '@/hooks/useManyChatTags';
 import { triggerLabels } from './nodes/WzTriggerNode';
 import WzProductSelector from './WzProductSelector';
 import type { Node } from '@xyflow/react';
@@ -83,7 +84,7 @@ const WzNodeConfigPanel: React.FC<WzNodeConfigPanelProps> = ({
       <SheetContent className="w-[400px] sm:w-[440px] overflow-y-auto">
         <SheetHeader>
           <SheetTitle className="text-foreground">
-            Configurar {nodeType === 'trigger' ? 'Gatilho' : nodeType === 'whatsapp' ? 'WhatsApp' : nodeType === 'timer' ? 'Timer' : nodeType === 'condition' ? 'Condição' : nodeType === 'note' ? 'Anotação' : nodeType === 'ab_split' ? 'Divisor A/B' : nodeType === 'smart_delay' ? 'Delay Inteligente' : nodeType === 'webhook' ? 'Webhook' : nodeType === 'tag' ? 'Tag' : nodeType === 'goto' ? 'Goto' : nodeType === 'move_stage' ? 'Mover para coluna' : 'Nó'}
+            Configurar {nodeType === 'trigger' ? 'Gatilho' : nodeType === 'whatsapp' ? 'WhatsApp' : nodeType === 'timer' ? 'Timer' : nodeType === 'condition' ? 'Condição' : nodeType === 'note' ? 'Anotação' : nodeType === 'ab_split' ? 'Divisor A/B' : nodeType === 'smart_delay' ? 'Delay Inteligente' : nodeType === 'webhook' ? 'Webhook' : nodeType === 'tag' ? 'Tag' : nodeType === 'goto' ? 'Goto' : nodeType === 'move_stage' ? 'Mover para coluna' : nodeType === 'manychat' ? 'ManyChat' : 'Nó'}
           </SheetTitle>
         </SheetHeader>
 
@@ -138,6 +139,9 @@ const WzNodeConfigPanel: React.FC<WzNodeConfigPanelProps> = ({
 
           {/* TAG CONFIG */}
           {nodeType === 'tag' && <TagConfig data={data} update={update} />}
+
+          {/* MANYCHAT CONFIG */}
+          {nodeType === 'manychat' && <ManyChatConfig data={data} update={update} />}
 
           {/* GOTO CONFIG */}
           {nodeType === 'goto' && <GotoConfig data={data} update={update} node={node} />}
@@ -1018,6 +1022,38 @@ function TagConfig({ data, update }: { data: any; update: (k: string, v: any) =>
           placeholder="Ex: recuperado, vip, interessado"
         />
       </div>
+    </>
+  );
+}
+
+function ManyChatConfig({ data, update }: { data: any; update: (k: string, v: any) => void }) {
+  const { data: tags = [], isLoading } = useManyChatTags();
+  return (
+    <>
+      <div className="space-y-2">
+        <Label>Tag do ManyChat a aplicar</Label>
+        {tags.length > 0 ? (
+          <Select value={data.tagName || ''} onValueChange={(v) => update('tagName', v)}>
+            <SelectTrigger><SelectValue placeholder={isLoading ? 'Carregando...' : 'Escolha a tag'} /></SelectTrigger>
+            <SelectContent className="max-h-72">
+              {tags.map((t: any) => (
+                <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : (
+          <Input
+            value={data.tagName || ''}
+            onChange={(e) => update('tagName', e.target.value)}
+            placeholder={isLoading ? 'Carregando tags...' : 'Nome exato da tag no ManyChat'}
+          />
+        )}
+      </div>
+      <p className="text-[11px] text-muted-foreground">
+        Quando o lead passa por aqui, ele é <strong>criado ou localizado</strong> no ManyChat
+        (pelo telefone do lead) e recebe esta tag — que dispara a automação de lá. O telefone e o
+        nome do lead são usados automaticamente.
+      </p>
     </>
   );
 }

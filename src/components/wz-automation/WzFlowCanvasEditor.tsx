@@ -36,6 +36,7 @@ import WzWebhookNode from './nodes/WzWebhookNode';
 import WzTagNode from './nodes/WzTagNode';
 import WzGotoNode from './nodes/WzGotoNode';
 import WzMoveStageNode from './nodes/WzMoveStageNode';
+import WzManyChatNode from './nodes/WzManyChatNode';
 import { useWzFlow, useCreateWzFlow, useUpdateWzFlow } from '@/hooks/useWzFlows';
 import { useWzFlowNodeStats } from '@/hooks/useWzFlowNodeStats';
 
@@ -52,6 +53,7 @@ const nodeTypes: NodeTypes = {
   tag: WzTagNode,
   goto: WzGotoNode,
   move_stage: WzMoveStageNode,
+  manychat: WzManyChatNode,
 };
 
 const defaultEdgeOptions = {
@@ -291,6 +293,8 @@ export default function WzFlowCanvasEditor() {
       nodeData.stageId = '';
       nodeData.stageName = '';
       nodeData.registerEvent = true;
+    } else if (dragData.nodeType === 'manychat') {
+      nodeData.tagName = '';
     }
 
     const newNode: Node = {

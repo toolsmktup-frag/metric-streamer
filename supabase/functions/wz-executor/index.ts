@@ -506,6 +506,46 @@ Deno.serve(async (req) => {
           await logNodeEnd(supabase, logId, "skipped", { summary: "Sem tag ou telefone" });
         }
 
+      } else if (nodeType === "manychat") {
+        // Cria/atualiza o contato no ManyChat e aplica a tag (find-or-create + espelho),
+        // delegando toda a lógica para a função manychat-sync.
+        const tagName = nodeData.tagName;
+        const phone = execution.contact_phone;
+        if (!tagName) {
+          await logNodeEnd(supabase, logId, "skipped", { summary: "Sem tag configurada" });
+        } else if (!phone) {
+          await logNodeEnd(supabase, logId, "skipped", { summary: "Lead sem telefone" });
+        } else {
+          const baseUrl = Deno.env.get("SUPABASE_URL");
+          const syncSecret = Deno.env.get("MANYCHAT_SYNC_SECRET") || "";
+          try {
+            const res = await fetch(`${baseUrl}/functions/v1/manychat-sync`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${syncSecret}` },
+              body: JSON.stringify({
+                phone,
+                name: execution.contact_name || undefined,
+                email: execution.contact_email || undefined,
+                tag_name: tagName,
+              }),
+            });
+            const out = await res.json().catch(() => ({}));
+            if (res.ok && out?.ok) {
+              await logNodeEnd(supabase, logId, "success", {
+                summary: `ManyChat ${out.created ? "criado" : "ok"} + tag "${tagName}"`,
+                subscriber_id: out.subscriber_id,
+              });
+            } else {
+              await logNodeEnd(supabase, logId, "failed", {
+                summary: `ManyChat: ${out?.reason || out?.error || `HTTP ${res.status}`}`,
+                response: JSON.stringify(out).slice(0, 500),
+              }, `ManyChat ${res.status}`);
+            }
+          } catch (e) {
+            await logNodeEnd(supabase, logId, "failed", { summary: "ManyChat erro" }, String((e as Error)?.message || e));
+          }
+        }
+
       } else if (nodeType === "goto") {
         const targetNodeId = nodeData.targetNodeId;
         if (targetNodeId) {
