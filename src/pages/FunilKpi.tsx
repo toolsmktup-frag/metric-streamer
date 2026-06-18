@@ -428,17 +428,7 @@ export default function FunilKpi() {
   const simLucro = simRevenue - totals.spend;
   const simRoi = totals.spend > 0 ? ((simRevenue - totals.spend) / totals.spend) * 100 : 0;
 
-  // Month navigation
-  const goMonth = (delta: number) => {
-    let m = selectedMonth + delta;
-    let y = selectedYear;
-    if (m < 0) { m = 11; y--; }
-    if (m > 11) { m = 0; y++; }
-    setSelectedMonth(m);
-    setSelectedYear(y);
-  };
-
-  const isCurrentMonth = selectedYear === now.getFullYear() && selectedMonth === now.getMonth();
+  // Period is controlled by the global DateRangePicker.
 
   if (loadingMeta || loadingTicto) {
     return (
