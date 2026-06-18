@@ -228,11 +228,13 @@ function MetricCard({ label, value, sub, icon: Icon, color, tooltip }: {
 export default function FunilKpi() {
   const { id } = useParams<{ id: string }>();
   const { data: funnel } = useFunnel(id!);
-  const { dateRange } = useFilterStore();
 
-  const dateFrom = toLocalDate(dateRange.start);
-  const dateTo = toLocalDate(dateRange.end);
-  const allDays = useMemo(() => getDaysInRange(dateRange.start, dateRange.end), [dateRange.start, dateRange.end]);
+  const now = new Date();
+  const [selectedYear, setSelectedYear] = useState(now.getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState(now.getMonth());
+
+  const { start: dateFrom, end: dateTo } = getMonthRange(selectedYear, selectedMonth);
+  const allDays = getDaysInMonth(selectedYear, selectedMonth);
 
   // ─── Fetch Meta insights for the month (isolated by funnel) ───
   const { data: metaInsights = [], isLoading: loadingMeta } = useQuery({
@@ -428,7 +430,17 @@ export default function FunilKpi() {
   const simLucro = simRevenue - totals.spend;
   const simRoi = totals.spend > 0 ? ((simRevenue - totals.spend) / totals.spend) * 100 : 0;
 
-  // Period is controlled by the global DateRangePicker.
+  // Month navigation
+  const goMonth = (delta: number) => {
+    let m = selectedMonth + delta;
+    let y = selectedYear;
+    if (m < 0) { m = 11; y--; }
+    if (m > 11) { m = 0; y++; }
+    setSelectedMonth(m);
+    setSelectedYear(y);
+  };
+
+  const isCurrentMonth = selectedYear === now.getFullYear() && selectedMonth === now.getMonth();
 
   if (loadingMeta || loadingTicto) {
     return (
