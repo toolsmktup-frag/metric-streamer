@@ -228,13 +228,11 @@ function MetricCard({ label, value, sub, icon: Icon, color, tooltip }: {
 export default function FunilKpi() {
   const { id } = useParams<{ id: string }>();
   const { data: funnel } = useFunnel(id!);
+  const { dateRange } = useFilterStore();
 
-  const now = new Date();
-  const [selectedYear, setSelectedYear] = useState(now.getFullYear());
-  const [selectedMonth, setSelectedMonth] = useState(now.getMonth());
-
-  const { start: dateFrom, end: dateTo } = getMonthRange(selectedYear, selectedMonth);
-  const allDays = getDaysInMonth(selectedYear, selectedMonth);
+  const dateFrom = toLocalDate(dateRange.start);
+  const dateTo = toLocalDate(dateRange.end);
+  const allDays = useMemo(() => getDaysInRange(dateRange.start, dateRange.end), [dateRange.start, dateRange.end]);
 
   // ─── Fetch Meta insights for the month (isolated by funnel) ───
   const { data: metaInsights = [], isLoading: loadingMeta } = useQuery({
