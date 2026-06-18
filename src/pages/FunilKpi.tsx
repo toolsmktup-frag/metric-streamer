@@ -87,25 +87,18 @@ function getActionValue(actions: any[] | null, actionType: string): number {
   return action ? Number(action.value) : 0;
 }
 
-// ─── Month helpers ───
-const MONTH_NAMES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
-
-function getMonthRange(year: number, month: number) {
-  const start = `${year}-${String(month + 1).padStart(2, '0')}-01`;
-  const lastDay = new Date(year, month + 1, 0).getDate();
-  const end = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
-  return { start, end, lastDay };
-}
-
-function getDaysInMonth(year: number, month: number): string[] {
-  const today = new Date();
-  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-  const lastDay = new Date(year, month + 1, 0).getDate();
+// ─── Date range helpers ───
+function getDaysInRange(start: Date, end: Date): string[] {
   const days: string[] = [];
-  for (let d = 1; d <= lastDay; d++) {
-    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-    if (dateStr > todayStr) break;
-    days.push(dateStr);
+  const today = new Date();
+  const todayStr = toLocalDate(today);
+  const cur = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  const last = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+  while (cur.getTime() <= last.getTime()) {
+    const ds = toLocalDate(cur);
+    if (ds > todayStr) break;
+    days.push(ds);
+    cur.setDate(cur.getDate() + 1);
   }
   return days;
 }
