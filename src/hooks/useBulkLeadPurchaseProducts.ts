@@ -116,7 +116,7 @@ export function useBulkLeadPurchaseProducts(
 
       // 2) Fetch purchases for resolved customers in batches
       const customerIds = Array.from(customerIdToLeadIds.keys());
-      const purchasesByLead = new Map<string, Array<{ productName: string; date: string }>>();
+      const purchasesByLead = new Map<string, Array<{ productName: string; date: string; quantity?: number; quantitySource?: string }>>();
 
       for (let i = 0; i < customerIds.length; i += BATCH) {
         const chunk = customerIds.slice(i, i + BATCH);
