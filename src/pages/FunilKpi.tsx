@@ -14,7 +14,9 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useFunnel, type FunnelProduct } from '@/hooks/useFunnels';
 import { avgUnitPrice } from '@/lib/classifyTransaction';
-import { dayStartISO, dayEndISO } from '@/lib/dateUtils';
+import { dayStartISO, dayEndISO, toLocalDate } from '@/lib/dateUtils';
+import DateRangePicker from '@/components/dashboard/DateRangePicker';
+import { useFilterStore } from '@/stores/filterStore';
 
 type FunnelRole = FunnelProduct['role'];
 
@@ -85,25 +87,18 @@ function getActionValue(actions: any[] | null, actionType: string): number {
   return action ? Number(action.value) : 0;
 }
 
-// ─── Month helpers ───
-const MONTH_NAMES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
-
-function getMonthRange(year: number, month: number) {
-  const start = `${year}-${String(month + 1).padStart(2, '0')}-01`;
-  const lastDay = new Date(year, month + 1, 0).getDate();
-  const end = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
-  return { start, end, lastDay };
-}
-
-function getDaysInMonth(year: number, month: number): string[] {
-  const today = new Date();
-  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-  const lastDay = new Date(year, month + 1, 0).getDate();
+// ─── Date range helpers ───
+function getDaysInRange(start: Date, end: Date): string[] {
   const days: string[] = [];
-  for (let d = 1; d <= lastDay; d++) {
-    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-    if (dateStr > todayStr) break;
-    days.push(dateStr);
+  const today = new Date();
+  const todayStr = toLocalDate(today);
+  const cur = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  const last = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+  while (cur.getTime() <= last.getTime()) {
+    const ds = toLocalDate(cur);
+    if (ds > todayStr) break;
+    days.push(ds);
+    cur.setDate(cur.getDate() + 1);
   }
   return days;
 }
@@ -233,13 +228,11 @@ function MetricCard({ label, value, sub, icon: Icon, color, tooltip }: {
 export default function FunilKpi() {
   const { id } = useParams<{ id: string }>();
   const { data: funnel } = useFunnel(id!);
+  const { dateRange } = useFilterStore();
 
-  const now = new Date();
-  const [selectedYear, setSelectedYear] = useState(now.getFullYear());
-  const [selectedMonth, setSelectedMonth] = useState(now.getMonth());
-
-  const { start: dateFrom, end: dateTo } = getMonthRange(selectedYear, selectedMonth);
-  const allDays = getDaysInMonth(selectedYear, selectedMonth);
+  const dateFrom = toLocalDate(dateRange.start);
+  const dateTo = toLocalDate(dateRange.end);
+  const allDays = useMemo(() => getDaysInRange(dateRange.start, dateRange.end), [dateRange.start, dateRange.end]);
 
   // ─── Fetch Meta insights for the month (isolated by funnel) ───
   const { data: metaInsights = [], isLoading: loadingMeta } = useQuery({
@@ -435,17 +428,7 @@ export default function FunilKpi() {
   const simLucro = simRevenue - totals.spend;
   const simRoi = totals.spend > 0 ? ((simRevenue - totals.spend) / totals.spend) * 100 : 0;
 
-  // Month navigation
-  const goMonth = (delta: number) => {
-    let m = selectedMonth + delta;
-    let y = selectedYear;
-    if (m < 0) { m = 11; y--; }
-    if (m > 11) { m = 0; y++; }
-    setSelectedMonth(m);
-    setSelectedYear(y);
-  };
-
-  const isCurrentMonth = selectedYear === now.getFullYear() && selectedMonth === now.getMonth();
+  // Period is controlled by the global DateRangePicker.
 
   if (loadingMeta || loadingTicto) {
     return (
@@ -463,27 +446,13 @@ export default function FunilKpi() {
 
   return (
     <div className="space-y-6">
-      {/* Header + Month Picker */}
-      <div className="flex items-center justify-between">
+      {/* Header + Global Date Range */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           {funnel?.color && <span className="h-4 w-4 rounded-full shrink-0" style={{ backgroundColor: funnel.color }} />}
           <h1 className="text-2xl font-bold text-foreground">KPI — {funnel?.name || ''}</h1>
         </div>
-        <div className="flex items-center gap-2 bg-card border border-border rounded-xl px-2 py-1.5">
-          <button onClick={() => goMonth(-1)} className="p-1.5 rounded-lg hover:bg-muted transition-colors">
-            <ChevronLeft className="h-4 w-4 text-muted-foreground" />
-          </button>
-          <span className="text-sm font-semibold text-foreground min-w-[150px] text-center">
-            {MONTH_NAMES[selectedMonth]} de {selectedYear}
-          </span>
-          <button
-            onClick={() => goMonth(1)}
-            disabled={isCurrentMonth}
-            className="p-1.5 rounded-lg hover:bg-muted transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-          >
-            <ChevronRight className="h-4 w-4 text-muted-foreground" />
-          </button>
-        </div>
+        <DateRangePicker />
       </div>
 
       {/* ─── TOP KPIs ─── */}
@@ -801,7 +770,7 @@ export default function FunilKpi() {
         <div className="p-4 border-b border-border">
           <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
             <FileText className="h-4 w-4 text-primary" />
-            Dados Diários — {MONTH_NAMES[selectedMonth]} {selectedYear}
+            Dados Diários — {dateFrom} → {dateTo}
           </h3>
         </div>
         <div className="overflow-x-auto">
