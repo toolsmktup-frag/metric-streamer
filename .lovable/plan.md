@@ -1,31 +1,40 @@
-## Problema
+## Diagnóstico
 
-O botão **Exportar CSV** em `Todos os Leads` (`src/pages/LeadsList.tsx`) só exporta os 50 leads da página atual, porque usa o array `leads` vindo do `usePaginatedLeads` (paginado em `PAGE_SIZE = 50`). Por isso, mesmo com 1.423 leads filtrados, o CSV sai com apenas 50.
+Não é bug de dados — é **diferença de período entre as telas**:
 
-## Correção
+| Tela | Fonte do período | Como conta vendas |
+|---|---|---|
+| **Resumo** (`FunilResumo.tsx`) | `useFilterStore().dateRange` (ex.: "Hoje") | `totalSales.sales_count` de `useAllSalesAggregation` → todas as vendas `authorized` do funil no período |
+| **Campanhas** (`FunilCampanhas.tsx`) | mesmo `useFilterStore().dateRange` | mesma agregação, mas só vendas com `meta_campaign_id` (tráfego pago) |
+| **KPI do Funil** (`FunilKpi.tsx`) | **seletor próprio de MÊS** (`selectedMonth/selectedYear`, linhas 270–314) — ignora o `filterStore` | soma `vendas_principal + bump1 + upsell1/2/3` do **mês inteiro** |
 
-Refatorar `exportCSV` para buscar **todos os leads filtrados** antes de gerar o CSV, respeitando os filtros ativos (busca, funil, fonte).
+Por isso o KPI mostra 6 e o Resumo 3: a tela KPI está somando o mês de junho inteiro do Guia de Tinturas, enquanto o Resumo está limitado a "Hoje". As 3 extras são vendas anteriores do mês (principal + bumps + upsells) — não há duplicidade, classificação errada nem inconsistência de status.
 
-### Passos
+Confirmação rápida (opcional, sem mudar código): no FunilKpi, observe o seletor de mês no topo direito — ele controla totalmente os números daquela tela.
 
-1. Em `src/pages/LeadsList.tsx`:
-   - Tornar `exportCSV` assíncrono.
-   - Adicionar estado `isExporting` para desabilitar o botão e mostrar spinner enquanto roda.
-   - Chamar a RPC `search_leads_paginated` (mesma usada por `usePaginatedLeads`) com os filtros atuais (`debouncedSearch`, `funnelFilter`, `sourceFilter`), em **lotes de 1000** (`p_limit: 1000`, `p_offset` incremental) até trazer `total` registros — evita estourar limites do PostgREST/Supabase e segue o padrão de paginação do projeto.
-   - Concatenar todos os leads retornados e gerar o CSV com o mesmo cabeçalho/colunas atuais.
-   - Manter o cálculo de `Total Gasto` via `spentMap` já carregado (lookup por email).
+## Correção proposta
 
-2. UX:
-   - Botão mostra "Exportando..." com `Loader2` enquanto baixa.
-   - Toast (opcional) com `Exportados X leads` ao final, usando `useToast` já disponível no projeto.
+Unificar o período: fazer o FunilKpi também usar o `dateRange` global (`useFilterStore`), igual às outras duas telas. Assim, ao selecionar "Hoje", os 3 valores batem.
 
-### Detalhes técnicos
+### Mudanças em `src/pages/FunilKpi.tsx`
 
-- Não muda o hook `usePaginatedLeads` (continua paginando a tela em 50).
-- A chamada de export usa `(supabase as any).rpc('search_leads_paginated', { p_search, p_funnel_id, p_source, p_limit: 1000, p_offset })` diretamente dentro de `exportCSV`, em loop até `leads.length >= total`.
-- Sem alterações no backend (a RPC já suporta limit/offset).
-- Sem alterações em outras telas.
+1. Remover `selectedMonth`/`selectedYear` e o `MonthPicker` do header.
+2. Trocar `monthStart`/`monthEnd` por `dateRange.start`/`dateRange.end` vindo de `useFilterStore`.
+3. Atualizar `dateFrom`/`dateTo` (usados nas queries Meta e `v_all_sales`) para refletirem o intervalo global.
+4. Recalcular `allDays` a partir do intervalo do `dateRange` (em vez de "dias do mês").
+5. Trocar `daysWithData`/labels "X vendas/dia" para considerar o tamanho do período selecionado.
+6. Substituir o componente do seletor de mês pelo `DateRangePicker` global (mesmo usado em `FunilResumo`).
 
-### Arquivos afetados
+### O que NÃO mexer
 
-- `src/pages/LeadsList.tsx` (única alteração)
+- Lógica de classificação (`classifyByFunnelProducts`, slots).
+- Hooks de vendas (`v_all_sales`).
+- Resumo e Campanhas.
+
+## Resultado esperado
+
+- "Hoje" no filtro global → KPI, Resumo e Campanhas mostram exatamente o mesmo número (3).
+- "Este mês" no filtro global → KPI mostra os mesmos 6 que mostrava antes.
+- Sem mais "duas verdades" por causa de seletores de data diferentes.
+
+Quer que eu aplique essa unificação?
