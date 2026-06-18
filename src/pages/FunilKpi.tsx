@@ -20,6 +20,28 @@ import { useFilterStore } from '@/stores/filterStore';
 
 type FunnelRole = FunnelProduct['role'];
 
+const MONTH_NAMES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+
+function getMonthRange(year: number, month: number) {
+  const start = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+  const lastDay = new Date(year, month + 1, 0).getDate();
+  const end = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+  return { start, end, lastDay };
+}
+
+function getDaysInMonth(year: number, month: number): string[] {
+  const today = new Date();
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const lastDay = new Date(year, month + 1, 0).getDate();
+  const days: string[] = [];
+  for (let d = 1; d <= lastDay; d++) {
+    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    if (dateStr > todayStr) break;
+    days.push(dateStr);
+  }
+  return days;
+}
+
 /**
  * Classifica uma transação usando os funnel_products configurados no funil.
  * Faz match por ILIKE (case-insensitive contains) do product_name.
