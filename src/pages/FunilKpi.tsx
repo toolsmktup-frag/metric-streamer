@@ -446,13 +446,27 @@ export default function FunilKpi() {
 
   return (
     <div className="space-y-6">
-      {/* Header + Global Date Range */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      {/* Header + Month Picker */}
+      <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           {funnel?.color && <span className="h-4 w-4 rounded-full shrink-0" style={{ backgroundColor: funnel.color }} />}
           <h1 className="text-2xl font-bold text-foreground">KPI — {funnel?.name || ''}</h1>
         </div>
-        <DateRangePicker />
+        <div className="flex items-center gap-2 bg-card border border-border rounded-xl px-2 py-1.5">
+          <button onClick={() => goMonth(-1)} className="p-1.5 rounded-lg hover:bg-muted transition-colors">
+            <ChevronLeft className="h-4 w-4 text-muted-foreground" />
+          </button>
+          <span className="text-sm font-semibold text-foreground min-w-[150px] text-center">
+            {MONTH_NAMES[selectedMonth]} de {selectedYear}
+          </span>
+          <button
+            onClick={() => goMonth(1)}
+            disabled={isCurrentMonth}
+            className="p-1.5 rounded-lg hover:bg-muted transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          </button>
+        </div>
       </div>
 
       {/* ─── TOP KPIs ─── */}
@@ -770,7 +784,7 @@ export default function FunilKpi() {
         <div className="p-4 border-b border-border">
           <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
             <FileText className="h-4 w-4 text-primary" />
-            Dados Diários — {dateFrom} → {dateTo}
+            Dados Diários — {MONTH_NAMES[selectedMonth]} {selectedYear}
           </h3>
         </div>
         <div className="overflow-x-auto">
