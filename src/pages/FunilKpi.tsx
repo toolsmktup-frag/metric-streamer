@@ -14,7 +14,9 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useFunnel, type FunnelProduct } from '@/hooks/useFunnels';
 import { avgUnitPrice } from '@/lib/classifyTransaction';
-import { dayStartISO, dayEndISO } from '@/lib/dateUtils';
+import { dayStartISO, dayEndISO, toLocalDate } from '@/lib/dateUtils';
+import DateRangePicker from '@/components/dashboard/DateRangePicker';
+import { useFilterStore } from '@/stores/filterStore';
 
 type FunnelRole = FunnelProduct['role'];
 
