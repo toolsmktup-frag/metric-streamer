@@ -183,6 +183,17 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Ignorar eventos de TENTATIVA de cobranca de assinatura recorrente da Eduzz/myeduzz
+    // (contract_card_attempted / contract_pix_attempted / contract_bankslip_attempted):
+    // a Eduzz envia esses webhooks para este endpoint, mas nao sao vendas — sem produto e R$0.
+    if (typeof payload.event === "string" && /contract_\w*_attempted/i.test(payload.event)) {
+      console.log("[ticto-webhook] Evento de tentativa de cobranca ignorado:", payload.event);
+      return new Response(JSON.stringify({ success: true, message: "contract attempt ignored" }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const tracking = payload.tracking || invoice.tracking || invoice.utm_data || payload.utm_data || payload.source || {};
     const queryParams = payload.query_params || {};
     const contract = payload.contract || {};

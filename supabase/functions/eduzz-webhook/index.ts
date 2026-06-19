@@ -96,6 +96,14 @@ Deno.serve(async (req) => {
       return jsonResponse({ success: true, message: "ping ok" });
     }
 
+    // Ignorar eventos de TENTATIVA de cobranca de assinatura recorrente
+    // (contract_card_attempted / contract_pix_attempted / contract_bankslip_attempted):
+    // nao sao vendas novas — chegam sem produto e R$0, poluindo as vendas.
+    if (typeof payload.event === "string" && /contract_\w*_attempted/i.test(payload.event)) {
+      console.log("Evento de tentativa de cobranca ignorado (nao e venda):", payload.event);
+      return jsonResponse({ success: true, message: "contract attempt ignored" });
+    }
+
     const data     = payload.data     || {};
     const invoice  = data.invoice     || {};
     const customer = data.customer    || {};
