@@ -314,6 +314,16 @@ Deno.serve(async (req) => {
       }
     }
 
+    // 🔒 Anti-injeção: aceita se (a) token de URL resolveu funil OU (b) api_token bate em guru_accounts.
+    if (!funnelId && !guruAccountSlug) {
+      console.warn("[guru-webhook] Rejeitado: sem token válido nem api_token reconhecido");
+      return new Response(JSON.stringify({ error: "Invalid or missing webhook credentials" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+
     const { quantity: potQty, source: potQtySource } = resolveQuantity({
       offerName: product.offer?.name || product.offer_name || product.plan_name || null,
       productName,
