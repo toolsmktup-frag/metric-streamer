@@ -23,4 +23,7 @@ window.addEventListener('unhandledrejection', (event) => {
   }
 });
 
+// build marker — usado para confirmar que o deploy mais recente subiu (pode remover depois)
+console.info('metric-streamer BUILD-2026-06-19-vendas');
+
 createRoot(document.getElementById("root")!).render(<App />);
