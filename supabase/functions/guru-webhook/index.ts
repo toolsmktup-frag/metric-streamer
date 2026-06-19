@@ -188,7 +188,9 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase    = createClient(supabaseUrl, supabaseKey);
 
-    // Resolve funnel_id: primeiro por token na URL, depois por product name ILIKE
+    // Resolve funnel_id: primeiro por token na URL, depois por produto (nome/id).
+    // Se nenhum funil for resolvido, a venda é aceita mesmo assim (funnel_id = null)
+    // para aparecer no Resumo Geral — produtos sem funil dedicado (ex.: RevitaSoul).
     const urlToken = new URL(req.url).searchParams.get("token");
     let funnelId: string | null = null;
 
@@ -211,18 +213,13 @@ Deno.serve(async (req) => {
           .maybeSingle();
         funnelId = byLegacy?.id ?? null;
       }
+
+      if (!urlToken || !funnelId) {
+        console.warn(`[guru-webhook] token "${urlToken}" não casou com nenhum funil — seguindo sem funnel_id`);
+      }
     }
 
-    // 🔒 Webhook token obrigatório e válido — anti-injeção de vendas falsas.
-    // Todos os funis guru têm webhook_token configurado; payloads sem token válido são rejeitados.
-    if (!funnelId) {
-      console.warn("[guru-webhook] Rejeitado: webhook_token ausente ou inválido");
-      return new Response(JSON.stringify({ error: "Invalid or missing webhook token" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
+    // 3. Fallback por produto (nome/id) quando não veio token ou token não casou
     if (!funnelId && (productName || product.id || product.product_id || product.marketplace_id)) {
       const earlyProductId = String(product.id || product.product_id || product.marketplace_id || "") || null;
       const { data } = await supabase.rpc("resolve_funnel_id", {
@@ -231,6 +228,10 @@ Deno.serve(async (req) => {
       });
       funnelId = data || null;
     }
+
+    // 🔒 Anti-injeção: exigimos api_token válido (resolvido em guru_accounts logo abaixo)
+    // OU funnelId resolvido por token de URL. Sem nenhum dos dois, rejeitamos.
+    // A validação final do api_token acontece após o lookup em guru_accounts.
 
     const customerPhone = customer.phone || customer.telephone || customer.phone_number
       ? `${customer.phone_local_code || ""}${customer.phone || customer.telephone || customer.phone_number || ""}`
@@ -312,6 +313,16 @@ Deno.serve(async (req) => {
         console.error("guru_accounts lookup failed (non-fatal):", e);
       }
     }
+
+    // 🔒 Anti-injeção: aceita se (a) token de URL resolveu funil OU (b) api_token bate em guru_accounts.
+    if (!funnelId && !guruAccountSlug) {
+      console.warn("[guru-webhook] Rejeitado: sem token válido nem api_token reconhecido");
+      return new Response(JSON.stringify({ error: "Invalid or missing webhook credentials" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
 
     const { quantity: potQty, source: potQtySource } = resolveQuantity({
       offerName: product.offer?.name || product.offer_name || product.plan_name || null,
