@@ -69,6 +69,26 @@ async function findBySystemPhone(token: string, phone: string): Promise<string |
   return null;
 }
 
+/**
+ * Fallback decisivo p/ contatos de WhatsApp LEGADOS (existem mas sem `phone` nem
+ * espelho `wa_busca`): busca por NOME — única chamada que devolve o `whatsapp_phone`
+ * preenchido — e casa pelos últimos 8 dígitos do número. Resolve o 409
+ * `legacy_unfindable` para quem tem nome cadastrado no ManyChat.
+ */
+async function findByName(token: string, name: string, phone: string): Promise<string | null> {
+  const url = `${MC_BASE}/fb/subscriber/findByName?name=${encodeURIComponent(name)}`;
+  const res = await fetch(url, { headers: mcHeaders(token) });
+  if (!res.ok) return null;
+  const json = await res.json().catch(() => ({}));
+  const list = Array.isArray(json?.data) ? json.data : [];
+  const last8 = phone.slice(-8);
+  for (const s of list) {
+    const wp = String(s?.whatsapp_phone ?? "").replace(/\D/g, "");
+    if (wp && wp.slice(-8) === last8 && s?.id) return String(s.id);
+  }
+  return null;
+}
+
 async function createSubscriber(token: string, phone: string, name?: string, email?: string) {
   const body: Record<string, unknown> = {
     whatsapp_phone: phone,
@@ -172,8 +192,10 @@ Deno.serve(async (req) => {
     subscriberId = await findByCustomField(token, phone);
     // 2) fallback — campo `phone` do sistema (pega legados com phone preenchido)
     if (!subscriberId) subscriberId = await findBySystemPhone(token, phone);
+    // 3) fallback — legados de WhatsApp: busca por nome e casa pelo whatsapp_phone
+    if (!subscriberId && name) subscriberId = await findByName(token, name, phone);
 
-    // 3) não achou em lugar nenhum → cria
+    // 4) não achou em lugar nenhum → cria
     if (!subscriberId) {
       const c = await createSubscriber(token, phone, name, email);
       if (c.ok) {
