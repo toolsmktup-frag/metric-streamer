@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import {
@@ -21,8 +21,9 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
+import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card';
 import {
-  Package, Search, Loader2, FileDown, FileText, Truck, Send, MapPin, ExternalLink, Pencil,
+  Package, Search, Loader2, FileDown, FileText, Truck, Send, MapPin, ExternalLink, Pencil, HelpCircle,
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -229,27 +230,34 @@ function ShipmentRow({ shipment, onEditAddress }: { shipment: OrderShipment; onE
 /* ── Legenda fixa dos status ── */
 function LegendItem({ cls, label, desc }: { cls: string; label: string; desc?: string }) {
   return (
-    <span className="inline-flex items-center gap-1.5">
-      <Badge className={`${cls} border-transparent`}>{label}</Badge>
+    <div className="flex items-center gap-2">
+      <Badge className={`${cls} border-transparent shrink-0`}>{label}</Badge>
       {desc && <span className="text-muted-foreground">{desc}</span>}
-    </span>
+    </div>
   );
 }
 
-function LegendBar() {
+function LegendContent() {
   return (
-    <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs flex flex-wrap items-center gap-x-4 gap-y-2">
-      <span className="font-semibold text-muted-foreground uppercase tracking-wide">Disparo:</span>
-      <LegendItem cls="bg-amber-500/15 text-amber-600" label="Aguardando rastreio" desc="pago, falta colar o código" />
-      <LegendItem cls="bg-blue-500/15 text-blue-600" label="Na fila" desc="vai disparar no WhatsApp" />
-      <LegendItem cls="bg-green-500/15 text-green-600" label="Enviado" desc="rastreio enviado" />
-      <LegendItem cls="bg-destructive/15 text-destructive" label="Falhou" desc="erro no envio" />
-      <span className="h-4 w-px bg-border" />
-      <span className="font-semibold text-muted-foreground uppercase tracking-wide">Entrega (Correios):</span>
-      <LegendItem cls="bg-blue-500/15 text-blue-600" label="Em trânsito" />
-      <LegendItem cls="bg-amber-500/15 text-amber-600" label="Saiu p/ entrega" />
-      <LegendItem cls="bg-green-500/15 text-green-600" label="Entregue" />
-      <LegendItem cls="bg-destructive/15 text-destructive" label="Devolvido" />
+    <div className="space-y-3 text-xs">
+      <div>
+        <p className="font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Disparo (WhatsApp)</p>
+        <div className="space-y-1.5">
+          <LegendItem cls="bg-amber-500/15 text-amber-600" label="Aguardando rastreio" desc="pago, falta colar o código" />
+          <LegendItem cls="bg-blue-500/15 text-blue-600" label="Na fila" desc="vai disparar no WhatsApp" />
+          <LegendItem cls="bg-green-500/15 text-green-600" label="Enviado" desc="rastreio enviado ao cliente" />
+          <LegendItem cls="bg-destructive/15 text-destructive" label="Falhou" desc="erro no envio" />
+        </div>
+      </div>
+      <div>
+        <p className="font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Entrega (Correios)</p>
+        <div className="space-y-1.5">
+          <LegendItem cls="bg-blue-500/15 text-blue-600" label="Em trânsito" />
+          <LegendItem cls="bg-amber-500/15 text-amber-600" label="Saiu p/ entrega" />
+          <LegendItem cls="bg-green-500/15 text-green-600" label="Entregue" />
+          <LegendItem cls="bg-destructive/15 text-destructive" label="Devolvido" />
+        </div>
+      </div>
     </div>
   );
 }
@@ -317,6 +325,11 @@ const Rastreios: React.FC = () => {
   const [page, setPage] = useState(1);
   const [editing, setEditing] = useState<OrderShipment | null>(null);
 
+  // Scroll horizontal sincronizado (barra no topo + a nativa embaixo)
+  const tableRef = useRef<HTMLTableElement>(null);
+  const topScrollRef = useRef<HTMLDivElement>(null);
+  const [scrollW, setScrollW] = useState(1600);
+
   useEffect(() => {
     const t = setTimeout(() => { setDebounced(search); setPage(1); }, 300);
     return () => clearTimeout(t);
@@ -341,6 +354,24 @@ const Rastreios: React.FC = () => {
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [queryClient]);
+
+  // Sincroniza a barra de rolagem do topo com o container da tabela
+  useEffect(() => {
+    const container = tableRef.current?.parentElement; // div.overflow-auto do <Table>
+    if (!container) return;
+    const measure = () => setScrollW(container.scrollWidth);
+    measure();
+    const onScroll = () => { if (topScrollRef.current) topScrollRef.current.scrollLeft = container.scrollLeft; };
+    container.addEventListener('scroll', onScroll);
+    const ro = new ResizeObserver(measure);
+    ro.observe(container);
+    return () => { container.removeEventListener('scroll', onScroll); ro.disconnect(); };
+  }, [shipments.length, isLoading]);
+
+  const onTopScroll = () => {
+    const container = tableRef.current?.parentElement;
+    if (container && topScrollRef.current) container.scrollLeft = topScrollRef.current.scrollLeft;
+  };
 
   const tabCount = useMemo(() => ({
     pendentes: counts?.aguardando_rastreio ?? 0,
@@ -382,19 +413,39 @@ const Rastreios: React.FC = () => {
         })}
       </div>
 
-      {/* Busca */}
-      <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Buscar por nome, telefone, e-mail, rastreio ou NF..."
-          className="pl-9"
-        />
+      {/* Busca + legenda */}
+      <div className="flex items-center gap-3">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar por nome, telefone, e-mail, rastreio ou NF..."
+            className="pl-9"
+          />
+        </div>
+        <HoverCard openDelay={80} closeDelay={80}>
+          <HoverCardTrigger asChild>
+            <button className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground hover:bg-muted transition-colors shrink-0">
+              <HelpCircle className="h-4 w-4" /> Legenda
+            </button>
+          </HoverCardTrigger>
+          <HoverCardContent align="end" className="w-72">
+            <LegendContent />
+          </HoverCardContent>
+        </HoverCard>
       </div>
 
-      {/* Legenda */}
-      <LegendBar />
+      {/* Barra de rolagem horizontal no topo (sincronizada com a tabela) */}
+      {!isLoading && shipments.length > 0 && (
+        <div
+          ref={topScrollRef}
+          onScroll={onTopScroll}
+          className="overflow-x-auto [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 [&::-webkit-scrollbar-track]:bg-transparent"
+        >
+          <div style={{ width: scrollW }} className="h-px" />
+        </div>
+      )}
 
       <Card>
         <CardContent className="p-0">
@@ -407,7 +458,7 @@ const Rastreios: React.FC = () => {
               Nenhum pedido {status === 'pendentes' ? 'pendente de rastreio' : 'encontrado'}.
             </div>
           ) : (
-            <Table className="min-w-[1600px]">
+            <Table ref={tableRef} className="min-w-[1600px]">
               <TableHeader>
                 <TableRow>
                   <TableHead>Cliente</TableHead>
