@@ -15,6 +15,8 @@ export interface OrderShipment {
   product_name: string | null;
   quantity: number;
   purchased_at: string | null;
+  planilha_shipped_at: string | null;
+  source: string | null;
   frete_value: number | null;
   logistica_value: number | null;
   ship_street: string | null;

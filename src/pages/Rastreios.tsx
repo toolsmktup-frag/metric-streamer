@@ -136,7 +136,14 @@ function ShipmentRow({ shipment, onEditAddress }: { shipment: OrderShipment; onE
 
   return (
     <TableRow>
-      <TableCell className="whitespace-nowrap font-medium text-foreground">{shipment.customer_name || '—'}</TableCell>
+      <TableCell className="whitespace-nowrap font-medium text-foreground">
+        {shipment.customer_name || '—'}
+        {shipment.source === 'planilha' && (
+          <span className="ml-1.5 rounded bg-muted px-1.5 py-0.5 text-[10px] font-normal text-muted-foreground align-middle" title="Importado da planilha (histórico)">
+            planilha
+          </span>
+        )}
+      </TableCell>
       <TableCell className="whitespace-nowrap text-xs text-muted-foreground">{shipment.customer_phone || '—'}</TableCell>
       <TableCell className="whitespace-nowrap text-xs text-muted-foreground">{shipment.customer_cpf || '—'}</TableCell>
       <TableCell className="max-w-[200px] truncate text-xs text-muted-foreground" title={shipment.customer_email || ''}>
@@ -148,7 +155,7 @@ function ShipmentRow({ shipment, onEditAddress }: { shipment: OrderShipment; onE
         <span className="ml-1 text-xs text-muted-foreground">×{shipment.quantity}</span>
       </TableCell>
 
-      <TableCell className="whitespace-nowrap text-xs text-muted-foreground">{fmtDate(shipment.purchased_at)}</TableCell>
+      <TableCell className="whitespace-nowrap text-xs text-muted-foreground">{fmtDate(shipment.purchased_at || shipment.planilha_shipped_at)}</TableCell>
 
       <TableCell className="max-w-[240px]">
         <div className="flex items-start gap-1.5">
