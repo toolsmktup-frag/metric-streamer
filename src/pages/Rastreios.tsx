@@ -160,6 +160,7 @@ function ShipmentRow({ shipment, onEditAddress }: { shipment: OrderShipment; onE
 
   return (
     <TableRow>
+      <TableCell className="whitespace-nowrap text-xs text-muted-foreground">{fmtDate(shipment.purchased_at || shipment.planilha_shipped_at)}</TableCell>
       <TableCell className="whitespace-nowrap font-medium text-foreground">
         {shipment.customer_name || '—'}
         {shipment.source === 'planilha' && (
@@ -178,8 +179,6 @@ function ShipmentRow({ shipment, onEditAddress }: { shipment: OrderShipment; onE
         <span className="text-foreground">{shipment.product_name || '—'}</span>
         <span className="ml-1 text-xs text-muted-foreground">×{shipment.quantity}</span>
       </TableCell>
-
-      <TableCell className="whitespace-nowrap text-xs text-muted-foreground">{fmtDate(shipment.purchased_at || shipment.planilha_shipped_at)}</TableCell>
 
       <TableCell className="max-w-[240px]">
         <div className="flex items-start gap-1.5">
@@ -532,12 +531,12 @@ const Rastreios: React.FC = () => {
             <Table ref={tableRef} className="min-w-[1600px]">
               <TableHeader>
                 <TableRow>
+                  <SortHead col="purchased_at" label="Data" sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
                   <SortHead col="customer_name" label="Cliente" sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
                   <SortHead col="customer_phone" label="Telefone" sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
                   <SortHead col="customer_cpf" label="Documento" sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
                   <SortHead col="customer_email" label="Email" sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
                   <SortHead col="product_name" label="Produto" sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
-                  <SortHead col="purchased_at" label="Data" sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
                   <SortHead col="ship_city" label="Endereço" sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
                   <SortHead col="frete_value" label="Frete" sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
                   <SortHead col="logistica_value" label="Logística" sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
