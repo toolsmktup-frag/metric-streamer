@@ -26,8 +26,11 @@ import {
 import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card';
 import {
   Package, Search, Loader2, FileDown, FileText, Truck, Send, MapPin, ExternalLink, Pencil, HelpCircle,
+  ArrowUp, ArrowDown, ArrowUpDown,
 } from 'lucide-react';
 import { format } from 'date-fns';
+
+type SortDir = 'asc' | 'desc';
 
 const PAGE_SIZE = 50;
 
@@ -97,6 +100,23 @@ function fmtDate(s: string | null): string {
   if (!s) return '—';
   const d = new Date(s);
   return isNaN(d.getTime()) ? '—' : format(d, 'dd/MM/yyyy');
+}
+
+/* ── Cabeçalho ordenável ── */
+function SortHead({ col, label, sortBy, sortDir, onSort, className }: {
+  col: string; label: string; sortBy: string; sortDir: SortDir; onSort: (c: string) => void; className?: string;
+}) {
+  const active = sortBy === col;
+  return (
+    <TableHead className={className}>
+      <button onClick={() => onSort(col)} className="flex items-center gap-1 hover:text-foreground transition-colors">
+        {label}
+        {active
+          ? (sortDir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />)
+          : <ArrowUpDown className="h-3 w-3 opacity-30" />}
+      </button>
+    </TableHead>
+  );
 }
 
 /* ── Célula de valor editável (Frete / Logística) ── */
@@ -357,7 +377,15 @@ const Rastreios: React.FC = () => {
   const [debounced, setDebounced] = useState('');
   const [page, setPage] = useState(1);
   const [fromDate, setFromDate] = useState('2026-06-10');
+  const [sortBy, setSortBy] = useState('created_at');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [editing, setEditing] = useState<OrderShipment | null>(null);
+
+  const onSort = (col: string) => {
+    if (sortBy === col) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    else { setSortBy(col); setSortDir('asc'); }
+    setPage(1);
+  };
 
   // Scroll horizontal sincronizado (barra no topo + a nativa embaixo)
   const tableRef = useRef<HTMLTableElement>(null);
@@ -371,7 +399,7 @@ const Rastreios: React.FC = () => {
 
   const handleTab = (key: ShipmentStatusFilter) => { setStatus(key); setPage(1); };
 
-  const { data, isLoading, isFetching } = useShipments({ search: debounced, status, page, pageSize: PAGE_SIZE, fromDate: fromDate || null });
+  const { data, isLoading, isFetching } = useShipments({ search: debounced, status, page, pageSize: PAGE_SIZE, fromDate: fromDate || null, sortBy, sortDir });
   const { data: counts } = useShipmentCounts(fromDate || null);
   const shipments = data?.shipments ?? [];
   const total = data?.total ?? 0;
@@ -504,19 +532,19 @@ const Rastreios: React.FC = () => {
             <Table ref={tableRef} className="min-w-[1600px]">
               <TableHeader>
                 <TableRow>
-                  <TableHead>Cliente</TableHead>
-                  <TableHead>Telefone</TableHead>
-                  <TableHead>Documento</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Produto</TableHead>
-                  <TableHead>Data</TableHead>
-                  <TableHead>Endereço</TableHead>
-                  <TableHead>Frete</TableHead>
-                  <TableHead>Logística</TableHead>
-                  <TableHead>Nota Fiscal</TableHead>
-                  <TableHead>Rastreio</TableHead>
-                  <TableHead>Entrega</TableHead>
-                  <TableHead>Status</TableHead>
+                  <SortHead col="customer_name" label="Cliente" sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
+                  <SortHead col="customer_phone" label="Telefone" sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
+                  <SortHead col="customer_cpf" label="Documento" sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
+                  <SortHead col="customer_email" label="Email" sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
+                  <SortHead col="product_name" label="Produto" sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
+                  <SortHead col="purchased_at" label="Data" sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
+                  <SortHead col="ship_city" label="Endereço" sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
+                  <SortHead col="frete_value" label="Frete" sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
+                  <SortHead col="logistica_value" label="Logística" sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
+                  <SortHead col="nf_number" label="Nota Fiscal" sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
+                  <SortHead col="tracking_code" label="Rastreio" sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
+                  <SortHead col="tracking_status" label="Entrega" sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
+                  <SortHead col="dispatch_status" label="Status" sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
                 </TableRow>
               </TableHeader>
               <TableBody>

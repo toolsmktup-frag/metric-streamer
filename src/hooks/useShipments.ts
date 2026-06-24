@@ -54,6 +54,8 @@ interface UseShipmentsParams {
   page: number;
   pageSize?: number;
   fromDate?: string | null;
+  sortBy?: string;
+  sortDir?: 'asc' | 'desc';
 }
 
 /** Filtro por data efetiva: compra (purchased_at) ou, na falta, data da planilha. */
@@ -68,9 +70,9 @@ export interface ShipmentsPage {
 }
 
 /** Lista pedidos de envio paginados, com filtro por status de disparo e busca livre. */
-export function useShipments({ search, status, page, pageSize = 50, fromDate }: UseShipmentsParams) {
+export function useShipments({ search, status, page, pageSize = 50, fromDate, sortBy = 'created_at', sortDir = 'desc' }: UseShipmentsParams) {
   return useQuery({
-    queryKey: ['order-shipments', search, status, page, pageSize, fromDate],
+    queryKey: ['order-shipments', search, status, page, pageSize, fromDate, sortBy, sortDir],
     queryFn: async (): Promise<ShipmentsPage> => {
       const from = (page - 1) * pageSize;
       const to = from + pageSize - 1;
@@ -78,7 +80,7 @@ export function useShipments({ search, status, page, pageSize = 50, fromDate }: 
       let q = (supabase as any)
         .from('order_shipments')
         .select('*', { count: 'exact' })
-        .order('created_at', { ascending: false })
+        .order(sortBy, { ascending: sortDir === 'asc', nullsFirst: false })
         .range(from, to);
 
       if (status === 'pendentes') {
