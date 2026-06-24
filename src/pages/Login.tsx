@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import { isLogisticaOnly } from '@/hooks/useUserPermissions';
 import { toast } from 'sonner';
 
 export default function Login() {
@@ -28,12 +29,26 @@ export default function Login() {
         setMode('login');
       }
     } else {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      setLoading(false);
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
+        setLoading(false);
         toast.error(error.message);
       } else {
-        navigate('/resumo', { replace: true });
+        // Logística (só mod_rastreios) entra direto na aba de Rastreios.
+        let dest = '/resumo';
+        try {
+          const userId = data.user?.id;
+          if (userId) {
+            const { data: perms } = await (supabase as any)
+              .from('user_permissions')
+              .select('*')
+              .eq('user_id', userId)
+              .maybeSingle();
+            if (isLogisticaOnly(perms)) dest = '/rastreios';
+          }
+        } catch { /* fallback /resumo + guard cuida */ }
+        setLoading(false);
+        navigate(dest, { replace: true });
       }
     }
   };

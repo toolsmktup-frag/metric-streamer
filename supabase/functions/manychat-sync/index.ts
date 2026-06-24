@@ -108,6 +108,36 @@ async function createSubscriber(token: string, phone: string, name?: string, ema
   return { ok: res.ok, status: res.status, json };
 }
 
+/**
+ * Seta custom fields arbitrários antes de aplicar a tag (ex.: código de rastreio).
+ * Aceita { field_id, value } ou { field_name, value }. Best-effort — não quebra o fluxo.
+ */
+async function setCustomFields(
+  token: string,
+  subscriberId: string,
+  fields: Array<{ field_id?: number | string; field_name?: string; value?: unknown; field_value?: unknown }>,
+) {
+  const sid = Number(subscriberId);
+  for (const f of fields) {
+    if (!f) continue;
+    const value = f.value ?? f.field_value;
+    if (value === undefined || value === null || value === "") continue;
+    if (f.field_id !== undefined && f.field_id !== null && f.field_id !== "") {
+      await fetch(`${MC_BASE}/fb/subscriber/setCustomField`, {
+        method: "POST",
+        headers: mcHeaders(token),
+        body: JSON.stringify({ subscriber_id: sid, field_id: Number(f.field_id), field_value: value }),
+      }).catch(() => {});
+    } else if (f.field_name) {
+      await fetch(`${MC_BASE}/fb/subscriber/setCustomFieldByName`, {
+        method: "POST",
+        headers: mcHeaders(token),
+        body: JSON.stringify({ subscriber_id: sid, field_name: f.field_name, field_value: value }),
+      }).catch(() => {});
+    }
+  }
+}
+
 async function setWaBusca(token: string, subscriberId: string, phone: string) {
   await fetch(`${MC_BASE}/fb/subscriber/setCustomField`, {
     method: "POST",
@@ -181,6 +211,7 @@ Deno.serve(async (req) => {
   const tagId =
     rawTag !== undefined && rawTag !== null && rawTag !== "" ? Number(rawTag) : undefined;
   const tagName = (input.tag_name ?? "").toString().trim() || undefined;
+  const fields = Array.isArray(input.fields) ? input.fields : [];
   if (!phone) return reply({ ok: false, error: "telefone inválido" }, 400);
   if (!tagId && !tagName) return reply({ ok: false, error: "tag_id ou tag_name obrigatório" }, 400);
 
@@ -219,8 +250,11 @@ Deno.serve(async (req) => {
 
     if (!subscriberId) return reply({ ok: false, reason: "no_subscriber_id", phone }, 502);
 
-    // grava/atualiza o espelho (garante localização futura) + aplica a tag
+    // grava/atualiza o espelho (garante localização futura), seta campos
+    // (ex.: código de rastreio) e por fim aplica a tag — nessa ordem para o
+    // fluxo oficial já encontrar o campo preenchido quando a tag disparar.
     await setWaBusca(token, subscriberId, phone);
+    if (fields.length) await setCustomFields(token, subscriberId, fields);
     const tagged = await applyTag(token, subscriberId, tagId, tagName);
 
     return reply({ ok: true, subscriber_id: subscriberId, created, tagged, phone });

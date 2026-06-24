@@ -28,6 +28,7 @@ import {
   Trophy,
   Sparkles,
   Package,
+  Truck,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useFunnels } from '@/hooks/useFunnels';
@@ -350,6 +351,14 @@ const AppSidebar = React.memo(function AppSidebar({ collapsed, onToggle, onNavig
             {sectionLabel('WhatsApp')}
             {can('mod_whatsapp') && navLink('/whatsapp', 'Chat', MessageCircle)}
             {can('mod_ferramentas') && navLink('/ferramentas/automacoes', 'Automações', Zap)}
+          </>
+        )}
+
+        {/* ── LOGÍSTICA ── */}
+        {can('mod_rastreios') && (
+          <>
+            {sectionLabel('Logística')}
+            {navLink('/rastreios', 'Rastreios', Truck)}
           </>
         )}
 

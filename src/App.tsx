@@ -2,7 +2,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation, Navigate } from "react-router-dom";
+import { useMyPermissions, isLogisticaOnly } from "@/hooks/useUserPermissions";
 import ErrorBoundary from "./components/ErrorBoundary";
 import AppLayout from "./components/layout/AppLayout";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -48,6 +49,7 @@ import MinhasMetas from "./pages/MinhasMetas";
 import ConfigMetas from "./pages/ConfigMetas";
 import AutoRules from "./pages/AutoRules";
 import SalesCopilotConfig from "./pages/SalesCopilotConfig";
+import Rastreios from "./pages/Rastreios";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -58,9 +60,35 @@ const queryClient = new QueryClient({
   },
 });
 
+/**
+ * Trava de navegação para o perfil "logística": usuários que só têm
+ * mod_rastreios são redirecionados para /rastreios em qualquer outra rota
+ * (inclusive ao digitar a URL na mão).
+ */
+const RastreiosGuard = ({ children }: { children: React.ReactNode }) => {
+  const { data: perms, isLoading } = useMyPermissions();
+  const location = useLocation();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+      </div>
+    );
+  }
+
+  if (isLogisticaOnly(perms) && location.pathname !== '/rastreios') {
+    return <Navigate to="/rastreios" replace />;
+  }
+
+  return <>{children}</>;
+};
+
 const Protected = ({ children }: { children: React.ReactNode }) => (
   <ProtectedRoute>
-    <AppLayout>{children}</AppLayout>
+    <RastreiosGuard>
+      <AppLayout>{children}</AppLayout>
+    </RastreiosGuard>
   </ProtectedRoute>
 );
 
@@ -106,6 +134,8 @@ const App = () => (
           <Route path="/leads/fontes" element={<Protected><LeadsSources /></Protected>} />
           <Route path="/lead-campaigns" element={<Protected><PermissionRoute requiredPermission="mod_leads"><LeadCampaigns /></PermissionRoute></Protected>} />
           <Route path="/lead-funnels/:id" element={<Protected><LeadFunnelDetail /></Protected>} />
+          {/* Logística / Rastreios */}
+          <Route path="/rastreios" element={<Protected><PermissionRoute requiredPermission="mod_rastreios"><Rastreios /></PermissionRoute></Protected>} />
           {/* Equipe */}
           <Route path="/equipe" element={<Protected><Equipe /></Protected>} />
           {/* Configurações do usuário */}

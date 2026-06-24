@@ -11,6 +11,7 @@ export const MODULE_KEYS = [
   'mod_ferramentas',
   'mod_resumo',
   'mod_funil_avancado',
+  'mod_rastreios',
 ] as const;
 
 export type ModuleKey = typeof MODULE_KEYS[number];
@@ -24,6 +25,7 @@ export const MODULE_LABELS: Record<ModuleKey, string> = {
   mod_ferramentas: 'Configurações & Automações',
   mod_resumo: 'Resumo Geral',
   mod_funil_avancado: 'Funil avançado (todas as abas)',
+  mod_rastreios: 'Rastreios (Logística)',
 };
 
 export interface UserPermissions {
@@ -38,6 +40,21 @@ export interface UserPermissions {
   mod_ferramentas: boolean;
   mod_resumo: boolean;
   mod_funil_avancado: boolean;
+  mod_rastreios: boolean;
+}
+
+/**
+ * Usuário "logística": tem mod_rastreios e NENHUM outro módulo principal.
+ * Usado para travar a navegação somente na aba de Rastreios.
+ * (mod_funil_avancado é sub-permissão de Leads, ignorado aqui.)
+ */
+const PRIMARY_MODULE_KEYS = MODULE_KEYS.filter(
+  (k) => k !== 'mod_rastreios' && k !== 'mod_funil_avancado'
+);
+
+export function isLogisticaOnly(perms: UserPermissions | null | undefined): boolean {
+  if (!perms || !perms.mod_rastreios) return false;
+  return PRIMARY_MODULE_KEYS.every((k) => !perms[k]);
 }
 
 /** Fetch permissions for all users in the org (admin view) */

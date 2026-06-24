@@ -98,3 +98,12 @@ verify_jwt = false
 
 [functions.manychat-tags]
 verify_jwt = false
+
+[functions.enqueue-tracking-dispatch]
+verify_jwt = false
+
+[functions.spedy-webhook]
+verify_jwt = false
+
+[functions.correios-tracking-sync]
+verify_jwt = false
