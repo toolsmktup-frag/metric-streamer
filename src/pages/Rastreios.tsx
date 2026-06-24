@@ -6,6 +6,8 @@ import {
   useShipmentCounts,
   useSaveTracking,
   useUpdateShipment,
+  useMarkAsSent,
+  useRevertToPending,
   buildTrackingUrl,
   type OrderShipment,
   type ShipmentStatusFilter,
@@ -132,6 +134,8 @@ function MoneyCell({ shipment, field }: { shipment: OrderShipment; field: 'frete
 function ShipmentRow({ shipment, onEditAddress }: { shipment: OrderShipment; onEditAddress: (s: OrderShipment) => void }) {
   const [code, setCode] = useState('');
   const saveTracking = useSaveTracking();
+  const markSent = useMarkAsSent();
+  const revert = useRevertToPending();
   const trackingUrl = buildTrackingUrl(shipment.tracking_code, shipment.carrier);
 
   return (
@@ -194,7 +198,7 @@ function ShipmentRow({ shipment, onEditAddress }: { shipment: OrderShipment; onE
         )}
       </TableCell>
 
-      <TableCell className="min-w-[230px]">
+      <TableCell className="min-w-[270px]">
         {shipment.tracking_code ? (
           <div className="flex items-center gap-1.5">
             <Truck className="h-3.5 w-3.5 text-muted-foreground" />
@@ -204,6 +208,17 @@ function ShipmentRow({ shipment, onEditAddress }: { shipment: OrderShipment; onE
                 <ExternalLink className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
               </a>
             )}
+          </div>
+        ) : shipment.dispatch_status === 'enviado' ? (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span className="italic">enviado manualmente</span>
+            <button
+              onClick={() => revert.mutate(shipment.id)}
+              className="text-primary hover:underline"
+              title="Voltar para a fila de pendentes"
+            >
+              voltar p/ pendente
+            </button>
           </div>
         ) : (
           <div className="flex items-center gap-1.5">
@@ -221,8 +236,19 @@ function ShipmentRow({ shipment, onEditAddress }: { shipment: OrderShipment; onE
               className="h-8 px-2.5 gap-1"
               disabled={!code.trim() || saveTracking.isPending}
               onClick={() => saveTracking.mutate({ id: shipment.id, trackingCode: code })}
+              title="Salvar código e disparar no WhatsApp"
             >
               {saveTracking.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8 px-2 text-xs text-muted-foreground shrink-0"
+              disabled={markSent.isPending}
+              onClick={() => markSent.mutate(shipment.id)}
+              title="Já enviei à mão — marcar como enviado sem disparar"
+            >
+              Já enviei
             </Button>
           </div>
         )}
@@ -330,6 +356,7 @@ const Rastreios: React.FC = () => {
   const [search, setSearch] = useState('');
   const [debounced, setDebounced] = useState('');
   const [page, setPage] = useState(1);
+  const [fromDate, setFromDate] = useState('2026-06-10');
   const [editing, setEditing] = useState<OrderShipment | null>(null);
 
   // Scroll horizontal sincronizado (barra no topo + a nativa embaixo)
@@ -344,8 +371,8 @@ const Rastreios: React.FC = () => {
 
   const handleTab = (key: ShipmentStatusFilter) => { setStatus(key); setPage(1); };
 
-  const { data, isLoading, isFetching } = useShipments({ search: debounced, status, page, pageSize: PAGE_SIZE });
-  const { data: counts } = useShipmentCounts();
+  const { data, isLoading, isFetching } = useShipments({ search: debounced, status, page, pageSize: PAGE_SIZE, fromDate: fromDate || null });
+  const { data: counts } = useShipmentCounts(fromDate || null);
   const shipments = data?.shipments ?? [];
   const total = data?.total ?? 0;
   const totalPages = data?.totalPages ?? 1;
@@ -431,6 +458,15 @@ const Rastreios: React.FC = () => {
             className="pl-9"
           />
         </div>
+        <label className="flex items-center gap-2 text-sm text-muted-foreground shrink-0">
+          Desde
+          <input
+            type="date"
+            value={fromDate}
+            onChange={(e) => { setFromDate(e.target.value); setPage(1); }}
+            className="h-9 rounded-lg border border-border bg-card px-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+          />
+        </label>
         <HoverCard openDelay={80} closeDelay={80}>
           <HoverCardTrigger asChild>
             <button className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground hover:bg-muted transition-colors shrink-0">

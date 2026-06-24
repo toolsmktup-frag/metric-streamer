@@ -53,6 +53,12 @@ interface UseShipmentsParams {
   status: ShipmentStatusFilter;
   page: number;
   pageSize?: number;
+  fromDate?: string | null;
+}
+
+/** Filtro por data efetiva: compra (purchased_at) ou, na falta, data da planilha. */
+function dateOr(fromDate?: string | null): string | null {
+  return fromDate ? `purchased_at.gte.${fromDate},planilha_shipped_at.gte.${fromDate}` : null;
 }
 
 export interface ShipmentsPage {
@@ -62,9 +68,9 @@ export interface ShipmentsPage {
 }
 
 /** Lista pedidos de envio paginados, com filtro por status de disparo e busca livre. */
-export function useShipments({ search, status, page, pageSize = 50 }: UseShipmentsParams) {
+export function useShipments({ search, status, page, pageSize = 50, fromDate }: UseShipmentsParams) {
   return useQuery({
-    queryKey: ['order-shipments', search, status, page, pageSize],
+    queryKey: ['order-shipments', search, status, page, pageSize, fromDate],
     queryFn: async (): Promise<ShipmentsPage> => {
       const from = (page - 1) * pageSize;
       const to = from + pageSize - 1;
@@ -80,6 +86,9 @@ export function useShipments({ search, status, page, pageSize = 50 }: UseShipmen
       } else if (status !== 'all') {
         q = q.eq('dispatch_status', status);
       }
+
+      const dOr = dateOr(fromDate);
+      if (dOr) q = q.or(dOr);
 
       const term = search.trim();
       if (term) {
@@ -102,18 +111,21 @@ export function useShipments({ search, status, page, pageSize = 50 }: UseShipmen
   });
 }
 
-/** Contadores por status (cards/abas). */
-export function useShipmentCounts() {
+/** Contadores por status (abas) — respeitam o mesmo filtro de data. */
+export function useShipmentCounts(fromDate?: string | null) {
   return useQuery({
-    queryKey: ['order-shipments-counts'],
+    queryKey: ['order-shipments-counts', fromDate],
     queryFn: async () => {
       const statuses: DispatchStatus[] = ['aguardando_rastreio', 'na_fila', 'enviado', 'falhou'];
+      const dOr = dateOr(fromDate);
       const entries = await Promise.all(
         statuses.map(async (s) => {
-          const { count } = await (supabase as any)
+          let q = (supabase as any)
             .from('order_shipments')
             .select('id', { count: 'exact', head: true })
             .eq('dispatch_status', s);
+          if (dOr) q = q.or(dOr);
+          const { count } = await q;
           return [s, count || 0] as const;
         }),
       );
@@ -180,5 +192,55 @@ export function useUpdateShipment() {
       toast.success('Pedido atualizado');
     },
     onError: (e: any) => toast.error(e?.message || 'Erro ao atualizar pedido'),
+  });
+}
+
+/** Marca um pedido como "já enviado" manualmente (fora do sistema) — sem disparar. */
+export function useMarkAsSent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await (supabase as any)
+        .from('order_shipments')
+        .update({
+          dispatch_status: 'enviado',
+          dispatched_at: new Date().toISOString(),
+          dispatch_channel: null,
+          notes: 'marcado manual: já enviado fora do sistema',
+        })
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['order-shipments'] });
+      qc.invalidateQueries({ queryKey: ['order-shipments-counts'] });
+      toast.success('Marcado como enviado');
+    },
+    onError: (e: any) => toast.error(e?.message || 'Erro ao marcar'),
+  });
+}
+
+/** Desfaz o "já enviei" — volta o pedido para a fila de pendentes. */
+export function useRevertToPending() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await (supabase as any)
+        .from('order_shipments')
+        .update({
+          dispatch_status: 'aguardando_rastreio',
+          dispatched_at: null,
+          dispatch_channel: null,
+          notes: null,
+        })
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['order-shipments'] });
+      qc.invalidateQueries({ queryKey: ['order-shipments-counts'] });
+      toast.success('Voltou para pendente');
+    },
+    onError: (e: any) => toast.error(e?.message || 'Erro ao reverter'),
   });
 }
