@@ -14,6 +14,9 @@ export interface OrderShipment {
   customer_cpf: string | null;
   product_name: string | null;
   quantity: number;
+  purchased_at: string | null;
+  frete_value: number | null;
+  logistica_value: number | null;
   ship_street: string | null;
   ship_number: string | null;
   ship_complement: string | null;
@@ -46,19 +49,29 @@ export type ShipmentStatusFilter = DispatchStatus | 'all' | 'pendentes';
 interface UseShipmentsParams {
   search: string;
   status: ShipmentStatusFilter;
+  page: number;
   pageSize?: number;
 }
 
-/** Lista pedidos de envio com filtro por status de disparo e busca livre. */
-export function useShipments({ search, status, pageSize = 200 }: UseShipmentsParams) {
+export interface ShipmentsPage {
+  shipments: OrderShipment[];
+  total: number;
+  totalPages: number;
+}
+
+/** Lista pedidos de envio paginados, com filtro por status de disparo e busca livre. */
+export function useShipments({ search, status, page, pageSize = 50 }: UseShipmentsParams) {
   return useQuery({
-    queryKey: ['order-shipments', search, status, pageSize],
-    queryFn: async (): Promise<OrderShipment[]> => {
+    queryKey: ['order-shipments', search, status, page, pageSize],
+    queryFn: async (): Promise<ShipmentsPage> => {
+      const from = (page - 1) * pageSize;
+      const to = from + pageSize - 1;
+
       let q = (supabase as any)
         .from('order_shipments')
-        .select('*')
+        .select('*', { count: 'exact' })
         .order('created_at', { ascending: false })
-        .limit(pageSize);
+        .range(from, to);
 
       if (status === 'pendentes') {
         q = q.eq('dispatch_status', 'aguardando_rastreio');
@@ -70,13 +83,17 @@ export function useShipments({ search, status, pageSize = 200 }: UseShipmentsPar
       if (term) {
         const like = `%${term}%`;
         q = q.or(
-          `customer_name.ilike.${like},customer_phone.ilike.${like},tracking_code.ilike.${like},nf_number.ilike.${like}`,
+          `customer_name.ilike.${like},customer_phone.ilike.${like},tracking_code.ilike.${like},nf_number.ilike.${like},customer_email.ilike.${like}`,
         );
       }
 
-      const { data, error } = await q;
+      const { data, error, count } = await q;
       if (error) throw error;
-      return (data || []) as OrderShipment[];
+      return {
+        shipments: (data || []) as OrderShipment[],
+        total: count || 0,
+        totalPages: Math.max(1, Math.ceil((count || 0) / pageSize)),
+      };
     },
     placeholderData: keepPreviousData,
     refetchInterval: 30000,

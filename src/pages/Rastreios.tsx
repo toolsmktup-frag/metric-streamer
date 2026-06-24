@@ -16,11 +16,17 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import {
+  Pagination, PaginationContent, PaginationItem, PaginationPrevious, PaginationNext,
+} from '@/components/ui/pagination';
+import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
 import {
   Package, Search, Loader2, FileDown, FileText, Truck, Send, MapPin, ExternalLink, Pencil,
 } from 'lucide-react';
+import { format } from 'date-fns';
+
+const PAGE_SIZE = 50;
 
 const TABS: { key: ShipmentStatusFilter; label: string }[] = [
   { key: 'pendentes', label: 'Pendentes' },
@@ -43,7 +49,7 @@ function statusBadge(s: OrderShipment['dispatch_status']) {
     enviado: 'Enviado',
     falhou: 'Falhou',
   };
-  return <Badge className={`${map[s]} border-transparent`}>{label[s] || s}</Badge>;
+  return <Badge className={`${map[s]} border-transparent whitespace-nowrap`}>{label[s] || s}</Badge>;
 }
 
 function trackingBadge(s: OrderShipment) {
@@ -68,7 +74,7 @@ function trackingBadge(s: OrderShipment) {
     devolvido: 'Devolvido',
   };
   return (
-    <Badge className={`${color[st] || color.aguardando} border-transparent`} title={s.tracking_last_event || ''}>
+    <Badge className={`${color[st] || color.aguardando} border-transparent whitespace-nowrap`} title={s.tracking_last_event || ''}>
       {label[st] || st}
     </Badge>
   );
@@ -84,6 +90,43 @@ function addressSummary(s: OrderShipment): string {
   return parts.join(' · ') || '—';
 }
 
+function fmtDate(s: string | null): string {
+  if (!s) return '—';
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? '—' : format(d, 'dd/MM/yyyy');
+}
+
+/* ── Célula de valor editável (Frete / Logística) ── */
+function MoneyCell({ shipment, field }: { shipment: OrderShipment; field: 'frete_value' | 'logistica_value' }) {
+  const update = useUpdateShipment();
+  const initial = shipment[field] != null ? String(shipment[field]) : '';
+  const [val, setVal] = useState(initial);
+  useEffect(() => { setVal(shipment[field] != null ? String(shipment[field]) : ''); }, [shipment[field]]);
+
+  const save = () => {
+    const trimmed = val.trim().replace(',', '.');
+    const num = trimmed === '' ? null : Number(trimmed);
+    if (num !== null && isNaN(num)) { setVal(initial); return; }
+    if ((shipment[field] ?? null) === num) return;
+    update.mutate({ id: shipment.id, patch: { [field]: num } as Partial<OrderShipment> });
+  };
+
+  return (
+    <div className="flex items-center gap-1">
+      <span className="text-xs text-muted-foreground">R$</span>
+      <Input
+        value={val}
+        onChange={(e) => setVal(e.target.value)}
+        onBlur={save}
+        onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+        placeholder="0,00"
+        inputMode="decimal"
+        className="h-8 w-20 text-xs"
+      />
+    </div>
+  );
+}
+
 /* ── Linha da tabela ── */
 function ShipmentRow({ shipment, onEditAddress }: { shipment: OrderShipment; onEditAddress: (s: OrderShipment) => void }) {
   const [code, setCode] = useState('');
@@ -92,9 +135,11 @@ function ShipmentRow({ shipment, onEditAddress }: { shipment: OrderShipment; onE
 
   return (
     <TableRow>
-      <TableCell>
-        <div className="font-medium text-foreground">{shipment.customer_name || '—'}</div>
-        <div className="text-xs text-muted-foreground">{shipment.customer_phone || 'sem telefone'}</div>
+      <TableCell className="whitespace-nowrap font-medium text-foreground">{shipment.customer_name || '—'}</TableCell>
+      <TableCell className="whitespace-nowrap text-xs text-muted-foreground">{shipment.customer_phone || '—'}</TableCell>
+      <TableCell className="whitespace-nowrap text-xs text-muted-foreground">{shipment.customer_cpf || '—'}</TableCell>
+      <TableCell className="max-w-[200px] truncate text-xs text-muted-foreground" title={shipment.customer_email || ''}>
+        {shipment.customer_email || '—'}
       </TableCell>
 
       <TableCell className="whitespace-nowrap">
@@ -102,7 +147,9 @@ function ShipmentRow({ shipment, onEditAddress }: { shipment: OrderShipment; onE
         <span className="ml-1 text-xs text-muted-foreground">×{shipment.quantity}</span>
       </TableCell>
 
-      <TableCell className="max-w-[260px]">
+      <TableCell className="whitespace-nowrap text-xs text-muted-foreground">{fmtDate(shipment.purchased_at)}</TableCell>
+
+      <TableCell className="max-w-[240px]">
         <div className="flex items-start gap-1.5">
           <MapPin className="h-3.5 w-3.5 mt-0.5 shrink-0 text-muted-foreground" />
           <span className="text-xs text-muted-foreground line-clamp-2">{addressSummary(shipment)}</span>
@@ -115,6 +162,9 @@ function ShipmentRow({ shipment, onEditAddress }: { shipment: OrderShipment; onE
           </button>
         </div>
       </TableCell>
+
+      <TableCell><MoneyCell shipment={shipment} field="frete_value" /></TableCell>
+      <TableCell><MoneyCell shipment={shipment} field="logistica_value" /></TableCell>
 
       <TableCell className="whitespace-nowrap">
         {shipment.nf_number ? (
@@ -171,9 +221,36 @@ function ShipmentRow({ shipment, onEditAddress }: { shipment: OrderShipment; onE
       </TableCell>
 
       <TableCell>{trackingBadge(shipment)}</TableCell>
-
       <TableCell>{statusBadge(shipment.dispatch_status)}</TableCell>
     </TableRow>
+  );
+}
+
+/* ── Legenda fixa dos status ── */
+function LegendItem({ cls, label, desc }: { cls: string; label: string; desc?: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <Badge className={`${cls} border-transparent`}>{label}</Badge>
+      {desc && <span className="text-muted-foreground">{desc}</span>}
+    </span>
+  );
+}
+
+function LegendBar() {
+  return (
+    <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs flex flex-wrap items-center gap-x-4 gap-y-2">
+      <span className="font-semibold text-muted-foreground uppercase tracking-wide">Disparo:</span>
+      <LegendItem cls="bg-amber-500/15 text-amber-600" label="Aguardando rastreio" desc="pago, falta colar o código" />
+      <LegendItem cls="bg-blue-500/15 text-blue-600" label="Na fila" desc="vai disparar no WhatsApp" />
+      <LegendItem cls="bg-green-500/15 text-green-600" label="Enviado" desc="rastreio enviado" />
+      <LegendItem cls="bg-destructive/15 text-destructive" label="Falhou" desc="erro no envio" />
+      <span className="h-4 w-px bg-border" />
+      <span className="font-semibold text-muted-foreground uppercase tracking-wide">Entrega (Correios):</span>
+      <LegendItem cls="bg-blue-500/15 text-blue-600" label="Em trânsito" />
+      <LegendItem cls="bg-amber-500/15 text-amber-600" label="Saiu p/ entrega" />
+      <LegendItem cls="bg-green-500/15 text-green-600" label="Entregue" />
+      <LegendItem cls="bg-destructive/15 text-destructive" label="Devolvido" />
+    </div>
   );
 }
 
@@ -237,15 +314,21 @@ const Rastreios: React.FC = () => {
   const [status, setStatus] = useState<ShipmentStatusFilter>('pendentes');
   const [search, setSearch] = useState('');
   const [debounced, setDebounced] = useState('');
+  const [page, setPage] = useState(1);
   const [editing, setEditing] = useState<OrderShipment | null>(null);
 
   useEffect(() => {
-    const t = setTimeout(() => setDebounced(search), 300);
+    const t = setTimeout(() => { setDebounced(search); setPage(1); }, 300);
     return () => clearTimeout(t);
   }, [search]);
 
-  const { data: shipments = [], isLoading, isFetching } = useShipments({ search: debounced, status });
+  const handleTab = (key: ShipmentStatusFilter) => { setStatus(key); setPage(1); };
+
+  const { data, isLoading, isFetching } = useShipments({ search: debounced, status, page, pageSize: PAGE_SIZE });
   const { data: counts } = useShipmentCounts();
+  const shipments = data?.shipments ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = data?.totalPages ?? 1;
 
   // Realtime: fila atualiza sozinha quando chega pedido novo ou muda status
   useEffect(() => {
@@ -285,7 +368,7 @@ const Rastreios: React.FC = () => {
           return (
             <button
               key={t.key}
-              onClick={() => setStatus(t.key)}
+              onClick={() => handleTab(t.key)}
               className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
                 status === t.key ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/70'
               }`}
@@ -305,10 +388,13 @@ const Rastreios: React.FC = () => {
         <Input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Buscar por nome, telefone, rastreio ou NF..."
+          placeholder="Buscar por nome, telefone, e-mail, rastreio ou NF..."
           className="pl-9"
         />
       </div>
+
+      {/* Legenda */}
+      <LegendBar />
 
       <Card>
         <CardContent className="p-0">
@@ -321,12 +407,18 @@ const Rastreios: React.FC = () => {
               Nenhum pedido {status === 'pendentes' ? 'pendente de rastreio' : 'encontrado'}.
             </div>
           ) : (
-            <Table>
+            <Table className="min-w-[1600px]">
               <TableHeader>
                 <TableRow>
                   <TableHead>Cliente</TableHead>
+                  <TableHead>Telefone</TableHead>
+                  <TableHead>Documento</TableHead>
+                  <TableHead>Email</TableHead>
                   <TableHead>Produto</TableHead>
+                  <TableHead>Data</TableHead>
                   <TableHead>Endereço</TableHead>
+                  <TableHead>Frete</TableHead>
+                  <TableHead>Logística</TableHead>
                   <TableHead>Nota Fiscal</TableHead>
                   <TableHead>Rastreio</TableHead>
                   <TableHead>Entrega</TableHead>
@@ -343,11 +435,36 @@ const Rastreios: React.FC = () => {
         </CardContent>
       </Card>
 
-      {isFetching && !isLoading && (
+      {/* Rodapé: contagem + paginação */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-          <Loader2 className="h-3 w-3 animate-spin" /> atualizando…
+          {isFetching && !isLoading && <Loader2 className="h-3 w-3 animate-spin" />}
+          {total > 0 ? `${total} pedido${total > 1 ? 's' : ''} · página ${page} de ${totalPages}` : ''}
         </p>
-      )}
+        {totalPages > 1 && (
+          <Pagination className="mx-0 w-auto justify-end">
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationPrevious
+                  href="#"
+                  onClick={(e) => { e.preventDefault(); if (page > 1) setPage((p) => p - 1); }}
+                  className={page <= 1 ? 'pointer-events-none opacity-50' : ''}
+                />
+              </PaginationItem>
+              <PaginationItem>
+                <span className="px-3 text-sm text-muted-foreground">{page} / {totalPages}</span>
+              </PaginationItem>
+              <PaginationItem>
+                <PaginationNext
+                  href="#"
+                  onClick={(e) => { e.preventDefault(); if (page < totalPages) setPage((p) => p + 1); }}
+                  className={page >= totalPages ? 'pointer-events-none opacity-50' : ''}
+                />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
+        )}
+      </div>
 
       <AddressDialog shipment={editing} onClose={() => setEditing(null)} />
     </div>
