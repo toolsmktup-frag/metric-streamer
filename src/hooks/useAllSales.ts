@@ -29,6 +29,8 @@ export interface UnifiedSale {
   payment_method: string | null;
   customer_name: string | null;
   customer_email: string | null;
+  customer_phone?: string | null;
+  unified_customer_id?: string | null;
   meta_campaign_id: string | null;
   meta_adset_id: string | null;
   meta_ad_id: string | null;
@@ -117,17 +119,28 @@ function emptySalesAgg(): SalesAggregation {
  * ou fallback para classificação hardcoded.
  */
 function classifyWithProducts(
-  tx: { product_name?: string | null; product_id?: string | null },
+  tx: { platform?: string | null; product_name?: string | null; product_id?: string | number | null; offer_name?: string | null },
   funnelProducts?: FunnelProduct[]
 ): string {
+  const explicitClassification = classifySale(tx);
+  if (tx.product_id != null && explicitClassification !== 'other') {
+    return explicitClassification;
+  }
+
   if (funnelProducts && funnelProducts.length > 0) {
     const txProductId = String(tx.product_id || '').trim();
     const name = (tx.product_name || '').toLowerCase();
+    const platform = String(tx.platform || '').trim().toLowerCase();
+
+    const productAppliesToPlatform = (fp: FunnelProduct): boolean => {
+      if (!fp.platform || !platform) return true;
+      return String(fp.platform).trim().toLowerCase() === platform;
+    };
 
     const roleToPosition = (role: string): string => {
       if (role === 'front') return 'principal';
       if (role === 'order_bump') return 'bump1';
-      if (role === 'upsell1') return 'upsell1';
+      if (role === 'upsell1' || role === 'upsell2' || role === 'upsell3') return 'upsell1';
       if (role === 'downsell') return 'downsell';
       return 'other';
     };
@@ -135,7 +148,7 @@ function classifyWithProducts(
     // Pass 1: exact product_id match (source of truth — must win over name matches)
     if (txProductId) {
       for (const fp of funnelProducts) {
-        if (fp.product_id && String(fp.product_id) === txProductId) {
+        if (productAppliesToPlatform(fp) && fp.product_id && String(fp.product_id) === txProductId) {
           return roleToPosition(fp.role);
         }
       }
@@ -144,7 +157,7 @@ function classifyWithProducts(
     // Pass 2: product_name_contains fallback
     if (name) {
       for (const fp of funnelProducts) {
-        if (fp.product_name_contains && name.includes(fp.product_name_contains.toLowerCase())) {
+        if (productAppliesToPlatform(fp) && fp.product_name_contains && name.includes(fp.product_name_contains.toLowerCase())) {
           return roleToPosition(fp.role);
         }
       }
@@ -155,13 +168,108 @@ function classifyWithProducts(
   return classifySale(tx);
 }
 
+function normalizeEmail(value?: string | null): string | null {
+  const normalized = (value || '').trim().toLowerCase();
+  return normalized.includes('@') ? normalized : null;
+}
+
+function normalizePhone(value?: string | null): string | null {
+  const digits = (value || '').replace(/\D/g, '');
+  if (digits.length < 10) return null;
+  return digits.slice(-10);
+}
+
+function saleTime(sale: UnifiedSale): number {
+  const time = new Date(sale.purchased_at).getTime();
+  return Number.isFinite(time) ? time : 0;
+}
+
+function hasMetaAttribution(sale: UnifiedSale): boolean {
+  return Boolean(sale.meta_campaign_id || sale.meta_adset_id || sale.meta_ad_id);
+}
+
+function getIdentityKeys(sale: UnifiedSale): string[] {
+  const keys = new Set<string>();
+  if (sale.unified_customer_id) keys.add(`customer:${sale.unified_customer_id}`);
+
+  const email = normalizeEmail(sale.customer_email);
+  if (email) keys.add(`email:${email}`);
+
+  const phone = normalizePhone(sale.customer_phone);
+  if (phone) keys.add(`phone:${phone}`);
+
+  return Array.from(keys);
+}
+
+function resolveInheritedAttribution(sales: UnifiedSale[]): UnifiedSale[] {
+  const donorsByIdentity = new Map<string, UnifiedSale[]>();
+
+  for (const sale of sales) {
+    if (!hasMetaAttribution(sale)) continue;
+    for (const key of getIdentityKeys(sale)) {
+      const donors = donorsByIdentity.get(key) || [];
+      donors.push(sale);
+      donorsByIdentity.set(key, donors);
+    }
+  }
+
+  for (const donors of donorsByIdentity.values()) {
+    donors.sort((a, b) => saleTime(b) - saleTime(a));
+  }
+
+  return sales.map((sale) => {
+    if (hasMetaAttribution(sale)) return sale;
+
+    const saleTs = saleTime(sale);
+    const candidates = getIdentityKeys(sale)
+      .flatMap((key) => donorsByIdentity.get(key) || [])
+      .filter((donor, index, array) => array.findIndex((item) => item.id === donor.id) === index)
+      .filter((donor) => {
+        const donorTs = saleTime(donor);
+        if (!donorTs || !saleTs) return true;
+        const diffDays = (saleTs - donorTs) / (24 * 60 * 60 * 1000);
+        return diffDays >= -1 && diffDays <= 90;
+      })
+      .sort((a, b) => Math.abs(saleTs - saleTime(a)) - Math.abs(saleTs - saleTime(b)));
+
+    const donor = candidates[0];
+    if (!donor) return sale;
+
+    return {
+      ...sale,
+      funnel_id: sale.funnel_id || donor.funnel_id,
+      meta_campaign_id: sale.meta_campaign_id || donor.meta_campaign_id,
+      meta_adset_id: sale.meta_adset_id || donor.meta_adset_id,
+      meta_ad_id: sale.meta_ad_id || donor.meta_ad_id,
+      meta_campaign_name: sale.meta_campaign_name || donor.meta_campaign_name,
+      meta_adset_name: sale.meta_adset_name || donor.meta_adset_name,
+      meta_ad_name: sale.meta_ad_name || donor.meta_ad_name,
+      utm_source: sale.utm_source || donor.utm_source,
+      utm_campaign: sale.utm_campaign || donor.utm_campaign,
+      utm_medium: sale.utm_medium || donor.utm_medium,
+      utm_content: sale.utm_content || donor.utm_content,
+      is_paid_traffic: sale.is_paid_traffic || hasMetaAttribution(donor),
+    };
+  });
+}
+
 /**
  * Agrega vendas de todas as plataformas por campanha / adset / ad.
  * Quando funnelProducts é fornecido, usa classificação dinâmica.
  */
 export function useAllSalesAggregation(funnelId?: string | null, ingestionType?: string | null, funnelProducts?: FunnelProduct[], paidTrafficOnly?: boolean) {
-  const { data: allSales = [] } = useAllSales(funnelId, ingestionType, paidTrafficOnly);
-  const confirmed = allSales.filter(t => t.status === 'authorized');
+  const needsProductFunnelFilter = Boolean(funnelId && funnelProducts && funnelProducts.length > 0);
+  const { data: rawSales = [] } = useAllSales(needsProductFunnelFilter ? undefined : funnelId, ingestionType, false);
+  const allSales = resolveInheritedAttribution(rawSales);
+  const confirmed = allSales.filter(t => {
+    if (t.status !== 'authorized') return false;
+    if (funnelId && needsProductFunnelFilter) {
+      const belongsToFunnel = t.funnel_id === funnelId || classifyWithProducts(t, funnelProducts) !== 'other';
+      if (!belongsToFunnel) return false;
+    }
+    if (paidTrafficOnly && !hasMetaAttribution(t)) return false;
+    return true;
+  });
 
   const byCampaign: Record<string, SalesAggregation> = {};
   const byAdset: Record<string, SalesAggregation> = {};
@@ -193,7 +301,7 @@ export function useAllSalesAggregation(funnelId?: string | null, ingestionType?:
   }
 
   const organicSales = emptySalesAgg();
-  const organicTransactions = confirmed.filter(t => !t.is_paid_traffic);
+  const organicTransactions = confirmed.filter(t => !hasMetaAttribution(t));
   for (const tx of organicTransactions) {
     addToAgg(organicSales, tx.revenue, classifyWithProducts(tx, funnelProducts));
   }
