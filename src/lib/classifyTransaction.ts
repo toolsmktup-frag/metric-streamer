@@ -33,15 +33,37 @@ const PRODUCT_KEY_TO_FUNNEL: Record<string, FunnelPosition> = {
 };
 
 /**
+ * Funnel position by product_id (Ticto/Guru/Eduzz numeric IDs).
+ * Source of truth — takes precedence over name/offer matching.
+ *
+ * Articulabem-1 funnel:
+ *   105335 = 1 Pote Grátis (principal/frente)
+ *   105337 = 3 Potes (upsell)
+ *   109829 = 9 Potes (upsell antigo)
+ */
+const PRODUCT_ID_TO_FUNNEL: Record<string, FunnelPosition> = {
+  '105335': 'principal',
+  '105337': 'upsell1',
+  '109829': 'upsell1',
+};
+
+/**
  * Classify a transaction into its funnel position.
- * 
- * 1. First tries classifyProduct() with rich pattern catalog (16+ products)
- * 2. Falls back to offer_name patterns for edge cases
+ *
+ * 1. product_id explicit mapping (most reliable)
+ * 2. classifyProduct() rich pattern catalog
+ * 3. offer_name fallback patterns
  */
 export function classifyTransaction(
-  tx: { product_name?: string | null; offer_name?: string | null }
+  tx: { product_id?: string | number | null; product_name?: string | null; offer_name?: string | null }
 ): FunnelPosition {
-  // Step 1: Use the rich product catalog
+  // Step 1: explicit product_id mapping
+  const pid = tx.product_id != null ? String(tx.product_id) : '';
+  if (pid && PRODUCT_ID_TO_FUNNEL[pid]) {
+    return PRODUCT_ID_TO_FUNNEL[pid];
+  }
+
+  // Step 2: rich product catalog
   const product = classifyProduct(tx.product_name || '');
   if (product) {
     const mapped = PRODUCT_KEY_TO_FUNNEL[product.key];
@@ -50,7 +72,7 @@ export function classifyTransaction(
     return 'other';
   }
 
-  // Step 2: Fallback to offer_name patterns for unclassified product names
+  // Step 3: offer_name fallback
   const on = (tx.offer_name || '').toLowerCase();
   if (on.includes('oferta 197')) return 'upsell1';
   if (on.includes('checkout principal')) return 'principal';
@@ -58,6 +80,7 @@ export function classifyTransaction(
 
   return 'other';
 }
+
 
 /**
  * Compute average unit price from actual revenue and count.
