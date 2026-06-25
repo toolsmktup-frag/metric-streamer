@@ -123,22 +123,33 @@ function classifyWithProducts(
   if (funnelProducts && funnelProducts.length > 0) {
     const txProductId = String(tx.product_id || '').trim();
     const name = (tx.product_name || '').toLowerCase();
-    for (const fp of funnelProducts) {
-      if (fp.product_id && txProductId && String(fp.product_id) === txProductId) {
-        if (fp.role === 'front') return 'principal';
-        if (fp.role === 'order_bump') return 'bump1';
-        if (fp.role === 'upsell1') return 'upsell1';
-        if (fp.role === 'downsell') return 'downsell';
-        return 'other';
-      }
-      if (name && fp.product_name_contains && name.includes(fp.product_name_contains.toLowerCase())) {
-        if (fp.role === 'front') return 'principal';
-        if (fp.role === 'order_bump') return 'bump1';
-        if (fp.role === 'upsell1') return 'upsell1';
-        if (fp.role === 'downsell') return 'downsell';
-        return 'other';
+
+    const roleToPosition = (role: string): string => {
+      if (role === 'front') return 'principal';
+      if (role === 'order_bump') return 'bump1';
+      if (role === 'upsell1') return 'upsell1';
+      if (role === 'downsell') return 'downsell';
+      return 'other';
+    };
+
+    // Pass 1: exact product_id match (source of truth — must win over name matches)
+    if (txProductId) {
+      for (const fp of funnelProducts) {
+        if (fp.product_id && String(fp.product_id) === txProductId) {
+          return roleToPosition(fp.role);
+        }
       }
     }
+
+    // Pass 2: product_name_contains fallback
+    if (name) {
+      for (const fp of funnelProducts) {
+        if (fp.product_name_contains && name.includes(fp.product_name_contains.toLowerCase())) {
+          return roleToPosition(fp.role);
+        }
+      }
+    }
+
     return 'other';
   }
   return classifySale(tx);
