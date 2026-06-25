@@ -55,11 +55,12 @@ const PRODUCT_ID_TO_FUNNEL: Record<string, FunnelPosition> = {
  * 3. offer_name fallback patterns
  */
 export function classifyTransaction(
-  tx: { product_id?: string | null; product_name?: string | null; offer_name?: string | null }
+  tx: { product_id?: string | number | null; product_name?: string | null; offer_name?: string | null }
 ): FunnelPosition {
   // Step 1: explicit product_id mapping
-  if (tx.product_id && PRODUCT_ID_TO_FUNNEL[tx.product_id]) {
-    return PRODUCT_ID_TO_FUNNEL[tx.product_id];
+  const pid = tx.product_id != null ? String(tx.product_id) : '';
+  if (pid && PRODUCT_ID_TO_FUNNEL[pid]) {
+    return PRODUCT_ID_TO_FUNNEL[pid];
   }
 
   // Step 2: rich product catalog
