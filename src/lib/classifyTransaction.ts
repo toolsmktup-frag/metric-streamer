@@ -42,9 +42,13 @@ const PRODUCT_KEY_TO_FUNNEL: Record<string, FunnelPosition> = {
  *   109829 = 9 Potes (upsell antigo)
  */
 const PRODUCT_ID_TO_FUNNEL: Record<string, FunnelPosition> = {
+  // Ticto (numeric internal product_id)
   '105335': 'principal',
   '105337': 'upsell1',
   '109829': 'upsell1',
+  // Guru (marketplace product_id)
+  '1777999197': 'principal', // 3 Potes Articulabem VSL (frente)
+  '1781803362': 'upsell1',   // Articulabem - 3 Potes (Upsell 1)
 };
 
 /**
