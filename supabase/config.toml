@@ -129,3 +129,6 @@ verify_jwt = false
 
 [functions.webinar-redirect]
 verify_jwt = false
+
+[functions.classify-sales]
+verify_jwt = false
