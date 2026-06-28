@@ -351,6 +351,7 @@ const AppSidebar = React.memo(function AppSidebar({ collapsed, onToggle, onNavig
             {sectionLabel('WhatsApp')}
             {can('mod_whatsapp') && navLink('/whatsapp', 'Chat', MessageCircle)}
             {can('mod_ferramentas') && navLink('/ferramentas/automacoes', 'Automações', Zap)}
+            {can('mod_ferramentas') && navLink('/whatsapp-oficial', 'API Oficial', Sparkles)}
           </>
         )}
 

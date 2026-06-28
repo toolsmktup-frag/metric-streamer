@@ -7,8 +7,13 @@ import WzNodeToolbar from './WzNodeToolbar';
 
 interface WzWhatsAppNodeData {
   label: string;
+  channel?: 'uazapi' | 'official';
   instanceId?: string;
   instanceName?: string;
+  officialInstanceId?: string;
+  officialInstanceName?: string;
+  templateName?: string;
+  webinarUrl?: string;
   messages?: Array<{ text: string; type: string }>;
   delayMin?: number;
   delayMax?: number;
@@ -20,6 +25,7 @@ interface WzWhatsAppNodeData {
 function WzWhatsAppNode({ data, selected }: { data: WzWhatsAppNodeData; selected?: boolean }) {
   const hasNotes = !!data.notes?.trim();
   const isDisabled = !!data.disabled;
+  const isOfficial = data.channel === 'official';
   const firstMsg = data.messages?.[0]?.text;
   const preview = firstMsg
     ? (firstMsg.length > 40 ? firstMsg.slice(0, 40) + '…' : firstMsg)
@@ -49,32 +55,57 @@ function WzWhatsAppNode({ data, selected }: { data: WzWhatsAppNodeData; selected
       )}
 
       {/* Header */}
-      <div className="bg-gradient-to-r from-emerald-600 to-emerald-500 px-4 py-3 flex items-center gap-2 text-white">
+      <div className={cn(
+        'px-4 py-3 flex items-center gap-2 text-white',
+        isOfficial ? 'bg-gradient-to-r from-blue-600 to-sky-500' : 'bg-gradient-to-r from-emerald-600 to-emerald-500'
+      )}>
         <MessageCircle className="h-4 w-4" />
-        <div>
+        <div className="flex-1 min-w-0">
           <span className="text-[10px] font-bold uppercase tracking-wider opacity-80">Ação</span>
-          <p className="text-sm font-semibold leading-tight">{data.label || 'Enviar WhatsApp'}</p>
+          <p className="text-sm font-semibold leading-tight truncate">{data.label || 'Enviar WhatsApp'}</p>
         </div>
+        <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-white/20 whitespace-nowrap">
+          {isOfficial ? 'Oficial' : 'Não-oficial'}
+        </span>
       </div>
 
       {/* Body */}
       <div className="bg-card px-4 py-2.5 border-t border-border space-y-1">
-        <div className="flex items-center gap-2">
-          <span className={cn(
-            'h-2 w-2 rounded-full flex-shrink-0',
-            data.instanceId ? 'bg-emerald-500' : 'bg-muted-foreground'
-          )} />
-          <span className="text-xs text-foreground">
-            {data.instanceName || 'Selecionar instância'}
-          </span>
-        </div>
-        {preview && (
-          <p className="text-[11px] text-muted-foreground italic truncate">"{preview}"</p>
-        )}
-        {data.messages && data.messages.length > 1 && (
-          <span className="text-[10px] text-muted-foreground">
-            +{data.messages.length - 1} variação{data.messages.length > 2 ? 'ões' : ''}
-          </span>
+        {isOfficial ? (
+          <>
+            <div className="flex items-center gap-2">
+              <span className={cn(
+                'h-2 w-2 rounded-full flex-shrink-0',
+                data.officialInstanceId ? 'bg-blue-500' : 'bg-muted-foreground'
+              )} />
+              <span className="text-xs text-foreground truncate">
+                {data.officialInstanceName || 'Selecionar instância oficial'}
+              </span>
+            </div>
+            <p className="text-[11px] text-muted-foreground truncate">
+              {data.templateName ? `Template: ${data.templateName}` : 'Selecionar template...'}
+            </p>
+          </>
+        ) : (
+          <>
+            <div className="flex items-center gap-2">
+              <span className={cn(
+                'h-2 w-2 rounded-full flex-shrink-0',
+                data.instanceId ? 'bg-emerald-500' : 'bg-muted-foreground'
+              )} />
+              <span className="text-xs text-foreground">
+                {data.instanceName || 'Selecionar instância'}
+              </span>
+            </div>
+            {preview && (
+              <p className="text-[11px] text-muted-foreground italic truncate">"{preview}"</p>
+            )}
+            {data.messages && data.messages.length > 1 && (
+              <span className="text-[10px] text-muted-foreground">
+                +{data.messages.length - 1} variação{data.messages.length > 2 ? 'ões' : ''}
+              </span>
+            )}
+          </>
         )}
       </div>
 

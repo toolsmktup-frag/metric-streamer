@@ -107,3 +107,25 @@ verify_jwt = false
 
 [functions.correios-tracking-sync]
 verify_jwt = false
+
+# --- WhatsApp API Oficial (Meta Cloud API) ---
+[functions.meta-whatsapp-instance]
+verify_jwt = false
+
+[functions.meta-whatsapp-webhook]
+verify_jwt = false
+
+[functions.meta-whatsapp-send]
+verify_jwt = false
+
+[functions.meta-templates-sync]
+verify_jwt = false
+
+[functions.meta-templates-create]
+verify_jwt = false
+
+[functions.meta-templates-generate]
+verify_jwt = false
+
+[functions.webinar-redirect]
+verify_jwt = false

@@ -50,6 +50,7 @@ import ConfigMetas from "./pages/ConfigMetas";
 import AutoRules from "./pages/AutoRules";
 import SalesCopilotConfig from "./pages/SalesCopilotConfig";
 import Rastreios from "./pages/Rastreios";
+import WhatsAppOficial from "./pages/WhatsAppOficial";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -142,6 +143,8 @@ const App = () => (
           <Route path="/configuracoes" element={<Protected><UserSettings /></Protected>} />
           {/* WhatsApp Chat - fullscreen layout */}
           <Route path="/whatsapp" element={<Protected><PermissionRoute requiredPermission="mod_whatsapp"><WhatsAppChat /></PermissionRoute></Protected>} />
+          {/* WhatsApp API Oficial (Meta Cloud API) */}
+          <Route path="/whatsapp-oficial" element={<Protected><WhatsAppOficial /></Protected>} />
           {/* Automações WhatsApp */}
           <Route path="/ferramentas/automacoes" element={<Protected><WzAutomacoes /></Protected>} />
           <Route path="/ferramentas/automacoes/novo" element={<Protected><WzFlowCanvas /></Protected>} />

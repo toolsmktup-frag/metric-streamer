@@ -17,6 +17,7 @@ import { useTeamMembers } from '@/hooks/useTeamMembers';
 import { useFunnels } from '@/hooks/useFunnels';
 import { useLeadFunnelStages } from '@/hooks/useLeadFunnelStages';
 import { useManyChatTags } from '@/hooks/useManyChatTags';
+import { useWhatsAppOfficialInstances, useWhatsAppOfficialTemplates, countTemplateBodyVars } from '@/hooks/useWhatsAppOfficial';
 import { triggerLabels } from './nodes/WzTriggerNode';
 import WzProductSelector from './WzProductSelector';
 import type { Node } from '@xyflow/react';
@@ -283,6 +284,127 @@ function getBlocks(msg: MessageVariation): MessageBlock[] {
   return [{ text: msg.text || '', type: msg.type || 'text', imageUrl: msg.imageUrl, caption: msg.caption }];
 }
 
+// Config do canal API Oficial (Meta Cloud API): instância oficial + template + variáveis
+function OfficialWhatsAppConfig({ data, update }: { data: any; update: (k: string, v: any) => void }) {
+  const { instances } = useWhatsAppOfficialInstances();
+  const { templates } = useWhatsAppOfficialTemplates();
+
+  const selectedTemplate = templates.find((t) => t.name === data.templateName);
+  const varCount = selectedTemplate ? countTemplateBodyVars(selectedTemplate.components) : 0;
+  const tvars: Record<string, string> = data.templateVariables || {};
+
+  return (
+    <>
+      <div className="space-y-2 pb-4 border-b border-border">
+        <Label className="flex items-center gap-2">
+          <MessageSquare className="h-4 w-4 text-blue-500" />
+          Instância (API Oficial)
+        </Label>
+        {instances.length === 0 ? (
+          <p className="text-xs text-muted-foreground">
+            Nenhuma instância oficial conectada. Conecte um número em Configurações › WhatsApp (API Oficial).
+          </p>
+        ) : (
+          <Select
+            value={data.officialInstanceId || ''}
+            onValueChange={(v) => {
+              const inst = instances.find((i) => i.id === v);
+              update('officialInstanceSelection', {
+                officialInstanceId: v,
+                officialInstanceName: inst ? (inst.display_name || inst.instance_name) : '',
+              });
+            }}
+          >
+            <SelectTrigger><SelectValue placeholder="Selecionar instância oficial..." /></SelectTrigger>
+            <SelectContent>
+              {instances.map((i) => (
+                <SelectItem key={i.id} value={i.id}>
+                  {(i.display_name || i.instance_name)}{i.phone_number ? ` (${i.phone_number})` : ''}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+      </div>
+
+      <div className="space-y-2">
+        <Label>Template aprovado</Label>
+        {templates.length === 0 ? (
+          <p className="text-xs text-muted-foreground">
+            Nenhum template. Gere/sincronize em WhatsApp › Templates Oficiais.
+          </p>
+        ) : (
+          <Select
+            value={data.templateName || ''}
+            onValueChange={(v) => update('templateSelection', { templateName: v, templateVariables: {} })}
+          >
+            <SelectTrigger><SelectValue placeholder="Selecionar template..." /></SelectTrigger>
+            <SelectContent>
+              {templates.map((t) => (
+                <SelectItem key={t.id} value={t.name}>
+                  {t.name} · {t.status}{t.strategy === 'bypass' ? ' · bypass' : ''}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+        {selectedTemplate && selectedTemplate.status !== 'APPROVED' && (
+          <p className="text-[11px] text-amber-600">
+            ⚠ Status atual: {selectedTemplate.status}. Só templates APPROVED disparam de fato.
+          </p>
+        )}
+      </div>
+
+      <div className="space-y-1">
+        <Label className="text-xs">Link do webinário (opcional)</Label>
+        <Input
+          value={data.webinarUrl || ''}
+          placeholder="https://sua-sala-do-webinario.com"
+          onChange={(e) => update('webinarUrl', e.target.value)}
+          className="h-8 text-xs"
+        />
+        <p className="text-[10px] text-muted-foreground">
+          Use {'{{link_webinario}}'} numa variável do template para mandar um link rastreável — detecta quem assistiu.
+        </p>
+      </div>
+
+      {selectedTemplate && varCount > 0 && (
+        <div className="space-y-2 pt-2 border-t border-border">
+          <Label className="text-xs">Variáveis (vazio = usa os valores do template)</Label>
+          {Array.from({ length: varCount }).map((_, idx) => {
+            const k = String(idx + 1);
+            const ph = selectedTemplate.marketing_variables?.[k]
+              || selectedTemplate.sample_variables?.[k]
+              || `Variável ${k}`;
+            return (
+              <div key={k} className="space-y-1">
+                <Label className="text-[10px] text-muted-foreground">{`{{${k}}}`}</Label>
+                <Input
+                  value={tvars[k] || ''}
+                  placeholder={ph}
+                  onChange={(e) => update('templateVariables', { ...tvars, [k]: e.target.value })}
+                  className="h-8 text-xs"
+                />
+              </div>
+            );
+          })}
+          <p className="text-[10px] text-muted-foreground">
+            Dica: use chips como {'{{nome}}'} para puxar dados do lead.
+          </p>
+        </div>
+      )}
+
+      {selectedTemplate?.strategy === 'bypass' && (
+        <div className="rounded-md border border-blue-500/30 bg-blue-500/5 px-3 py-2">
+          <p className="text-[11px] text-muted-foreground">
+            🔓 Template <b>bypass</b>: aprovado como UTILITY, mas no disparo o cliente recebe os valores de marketing.
+          </p>
+        </div>
+      )}
+    </>
+  );
+}
+
 function WhatsAppConfig({ data, update }: { data: any; update: (k: string, v: any) => void }) {
   const { instances: chatInstances = [] } = useWhatsAppInstances();
   const { data: manualInstances = [] } = useWzInstances();
@@ -352,8 +474,39 @@ function WhatsAppConfig({ data, update }: { data: any; update: (k: string, v: an
     }
   };
 
+  const channel = data.channel || 'uazapi';
+
+  const channelSelector = (
+    <div className="space-y-2 pb-4 border-b border-border">
+      <Label className="flex items-center gap-2">
+        <MessageSquare className="h-4 w-4 text-blue-500" />
+        Canal de envio
+      </Label>
+      <Select value={channel} onValueChange={(v) => update('channel', v)}>
+        <SelectTrigger><SelectValue /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="uazapi">Não-oficial (UAZAPI)</SelectItem>
+          <SelectItem value="official">API Oficial (Meta)</SelectItem>
+        </SelectContent>
+      </Select>
+      <p className="text-[11px] text-muted-foreground">
+        Oficial = WhatsApp Business Cloud API (Meta). Exige template aprovado.
+      </p>
+    </div>
+  );
+
+  if (channel === 'official') {
+    return (
+      <>
+        {channelSelector}
+        <OfficialWhatsAppConfig data={data} update={update} />
+      </>
+    );
+  }
+
   return (
     <>
+      {channelSelector}
       <div className="space-y-2 pb-4 border-b border-border">
         <Label className="flex items-center gap-2">
           <MessageSquare className="h-4 w-4 text-green-500" />

@@ -14,6 +14,7 @@ const triggerLabels: Record<string, string> = {
   refund: 'Reembolso',
   cancellation: 'Cancelamento',
   cart_abandoned: 'Abandono de carrinho',
+  webinar_attended: 'Assistiu o webinário',
   any_event: 'Qualquer evento',
 };
 

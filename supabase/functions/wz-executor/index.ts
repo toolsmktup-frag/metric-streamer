@@ -302,7 +302,9 @@ Deno.serve(async (req) => {
     // ─── PROCESS NODE ───
     try {
       if (nodeType === "whatsapp") {
-        const result = await processWhatsAppNode(supabase, execution, nodeData, vars);
+        const result = nodeData.channel === "official"
+          ? await processOfficialWhatsAppNode(supabase, execution, nodeData, vars)
+          : await processWhatsAppNode(supabase, execution, nodeData, vars);
         await logNodeEnd(supabase, logId, "success", result);
 
       } else if (nodeType === "timer") {
@@ -689,6 +691,83 @@ Deno.serve(async (req) => {
 });
 
 // ─── Node processors ───
+
+// Assina o link rastreável de webinário (mesma fórmula da edge webinar-redirect)
+async function signWebinarLink(phone: string, dest: string): Promise<string> {
+  const secret = Deno.env.get("WEBINAR_LINK_SECRET") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "dev-secret";
+  const key = await crypto.subtle.importKey(
+    "raw", new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" }, false, ["sign"],
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(`${phone}|${dest}`));
+  return [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+// Envio via WhatsApp Cloud API (Meta) — delega para a edge meta-whatsapp-send.
+async function processOfficialWhatsAppNode(
+  supabase: any,
+  execution: Record<string, any>,
+  nodeData: Record<string, any>,
+  vars: Record<string, any>
+): Promise<Record<string, any>> {
+  const result: Record<string, any> = { channel: "official" };
+  const instanceId = nodeData.officialInstanceId;
+  const templateName = nodeData.templateName;
+  const phone = execution.contact_phone;
+  if (!instanceId) { result.summary = "Sem instância oficial"; return result; }
+  if (!templateName) { result.summary = "Sem template selecionado"; return result; }
+  if (!phone) { result.summary = "Lead sem telefone"; return result; }
+
+  // Link rastreável do webinário (se configurado no nó): vira a variável {{link_webinario}}
+  let localVars = vars;
+  if (nodeData.webinarUrl) {
+    try {
+      const cleanPhone = String(phone).replace(/\D/g, "");
+      const dest = String(nodeData.webinarUrl);
+      const sig = await signWebinarLink(cleanPhone, dest);
+      const base = Deno.env.get("SUPABASE_URL");
+      const tracked = `${base}/functions/v1/webinar-redirect?p=${encodeURIComponent(cleanPhone)}&d=${encodeURIComponent(dest)}&k=${sig}`;
+      localVars = { ...vars, link_webinario: tracked };
+    } catch (e) {
+      console.error("[official] link rastreável falhou:", String(e));
+    }
+  }
+
+  // Overrides de variáveis (substitui chips do lead, ex: {{nome}}, {{link_webinario}})
+  const tv = (nodeData.templateVariables || {}) as Record<string, string>;
+  const variables: Record<string, string> = {};
+  for (const [k, val] of Object.entries(tv)) {
+    if (val) variables[k] = substituteVariables(String(val), localVars);
+  }
+
+  const baseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+  try {
+    const res = await fetch(`${baseUrl}/functions/v1/meta-whatsapp-send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
+      body: JSON.stringify({
+        instance_id: instanceId,
+        phone,
+        template_name: templateName,
+        variables: Object.keys(variables).length ? variables : undefined,
+      }),
+    });
+    const out = await res.json().catch(() => ({}));
+    if (res.ok && out?.success) {
+      result.summary = `Template "${templateName}" enviado (oficial)`;
+      result.message_id = out.messageId || null;
+      result.phone = String(phone).replace(/\D/g, "");
+    } else {
+      result.summary = `Falha (oficial): ${out?.error || `HTTP ${res.status}`}`;
+      result.error = out?.error || `HTTP ${res.status}`;
+    }
+  } catch (err) {
+    result.summary = `Erro (oficial): ${String(err)}`;
+    result.error = String(err);
+  }
+  return result;
+}
 
 async function processWhatsAppNode(
   supabase: any,
