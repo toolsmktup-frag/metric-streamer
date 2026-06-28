@@ -97,7 +97,7 @@ export default function KpiGeral() {
       const pageSize = 1000;
       while (true) {
         const { data, error } = await (supabase as any)
-          .from('v_all_sales')
+          .from('v_all_sales_classified')
           .select('*')
           .gte('purchased_at', dayStartISO(dateFrom))
           .lte('purchased_at', dayEndISO(dateTo))
@@ -135,7 +135,8 @@ export default function KpiGeral() {
 
       let vp = 0, vb1 = 0, vu1 = 0, rp = 0, rb1 = 0, ru1 = 0;
       for (const tx of dayTx) {
-        const type = classifyTransaction(tx);
+        // Classificação durável (view v_all_sales_classified via funnel_products); fallback hardcoded.
+        const type = tx.funnel_position || classifyTransaction(tx);
         const rev = Number(tx.revenue) || 0;
         if (type === 'principal') { vp++; rp += rev; }
         else if (type === 'bump1') { vb1++; rb1 += rev; }

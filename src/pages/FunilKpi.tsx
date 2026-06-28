@@ -307,7 +307,7 @@ export default function FunilKpi() {
       const pageSize = 1000;
       while (true) {
         let query = supabase
-          .from('v_all_sales')
+          .from('v_all_sales_classified')
           .select('*')
           .gte('purchased_at', dayStartISO(dateFrom))
           .lte('purchased_at', dayEndISO(dateTo))
@@ -353,7 +353,8 @@ export default function FunilKpi() {
 
       let vp = 0, vb1 = 0, vu1 = 0, vu2 = 0, vu3 = 0, rp = 0, rb1 = 0, ru1 = 0, ru2 = 0, ru3 = 0;
       for (const tx of dayTx) {
-        const role = classifyByFunnelProducts(tx, funnelProducts);
+        // Role durável (view via funnel_products) preserva upsell2/3; fallback dinâmico local.
+        const role = tx.mapped_role || classifyByFunnelProducts(tx, funnelProducts);
         const slot = role ? roleToSlot(role) : null;
         const rev = Number(tx.revenue) || 0;
         if (slot === 'principal') { vp++; rp += rev; }

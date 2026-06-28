@@ -45,6 +45,11 @@ export interface UnifiedSale {
   ingestion_type: string;
   affiliate_name: string | null;
   affiliate_commission: number | null;
+  // Classificação DURÁVEL vinda da view v_all_sales_classified (via funnel_products).
+  // É a fonte de verdade da posição no funil — o front só lê, não recalcula.
+  funnel_position?: string | null;       // principal | bump1 | upsell1 | downsell | other
+  mapped_role?: string | null;           // role bruto do funnel_products
+  mapped_funnel_id?: string | null;      // funil do produto (via funnel_products)
 }
 
 async function fetchAllSalesRows(dateFrom: string, dateTo: string, funnelId?: string | null, ingestionType?: string | null, paidTrafficOnly?: boolean) {
@@ -52,7 +57,7 @@ async function fetchAllSalesRows(dateFrom: string, dateTo: string, funnelId?: st
 
   for (let from = 0; ; from += SALES_PAGE_SIZE) {
     let query = (supabase as any)
-      .from('v_all_sales')
+      .from('v_all_sales_classified')
       .select('*')
       .gte('purchased_at', dayStartISO(dateFrom))
       .lte('purchased_at', dayEndISO(dateTo))
@@ -119,9 +124,14 @@ function emptySalesAgg(): SalesAggregation {
  * ou fallback para classificação hardcoded.
  */
 function classifyWithProducts(
-  tx: { platform?: string | null; product_name?: string | null; product_id?: string | number | null; offer_name?: string | null },
+  tx: { platform?: string | null; product_name?: string | null; product_id?: string | number | null; offer_name?: string | null; funnel_position?: string | null },
   funnelProducts?: FunnelProduct[]
 ): string {
+  // Fonte de verdade DURÁVEL: a view v_all_sales_classified já classificou via
+  // funnel_products no banco. Se veio preenchida, usa direto (toda tela fica
+  // consistente e imune a reescritas do front). Fallback abaixo só p/ dados sem a coluna.
+  if (tx.funnel_position) return tx.funnel_position;
+
   const explicitClassification = classifySale(tx);
   if (tx.product_id != null && explicitClassification !== 'other') {
     return explicitClassification;
@@ -264,7 +274,10 @@ export function useAllSalesAggregation(funnelId?: string | null, ingestionType?:
   const confirmed = allSales.filter(t => {
     if (t.status !== 'authorized') return false;
     if (funnelId && needsProductFunnelFilter) {
-      const belongsToFunnel = t.funnel_id === funnelId || classifyWithProducts(t, funnelProducts) !== 'other';
+      // Pertence ao funil pelo funnel_id da transação OU pelo funil do produto
+      // (mapped_funnel_id, vindo de funnel_products). NÃO excluir por classificação
+      // 'other' — isso é o que derrubava order bumps/upsells e a receita do dash.
+      const belongsToFunnel = t.funnel_id === funnelId || t.mapped_funnel_id === funnelId;
       if (!belongsToFunnel) return false;
     }
     if (paidTrafficOnly && !hasMetaAttribution(t)) return false;
