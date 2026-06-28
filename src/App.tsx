@@ -32,6 +32,7 @@ import FunilCampanhas from "./pages/FunilCampanhas";
 import FunisConfigurar from "./pages/FunisConfigurar";
 import FunilCriativos from "./pages/FunilCriativos";
 import Produtos from "./pages/Produtos";
+import ClassificacaoIA from "./pages/ClassificacaoIA";
 import Ecommerce from "./pages/Ecommerce";
 import LeadCampaigns from "./pages/LeadCampaigns";
 import LeadFunnelDetail from "./pages/LeadFunnelDetail";
@@ -123,6 +124,7 @@ const App = () => (
           {/* Rotas de funis */}
           <Route path="/funis/configurar" element={<Protected><FunisConfigurar /></Protected>} />
           <Route path="/produtos" element={<Protected><Produtos /></Protected>} />
+          <Route path="/classificacao-ia" element={<Protected><ClassificacaoIA /></Protected>} />
           <Route path="/funis/:id/resumo" element={<Protected><FunilResumo /></Protected>} />
           <Route path="/funis/:id/kpi" element={<Protected><FunilKpi /></Protected>} />
           <Route path="/funis/:id/campanhas" element={<Protected><FunilCampanhas /></Protected>} />

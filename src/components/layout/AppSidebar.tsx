@@ -28,6 +28,7 @@ import {
   Trophy,
   Sparkles,
   Package,
+  Brain,
   Truck,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -77,6 +78,7 @@ const CONFIG_ITEMS = [
   { path: '/configuracoes/copiloto-vendas', label: 'Copiloto de Vendas', icon: Sparkles },
   { path: '/funis/configurar', label: 'Gerenciar Funis', icon: Settings },
   { path: '/produtos',         label: 'Produtos',        icon: Package },
+  { path: '/classificacao-ia', label: 'Classificação IA', icon: Brain },
 ];
 
 const AppSidebar = React.memo(function AppSidebar({ collapsed, onToggle, onNavigate }: AppSidebarProps) {
