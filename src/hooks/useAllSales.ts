@@ -123,7 +123,7 @@ function emptySalesAgg(): SalesAggregation {
  * Classifica uma venda usando funnel_products dinâmicos (se disponíveis)
  * ou fallback para classificação hardcoded.
  */
-function classifyWithProducts(
+export function classifyWithProducts(
   tx: { platform?: string | null; product_name?: string | null; product_id?: string | number | null; offer_name?: string | null; funnel_position?: string | null },
   funnelProducts?: FunnelProduct[]
 ): string {
