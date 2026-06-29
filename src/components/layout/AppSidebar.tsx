@@ -79,6 +79,7 @@ const CONFIG_ITEMS = [
   { path: '/funis/configurar', label: 'Gerenciar Funis', icon: Settings },
   { path: '/produtos',         label: 'Produtos',        icon: Package },
   { path: '/classificacao-ia', label: 'Classificação IA', icon: Brain },
+  { path: '/vinculo-campanhas', label: 'Vínculo de Campanhas', icon: Link2 },
 ];
 
 const AppSidebar = React.memo(function AppSidebar({ collapsed, onToggle, onNavigate }: AppSidebarProps) {
