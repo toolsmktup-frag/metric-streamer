@@ -37,6 +37,7 @@ node_modules/
 dist/
 build/
 logs/
+*.tsbuildinfo
 
 # IDE & OS (AIOX)
 Thumbs.db
