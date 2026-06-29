@@ -47,6 +47,34 @@ export interface AutoMapping {
 
 export interface FunnelOption { id: string; name: string; is_active: boolean; }
 
+export interface ProductMapping {
+  id: string;
+  funnel_id: string;
+  funnel_name?: string;
+  product_id: string | null;
+  platform: string | null;
+  role: string;
+  display_name: string | null;
+  product_name_contains: string | null;
+  source: string | null;
+}
+
+/** Todos os produtos mapeados, por funil (p/ revisão completa da classificação). */
+export function useAllProductMappings() {
+  return useQuery({
+    queryKey: ['all-product-mappings'],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('funnel_products')
+        .select('id, funnel_id, product_id, platform, role, display_name, product_name_contains, source, funnels(name)')
+        .order('role');
+      if (error) throw error;
+      return (data || []).map((r: any) => ({ ...r, funnel_name: r.funnels?.name })) as ProductMapping[];
+    },
+    staleTime: 30_000,
+  });
+}
+
 export function useFunnelOptions() {
   return useQuery({
     queryKey: ['funnel-options'],
@@ -96,6 +124,7 @@ export function useAutoMappings() {
 function invalidate(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: ['ai-suggestions'] });
   qc.invalidateQueries({ queryKey: ['ai-auto-mappings'] });
+  qc.invalidateQueries({ queryKey: ['all-product-mappings'] });
   qc.invalidateQueries({ queryKey: ['all-funnel-products'] });
   qc.invalidateQueries({ queryKey: ['all-sales'] });
 }

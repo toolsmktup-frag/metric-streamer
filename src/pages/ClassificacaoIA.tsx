@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import {
-  usePendingSuggestions, useAutoMappings, useFunnelOptions,
+  usePendingSuggestions, useAutoMappings, useFunnelOptions, useAllProductMappings,
   useApproveClassification, useRejectSuggestion, useUpdateMapping, useDeleteMapping, useRunClassifier,
   ROLE_LABELS, type Role,
 } from '@/hooks/useAiClassifications';
@@ -22,6 +22,7 @@ function ConfidenceBadge({ c }: { c: string | null }) {
 const ClassificacaoIA: React.FC = () => {
   const { data: pending = [], isLoading: lp } = usePendingSuggestions();
   const { data: autos = [], isLoading: la } = useAutoMappings();
+  const { data: allMappings = [], isLoading: lm } = useAllProductMappings();
   const { data: funnels = [] } = useFunnelOptions();
   const approve = useApproveClassification();
   const reject = useRejectSuggestion();
@@ -219,6 +220,55 @@ const ClassificacaoIA: React.FC = () => {
           </tbody>
         </table>
       </div>
+
+      {/* ─── Todos os produtos por funil ─── */}
+      <h2 className="text-lg font-semibold flex items-center gap-2 mb-1 mt-8">
+        <Brain className="h-4 w-4 text-violet-600" /> Todos os produtos por funil
+      </h2>
+      <p className="text-sm text-muted-foreground mb-3">
+        A classificação que o dashboard usa. Ajuste o papel de qualquer produto (ex: marcar um SKU como upsell) — vale na hora.
+      </p>
+      {lm && <div className="p-6 text-center text-muted-foreground">Carregando...</div>}
+      {Object.entries(
+        allMappings.reduce((acc: Record<string, typeof allMappings>, m) => {
+          const k = m.funnel_name || '(sem funil)';
+          (acc[k] ||= []).push(m);
+          return acc;
+        }, {})
+      ).map(([funil, prods]) => (
+        <div key={funil} className="mb-5 border border-border rounded-lg overflow-hidden">
+          <div className="bg-muted/50 px-3 py-2 text-sm font-semibold">{funil}</div>
+          <table className="w-full text-sm">
+            <tbody>
+              {prods.map(m => {
+                const cur = edits[m.id]?.role || (m.role as Role);
+                const changed = cur !== m.role;
+                return (
+                  <tr key={m.id} className="border-t border-border">
+                    <td className="p-2.5">
+                      <div className="font-medium">{m.display_name || m.product_name_contains}</div>
+                      <div className="text-[11px] text-muted-foreground font-mono">
+                        {m.platform || 'todas'} · {m.product_id || `nome: ${m.product_name_contains}`}
+                        {m.source === 'ai_auto' && <Badge variant="outline" className="ml-2 text-[9px]">IA</Badge>}
+                      </div>
+                    </td>
+                    <td className="p-2.5 w-44">
+                      <RoleSelect value={cur} onChange={v => setEdit(m.id, { role: v as Role, funnel_id: m.funnel_id })} />
+                    </td>
+                    <td className="p-2.5 w-24 text-right">
+                      <Button size="sm" variant={changed ? 'default' : 'outline'} disabled={!changed || updateMap.isPending}
+                        onClick={async () => {
+                          try { await updateMap.mutateAsync({ id: m.id, funnel_id: m.funnel_id, role: cur }); toast.success('Salvo'); }
+                          catch (e: any) { toast.error(e?.message || 'Erro'); }
+                        }}>Salvar</Button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ))}
     </div>
   );
 };
