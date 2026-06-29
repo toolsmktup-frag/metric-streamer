@@ -71,7 +71,7 @@ Deno.serve(async (req) => {
     }).join('\n');
 
     const toClassify = todo.map((g: any) =>
-      `{ "product_id": "${g.product_id}", "platform": "${g.platform}", "product_name": ${JSON.stringify(g.product_name)} }`
+      `{ "product_id": "${g.product_id}", "platform": "${g.platform}", "product_name": ${JSON.stringify(g.product_name)}, "ofertas": ${JSON.stringify(g.offers || [])} }`
     ).join(',\n');
 
     const prompt = `Você classifica produtos de e-commerce na posição correta dentro do funil de vendas.
@@ -81,7 +81,14 @@ ${context}
 
 ROLES possíveis: front (oferta principal), order_bump (item adicional barato no checkout), upsell1/upsell2/upsell3 (ofertas pós-compra), downsell, other (não pertence a nenhum funil conhecido).
 
-Para cada PRODUTO abaixo, decida a qual funil ele pertence (pelo nome, comparando com os produtos já mapeados) e qual o role. Ex.: "RevitaSoul - 6 potes" claramente pertence ao funil RevitaSoul. "Pote Extra (Bump...)" é order_bump. Se o nome não casar com nenhum funil, use funnel_id=null e role="other".
+SINAL FORTE — o nome da OFERTA (campo "ofertas") quase sempre revela a POSIÇÃO. Use como prioridade quando presente:
+- contém "upsell" ou "oferta 197" ou "para upsell" → upsell1 (ou upsell2/3 se indicar "upsell 2"/"upsell 3")
+- contém "downsell" → downsell
+- contém "order bump" ou "bump" → order_bump
+- contém "principal" ou "checkout principal" → front
+O FUNIL (a qual produto pertence) vem da semelhança do NOME com os produtos já mapeados; a POSIÇÃO/role vem preferencialmente da oferta.
+
+Para cada PRODUTO abaixo, decida a qual funil ele pertence (pelo nome) e qual o role (pela oferta, senão pelo nome). Ex.: "RevitaSoul - 6 potes" pertence ao funil RevitaSoul; oferta "principal" → front. "Pote Extra (Bump...)" → order_bump. Se o nome não casar com nenhum funil, use funnel_id=null e role="other".
 
 PRODUTOS A CLASSIFICAR:
 [
