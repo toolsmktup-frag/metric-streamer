@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { User, Tag, StickyNote, Trash2, Send, ShoppingCart, DollarSign, MapPin, Activity, CreditCard, CheckCircle2, XCircle, Clock, RotateCcw, AlertTriangle, UserPlus, Eye, FileText, Loader2, type LucideIcon } from 'lucide-react';
 import ClaimLeadBanner from './ClaimLeadBanner';
+import BotControlBanner from './BotControlBanner';
 import { useEnsureLead } from '@/hooks/useEnsureLead';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -204,6 +205,16 @@ export default function ContactPanel({ phone, senderName, contactPicture }: Cont
           leadId={lead.id}
           currentOwnerId={lead.assigned_to ?? null}
           currentUserId={currentUserId}
+        />
+      )}
+
+      {/* Controle IA↔humano — assumir o atendimento (pausa a Girassol) ou devolver pra IA */}
+      {lead?.id && (
+        <BotControlBanner
+          leadId={lead.id}
+          pausedUntil={(lead.metadata as any)?.bot_paused_until ?? null}
+          canEdit={canEditCrm}
+          onChanged={refetchLead}
         />
       )}
 
