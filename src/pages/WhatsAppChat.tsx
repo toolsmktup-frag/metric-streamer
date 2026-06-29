@@ -8,6 +8,7 @@ import InstanceHub from '@/components/whatsapp/InstanceHub';
 import ChatList from '@/components/whatsapp/ChatList';
 import ChatThread from '@/components/whatsapp/ChatThread';
 import ChatInput from '@/components/whatsapp/ChatInput';
+import BotControlBar from '@/components/whatsapp/BotControlBar';
 import ContactPanel from '@/components/whatsapp/ContactPanel';
 import SalesCopilotPanel from '@/components/whatsapp/SalesCopilotPanel';
 import SalesCopilotButton from '@/components/whatsapp/SalesCopilotButton';
@@ -29,6 +30,10 @@ export default function WhatsAppChat() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { instances, loading: loadingInstances, refetch: refetchInstances } = useWhatsAppInstances();
+  // Instância onde a IA (Girassol) atende — só nela o status IA↔humano faz sentido.
+  const botInstanceId = instances.find(
+    (i) => (i.instance_name || i.nickname || i.display_name || '').toUpperCase().includes('GIRASSOL'),
+  )?.id;
   const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null);
   const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
   const [selectedChatInstanceId, setSelectedChatInstanceId] = useState<string | null>(null);
@@ -350,6 +355,8 @@ export default function WhatsAppChat() {
             selectedKey={selectedKey}
             onSelectChat={handleSelectChat}
             showInstanceBadge={isAllMode}
+            botInstanceId={botInstanceId}
+            currentInstanceId={singleInstanceId}
           />
         </div>
 
@@ -369,6 +376,7 @@ export default function WhatsAppChat() {
             instanceId={effectiveInstanceId || undefined}
             phoneForActions={selectedPhone || undefined}
           />
+          {selectedPhone && <BotControlBar phone={selectedPhone} />}
           {selectedPhone && effectiveInstanceId && (
             <ChatInput
               instanceId={effectiveInstanceId}

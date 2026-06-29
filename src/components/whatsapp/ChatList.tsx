@@ -5,6 +5,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import type { ChatSummary } from '@/hooks/useWhatsApp';
 import type { MultiChatSummary } from '@/hooks/useWhatsAppMultiChat';
+import { useBotPausedPhones, phoneLast8 } from '@/hooks/useBotPausedPhones';
 import { format, isToday, isYesterday, isThisWeek, isThisYear } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -22,6 +23,10 @@ interface ChatListProps {
   selectedKey: string | null;
   onSelectChat: (phone: string, instanceId?: string) => void;
   showInstanceBadge?: boolean;
+  /** id da instância da Girassol (IA) — só nela faz sentido o status IA↔humano */
+  botInstanceId?: string;
+  /** id da instância em modo single (itens não carregam instance_id) */
+  currentInstanceId?: string;
 }
 
 function chatKey(c: ChatSummary | MultiChatSummary): string {
@@ -43,8 +48,9 @@ function formatPhone(phone: string): string {
   return phone;
 }
 
-export default function ChatList({ chats, loading, selectedKey, onSelectChat, showInstanceBadge }: ChatListProps) {
+export default function ChatList({ chats, loading, selectedKey, onSelectChat, showInstanceBadge, botInstanceId, currentInstanceId }: ChatListProps) {
   const [search, setSearch] = useState('');
+  const { data: pausedPhones } = useBotPausedPhones();
 
   const filtered = chats.filter(c => {
     const q = search.toLowerCase();
@@ -95,6 +101,11 @@ export default function ChatList({ chats, loading, selectedKey, onSelectChat, sh
                 : (chat.last_message.body || '').slice(0, 50);
             const time = formatChatTime(new Date(chat.last_message.created_at));
 
+            // Status IA↔humano: só nas conversas da instância da Girassol
+            const chatInstanceId = multi ? (chat as any).instance_id : currentInstanceId;
+            const isBotChat = !!botInstanceId && chatInstanceId === botInstanceId;
+            const humanAttending = isBotChat && !!pausedPhones?.has(phoneLast8(chat.phone));
+
             return (
               <button
                 key={key}
@@ -128,6 +139,19 @@ export default function ChatList({ chats, loading, selectedKey, onSelectChat, sh
 
                     <div className="col-span-2 mt-0.5 flex items-center gap-2 min-w-0">
                       <span className="text-xs text-muted-foreground truncate flex-1 min-w-0">{preview}</span>
+                      {isBotChat && (
+                        <span
+                          className={`shrink-0 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-medium ${
+                            humanAttending
+                              ? 'bg-amber-500/15 text-amber-600'
+                              : 'bg-emerald-500/15 text-emerald-600'
+                          }`}
+                          title={humanAttending ? 'Em atendimento humano' : 'Atendido pela IA'}
+                        >
+                          <span className={`h-1.5 w-1.5 rounded-full ${humanAttending ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+                          {humanAttending ? 'Humano' : 'IA'}
+                        </span>
+                      )}
                       {chat.unread_count > 0 && (
                         <span className="shrink-0 h-4 min-w-[16px] px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center">
                           {chat.unread_count}
