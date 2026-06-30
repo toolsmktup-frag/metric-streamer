@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { CheckCircle2, Loader2, RefreshCw, Send, Users, Webhook, Save, AlertCircle, Activity } from 'lucide-react';
-import { useWzInstances } from '@/hooks/useWzInstances';
+import { useWzInstances, useWzInstanceProfiles } from '@/hooks/useWzInstances';
 import {
   useApplyWzGroupSync,
   useEnableWzGroupWebhook,
@@ -50,6 +50,15 @@ const emptyConfig = (funnelId: string): WzGroupSyncConfig => ({
 });
 
 const stageName = (stages: LeadFunnelStage[], id?: string | null) => stages.find(stage => stage.id === id)?.name || 'etapa escolhida';
+
+const isInstanceOnline = (status?: string) => status === 'open' || status === 'connected';
+
+const StatusDot = ({ online }: { online: boolean }) => (
+  <span
+    className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${online ? 'bg-emerald-500' : 'bg-destructive'}`}
+    title={online ? 'Instância online' : 'Instância offline/desativada'}
+  />
+);
 
 const Metric = ({ label, value }: { label: string; value: number | undefined }) => (
   <div className="rounded-md border border-border bg-muted/30 p-3">
@@ -108,6 +117,7 @@ const ResultPanel = ({ result, stages, config }: { result: WzGroupSyncResult; st
 
 const WhatsAppGroupSyncConfig: React.FC<WhatsAppGroupSyncConfigProps> = ({ funnelId, stages }) => {
   const { data: instances = [] } = useWzInstances();
+  const { data: instanceProfiles = {} } = useWzInstanceProfiles(instances);
   const { data: savedConfig } = useWzGroupSyncConfig(funnelId);
   const listGroups = useWzGroupList();
   const saveConfig = useSaveWzGroupSyncConfig();
@@ -185,11 +195,23 @@ const WhatsAppGroupSyncConfig: React.FC<WhatsAppGroupSyncConfigProps> = ({ funne
             <label className="mb-1 block text-sm font-medium text-foreground">Instância administradora</label>
             <Select value={config.instance_id || ''} onValueChange={value => update('instance_id', value)}>
               <SelectTrigger>
-                <SelectValue placeholder="Escolha a instância UAZAPI" />
+                {config.instance_id ? (
+                  <span className="flex items-center gap-2">
+                    <StatusDot online={isInstanceOnline(instanceProfiles[config.instance_id]?.status)} />
+                    {instances.find(instance => instance.id === config.instance_id)?.name || 'Instância'}
+                  </span>
+                ) : (
+                  <SelectValue placeholder="Escolha a instância UAZAPI" />
+                )}
               </SelectTrigger>
               <SelectContent>
                 {instances.map(instance => (
-                  <SelectItem key={instance.id} value={instance.id}>{instance.name}</SelectItem>
+                  <SelectItem key={instance.id} value={instance.id}>
+                    <span className="flex items-center gap-2">
+                      <StatusDot online={isInstanceOnline(instanceProfiles[instance.id]?.status)} />
+                      {instance.name}
+                    </span>
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
