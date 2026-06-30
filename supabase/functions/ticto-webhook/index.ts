@@ -395,6 +395,38 @@ Deno.serve(async (req) => {
     let finalProductName = productName;
     let finalOfferName = offerName;
 
+    // ── Order bump embutido (Ticto) ──
+    // Neste checkout a Ticto manda só o produto principal em `item`, mas
+    // `order.paid_amount` traz o TOTAL do pedido (principal + order bump).
+    // Sem desmembrar, o bump some do dashboard (vira só um principal "mais caro").
+    // Aqui, quando há diferença E o funil tem um order_bump cadastrado (platform
+    // Ticto/agnóstica), gravamos 2 linhas: principal = valor do item, bump = diferença.
+    // O total é preservado; CAPI/lead seguem reportando o total (reportedAmountCents).
+    const itemAmountCents = Math.round(Number(item?.amount) || 0);
+    const orderTotalCents = Math.round(Number(order?.paid_amount) || 0);
+    const reportedAmountCents = orderTotalCents > 0 ? orderTotalCents : amountInCents;
+    let splitBump: { productId: number; name: string; amount: number } | null = null;
+    if (orderTotalCents - itemAmountCents > 0 && itemAmountCents > 0 && funnelId && orderId) {
+      const { data: ob } = await supabase
+        .from("funnel_products")
+        .select("product_id, display_name, product_name_contains")
+        .eq("funnel_id", funnelId)
+        .eq("role", "order_bump")
+        .not("product_id", "is", null)
+        .or("platform.is.null,platform.eq.ticto")
+        .limit(1)
+        .maybeSingle();
+      const bumpProductId = ob?.product_id ? Number(ob.product_id) : 0;
+      if (bumpProductId && bumpProductId !== productId) {
+        splitBump = {
+          productId: bumpProductId,
+          name: ob.display_name || ob.product_name_contains || "Order Bump",
+          amount: orderTotalCents - itemAmountCents,
+        };
+        finalAmount = itemAmountCents; // principal grava só o item; bump grava a diferença
+      }
+    }
+
     if (orderId && productId) {
       const { data: existing } = await supabase
         .from("ticto_transactions")
@@ -531,6 +563,39 @@ Deno.serve(async (req) => {
 
     console.log(`[ticto-webhook] Saved: status=${record.status} product="${record.product_name}" amount=${record.paid_amount} funnel=${funnelId} order=${record.order_id}`);
 
+    // ── Grava a linha do order bump desmembrado (sem lead sync / sem CAPI) ──
+    // Mesma chave de pedido (order_id) + product_id do bump → idempotente.
+    // transaction_hash recebe sufixo "-BUMP" para não violar o UNIQUE(transaction_hash).
+    if (splitBump && orderId) {
+      const bumpRecord = {
+        ...record,
+        product_id: splitBump.productId,
+        product_name: splitBump.name,
+        offer_name: "Order Bump",
+        offer_id: null,
+        offer_code: null,
+        paid_amount: splitBump.amount,
+        transaction_hash: record.transaction_hash ? `${record.transaction_hash}-BUMP` : null,
+        updated_at: new Date().toISOString(),
+      };
+      try {
+        const { data: exBump } = await supabase
+          .from("ticto_transactions")
+          .select("id")
+          .eq("order_id", orderId)
+          .eq("product_id", splitBump.productId)
+          .maybeSingle();
+        if (exBump) {
+          await supabase.from("ticto_transactions").update(bumpRecord).eq("id", exBump.id);
+        } else {
+          await supabase.from("ticto_transactions").insert(bumpRecord);
+        }
+        console.log(`[ticto-webhook] Order bump desmembrado: product=${splitBump.productId} amount=${splitBump.amount} order=${orderId}`);
+      } catch (bumpErr) {
+        console.error("[ticto-webhook] Bump split error (non-fatal):", bumpErr);
+      }
+    }
+
     // ── Sync lead (authorized + eventos de timeline) ──
     const leadSyncEvents: Record<string, string> = {
       authorized: "purchase",
@@ -561,7 +626,7 @@ Deno.serve(async (req) => {
             transaction_id: String((record as any).platform_transaction_id || record.order_hash || ""),
             product_name: record.product_name,
             status: record.status,
-            amount_cents: record.paid_amount,
+            amount_cents: reportedAmountCents,
             order_hash: record.order_hash,
             address_street: customer.street || customer.address_street || customer.logradouro || null,
             address_number: customer.number || customer.address_number || customer.numero || null,
@@ -597,7 +662,7 @@ Deno.serve(async (req) => {
               body: JSON.stringify({
                 email: record.customer_email,
                 phone: record.customer_phone,
-                amount_cents: record.paid_amount,
+                amount_cents: reportedAmountCents,
                 currency: "BRL",
                 order_id: record.order_id || record.order_hash,
                 product_name: record.product_name,
