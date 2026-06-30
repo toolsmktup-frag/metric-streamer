@@ -26,6 +26,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
 import { KanbanColumnFilter } from './KanbanColumnFilter';
 import { EMPTY_FILTERS, matchesFilters, isFiltersEmpty, type KanbanFilters } from '@/lib/kanbanFilters';
+import { resolutionStageIds } from '@/lib/supportTicket';
+import ResolveTicketDialog, { type ResolveTarget } from './ResolveTicketDialog';
 
 const CARDS_PER_PAGE = 50;
 
@@ -113,6 +115,9 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
   const [overId, setOverId] = useState<string | null>(null);
   const [visibleCounts, setVisibleCounts] = useState<Record<string, number>>({});
   const [columnFilters, setColumnFilters] = useState<Record<string, KanbanFilters>>({});
+  // Board de suporte: etapas que abrem o modal de resolução em vez de mover direto.
+  const resolutionIds = useMemo(() => resolutionStageIds(funnelId, stages), [funnelId, stages]);
+  const [resolveTarget, setResolveTarget] = useState<ResolveTarget | null>(null);
 
   const moveLeadStage = useMoveLeadStage();
   const { data: purchaseMap } = useBulkLeadPurchases(visiblePositions);
@@ -285,6 +290,12 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
 
     const toStage = stages.find(s => s.id === toStageId);
 
+    // Etapa de resolução do board de suporte: abre o modal de finalização (motivo + devolver IA + msg).
+    if (resolutionIds.has(toStageId) && toStage) {
+      setResolveTarget({ position, toStage });
+      return;
+    }
+
     moveLeadStage.mutate({
       positionId,
       leadId: position.lead_id,
@@ -456,6 +467,8 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
                           userRole={userRole}
                           currentUserId={currentUserId}
                           stages={sortedStages}
+                          resolutionStageIds={resolutionIds}
+                          onResolveRequest={(toStage) => setResolveTarget({ position: pos, toStage })}
                         />
                       ))}
                       {hasMore && (
@@ -489,6 +502,13 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ stages, positions, onLeadClic
           )}
         </DragOverlay>
       </DndContext>
+
+      <ResolveTicketDialog
+        target={resolveTarget}
+        funnelId={funnelId}
+        resolvedBy={currentUserId}
+        onClose={() => setResolveTarget(null)}
+      />
     </div>
   );
 };

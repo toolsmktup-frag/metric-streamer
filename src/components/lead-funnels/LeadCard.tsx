@@ -25,6 +25,9 @@ interface LeadCardProps {
   userRole?: string;
   currentUserId?: string;
   stages?: LeadFunnelStage[];
+  /** Etapas que, em vez de mover direto, abrem o fluxo de resolução de ticket (board de suporte). */
+  resolutionStageIds?: Set<string>;
+  onResolveRequest?: (stage: LeadFunnelStage) => void;
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -42,7 +45,7 @@ function friendlyStatus(status: string): string {
   return STATUS_LABELS[status.toLowerCase().trim()] || status;
 }
 
-const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, onWhatsAppClick, isDragging, isRevenue = true, purchaseSummary, recontactInfo, hideValues, stageClassification, userRole, currentUserId, stages }) => {
+const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, onWhatsAppClick, isDragging, isRevenue = true, purchaseSummary, recontactInfo, hideValues, stageClassification, userRole, currentUserId, stages, resolutionStageIds, onResolveRequest }) => {
   const lead = position.lead;
   // Fallback: try metadata for phone if lead.phone is empty
   const leadPhone = lead.phone || (lead.metadata?.phone as string) || (lead.metadata?.cel as string) || (lead.metadata?.telefone as string) || null;
@@ -72,6 +75,12 @@ const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, onWhatsAppClick,
   const handlePickStage = (stage: LeadFunnelStage) => {
     if (stage.id === position.stage_id) {
       setStageMenuOpen(false);
+      return;
+    }
+    // Etapa de resolução do board de suporte: abre o modal de finalização em vez de mover direto.
+    if (resolutionStageIds?.has(stage.id) && onResolveRequest) {
+      setStageMenuOpen(false);
+      onResolveRequest(stage);
       return;
     }
     moveStage.mutate(
