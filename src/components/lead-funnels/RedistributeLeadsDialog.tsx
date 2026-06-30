@@ -2,11 +2,14 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Shuffle, Users } from 'lucide-react';
+import { Shuffle, Users, Scale } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useRedistributeLeads } from '@/hooks/useRedistributeLeads';
+import { useFunnelDistribution } from '@/hooks/useFunnelDistribution';
+import { weightedCounts } from '@/lib/weightedDistribution';
 import type { LeadFunnelStage, LeadStagePosition, Lead } from '@/types/leadFunnels';
 
 interface Props {
@@ -18,6 +21,7 @@ interface Props {
 }
 
 type Scope = 'unassigned' | 'assigned' | 'all' | 'from_seller';
+type Mode = 'equal' | 'weighted';
 
 interface Seller {
   id: string;
@@ -26,10 +30,15 @@ interface Seller {
 
 const RedistributeLeadsDialog: React.FC<Props> = ({ open, onOpenChange, funnelId, stages, positions }) => {
   const [scope, setScope] = useState<Scope>('unassigned');
+  const [mode, setMode] = useState<Mode>('equal');
   const [selectedStageIds, setSelectedStageIds] = useState<string[]>([]);
   const [selectedSellerIds, setSelectedSellerIds] = useState<string[]>([]);
+  const [weights, setWeights] = useState<Record<string, number>>({});
   const [fromSellerId, setFromSellerId] = useState<string | null>(null);
   const redistribute = useRedistributeLeads();
+
+  // Pesos da distribuição automática (pra pré-preencher / botão "usar os mesmos").
+  const { data: autoConfig } = useFunnelDistribution(open ? funnelId : undefined);
 
   // Fetch sellers with access to this funnel (destination pool)
   const { data: sellers = [] } = useQuery({
@@ -103,8 +112,10 @@ const RedistributeLeadsDialog: React.FC<Props> = ({ open, onOpenChange, funnelId
   useEffect(() => {
     if (!open) {
       setScope('unassigned');
+      setMode('equal');
       setSelectedStageIds([]);
       setSelectedSellerIds([]);
+      setWeights({});
       setFromSellerId(null);
     }
   }, [open]);
@@ -115,10 +126,36 @@ const RedistributeLeadsDialog: React.FC<Props> = ({ open, onOpenChange, funnelId
     [sellers, scope, fromSellerId]
   );
 
-  const effectiveSelectedSellerIds = useMemo(
-    () => selectedSellerIds.filter(id => destinationSellers.some(s => s.id === id)),
-    [selectedSellerIds, destinationSellers]
-  );
+  // Preenche os pesos com os da distribuição automática (e zera quem não tem).
+  const applyAutoWeights = () => {
+    const saved = new Map((autoConfig?.weights || []).map(w => [w.user_id, w.weight] as const));
+    const next: Record<string, number> = {};
+    destinationSellers.forEach(s => {
+      next[s.id] = saved.get(s.id) ?? 0;
+    });
+    setWeights(next);
+  };
+
+  // Ao entrar no modo "por peso" pela 1ª vez, pré-preenche com os pesos da automática.
+  useEffect(() => {
+    if (mode === 'weighted' && Object.keys(weights).length === 0 && destinationSellers.length > 0) {
+      applyAutoWeights();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, autoConfig, destinationSellers]);
+
+  const setWeight = (sellerId: string, value: number) => {
+    const clamped = Math.max(0, Math.min(100, Math.round(value || 0)));
+    setWeights(prev => ({ ...prev, [sellerId]: clamped }));
+  };
+
+  // Vendedores que efetivamente recebem: por peso (>0) ou por checkbox selecionado.
+  const effectiveSelectedSellerIds = useMemo(() => {
+    if (mode === 'weighted') {
+      return destinationSellers.filter(s => (weights[s.id] ?? 0) > 0).map(s => s.id);
+    }
+    return selectedSellerIds.filter(id => destinationSellers.some(s => s.id === id));
+  }, [mode, weights, selectedSellerIds, destinationSellers]);
 
   // Preview calculation
   const preview = useMemo(() => {
@@ -153,20 +190,30 @@ const RedistributeLeadsDialog: React.FC<Props> = ({ open, onOpenChange, funnelId
     }
 
     const total = scopeFiltered.length;
-    const base = Math.floor(total / effectiveSelectedSellerIds.length);
-    const remainder = total % effectiveSelectedSellerIds.length;
 
-    const perSeller = effectiveSelectedSellerIds.map((id, idx) => {
-      const seller = destinationSellers.find(s => s.id === id);
-      return {
+    let perSeller: { id: string; name: string; count: number }[];
+    if (mode === 'weighted') {
+      const counts = weightedCounts(
+        total,
+        effectiveSelectedSellerIds.map(id => ({ id, weight: weights[id] ?? 0 }))
+      );
+      perSeller = effectiveSelectedSellerIds.map(id => ({
         id,
-        name: seller?.full_name || 'Sem nome',
+        name: destinationSellers.find(s => s.id === id)?.full_name || 'Sem nome',
+        count: counts[id] || 0,
+      }));
+    } else {
+      const base = Math.floor(total / effectiveSelectedSellerIds.length);
+      const remainder = total % effectiveSelectedSellerIds.length;
+      perSeller = effectiveSelectedSellerIds.map((id, idx) => ({
+        id,
+        name: destinationSellers.find(s => s.id === id)?.full_name || 'Sem nome',
         count: base + (idx < remainder ? 1 : 0),
-      };
-    });
+      }));
+    }
 
     return { total, perSeller };
-  }, [positions, selectedStageIds, effectiveSelectedSellerIds, scope, fromSellerId, destinationSellers]);
+  }, [positions, selectedStageIds, effectiveSelectedSellerIds, scope, fromSellerId, destinationSellers, mode, weights]);
 
   const toggleStage = (stageId: string) => {
     setSelectedStageIds(prev =>
@@ -188,12 +235,15 @@ const RedistributeLeadsDialog: React.FC<Props> = ({ open, onOpenChange, funnelId
         stageIds: selectedStageIds,
         sellerIds: effectiveSelectedSellerIds,
         fromSellerId: scope === 'from_seller' ? fromSellerId : null,
+        mode,
+        weights: mode === 'weighted' ? weights : undefined,
       },
       { onSuccess: () => onOpenChange(false) }
     );
   };
 
   const sourceSellerName = sellersWithLeads.find(s => s.id === fromSellerId)?.full_name;
+  const hasAutoWeights = (autoConfig?.weights || []).some(w => w.weight > 0);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -204,7 +254,7 @@ const RedistributeLeadsDialog: React.FC<Props> = ({ open, onOpenChange, funnelId
             Redistribuir Leads
           </DialogTitle>
           <DialogDescription>
-            Distribua leads igualmente entre os vendedores selecionados (round-robin).
+            Redistribui os leads existentes do funil entre os vendedores — agora, em lote.
           </DialogDescription>
         </DialogHeader>
 
@@ -255,6 +305,20 @@ const RedistributeLeadsDialog: React.FC<Props> = ({ open, onOpenChange, funnelId
             </div>
           )}
 
+          {/* Mode: igual x por peso */}
+          <div>
+            <label className="text-sm font-medium text-foreground mb-1.5 block">Como distribuir</label>
+            <Select value={mode} onValueChange={v => setMode(v as Mode)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="equal">Igualmente (round-robin)</SelectItem>
+                <SelectItem value="weighted">Por peso (%)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
           {/* Stage filter */}
           <div>
             <label className="text-sm font-medium text-foreground mb-1.5 block">
@@ -279,12 +343,43 @@ const RedistributeLeadsDialog: React.FC<Props> = ({ open, onOpenChange, funnelId
 
           {/* Destination Sellers */}
           <div>
-            <label className="text-sm font-medium text-foreground mb-1.5 flex items-center gap-1.5">
-              <Users className="h-4 w-4" />
-              {scope === 'from_seller' ? 'Distribuir para' : 'Vendedores'}
-            </label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-sm font-medium text-foreground flex items-center gap-1.5">
+                {mode === 'weighted' ? <Scale className="h-4 w-4" /> : <Users className="h-4 w-4" />}
+                {mode === 'weighted'
+                  ? 'Pesos por vendedor'
+                  : scope === 'from_seller'
+                  ? 'Distribuir para'
+                  : 'Vendedores'}
+              </label>
+              {mode === 'weighted' && hasAutoWeights && (
+                <button
+                  type="button"
+                  onClick={applyAutoWeights}
+                  className="text-xs text-primary hover:underline"
+                >
+                  Usar pesos da automática
+                </button>
+              )}
+            </div>
             {destinationSellers.length === 0 ? (
               <p className="text-sm text-muted-foreground">Nenhum vendedor com acesso a este funil.</p>
+            ) : mode === 'weighted' ? (
+              <div className="space-y-2 max-h-40 overflow-y-auto">
+                {destinationSellers.map(seller => (
+                  <div key={seller.id} className="flex items-center justify-between gap-3">
+                    <span className="text-sm text-foreground">{seller.full_name}</span>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={weights[seller.id] ?? 0}
+                      onChange={e => setWeight(seller.id, Number(e.target.value))}
+                      className="w-20 text-right"
+                    />
+                  </div>
+                ))}
+              </div>
             ) : (
               <div className="space-y-1.5 max-h-32 overflow-y-auto">
                 {destinationSellers.map(seller => (
@@ -297,6 +392,11 @@ const RedistributeLeadsDialog: React.FC<Props> = ({ open, onOpenChange, funnelId
                   </label>
                 ))}
               </div>
+            )}
+            {mode === 'weighted' && effectiveSelectedSellerIds.length === 0 && destinationSellers.length > 0 && (
+              <p className="text-xs text-amber-600 dark:text-amber-500 mt-1.5">
+                Defina um peso maior que 0 para ao menos um vendedor.
+              </p>
             )}
           </div>
 

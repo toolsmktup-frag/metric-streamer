@@ -634,7 +634,8 @@ const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSave
                 Redistribuir Leads
               </Button>
               <p className="text-xs text-muted-foreground mt-1.5">
-                Distribui leads igualmente entre os vendedores com acesso ao funil (round-robin).
+                Redistribui os leads já existentes do funil — agora, em lote. Escolha o escopo
+                (sem vendedor, todos, etc.) e distribua igualmente ou por peso (ex.: 90/10).
               </p>
               <RedistributeLeadsDialog
                 open={redistributeOpen}

@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { weightedSequence } from '@/lib/weightedDistribution';
 
 interface RedistributeParams {
   funnelId: string;
@@ -8,13 +9,15 @@ interface RedistributeParams {
   stageIds: string[]; // empty = all stages
   sellerIds: string[];
   fromSellerId?: string | null;
+  mode?: 'equal' | 'weighted'; // default: 'equal' (round-robin igual)
+  weights?: Record<string, number>; // sellerId -> peso, usado quando mode === 'weighted'
 }
 
 export function useRedistributeLeads() {
   const qc = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ funnelId, scope, stageIds, sellerIds, fromSellerId }: RedistributeParams) => {
+    mutationFn: async ({ funnelId, scope, stageIds, sellerIds, fromSellerId, mode = 'equal', weights }: RedistributeParams) => {
       if (!sellerIds.length) throw new Error('Selecione ao menos um vendedor');
       if (scope === 'from_seller' && !fromSellerId) throw new Error('Selecione o vendedor de origem');
 
@@ -87,14 +90,27 @@ export function useRedistributeLeads() {
 
       if (!filteredLeadIds.length) throw new Error('Nenhum lead encontrado com o escopo selecionado');
 
-      // 4. Round-robin distribution
+      // 4. Distribuição: igual (round-robin) ou ponderada (weighted round-robin).
       const updates: { leadId: string; sellerId: string }[] = [];
-      filteredLeadIds.forEach((leadId, idx) => {
-        updates.push({
-          leadId,
-          sellerId: sellerIds[idx % sellerIds.length],
+      if (mode === 'weighted') {
+        const weightedSellers = sellerIds
+          .map(id => ({ id, weight: weights?.[id] ?? 0 }))
+          .filter(s => s.weight > 0);
+        if (!weightedSellers.length) {
+          throw new Error('Defina um peso maior que 0 para ao menos um vendedor');
+        }
+        const seq = weightedSequence(filteredLeadIds.length, weightedSellers);
+        filteredLeadIds.forEach((leadId, idx) => {
+          updates.push({ leadId, sellerId: seq[idx] });
         });
-      });
+      } else {
+        filteredLeadIds.forEach((leadId, idx) => {
+          updates.push({
+            leadId,
+            sellerId: sellerIds[idx % sellerIds.length],
+          });
+        });
+      }
 
       // 5. Batch update in chunks
       for (let i = 0; i < updates.length; i += 100) {
