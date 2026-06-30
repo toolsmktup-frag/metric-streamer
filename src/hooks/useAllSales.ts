@@ -274,10 +274,13 @@ export function useAllSalesAggregation(funnelId?: string | null, ingestionType?:
   const confirmed = allSales.filter(t => {
     if (t.status !== 'authorized') return false;
     if (funnelId && needsProductFunnelFilter) {
-      // Pertence ao funil pelo funnel_id da transação OU pelo funil do produto
-      // (mapped_funnel_id, vindo de funnel_products). NÃO excluir por classificação
-      // 'other' — isso é o que derrubava order bumps/upsells e a receita do dash.
-      const belongsToFunnel = t.funnel_id === funnelId || t.mapped_funnel_id === funnelId;
+      // O PRODUTO define o funil: só conta as vendas dos produtos cadastrados no
+      // funil (mapped_funnel_id, vindo de funnel_products). Não usamos funnel_id da
+      // transação porque ele pode ser HERDADO de outra venda do mesmo cliente
+      // (resolveInheritedAttribution) e puxar produtos de OUTRO funil para cá —
+      // era isso que inflava o resumo do funil vs a KPI (ex.: "Combo Erveiros"
+      // entrando no Guia de Tinturas). Assim o resumo do funil bate com a KPI.
+      const belongsToFunnel = t.mapped_funnel_id === funnelId;
       if (!belongsToFunnel) return false;
     }
     if (paidTrafficOnly && !hasMetaAttribution(t)) return false;
