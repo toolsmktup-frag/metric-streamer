@@ -53,6 +53,14 @@ const stageName = (stages: LeadFunnelStage[], id?: string | null) => stages.find
 
 const isInstanceOnline = (status?: string) => status === 'open' || status === 'connected';
 
+const formatPhone = (raw?: string) => {
+  if (!raw) return '';
+  const digits = raw.replace(/\D/g, '');
+  const br = digits.match(/^55(\d{2})(\d{4,5})(\d{4})$/);
+  if (br) return `+55 (${br[1]}) ${br[2]}-${br[3]}`;
+  return raw;
+};
+
 const StatusDot = ({ online }: { online: boolean }) => (
   <span
     className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${online ? 'bg-emerald-500' : 'bg-destructive'}`}
@@ -196,9 +204,12 @@ const WhatsAppGroupSyncConfig: React.FC<WhatsAppGroupSyncConfigProps> = ({ funne
             <Select value={config.instance_id || ''} onValueChange={value => update('instance_id', value)}>
               <SelectTrigger>
                 {config.instance_id ? (
-                  <span className="flex items-center gap-2">
+                  <span className="flex min-w-0 items-center gap-2">
                     <StatusDot online={isInstanceOnline(instanceProfiles[config.instance_id]?.status)} />
-                    {instances.find(instance => instance.id === config.instance_id)?.name || 'Instância'}
+                    <span className="truncate">{instances.find(instance => instance.id === config.instance_id)?.name || 'Instância'}</span>
+                    {instanceProfiles[config.instance_id]?.phone_number && (
+                      <span className="shrink-0 text-xs text-muted-foreground">· {formatPhone(instanceProfiles[config.instance_id]?.phone_number)}</span>
+                    )}
                   </span>
                 ) : (
                   <SelectValue placeholder="Escolha a instância UAZAPI" />
@@ -209,7 +220,10 @@ const WhatsAppGroupSyncConfig: React.FC<WhatsAppGroupSyncConfigProps> = ({ funne
                   <SelectItem key={instance.id} value={instance.id}>
                     <span className="flex items-center gap-2">
                       <StatusDot online={isInstanceOnline(instanceProfiles[instance.id]?.status)} />
-                      {instance.name}
+                      <span>{instance.name}</span>
+                      {instanceProfiles[instance.id]?.phone_number && (
+                        <span className="text-xs text-muted-foreground">· {formatPhone(instanceProfiles[instance.id]?.phone_number)}</span>
+                      )}
                     </span>
                   </SelectItem>
                 ))}
