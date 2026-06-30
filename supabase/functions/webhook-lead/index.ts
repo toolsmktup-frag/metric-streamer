@@ -197,6 +197,26 @@ Deno.serve(async (req) => {
       }
     }
 
+    // 4.5. Auto-distribute lead by weighted distribution (non-fatal).
+    // Só tenta se o lead ainda não tem dono; a RPC re-checa de forma atômica
+    // e é no-op quando o toggle do funil está desligado. Falha não interrompe o fluxo.
+    if (!lead.assigned_to) {
+      try {
+        const { data: assignedTo, error: distError } = await supabase.rpc('assign_lead_by_distribution', {
+          p_funnel_id: funnel.id,
+          p_lead_id: lead.id,
+        })
+        if (distError) {
+          console.error('[webhook-lead] assign_lead_by_distribution failed:', distError)
+        } else if (assignedTo) {
+          lead.assigned_to = assignedTo
+          console.log('[webhook-lead] lead auto-assigned to:', assignedTo)
+        }
+      } catch (distErr) {
+        console.error('[webhook-lead] assign_lead_by_distribution threw:', distErr)
+      }
+    }
+
     // 5. Forward lead events to WhatsApp automation engine (non-fatal)
     // Map lead-capture events to canonical 'signup' for the automation engine.
     // The original event name is preserved in lead_events (tag visible in the card).

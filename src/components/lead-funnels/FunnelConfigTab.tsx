@@ -16,6 +16,7 @@ import FunnelProductsConfig from './FunnelProductsConfig';
 import FunnelAutomationsConfig from './FunnelAutomationsConfig';
 import WhatsAppGroupSyncConfig from './WhatsAppGroupSyncConfig';
 import RedistributeLeadsDialog from './RedistributeLeadsDialog';
+import FunnelDistributionConfig from './FunnelDistributionConfig';
 import ProductMappingConfig from './ProductMappingConfig';
 import StageMappingConfig from './StageMappingConfig';
 import { getDefaultClassification, classificationLabel } from '@/lib/valueClassification';
@@ -643,6 +644,10 @@ const FunnelConfigTab: React.FC<FunnelConfigTabProps> = ({ stages, rules, onSave
                 positions={positions}
               />
             </div>
+          )}
+
+          {funnelId && (
+            <FunnelDistributionConfig funnelId={funnelId} />
           )}
         </TabsContent>
       </Tabs>
