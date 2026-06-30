@@ -5,6 +5,14 @@
 > **Resumo:** existem DOIS sistemas de funil paralelos, sem conceito de "tipo", o que gera
 > retrabalho de configuração a cada funil novo.
 
+> **Atualização 2026-06-30** — a classificação de venda por funil ficou **durável no banco**:
+> a view `v_all_sales_classified` deriva `funnel_position`/`mapped_role`/`mapped_funnel_id`
+> de `funnel_products` (match por `product_id`+`platform`, fallback `product_name_contains`).
+> **Regra única hoje: o produto define o funil** (`mapped_funnel_id`); o `funnel_id` da
+> transação é atribuição e pode ser herdado entre vendas do mesmo cliente. O **investimento**
+> de um funil vem de `meta_campaigns` vinculadas a ele. Detalhes e correções recentes em
+> `FIX-FUNIL-DASHBOARD-2026-06-30.md` (order bump embutido, Resumo×KPI, vínculo de campanhas).
+
 ## Os dois sistemas
 
 ### A) `funnels` — funil de tráfego/vendas
