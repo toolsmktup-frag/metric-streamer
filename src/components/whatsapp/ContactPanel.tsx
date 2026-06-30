@@ -54,6 +54,8 @@ const EVENT_MAP: Record<string, EventMapping> = {
   waiting_payment: { label: 'Aguardando Pagamento', icon: Clock, colorClass: 'bg-amber-500/10 text-amber-500' },
   funnel_change: { label: 'Funil alterado manualmente', icon: MapPin, colorClass: 'bg-blue-500/10 text-blue-500' },
   stage_change: { label: 'Etapa alterada', icon: Activity, colorClass: 'bg-primary/10 text-primary' },
+  transferencia_girassol: { label: 'Transferência da Girassol', icon: AlertTriangle, colorClass: 'bg-orange-500/10 text-orange-500' },
+  ticket_resolved: { label: 'Ticket Resolvido', icon: CheckCircle2, colorClass: 'bg-emerald-500/10 text-emerald-500' },
 };
 
 const DEFAULT_EVENT: EventMapping = { label: '', icon: Activity, colorClass: 'bg-primary/10 text-primary' };
@@ -481,6 +483,12 @@ export default function ContactPanel({ phone, senderName, contactPicture }: Cont
                         <p className="text-[9px] text-muted-foreground truncate mt-0.5">
                           {(ev.metadata as any).product_name}
                           {(ev.metadata as any).amount && ` · ${formatCurrency(Number((ev.metadata as any).amount))}`}
+                        </p>
+                      )}
+                      {((ev.metadata as any)?.motivo || (ev.metadata as any)?.reason_label || (ev.metadata as any)?.note) && (
+                        <p className="text-[10px] leading-snug text-foreground/80 bg-muted/60 rounded px-1.5 py-1 mt-0.5 border-l-2 border-orange-400/50">
+                          {(ev.metadata as any).motivo || (ev.metadata as any).reason_label}
+                          {(ev.metadata as any).note && <span className="block text-muted-foreground mt-0.5">{(ev.metadata as any).note}</span>}
                         </p>
                       )}
                     </div>

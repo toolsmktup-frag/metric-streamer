@@ -69,6 +69,8 @@ const EVENT_MAP: Record<string, EventMapping> = {
   live: { label: 'Entrou na Live', icon: Eye, colorClass: 'bg-muted text-muted-foreground' },
   stage_change: { label: 'Mudou de Etapa', icon: Activity, colorClass: 'bg-muted text-muted-foreground' },
   whatsapp_group_sync: { label: 'Sync WhatsApp', icon: Activity, colorClass: 'bg-muted text-muted-foreground' },
+  transferencia_girassol: { label: 'Transferência da Girassol', icon: AlertTriangle, colorClass: 'bg-orange-500/10 text-orange-500' },
+  ticket_resolved: { label: 'Ticket Resolvido', icon: CheckCircle2, colorClass: 'bg-emerald-500/10 text-emerald-500' },
 };
 
 const DEFAULT_EVENT: EventMapping = { label: '', icon: Activity, colorClass: 'bg-primary/10 text-primary' };
@@ -398,6 +400,14 @@ const LeadTimeline: React.FC<LeadTimelineProps> = ({ lead, open, onClose }) => {
                               <p className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-1">
                                 <Clock className="h-2.5 w-2.5" /> {timeDelta}
                               </p>
+                            )}
+                            {/* Motivo do atendimento (transferência da Girassol) / resolução do ticket */}
+                            {(meta?.motivo || meta?.reason_label || meta?.note) && (
+                              <div className="mt-1 text-[11px] leading-snug text-foreground/80 bg-muted/60 rounded-md px-2 py-1 border-l-2 border-orange-400/50">
+                                {meta.motivo && <span>{meta.motivo}</span>}
+                                {meta.reason_label && <span className="font-medium">{meta.reason_label}</span>}
+                                {meta.note && <span className="block text-muted-foreground mt-0.5">{meta.note}</span>}
+                              </div>
                             )}
                             {meta && Object.keys(meta).length > 0 && (
                               <div className="flex items-center gap-2 mt-1 text-[10px] flex-wrap">

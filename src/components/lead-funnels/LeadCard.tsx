@@ -1,6 +1,6 @@
 import React from 'react';
 import { Lead, LeadFunnelStage, LeadStagePosition, ValueClassification } from '@/types/leadFunnels';
-import { Mail, Phone, Clock, DollarSign, GripVertical, MessageCircle, ShoppingBag, CalendarClock, Timer, EyeOff, AlertTriangle, Hourglass, Check, ArrowRight } from 'lucide-react';
+import { Mail, Phone, Clock, DollarSign, GripVertical, MessageCircle, ShoppingBag, CalendarClock, Timer, EyeOff, AlertTriangle, Hourglass, Check, ArrowRight, Headset } from 'lucide-react';
 import { PurchaseSummary } from '@/hooks/useBulkLeadPurchases';
 import { useDraggable } from '@dnd-kit/core';
 import { formatLocalDateTime } from '@/lib/localDate';
@@ -11,6 +11,7 @@ import GuruAccountBadge from '@/components/GuruAccountBadge';
 import { extractMetadataAmount, classificationColor, classificationLabel } from '@/lib/valueClassification';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useMoveLeadStage } from '@/hooks/useMoveLeadStage';
+import { useAssignLead } from '@/hooks/useAssignLead';
 
 interface LeadCardProps {
   position: LeadStagePosition & { lead: Lead };
@@ -53,7 +54,43 @@ const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, onWhatsAppClick,
     id: position.id,
   });
   const moveStage = useMoveLeadStage();
+  const assignLead = useAssignLead();
   const [stageMenuOpen, setStageMenuOpen] = React.useState(false);
+
+  // Board de suporte (Girassol): ações diretas no card em vez de depender do arrastar.
+  const isSupportBoard = (resolutionStageIds?.size ?? 0) > 0;
+  const inAttendanceStage = React.useMemo(
+    () => (stages || []).find(s => /em atend/i.test(s.name)),
+    [stages]
+  );
+  const resolvedStage = React.useMemo(
+    () => (stages || []).find(s => resolutionStageIds?.has(s.id)),
+    [stages, resolutionStageIds]
+  );
+  const isInAttendance = !!inAttendanceStage && position.stage_id === inAttendanceStage.id;
+  const isResolved = !!resolutionStageIds?.has(position.stage_id);
+
+  const handleAssumir = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!inAttendanceStage || moveStage.isPending) return;
+    // Atribui o lead a quem assumiu (se ainda não for) e move para "Em atendimento".
+    if (currentUserId && lead.assigned_to !== currentUserId) {
+      assignLead.mutate({ leadId: lead.id, assignedTo: currentUserId });
+    }
+    moveStage.mutate({
+      positionId: position.id,
+      leadId: position.lead_id,
+      funnelId: position.funnel_id,
+      fromStageId: position.stage_id,
+      toStageId: inAttendanceStage.id,
+      toStageName: inAttendanceStage.name,
+    });
+  };
+
+  const handleResolver = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (resolvedStage && onResolveRequest) onResolveRequest(resolvedStage);
+  };
 
   const style = transform
     ? { transform: `translate(${transform.x}px, ${transform.y}px)` }
@@ -295,6 +332,33 @@ const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, onWhatsAppClick,
             <span className="text-[10px] px-1.5 py-0.5 bg-muted rounded text-muted-foreground">
               {friendlyStatus(lead.metadata.status as string)}
             </span>
+          )}
+        </div>
+      )}
+
+      {/* Board de suporte: ações diretas (sem precisar arrastar o card) */}
+      {isSupportBoard && !isResolved && (
+        <div className="mt-2 ml-[42px] flex items-center gap-2" onClick={e => e.stopPropagation()}>
+          {!isInAttendance && inAttendanceStage && (
+            <button
+              type="button"
+              onClick={handleAssumir}
+              disabled={moveStage.isPending}
+              className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors disabled:opacity-50"
+              title="Atribuir a mim e colocar em atendimento"
+            >
+              <Headset className="h-3.5 w-3.5" /> Assumir
+            </button>
+          )}
+          {isInAttendance && resolvedStage && (
+            <button
+              type="button"
+              onClick={handleResolver}
+              className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 transition-colors"
+              title="Finalizar atendimento (motivo + devolver pra IA)"
+            >
+              <Check className="h-3.5 w-3.5" /> Resolver
+            </button>
           )}
         </div>
       )}
