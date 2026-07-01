@@ -235,7 +235,7 @@ Deno.serve(async (req) => {
     const statusDateRaw = payload.status_date || invoice.status_date || invoice.confirmed_at || invoice.attemptDate || dates.confirmed_at || dates.updated_at || dates.created_at || invoice.created_at || contract.updatedAt || null;
     const orderDateRaw = order.order_date || invoice.order_date || invoice.created_at || invoice.attemptDate || contract.createdAt || dates.ordered_at || dates.confirmed_at || dates.created_at || null;
     const statusDate = safeISO(statusDateRaw);
-    const orderDate = safeISO(orderDateRaw);
+    let orderDate = safeISO(orderDateRaw);
 
     const rawStatus = String(payload.status || order.status || invoice.status || contract.status || payload.event || "").toLowerCase();
     const late = rawStatus === "late" ? "pending" : null;
@@ -259,6 +259,15 @@ Deno.serve(async (req) => {
       abandoned: "abandoned_cart",
     };
     const normalizedStatus = late || statusMap[rawStatus] || rawStatus || "open";
+
+    // Venda paga conta no dia do PAGAMENTO (status_date), não no dia do pedido
+    // base. O upsell one-click (e o pix tardio) do Ticto reusa o order.order_date
+    // do pedido original, então a receita caía num dia anterior e sumia do "hoje".
+    // Não retrocede se, por algum motivo, a data de status vier antes da do pedido.
+    if (normalizedStatus === "authorized" && statusDate &&
+        (!orderDate || new Date(statusDate).getTime() >= new Date(orderDate).getTime())) {
+      orderDate = statusDate;
+    }
 
     const amountInCents = extractPaidAmountCents(payload, order, item, payment, invoice);
     const productName = extractProductName(payload, item, invoice);
