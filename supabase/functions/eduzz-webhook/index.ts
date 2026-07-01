@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveQuantity } from "../_shared/potQuantity.ts";
+import { readJsonBody } from "../_shared/readJsonBody.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -88,7 +89,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const payload = await req.json();
+    const payload = await readJsonBody(req);
 
     // Ping/teste
     if (payload.event === "ping" || payload.data?.message === "ping") {

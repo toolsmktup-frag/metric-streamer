@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { brPhoneForms } from '@/lib/phone';
 
 export interface LeadPurchase {
   id: string;
@@ -40,22 +41,20 @@ export function useLeadPurchases(email: string | null, phone: string | null) {
       }
 
       if (!customerId && phone) {
-        // Generate phone variations for flexible matching
-        const digits = phone.replace(/\D/g, '');
-        const phoneVariants = [phone, digits, `+${digits}`];
-        if (digits.startsWith('55') && digits.length >= 12) {
-          phoneVariants.push(digits.slice(2));
-        } else if (digits.length >= 10 && digits.length <= 11) {
-          phoneVariants.push(`55${digits}`, `+55${digits}`);
-        }
+        // Casa o cliente por todas as formas do número (9º dígito/DDI), igual ao
+        // resto do app — evita "compra na timeline mas sem receita" quando o
+        // telefone foi gravado num formato diferente do unified_customers.
+        const phoneVariants = brPhoneForms(phone);
 
-        const { data } = await supabase
-          .from('unified_customers')
-          .select('id')
-          .in('primary_phone', [...new Set(phoneVariants)])
-          .limit(1)
-          .maybeSingle();
-        customerId = data?.id ?? null;
+        if (phoneVariants.length > 0) {
+          const { data } = await supabase
+            .from('unified_customers')
+            .select('id')
+            .in('primary_phone', phoneVariants)
+            .limit(1)
+            .maybeSingle();
+          customerId = data?.id ?? null;
+        }
       }
 
       if (!customerId) {

@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { readJsonBody } from "../_shared/readJsonBody.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -119,7 +120,7 @@ Deno.serve(async (req) => {
   let urlToken: string | null = null;
 
   try {
-    payload = await req.json();
+    payload = await readJsonBody(req);
     urlToken = new URL(req.url).searchParams.get("token");
   } catch (parseErr) {
     // Audit even parse failures
