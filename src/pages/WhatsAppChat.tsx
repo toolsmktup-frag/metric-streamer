@@ -376,7 +376,9 @@ export default function WhatsAppChat() {
             instanceId={effectiveInstanceId || undefined}
             phoneForActions={selectedPhone || undefined}
           />
-          {selectedPhone && <BotControlBar phone={selectedPhone} />}
+          {selectedPhone && botInstanceId && effectiveInstanceId === botInstanceId && (
+            <BotControlBar phone={selectedPhone} />
+          )}
           {selectedPhone && effectiveInstanceId && (
             <ChatInput
               instanceId={effectiveInstanceId}

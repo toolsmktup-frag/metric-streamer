@@ -38,6 +38,64 @@ function phoneVariations(phone: string): string[] {
   return [...set]
 }
 
+// Descasca DDI 55 e reduz o número BR à sua parte "DDD + local".
+// Retorna null quando não parece um número BR (10 ou 11 dígitos após o DDI).
+function brDddLocal(phone: string): { ddd: string; local: string } | null {
+  let d = normalizePhone(phone)
+  if (d.startsWith('55') && d.length >= 12) d = d.slice(2)
+  if (d.length < 10 || d.length > 11) return null
+  return { ddd: d.slice(0, 2), local: d.slice(2) }
+}
+
+// Chave canônica que colapsa as variações do "9º dígito" e do DDI:
+// mesmo contato (mesmo DDD + mesmos 8 dígitos finais) → mesma chave.
+// Ex.: 554999083301 e 5549999083301 → ambos "4999083301".
+function brCanonicalKey(phone: string): string {
+  const parsed = brDddLocal(phone)
+  if (!parsed) return normalizePhone(phone)
+  const { ddd, local } = parsed
+  // Celular com 9º dígito (9 dígitos começando em 9) → derruba o 9 para casar
+  // com o registro legado de 8 dígitos.
+  const base = local.length === 9 && local[0] === '9' ? local.slice(1) : local
+  return `${ddd}${base}`
+}
+
+// Todas as formas plausíveis em que o número pode estar gravado, para casar
+// mensagens/contatos que ficaram em formatos diferentes do mesmo contato.
+function brPhoneForms(phone: string): string[] {
+  const parsed = brDddLocal(phone)
+  if (!parsed) return phoneVariations(phone)
+  const { ddd, local } = parsed
+  const isMobile = local.length === 9 && local[0] === '9'
+  const base8 = isMobile ? local.slice(1) : local
+  const locals = new Set<string>([local])
+  // Só pareia as formas 8↔9 dígitos para celulares (base começa em 6-9).
+  if (/[6-9]/.test(base8[0])) {
+    locals.add(base8)
+    locals.add(`9${base8}`)
+  }
+  const forms = new Set<string>()
+  for (const loc of locals) {
+    forms.add(`${ddd}${loc}`)
+    forms.add(`55${ddd}${loc}`)
+    forms.add(`+55${ddd}${loc}`)
+    forms.add(`+${ddd}${loc}`)
+  }
+  return [...forms]
+}
+
+// Forma "bonita" para exibição/identificador: celular sempre com 55 + DDD + 9 + 8
+// dígitos (o front formata 13 dígitos como (DD) 9XXXX-XXXX).
+function brDisplayPhone(phone: string): string {
+  const parsed = brDddLocal(phone)
+  if (!parsed) return normalizePhone(phone)
+  const { ddd, local } = parsed
+  const isMobile = local.length === 9 && local[0] === '9'
+  const base8 = isMobile ? local.slice(1) : local
+  const canonicalLocal = /[6-9]/.test(base8[0]) ? `9${base8}` : local
+  return `55${ddd}${canonicalLocal}`
+}
+
 interface AuthContext {
   userId: string
   orgId: string
@@ -304,16 +362,18 @@ Deno.serve(async (req) => {
       for (const msg of visibleMessages) {
         if (!msg?.phone || !msg?.instance_id) continue
 
-        const key = `${msg.instance_id}__${msg.phone}`
+        // Agrupa por chave canônica (colapsa 9º dígito/DDI) para não duplicar o
+        // mesmo contato gravado em formatos diferentes.
+        const key = `${msg.instance_id}__${brCanonicalKey(msg.phone)}`
         if (!chatMap.has(key)) {
           chatMap.set(key, {
-            phone: msg.phone,
+            phone: brDisplayPhone(msg.phone),
             instance_id: msg.instance_id,
             last_message: msg,
             sender_name: msg.sender_name,
             unread_count: 0,
           })
-          relevantPhones.add(msg.phone)
+          for (const form of brPhoneForms(msg.phone)) relevantPhones.add(form)
           relevantInstanceIds.add(msg.instance_id)
         }
 
@@ -327,7 +387,9 @@ Deno.serve(async (req) => {
       }
 
       let contactMap = new Map<string, any>()
-      const contactPhoneValues = [...relevantPhones].slice(0, 150)
+      // relevantPhones agora guarda várias formas por contato (9º dígito/DDI),
+      // então o teto é maior para não perder nomes/fotos.
+      const contactPhoneValues = [...relevantPhones].slice(0, 900)
       const contactInstanceIds = [...relevantInstanceIds]
 
       if (contactPhoneValues.length > 0) {
@@ -348,7 +410,7 @@ Deno.serve(async (req) => {
           console.warn('[whatsapp-chats] contacts query failed (continuing without contacts):', serializeError(contactsError))
         } else {
           contactMap = new Map(
-            (contactsData || []).map((contact: any) => [`${contact.instance_id}__${contact.phone}`, contact])
+            (contactsData || []).map((contact: any) => [`${contact.instance_id}__${brCanonicalKey(contact.phone)}`, contact])
           )
         }
       }
@@ -406,6 +468,8 @@ Deno.serve(async (req) => {
       }
 
       const cleanPhone = normalizePhone(phone)
+      // Casa todas as formas do número (9º dígito/DDI) para unificar a thread.
+      const phoneForms = brPhoneForms(phone)
       const limit = Math.min(Math.max(parseInt(url.searchParams.get('limit') || '50', 10), 1), 200)
       const offset = Math.max(parseInt(url.searchParams.get('offset') || '0', 10), 0)
 
@@ -425,7 +489,7 @@ Deno.serve(async (req) => {
         .from('whatsapp_messages')
         .select('id, organization_id, instance_id, phone, body, message_type, direction, status, media_url, media_mime_type, media_filename, message_id_external, payload_raw, is_deleted, lead_id, sender_name, created_at, updated_at')
         .eq('organization_id', orgId)
-        .eq('phone', cleanPhone)
+        .in('phone', phoneForms)
         .order('created_at', { ascending: true })
         .range(offset, offset + limit - 1)
 
@@ -451,7 +515,7 @@ Deno.serve(async (req) => {
           .from('whatsapp_messages')
           .update({ status: 'read', updated_at: new Date().toISOString() })
           .eq('organization_id', orgId)
-          .eq('phone', cleanPhone)
+          .in('phone', phoneForms)
           .eq('direction', 'inbound')
           .neq('status', 'read')
 
