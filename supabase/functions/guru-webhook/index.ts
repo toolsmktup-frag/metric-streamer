@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveQuantity } from "../_shared/potQuantity.ts";
 import { readJsonBody } from "../_shared/readJsonBody.ts";
+import { parseUtmPair } from "../_shared/parseUtmPair.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -154,18 +155,6 @@ Deno.serve(async (req) => {
     }
 
     // Meta Ads IDs — Guru pode enviar diretamente ou via UTM "Name|id"
-    function parseUtmPair(value: string | null): { name: string | null; id: string | null } {
-      if (!value) return { name: null, id: null };
-      const parts = value.split("|");
-      if (parts.length === 2) {
-        let id = parts[1].trim();
-        const colonIdx = id.indexOf("::");
-        if (colonIdx > 0) id = id.substring(0, colonIdx);
-        return { name: parts[0].trim(), id };
-      }
-      return { name: value, id: null };
-    }
-
     const campaignParsed = parseUtmPair(utmCampaign);
     const adsetParsed    = parseUtmPair(utmMedium);
     const adParsed       = parseUtmPair(utmContent);

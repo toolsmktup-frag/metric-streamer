@@ -1,24 +1,12 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { readJsonBody } from "../_shared/readJsonBody.ts";
+import { parseUtmPair } from "../_shared/parseUtmPair.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type",
 };
-
-/** Extract ID and name from UTM values like "Campaign Name|12345" */
-function parseUtmPair(value: string | null): { name: string | null; id: string | null } {
-  if (!value || value === "Não Informado") return { name: null, id: null };
-  const parts = value.split("|");
-  if (parts.length === 2) {
-    let id = parts[1].trim();
-    const colonIdx = id.indexOf("::");
-    if (colonIdx > 0) id = id.substring(0, colonIdx);
-    return { name: parts[0].trim(), id };
-  }
-  return { name: value, id: null };
-}
 
 function isPaidTraffic(tracking: Record<string, string>): boolean {
   const source = tracking?.utm_source;

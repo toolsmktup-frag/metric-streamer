@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveQuantity } from "../_shared/potQuantity.ts";
 import { readJsonBody } from "../_shared/readJsonBody.ts";
+import { parseUtmPair } from "../_shared/parseUtmPair.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -13,19 +14,6 @@ function jsonResponse(body: unknown, status = 200) {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
-}
-
-/** Extrai ID e nome do par "Nome|id" usado nos UTMs do Meta */
-function parseUtmPair(value: string | null): { name: string | null; id: string | null } {
-  if (!value) return { name: null, id: null };
-  const parts = value.split("|");
-  if (parts.length === 2) {
-    let id = parts[1].trim();
-    const colonIdx = id.indexOf("::");
-    if (colonIdx > 0) id = id.substring(0, colonIdx);
-    return { name: parts[0].trim(), id };
-  }
-  return { name: value, id: null };
 }
 
 function isPaidTraffic(utmSource: string | null): boolean {
