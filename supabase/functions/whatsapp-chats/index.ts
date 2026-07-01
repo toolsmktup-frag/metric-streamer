@@ -415,6 +415,29 @@ Deno.serve(async (req) => {
         }
       }
 
+      // Fallback de nome pela tabela de leads — o painel usa lead.name, então a
+      // lista deve casar (evita mostrar o número cru quando o contato não veio do
+      // WhatsApp, ex.: conversa só com mensagens de saída). Indexado por canônico.
+      const leadNameMap = new Map<string, string>()
+      if (contactPhoneValues.length > 0) {
+        const { data: leadRows, error: leadErr } = await adminClient
+          .from('leads')
+          .select('phone, name')
+          .eq('organization_id', orgId)
+          .in('phone', contactPhoneValues)
+
+        if (leadErr) {
+          console.warn('[whatsapp-chats] leads name query failed (continuing):', serializeError(leadErr))
+        } else {
+          for (const row of (leadRows || []) as Array<{ phone: string | null; name: string | null }>) {
+            const nm = (row?.name || '').trim()
+            if (!row?.phone || !nm) continue
+            const k = brCanonicalKey(row.phone)
+            if (!leadNameMap.has(k)) leadNameMap.set(k, nm)
+          }
+        }
+      }
+
       // Carrega nomes das instâncias da org pra filtrar nomes "poluídos"
       // (UAZAPI grava nome da instância como senderName em mensagens fromMe).
       const instanceNameSet = new Set<string>()
@@ -446,6 +469,14 @@ Deno.serve(async (req) => {
         // Limpa sender_name se for nome de instância
         if (isInstanceName(chat.sender_name)) {
           chat.sender_name = chat.contact_name || null
+        }
+        // Sem nome útil do WhatsApp → usa o nome do lead (mesmo do painel).
+        if (!chat.contact_name && !chat.sender_name) {
+          const leadName = leadNameMap.get(brCanonicalKey(chat.phone))
+          if (leadName) {
+            chat.contact_name = leadName
+            chat.sender_name = leadName
+          }
         }
       }
 
