@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { Lead, LeadStagePosition } from '@/types/leadFunnels';
+import { brPhoneForms } from '@/lib/phone';
 
 export interface PurchaseSummary {
   totalSpent: number;
@@ -27,10 +28,17 @@ export function useBulkLeadPurchases(
         keyMap.set(`e:${email}`, set);
       }
       if (phone) {
-        phoneSet.add(phone);
-        const set = keyMap.get(`p:${phone}`) || new Set();
-        set.add(p.lead_id);
-        keyMap.set(`p:${phone}`, set);
+        // Manda TODAS as formas do número (9º dígito/DDI) pra RPC e mapeia cada
+        // uma de volta ao lead — a RPC casa por igualdade exata em
+        // customer_identity_links, então o formato precisa bater.
+        const forms = brPhoneForms(phone);
+        const list = forms.length > 0 ? forms : [phone];
+        for (const f of list) {
+          phoneSet.add(f);
+          const set = keyMap.get(`p:${f}`) || new Set();
+          set.add(p.lead_id);
+          keyMap.set(`p:${f}`, set);
+        }
       }
     });
 
