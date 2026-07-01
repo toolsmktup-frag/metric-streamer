@@ -84,18 +84,6 @@ function brPhoneForms(phone: string): string[] {
   return [...forms]
 }
 
-// Forma "bonita" para exibição/identificador: celular sempre com 55 + DDD + 9 + 8
-// dígitos (o front formata 13 dígitos como (DD) 9XXXX-XXXX).
-function brDisplayPhone(phone: string): string {
-  const parsed = brDddLocal(phone)
-  if (!parsed) return normalizePhone(phone)
-  const { ddd, local } = parsed
-  const isMobile = local.length === 9 && local[0] === '9'
-  const base8 = isMobile ? local.slice(1) : local
-  const canonicalLocal = /[6-9]/.test(base8[0]) ? `9${base8}` : local
-  return `55${ddd}${canonicalLocal}`
-}
-
 interface AuthContext {
   userId: string
   orgId: string
@@ -367,7 +355,11 @@ Deno.serve(async (req) => {
         const key = `${msg.instance_id}__${brCanonicalKey(msg.phone)}`
         if (!chatMap.has(key)) {
           chatMap.set(key, {
-            phone: brDisplayPhone(msg.phone),
+            // Representante = número REAL da mensagem (o JID que o WhatsApp usa),
+            // NÃO uma forma sintética — o front usa este phone pra ENVIAR e pro
+            // realtime, então precisa ser o número que entrega de fato.
+            phone: msg.phone,
+            rep_from_inbound: msg.direction === 'inbound',
             instance_id: msg.instance_id,
             last_message: msg,
             sender_name: msg.sender_name,
@@ -378,6 +370,12 @@ Deno.serve(async (req) => {
         }
 
         const current = chatMap.get(key)
+        // Prefere o JID de uma mensagem inbound (número real que o contato usa).
+        // Mensagens vêm DESC, então fixa na inbound mais recente e não troca depois.
+        if (!current.rep_from_inbound && msg.direction === 'inbound') {
+          current.phone = msg.phone
+          current.rep_from_inbound = true
+        }
         if (!current.sender_name && msg.sender_name && msg.direction === 'inbound') {
           current.sender_name = msg.sender_name
         }
@@ -478,6 +476,7 @@ Deno.serve(async (req) => {
             chat.sender_name = leadName
           }
         }
+        delete chat.rep_from_inbound // campo auxiliar interno, não vai pro front
       }
 
       const chatList = Array.from(chatMap.values()).sort(

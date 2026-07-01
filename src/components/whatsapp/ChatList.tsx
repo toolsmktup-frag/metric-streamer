@@ -39,10 +39,18 @@ function isMultiChat(chat: ChatSummary | MultiChatSummary): chat is MultiChatSum
 }
 
 function formatPhone(phone: string): string {
+  // Celular com 9º dígito: 55 + DDD + 9XXXX-XXXX
   if (phone.length === 13 && phone.startsWith('55')) {
     const ddd = phone.slice(2, 4);
     const p1 = phone.slice(4, 9);
     const p2 = phone.slice(9);
+    return `(${ddd}) ${p1}-${p2}`;
+  }
+  // Número sem o 9º dígito (legado): 55 + DDD + XXXX-XXXX
+  if (phone.length === 12 && phone.startsWith('55')) {
+    const ddd = phone.slice(2, 4);
+    const p1 = phone.slice(4, 8);
+    const p2 = phone.slice(8);
     return `(${ddd}) ${p1}-${p2}`;
   }
   return phone;
