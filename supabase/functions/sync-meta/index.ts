@@ -244,6 +244,12 @@ Deno.serve(async (req) => {
         totalRecords += campaigns.length + accountInsightRows.length + campaignInsightRows.length;
         console.log(`Phase 1 done: ${campaigns.length} campaigns, ${accountInsightRows.length} account insights, ${campaignInsightRows.length} campaign insights (${Date.now() - t1}ms)`);
 
+        // Conta acessível porém vazia costuma ser ID de conta errado no funil
+        // (incidente Renda Natural 03/07). Deixa o aviso visível em meta_sync_log.
+        if (campaigns.length === 0) {
+          phaseErrors.push(`${actId}: 0 campanhas retornadas — verifique se o ID da conta no funil está correto`);
+        }
+
         // Auto-assign funnel_id to campaigns based on funnel_products keywords
         try {
           const { data: assigned, error: assignErr } = await supabase.rpc("auto_assign_campaign_funnels");
