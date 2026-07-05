@@ -23,6 +23,8 @@ export interface RecontactInfo {
   recontactDays: number;
   matchedProductId?: string;
   totalPots: number;
+  /** Explicação do cálculo p/ tooltip: compras que sustentam o timer + datas. */
+  breakdown: string;
 }
 
 /** Compras cuja quantidade foi resolvida como potes (encapsulados). */
@@ -90,6 +92,20 @@ export function useRecontactDeadlines(
       // Produto da faixa correspondente ao total (usado pelo auto-move).
       const tier = pickTier(tiers, r.totalDays);
 
+      // Tooltip explicando o cálculo (evita "timer não bate" quando o
+      // estoque vem de compra antiga com vários potes).
+      const fmt = (d: Date) =>
+        `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const comprasStr = [...potPurchases]
+        .sort((a, b) => a.date.getTime() - b.date.getTime())
+        .map((p) => `${fmt(p.date)} ×${p.quantity}`)
+        .join(', ');
+      const breakdown =
+        `${r.totalPots} pote${r.totalPots > 1 ? 's' : ''} (1 pote = 30 dias)\n` +
+        `Compras: ${comprasStr}\n` +
+        `Estoque acaba: ${fmt(r.stockEndsAt)}\n` +
+        `Recontato: ${fmt(r.recontactAt)} (${r.reminderDaysBefore}d antes)`;
+
       map.set(pos.lead_id, {
         daysRemaining: r.daysRemaining,
         isOverdue: r.daysRemaining < 0,
@@ -98,6 +114,7 @@ export function useRecontactDeadlines(
         recontactDays: r.totalDays - r.reminderDaysBefore,
         matchedProductId: tier?.productId,
         totalPots: r.totalPots,
+        breakdown,
       });
     }
 

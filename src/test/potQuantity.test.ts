@@ -36,8 +36,21 @@ describe("parseQuantityFromText — offers reais do banco", () => {
     expect(parseQuantityFromText("Pote 360 dias")?.quantity).toBe(12);
   });
 
-  it("retorna null quando não há potes nem dias (ex: 'Oferta Pote grátis')", () => {
-    expect(parseQuantityFromText("Oferta Pote grátis")).toBeNull();
+  it("'pote' no singular sem número = 1 ('Oferta Pote grátis')", () => {
+    expect(parseQuantityFromText("Oferta Pote grátis")).toEqual({
+      quantity: 1,
+      source: "parser_potes",
+    });
+  });
+
+  it("order bump 'Pote Extra ArticulaBEM (Bump do pote grátis)' → 1", () => {
+    expect(
+      parseQuantityFromText("Pote Extra ArticulaBEM - Soulnaturi (Bump do pote grátis)")?.quantity,
+    ).toBe(1);
+  });
+
+  it("retorna null quando não há pote nem dias ('1 articulabem + 1 supervita')", () => {
+    expect(parseQuantityFromText("1 articulabem + 1 supervita")).toBeNull();
   });
 
   it("ignora números absurdos (>100)", () => {
@@ -60,7 +73,7 @@ describe("resolveQuantity — precedência", () => {
   });
 
   it("default = 1 quando nada casa", () => {
-    const r = resolveQuantity({ offerName: "Oferta Pote grátis", productName: null });
+    const r = resolveQuantity({ offerName: "Combo sem indicação", productName: null });
     expect(r).toEqual({ quantity: 1, source: "default" });
   });
 

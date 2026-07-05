@@ -328,7 +328,7 @@ const BaseLeadsList: React.FC<BaseLeadsListProps> = ({ positions, onLeadClick, o
                           ? 'text-yellow-600 dark:text-yellow-400 font-semibold'
                           : 'text-emerald-600 dark:text-emerald-400';
                         return (
-                          <span className={`text-xs ${cls}`}>
+                          <span className={`text-xs ${cls}`} title={rc.breakdown}>
                             {rc.daysRemaining < 0 ? `${rc.daysRemaining}d 🔥` : rc.daysRemaining <= 7 ? `${rc.daysRemaining}d ⚠️` : `${rc.daysRemaining}d`}
                           </span>
                         );

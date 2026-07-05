@@ -85,17 +85,29 @@ Deno.serve(async (req) => {
       });
     }
 
-    const supabaseAuth = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } }
-    );
+    // Cron (pg_cron → net.http_post) autentica com token dedicado de baixo
+    // privilégio (SYNC_META_CRON_SECRET, mesmo padrão do recontact-cron) ou
+    // com a service key. verify_jwt está desligado p/ esta função, então só
+    // igualdade exata é aceitável (claim de JWT é forjável).
+    const bearer = authHeader.slice("Bearer ".length);
+    const cronSecret = Deno.env.get("SYNC_META_CRON_SECRET");
+    const isTrustedCaller =
+      bearer === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ||
+      (!!cronSecret && bearer === cronSecret);
 
-    const { data: { user }, error: userError } = await supabaseAuth.auth.getUser();
-    if (userError || !user) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    if (!isTrustedCaller) {
+      const supabaseAuth = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_ANON_KEY")!,
+        { global: { headers: { Authorization: authHeader } } }
+      );
+
+      const { data: { user }, error: userError } = await supabaseAuth.auth.getUser();
+      if (userError || !user) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     }
 
     const META_TOKEN = Deno.env.get("META_ACCESS_TOKEN");

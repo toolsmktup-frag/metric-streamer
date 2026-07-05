@@ -25,6 +25,9 @@ export const DIAS_POR_POTE = 30;
 const POTES_RE = /\b(\d{1,3})\s*potes?\b/i;
 // "Pote 90 dias", "180 dias" → captura os dias (convertidos para potes).
 const DIAS_RE = /\b(\d{1,4})\s*dias?\b/i;
+// "Pote Extra", "Pote Grátis", "Pote adicional" — pote SEM número = 1 unidade
+// (ex.: order bump "Pote Extra ArticulaBEM (Bump do pote grátis)").
+const POTE_SEM_NUMERO_RE = /\bpote\b/i;
 
 function clampQty(n: number): number | null {
   if (!Number.isFinite(n) || n <= 0 || n > 100) return null;
@@ -52,6 +55,13 @@ export function parseQuantityFromText(
       const dias = parseInt(m[1], 10);
       const q = clampQty(Math.max(1, Math.round(dias / DIAS_POR_POTE)));
       if (q) return { quantity: q, source: "parser_dias" };
+    }
+  }
+  // 3ª passada: "pote" no singular sem número ("Pote Extra", "Pote Grátis") = 1
+  for (const t of texts) {
+    if (!t) continue;
+    if (POTE_SEM_NUMERO_RE.test(t)) {
+      return { quantity: 1, source: "parser_potes" };
     }
   }
   return null;

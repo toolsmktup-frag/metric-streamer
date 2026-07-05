@@ -304,7 +304,7 @@ const LeadCard: React.FC<LeadCardProps> = ({ position, onClick, onWhatsAppClick,
                 ? 'bg-yellow-500/15 text-yellow-600 dark:text-yellow-400'
                 : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
             }`}
-            title={`Recontato: ${recontactInfo.productName} — ${recontactInfo.recontactDays}d ciclo`}
+            title={recontactInfo.breakdown || `Recontato: ${recontactInfo.productName} — ${recontactInfo.recontactDays}d ciclo`}
           >
             <Timer className="h-3.5 w-3.5" />
             {recontactInfo.daysRemaining < 0

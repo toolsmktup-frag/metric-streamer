@@ -1,0 +1,49 @@
+-- ═══════════════════════════════════════════════════════════════════
+-- REGISTRO das operações aplicadas em produção em 05/07/2026.
+-- Documentação — NÃO re-executar cegamente.
+--
+-- Contexto: auditoria dos crons + pendências do incidente recompra.
+-- ═══════════════════════════════════════════════════════════════════
+
+-- 1) auto-sync-meta-6h (jobid 11) NUNCA sincronizou de verdade:
+--    chamava trigger_meta_sync_auto(), que depende das GUCs
+--    app.supabase_url / app.service_role_key — NUNCA setadas (ALTER
+--    DATABASE exige permissão que o role postgres não tem no Supabase).
+--    Além disso o sync-meta exigia usuário logado (auth.getUser), que a
+--    service key não satisfaz — o desenho antigo era duplamente quebrado.
+--    FIX aplicado:
+--      a) secret SYNC_META_CRON_SECRET criada (token dedicado de baixo
+--         privilégio, mesmo padrão do RECONTACT_CRON_SECRET);
+--      b) sync-meta passou a aceitar esse token (igualdade exata);
+--      c) comando do job reescrito (não versionar o token aqui):
+-- SELECT cron.alter_job(11, command := $$
+--   SELECT net.http_post(
+--     url := 'https://emfbocpmphtftqcezaib.supabase.co/functions/v1/sync-meta',
+--     headers := jsonb_build_object('Content-Type','application/json',
+--                                   'Authorization','Bearer <SYNC_META_CRON_SECRET>'),
+--     body := '{"full_sync": false}'::jsonb
+--   );
+-- $$);
+
+-- 2) wz-scheduler-cron (jobid 6) DESAGENDADO: criado com placeholders
+--    literais ('<SUPABASE_URL>'), nunca funcionou, falhava com
+--    "Out of memory" a cada minuto poluindo cron.job_run_details.
+--    ATENÇÃO: há 655 linhas pending em wz_scheduled_steps — NÃO religar
+--    o scheduler sem antes revisar/expirar a fila (risco de disparo em
+--    massa de mensagens antigas de WhatsApp).
+-- SELECT cron.unschedule('wz-scheduler-cron');
+
+-- 3) Backfill quantity dos potes sem parse (12 compras Articulabem):
+-- UPDATE customer_purchases SET quantity = 1, quantity_source = 'parser_potes'
+-- WHERE status = 'authorized' AND product_name ILIKE '%articulabem%'
+--   AND (quantity_source IS NULL OR quantity_source = 'default')
+--   AND (product_name ~* '\mpotes?\M' OR offer_name ~* '\mpotes?\M');   -- 11 linhas
+-- UPDATE customer_purchases SET quantity = 1, quantity_source = 'mapping'
+-- WHERE product_name = '1 articulabem + 1 supervita'
+--   AND (quantity_source IS NULL OR quantity_source = 'default');       -- 1 linha
+
+-- 4) 17 compradores Articulabem sem lead (compras antigas anteriores ao
+--    sync_lead_from_sale) criados via RPC sync_lead_from_sale (overload
+--    13 params, p_funnel_id NULL) — entraram no RECOMPRA - POTES pela
+--    keyword genérica e foram distribuídos pelo trigger
+--    trg_auto_distribute_on_entry. Funil: 1201 leads.
