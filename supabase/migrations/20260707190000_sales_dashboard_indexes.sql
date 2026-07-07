@@ -18,3 +18,12 @@ create index if not exists idx_ticto_transactions_order_date
 
 create index if not exists idx_customer_purchases_purchased_at
   on public.customer_purchases (purchased_at desc nulls last);
+
+-- A view EM PRODUÇÃO (≠ docs/enrich-v-all-sales.sql; snapshot real em
+-- docs/v_all_sales-PROD-2026-07-07.sql) usa COALESCE(order_date, created_at)
+-- como purchased_at no braço Ticto — o índice simples em order_date não
+-- serve pro filtro/sort. Índice de expressão cobre exatamente o predicado.
+-- Resultado medido: consulta do Resumo caiu de 6,6s (fria, estourando o
+-- statement_timeout de 8s do role authenticated) para ~0,95s estável.
+create index if not exists idx_ticto_transactions_effective_date
+  on public.ticto_transactions ((coalesce(order_date, created_at)) desc);
