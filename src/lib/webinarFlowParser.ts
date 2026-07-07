@@ -24,6 +24,7 @@ export interface WebinarDay {
   targetTimeUtc: string;
   manychatNodeId: string | null;
   tagName: string;
+  webinarUrl: string | null;
   moveStageNodeId: string | null;
   stageName: string | null;
 }
@@ -89,8 +90,8 @@ export function parseWebinarFlow(nodes: WzNodeLike[], edges: WzEdgeLike[]): Webi
     if (!node) break;
     const data = node.data || {};
 
-    if (data.disabled === true || node.type === 'note' || node.type === 'stop') {
-      // ignora e segue
+    if (data.disabled === true || node.type === 'note' || node.type === 'stop' || node.type === 'condition') {
+      // ignora e segue (condition: a caminhada continua pelo ramo "no" — ver abaixo)
     } else if (node.type === 'smart_delay') {
       if (openDay) days.push(openDay);
       openDay = {
@@ -99,6 +100,7 @@ export function parseWebinarFlow(nodes: WzNodeLike[], edges: WzEdgeLike[]): Webi
         targetTimeUtc: data.targetTime || '09:00',
         manychatNodeId: null,
         tagName: '',
+        webinarUrl: null,
         moveStageNodeId: null,
         stageName: null,
       };
@@ -106,6 +108,7 @@ export function parseWebinarFlow(nodes: WzNodeLike[], edges: WzEdgeLike[]): Webi
       if (openDay && !openDay.manychatNodeId) {
         openDay.manychatNodeId = node.id;
         openDay.tagName = data.tagName || '';
+        openDay.webinarUrl = data.webinarUrl || null;
         if (!data.tagName) warnings.push(`Dia ${openDay.dayNumber} sem tag ManyChat configurada`);
       } else {
         warnings.push(`Nó ManyChat "${data.label || node.id}" fora do padrão dia-a-dia`);
@@ -123,7 +126,12 @@ export function parseWebinarFlow(nodes: WzNodeLike[], edges: WzEdgeLike[]): Webi
       warnings.push(`Nó "${data.label || node.type || node.id}" não faz parte do padrão da sequência`);
     }
 
-    currentId = edges.find(e => e.source === currentId)?.target;
+    // Nós condition têm duas saídas (yes/no); a sequência continua pelo "no"
+    // (o "yes" é o desvio de saída — ex.: lead já comprou o curso → Encerrado).
+    const outgoing = edges.filter(e => e.source === currentId);
+    currentId = node.type === 'condition'
+      ? (outgoing.find(e => e.sourceHandle === 'no') || outgoing[0])?.target
+      : outgoing[0]?.target;
   }
   if (openDay) {
     days.push(openDay);
@@ -149,6 +157,22 @@ export function applyDailyTimeUtc(nodes: WzNodeLike[], timeUtc: string): WzNodeL
       ? { ...n, data: { ...n.data, targetTime: timeUtc } }
       : n
   );
+}
+
+/**
+ * Reescreve o webinarUrl (link da live que vira o custom field {{link_webinario}}
+ * no ManyChat, via link rastreável assinado) de TODOS os nós manychat.
+ * String vazia remove o campo (desliga o rastreio).
+ */
+export function applyWebinarUrl(nodes: WzNodeLike[], url: string): WzNodeLike[] {
+  const trimmed = url.trim();
+  return nodes.map(n => {
+    if (n.type !== 'manychat') return n;
+    const data = { ...n.data };
+    if (trimmed) data.webinarUrl = trimmed;
+    else delete data.webinarUrl;
+    return { ...n, data };
+  });
 }
 
 /** Reescreve a tagName dos nós manychat indicados, preservando o resto. */

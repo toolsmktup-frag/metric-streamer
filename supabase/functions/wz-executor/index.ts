@@ -520,6 +520,23 @@ Deno.serve(async (req) => {
         } else {
           const baseUrl = Deno.env.get("SUPABASE_URL");
           const syncSecret = Deno.env.get("MANYCHAT_SYNC_SECRET") || "";
+
+          // Link rastreável do webinário (se configurado no nó): gravado como
+          // custom field "link_webinario" no ManyChat — a mensagem de lá usa o
+          // campo e o clique passa pela edge webinar-redirect (marca presença).
+          let fields: Array<{ field_name: string; value: string }> | undefined;
+          if (nodeData.webinarUrl) {
+            try {
+              const cleanPhone = String(phone).replace(/\D/g, "");
+              const dest = String(nodeData.webinarUrl);
+              const sig = await signWebinarLink(cleanPhone, dest);
+              const tracked = `${baseUrl}/functions/v1/webinar-redirect?p=${encodeURIComponent(cleanPhone)}&d=${encodeURIComponent(dest)}&k=${sig}`;
+              fields = [{ field_name: "link_webinario", value: tracked }];
+            } catch (e) {
+              console.error("[manychat] link rastreável falhou:", String(e));
+            }
+          }
+
           try {
             const res = await fetch(`${baseUrl}/functions/v1/manychat-sync`, {
               method: "POST",
@@ -529,6 +546,7 @@ Deno.serve(async (req) => {
                 name: execution.contact_name || undefined,
                 email: execution.contact_email || undefined,
                 tag_name: tagName,
+                ...(fields ? { fields } : {}),
               }),
             });
             const out = await res.json().catch(() => ({}));

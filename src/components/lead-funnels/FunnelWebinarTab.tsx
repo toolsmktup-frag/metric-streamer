@@ -30,6 +30,7 @@ import { useManyChatTags } from '@/hooks/useManyChatTags';
 import {
   applyDailyTimeUtc,
   applyDayTags,
+  applyWebinarUrl,
   brtToUtc,
   parseWebinarFlow,
   utcToBrt,
@@ -121,6 +122,25 @@ const FunnelWebinarTab: React.FC<FunnelWebinarTabProps> = ({
       toast.success(`Disparo diário salvo para ${timeBrt} (horário de Brasília)`);
     } catch {
       toast.error('Erro ao salvar o horário');
+    }
+  };
+
+  // ── Link da live (rastreável) ─────────────────────────────────────────────
+  const initialWebinarUrl = parse.days.find(d => d.webinarUrl)?.webinarUrl ?? '';
+  const [webinarUrl, setWebinarUrl] = useState(initialWebinarUrl);
+  useEffect(() => setWebinarUrl(initialWebinarUrl), [initialWebinarUrl]);
+  const urlDirty = webinarUrl.trim() !== initialWebinarUrl;
+
+  const handleSaveWebinarUrl = async () => {
+    try {
+      await updateFlow.mutateAsync({
+        id: flow.id,
+        nodes: applyWebinarUrl(flow.nodes || [], webinarUrl),
+      });
+      queryClient.invalidateQueries({ queryKey: ['lead-funnel-automations', funnelId] });
+      toast.success(webinarUrl.trim() ? 'Link da live salvo — rastreio de presença ativo' : 'Rastreio de presença desligado');
+    } catch {
+      toast.error('Erro ao salvar o link da live');
     }
   };
 
@@ -270,25 +290,48 @@ const FunnelWebinarTab: React.FC<FunnelWebinarTabProps> = ({
             Horário em que a mensagem de cada dia é enviada — <strong>horário de Brasília</strong>.
           </CardDescription>
         </CardHeader>
-        <CardContent className="flex items-end gap-3">
-          <div className="space-y-1.5">
-            <Label htmlFor="webinar-time">Horário</Label>
-            <Input
-              id="webinar-time"
-              type="time"
-              className="w-32"
-              value={timeBrt}
-              onChange={(e) => setTimeBrt(e.target.value)}
-            />
+        <CardContent className="space-y-4">
+          <div className="flex items-end gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="webinar-time">Horário</Label>
+              <Input
+                id="webinar-time"
+                type="time"
+                className="w-32"
+                value={timeBrt}
+                onChange={(e) => setTimeBrt(e.target.value)}
+              />
+            </div>
+            <Button onClick={handleSaveTime} disabled={!timeDirty || updateFlow.isPending}>
+              {updateFlow.isPending ? 'Salvando…' : 'Salvar horário'}
+            </Button>
+            {parse.commonTimeUtc === null && parse.days.length > 0 && (
+              <p className="text-xs text-amber-600 dark:text-amber-500 pb-2">
+                Os dias estão com horários diferentes — salvar unifica todos neste horário.
+              </p>
+            )}
           </div>
-          <Button onClick={handleSaveTime} disabled={!timeDirty || updateFlow.isPending}>
-            {updateFlow.isPending ? 'Salvando…' : 'Salvar horário'}
-          </Button>
-          {parse.commonTimeUtc === null && parse.days.length > 0 && (
-            <p className="text-xs text-amber-600 dark:text-amber-500 pb-2">
-              Os dias estão com horários diferentes — salvar unifica todos neste horário.
+          <div className="space-y-1.5 border-t border-border pt-4">
+            <Label htmlFor="webinar-url">Link da live (rastreável)</Label>
+            <div className="flex items-center gap-3">
+              <Input
+                id="webinar-url"
+                type="url"
+                placeholder="https://… (página/sala da live)"
+                value={webinarUrl}
+                onChange={(e) => setWebinarUrl(e.target.value)}
+              />
+              <Button onClick={handleSaveWebinarUrl} disabled={!urlDirty || updateFlow.isPending}>
+                {updateFlow.isPending ? 'Salvando…' : 'Salvar link'}
+              </Button>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Com o link preenchido, cada lead recebe no ManyChat um campo <strong>link_webinario</strong> com
+              um link personalizado: ao clicar, registramos que ele foi assistir (tag "assistiu" + coluna
+              "Confirmou") e redirecionamos pra live. Use <code>{'{{link_webinario}}'}</code> no botão da mensagem.
+              Deixe vazio pra mandar sem rastreio.
             </p>
-          )}
+          </div>
         </CardContent>
       </Card>
 
