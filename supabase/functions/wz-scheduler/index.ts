@@ -142,10 +142,16 @@ Deno.serve(async (req) => {
   }
   const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-  // 🔒 Função interna: aceita apenas chamadas autenticadas com a service_role key
-  // (invocada pelo cron wz-scheduler-cron). Bloqueia chamadas externas.
+  // 🔒 Função interna: aceita a service_role key ou o token dedicado de baixo
+  // privilégio WZ_SCHEDULER_CRON_SECRET (invocada pelo cron wz-scheduler-cron;
+  // mesmo padrão do SYNC_META_CRON_SECRET — verify_jwt desligado, então só
+  // igualdade exata é aceitável). Bloqueia chamadas externas.
   const authHeader = req.headers.get("Authorization") || "";
-  if (authHeader !== `Bearer ${serviceRoleKey}`) {
+  const bearer = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : "";
+  const cronSecret = Deno.env.get("WZ_SCHEDULER_CRON_SECRET");
+  const isTrustedCaller =
+    bearer === serviceRoleKey || (!!cronSecret && bearer === cronSecret);
+  if (!isTrustedCaller) {
     return jsonResponse({ error: "Unauthorized" }, 401);
   }
 
