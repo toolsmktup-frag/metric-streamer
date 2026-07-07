@@ -38,6 +38,9 @@ import WebhookConfig from '@/components/lead-funnels/WebhookConfig';
 import FunnelFlowEditor from '@/components/lead-funnels/FunnelFlowEditor';
 import FunnelMetricsTab from '@/components/lead-funnels/FunnelMetricsTab';
 import FunnelAutomationsTab from '@/components/lead-funnels/FunnelAutomationsTab';
+import FunnelWebinarTab from '@/components/lead-funnels/FunnelWebinarTab';
+import { useLeadFunnelAutomations } from '@/hooks/useLeadFunnelAutomations';
+import { isDripFlow } from '@/lib/webinarFlowParser';
 import LeadTimeline from '@/components/lead-funnels/LeadTimeline';
 import ImportLeadsDialog from '@/components/lead-funnels/ImportLeadsDialog';
 import ImportFromTrafficFunnelDialog from '@/components/lead-funnels/ImportFromTrafficFunnelDialog';
@@ -104,6 +107,11 @@ const LeadFunnelDetail: React.FC = () => {
   const { data: funnelEdges = [] } = useFunnelEdges(id ?? null);
   const { data: paymentFunnels = [] } = useFunnels();
   const { data: leadFunnelProducts = [] } = useLeadFunnelProducts(id ?? null);
+  const { data: funnelAutomations = [] } = useLeadFunnelAutomations(id ?? null);
+  const webinarFlow = useMemo(
+    () => funnelAutomations.find(a => a.wz_flow && isDripFlow(a.wz_flow.nodes || [], a.wz_flow.edges || []))?.wz_flow ?? null,
+    [funnelAutomations]
+  );
   const { data: productMappings = [] } = useLeadProductMappings(id ?? null);
   const { data: distinctLeadProducts = [], isLoading: loadingDistinctProducts } = useDistinctLeadProducts(id ?? null);
   const upsertStages = useUpsertStages();
@@ -209,6 +217,16 @@ const LeadFunnelDetail: React.FC = () => {
       setBulkMoving(false);
     }
   }, [id, funnel, leadFunnelProducts, positions, recontactMap, moveLeadStage]);
+
+  const handleSaveProducts = useCallback(async (prods: any[]) => {
+    if (!funnel) return;
+    try {
+      await upsertLeadProducts.mutateAsync({ funnelId: funnel.id, products: prods });
+      toast.success('Produtos salvos!');
+    } catch {
+      toast.error('Erro ao salvar produtos');
+    }
+  }, [funnel, upsertLeadProducts]);
 
   const handleClearFunnel = async () => {
     if (!id) return;
@@ -409,6 +427,7 @@ const LeadFunnelDetail: React.FC = () => {
           {canAdvancedTabs && <TabsTrigger value="metrics">Métricas</TabsTrigger>}
           {canAdvancedTabs && <TabsTrigger value="config">Configuração</TabsTrigger>}
           {canAdvancedTabs && <TabsTrigger value="automations">Automações</TabsTrigger>}
+          {canAdvancedTabs && webinarFlow && <TabsTrigger value="webinar">Webinário</TabsTrigger>}
           {canAdvancedTabs && <TabsTrigger value="webhook">Webhook</TabsTrigger>}
         </TabsList>
 
@@ -505,14 +524,7 @@ const LeadFunnelDetail: React.FC = () => {
               saving={upsertStages.isPending || upsertRules.isPending}
               leadFunnelProducts={leadFunnelProducts}
               catalogProducts={allCatalogProducts}
-              onSaveProducts={async (prods) => {
-                try {
-                  await upsertLeadProducts.mutateAsync({ funnelId: funnel.id, products: prods });
-                  toast.success('Produtos salvos!');
-                } catch {
-                  toast.error('Erro ao salvar produtos');
-                }
-              }}
+              onSaveProducts={handleSaveProducts}
               savingProducts={upsertLeadProducts.isPending}
               onBulkMoveOverdue={handleBulkMoveOverdue}
               bulkMoving={bulkMoving}
@@ -573,6 +585,20 @@ const LeadFunnelDetail: React.FC = () => {
         {canAdvancedTabs && (
           <TabsContent value="automations" className="mt-4">
             <FunnelAutomationsTab funnelId={funnel.id} funnelName={funnel.name} />
+          </TabsContent>
+        )}
+
+        {canAdvancedTabs && webinarFlow && (
+          <TabsContent value="webinar" className="mt-4">
+            <FunnelWebinarTab
+              funnelId={funnel.id}
+              flow={webinarFlow}
+              stages={stages}
+              products={leadFunnelProducts}
+              catalogProducts={allCatalogProducts}
+              onSaveProducts={handleSaveProducts}
+              savingProducts={upsertLeadProducts.isPending}
+            />
           </TabsContent>
         )}
 
