@@ -1,0 +1,32 @@
+-- ═══════════════════════════════════════════════════════════════════
+-- Cache materializado das funções analíticas (incidente 07/07, parte 2)
+--
+-- Sintoma: tela "Escada de Valor" vazia. As RPCs fn_rfm_customers,
+-- fn_cohort_analysis e fn_customer_journeys agregavam o histórico
+-- inteiro a cada chamada (10-28s medidos) e estouravam o
+-- statement_timeout de 8s do role authenticated.
+--
+-- Fix aplicado em produção (via supabase db query --linked):
+--   1. materialized views mv_rfm_customers / mv_cohort_analysis /
+--      mv_customer_journeys criadas com o SQL original das funções
+--      (definições completas preservadas em
+--      docs/analytics-fns-ORIG-2026-07-07.sql);
+--   2. as 3 funções redefinidas para `select * from public.mv_...`
+--      (assinatura idêntica — o front não muda);
+--   3. cron 'refresh-analytics-matviews' (jobid 18, '25 * * * *')
+--      faz REFRESH das 3 views de hora em hora.
+--
+-- Resultado: RPCs de 14-28s → 0,4-1,2s. Trade-off: dados da tela com
+-- até 1h de atraso (aceitável para RFM/coorte/jornada).
+--
+-- ⚠️ Para alterar o CÁLCULO dessas análises: editar o SQL da matview
+-- (drop + create a partir do ORIG ajustado), NÃO o corpo da função.
+-- ═══════════════════════════════════════════════════════════════════
+
+-- Registro apenas — já aplicado em produção. Statements de referência:
+-- create materialized view public.mv_rfm_customers as <corpo do ORIG>;
+-- create materialized view public.mv_cohort_analysis as <corpo do ORIG>;
+-- create materialized view public.mv_customer_journeys as <corpo do ORIG>;
+-- create or replace function public.fn_rfm_customers() ... as $$ select * from public.mv_rfm_customers $$;
+-- (idem para as outras duas)
+-- select cron.schedule('refresh-analytics-matviews', '25 * * * *', $$ refresh materialized view ... $$);
