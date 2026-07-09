@@ -48,9 +48,12 @@ export function useWzInstanceProfiles(instances: WzInstance[]) {
               return;
             }
             const data = await res.json();
+            // UazAPI devolve o número em instance.owner ("5548...@s.whatsapp.net")
+            const rawPhone = data?.phone || data?.number || data?.instance?.phone
+              || data?.instance?.owner || data?.owner || data?.user?.id;
             profiles[inst.id] = {
-              phone_number: data?.phone || data?.number || data?.instance?.phone || data?.user?.id?.replace('@s.whatsapp.net', ''),
-              profile_pic_url: data?.profilePicUrl || data?.instance?.profilePicUrl || data?.user?.profilePictureUrl,
+              phone_number: typeof rawPhone === 'string' ? rawPhone.replace(/@.*$/, '') : undefined,
+              profile_pic_url: data?.profilePicUrl || data?.instance?.profilePicUrl || data?.user?.profilePictureUrl || data?.instance?.profilePicUrl,
               status: normalizeWzStatus(data, inst.status),
             };
           } catch {
