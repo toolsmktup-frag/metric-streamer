@@ -42,6 +42,8 @@ export interface OrderShipment {
   dispatch_channel: 'manychat' | 'uazapi' | null;
   dispatched_at: string | null;
   notes: string | null;
+  tracking_added_by: string | null;
+  tracking_added_by_name: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -153,6 +155,21 @@ export function buildTrackingUrl(code: string | null, carrier: string | null): s
   return null;
 }
 
+/** Quem está logado, pra carimbar quem inseriu o rastreio / acionou o disparo. */
+async function currentUserStamp(): Promise<{ tracking_added_by: string; tracking_added_by_name: string } | Record<string, never>> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return {};
+  const { data: profile } = await (supabase as any)
+    .from('user_profiles')
+    .select('full_name')
+    .eq('id', user.id)
+    .maybeSingle();
+  return {
+    tracking_added_by: user.id,
+    tracking_added_by_name: profile?.full_name || user.email || 'usuário',
+  };
+}
+
 /**
  * Salva o código de rastreio e coloca o pedido na fila de disparo controlado.
  * O disparo é processado de forma escalonada pela edge function
@@ -165,10 +182,11 @@ export function useSaveTracking() {
       const code = trackingCode.trim();
       if (!code) throw new Error('Informe o código de rastreio');
       const carrier = inferCarrier(code);
+      const who = await currentUserStamp();
 
       const { error } = await (supabase as any)
         .from('order_shipments')
-        .update({ tracking_code: code, carrier, dispatch_status: 'na_fila' })
+        .update({ tracking_code: code, carrier, dispatch_status: 'na_fila', ...who })
         .eq('id', id);
       if (error) throw error;
     },
@@ -202,6 +220,7 @@ export function useMarkAsSent() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
+      const who = await currentUserStamp();
       const { error } = await (supabase as any)
         .from('order_shipments')
         .update({
@@ -209,6 +228,7 @@ export function useMarkAsSent() {
           dispatched_at: new Date().toISOString(),
           dispatch_channel: null,
           notes: 'marcado manual: já enviado fora do sistema',
+          ...who,
         })
         .eq('id', id);
       if (error) throw error;

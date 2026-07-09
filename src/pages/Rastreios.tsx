@@ -239,13 +239,20 @@ function ShipmentRow({ shipment, onEditAddress, onOpenCustomer }: {
 
       <TableCell className="min-w-[270px]">
         {shipment.tracking_code ? (
-          <div className="flex items-center gap-1.5">
-            <Truck className="h-3.5 w-3.5 text-muted-foreground" />
-            <span className="font-mono text-xs">{shipment.tracking_code}</span>
-            {trackingUrl && (
-              <a href={trackingUrl} target="_blank" rel="noreferrer" title="Rastrear">
-                <ExternalLink className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
-              </a>
+          <div>
+            <div className="flex items-center gap-1.5">
+              <Truck className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="font-mono text-xs">{shipment.tracking_code}</span>
+              {trackingUrl && (
+                <a href={trackingUrl} target="_blank" rel="noreferrer" title="Rastrear">
+                  <ExternalLink className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
+                </a>
+              )}
+            </div>
+            {shipment.tracking_added_by_name && (
+              <p className="mt-0.5 pl-5 text-[10px] text-muted-foreground">
+                inserido por {shipment.tracking_added_by_name}
+              </p>
             )}
           </div>
         ) : shipment.dispatch_status === 'enviado' ? (
