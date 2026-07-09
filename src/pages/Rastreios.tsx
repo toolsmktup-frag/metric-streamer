@@ -278,6 +278,7 @@ function ShipmentRow({ shipment, onEditAddress, onOpenCustomer }: {
               title="Salvar código e disparar no WhatsApp"
             >
               {saveTracking.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+              <span className="text-xs">Enviar</span>
             </Button>
             <Button
               size="sm"

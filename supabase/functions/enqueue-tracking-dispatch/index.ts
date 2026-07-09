@@ -23,9 +23,9 @@ const corsHeaders = {
 const ORG_ID = "00000000-0000-0000-0000-000000000001";
 
 const DEFAULT_TEMPLATES = [
-  "Oi {{nome}}, parabéns pela sua compra! 🌿\n\nSeu pedido da *Santo Mato* já foi postado nos Correios e está a caminho da sua casa. 📦\n\nSeu código de rastreio é:\n*{{codigo}}*\n\nPra acompanhar a entrega, é só tocar aqui:\n{{link}}\n\nQualquer dúvida, pode chamar por aqui! 💚",
-  "Olá {{nome}}, tudo bem? 😊\n\nPassando pra te dar uma ótima notícia: seu pedido da *Santo Mato* foi enviado e logo chega até você! 🚚\n\nCódigo de rastreio:\n*{{codigo}}*\n\nAcompanhe sua entrega por aqui:\n{{link}}\n\nObrigado pela confiança! 🌿",
-  "{{nome}}, que alegria! 🎉\n\nSeu pedido da *Santo Mato* acabou de ser postado nos Correios. 📦\n\nAnota seu código de rastreio:\n*{{codigo}}*\n\nÉ só acompanhar a entrega aqui:\n{{link}}\n\nQualquer coisa, estamos por aqui! 💚",
+  "Oi {{nome}}, parabéns pela sua compra! 🌿\n\nSeu pedido da *Soulnaturi* já foi postado nos Correios e está a caminho da sua casa. 📦\n\nSeu código de rastreio é:\n*{{codigo}}*\n\nPra acompanhar a entrega, é só tocar aqui:\n{{link}}\n\nQualquer dúvida, pode chamar por aqui! 💚",
+  "Olá {{nome}}, tudo bem? 😊\n\nPassando pra te dar uma ótima notícia: seu pedido da *Soulnaturi* foi enviado e logo chega até você! 🚚\n\nCódigo de rastreio:\n*{{codigo}}*\n\nAcompanhe sua entrega por aqui:\n{{link}}\n\nObrigado pela confiança! 🌿",
+  "{{nome}}, que alegria! 🎉\n\nSeu pedido da *Soulnaturi* acabou de ser postado nos Correios. 📦\n\nAnota seu código de rastreio:\n*{{codigo}}*\n\nÉ só acompanhar a entrega aqui:\n{{link}}\n\nQualquer coisa, estamos por aqui! 💚",
 ];
 
 const env = (k: string) => Deno.env.get(k) || "";
