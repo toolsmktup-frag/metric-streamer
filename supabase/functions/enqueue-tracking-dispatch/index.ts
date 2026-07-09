@@ -46,6 +46,14 @@ function fill(tpl: string, vars: Record<string, string>): string {
   return tpl.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, k) => vars[k] ?? "");
 }
 
+// Chave canônica BR: ignora o 55 e o 9º dígito (48992112108 ≡ 554892112108).
+function brKey(v: string): string {
+  let d = (v || "").replace(/\D/g, "");
+  if (d.startsWith("55") && d.length >= 12) d = d.slice(2);
+  if (d.length === 11 && d[2] === "9") d = d.slice(0, 2) + d.slice(3);
+  return d;
+}
+
 function templates(): string[] {
   try {
     const raw = env("TRACKING_UAZAPI_TEMPLATES");
@@ -174,11 +182,20 @@ Deno.serve(async (req) => {
   if (needsUazapi) {
     const { data: inst } = await supabase
       .from("whatsapp_instances")
-      .select("api_url, api_token, status")
+      .select("api_url, api_token, status, phone_number, instance_name")
       .eq("organization_id", ORG_ID);
-    instances = (inst || [])
-      .filter((i: any) => !i.status || ["connected", "open"].includes(String(i.status).toLowerCase()))
-      .map((i: any) => ({ api_url: i.api_url, api_token: i.api_token }));
+    let candidates = (inst || []).filter(
+      (i: any) => !i.status || ["connected", "open"].includes(String(i.status).toLowerCase()),
+    );
+    // Número dedicado: se TRACKING_UAZAPI_PHONE estiver setado, SÓ dispara por ele.
+    // Sem match conectado → skip (fila mantida); nunca cai nos números das vendedoras.
+    const pinned = brKey(env("TRACKING_UAZAPI_PHONE"));
+    if (pinned) {
+      candidates = candidates.filter(
+        (i: any) => brKey(i.phone_number) === pinned || brKey(i.instance_name) === pinned,
+      );
+    }
+    instances = candidates.map((i: any) => ({ api_url: i.api_url, api_token: i.api_token }));
   }
 
   // 3) Dispara com pacing
