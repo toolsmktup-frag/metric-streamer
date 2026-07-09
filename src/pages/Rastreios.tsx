@@ -12,21 +12,31 @@ import {
   type OrderShipment,
   type ShipmentStatusFilter,
 } from '@/hooks/useShipments';
+import { useMyPermissions, isLogisticaOnly } from '@/hooks/useUserPermissions';
+import { useLeadPurchases } from '@/hooks/useLeadPurchases';
+import {
+  useShippingProducts, useAddShippingProduct, useToggleShippingProduct,
+  useDeleteShippingProduct, useSyncShipments,
+} from '@/hooks/useShippingProducts';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import {
   Pagination, PaginationContent, PaginationItem, PaginationPrevious, PaginationNext,
 } from '@/components/ui/pagination';
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog';
+import {
+  Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
+} from '@/components/ui/sheet';
 import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card';
 import {
   Package, Search, Loader2, FileDown, FileText, Truck, Send, MapPin, ExternalLink, Pencil, HelpCircle,
-  ArrowUp, ArrowDown, ArrowUpDown,
+  ArrowUp, ArrowDown, ArrowUpDown, Boxes, Trash2, RefreshCw, ShoppingBag,
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -151,7 +161,11 @@ function MoneyCell({ shipment, field }: { shipment: OrderShipment; field: 'frete
 }
 
 /* ── Linha da tabela ── */
-function ShipmentRow({ shipment, onEditAddress }: { shipment: OrderShipment; onEditAddress: (s: OrderShipment) => void }) {
+function ShipmentRow({ shipment, onEditAddress, onOpenCustomer }: {
+  shipment: OrderShipment;
+  onEditAddress: (s: OrderShipment) => void;
+  onOpenCustomer: (s: OrderShipment) => void;
+}) {
   const [code, setCode] = useState('');
   const saveTracking = useSaveTracking();
   const markSent = useMarkAsSent();
@@ -162,7 +176,13 @@ function ShipmentRow({ shipment, onEditAddress }: { shipment: OrderShipment; onE
     <TableRow>
       <TableCell className="whitespace-nowrap text-xs text-muted-foreground">{fmtDate(shipment.purchased_at || shipment.planilha_shipped_at)}</TableCell>
       <TableCell className="whitespace-nowrap font-medium text-foreground">
-        {shipment.customer_name || '—'}
+        <button
+          onClick={() => onOpenCustomer(shipment)}
+          className="hover:text-primary hover:underline underline-offset-2 text-left"
+          title="Ver todas as compras deste cliente"
+        >
+          {shipment.customer_name || '—'}
+        </button>
         {shipment.source === 'planilha' && (
           <span className="ml-1.5 rounded bg-muted px-1.5 py-0.5 text-[10px] font-normal text-muted-foreground align-middle" title="Importado da planilha (histórico)">
             planilha
@@ -369,6 +389,168 @@ function AddressDialog({ shipment, onClose }: { shipment: OrderShipment | null; 
   );
 }
 
+/* ── Drawer: todas as compras do cliente (essa venda está paga?) ── */
+function purchaseStatusBadge(status: string) {
+  const map: Record<string, { cls: string; label: string }> = {
+    authorized: { cls: 'bg-green-500/15 text-green-600', label: 'Pago' },
+    refunded: { cls: 'bg-destructive/15 text-destructive', label: 'Reembolsado' },
+    chargeback: { cls: 'bg-destructive/15 text-destructive', label: 'Chargeback' },
+    waiting_payment: { cls: 'bg-amber-500/15 text-amber-600', label: 'Aguardando pgto' },
+    canceled: { cls: 'bg-muted text-muted-foreground', label: 'Cancelado' },
+    abandoned: { cls: 'bg-muted text-muted-foreground', label: 'Abandonado' },
+  };
+  const it = map[status] || { cls: 'bg-muted text-muted-foreground', label: status };
+  return <Badge className={`${it.cls} border-transparent whitespace-nowrap`}>{it.label}</Badge>;
+}
+
+const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+function CustomerDrawer({ shipment, onClose }: { shipment: OrderShipment | null; onClose: () => void }) {
+  const { data, isLoading } = useLeadPurchases(shipment?.customer_email ?? null, shipment?.customer_phone ?? null);
+
+  return (
+    <Sheet open={!!shipment} onOpenChange={(o) => !o && onClose()}>
+      <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+        <SheetHeader>
+          <SheetTitle className="flex items-center gap-2">
+            <ShoppingBag className="h-4 w-4 text-primary" />
+            {shipment?.customer_name || 'Cliente'}
+          </SheetTitle>
+          <SheetDescription>
+            {shipment?.customer_phone || ''}{shipment?.customer_email ? ` · ${shipment.customer_email}` : ''}
+          </SheetDescription>
+        </SheetHeader>
+
+        {isLoading ? (
+          <div className="flex justify-center py-10"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+        ) : !data || data.purchases.length === 0 ? (
+          <p className="py-10 text-center text-sm text-muted-foreground">
+            Nenhuma compra encontrada pra este cliente.
+          </p>
+        ) : (
+          <div className="mt-4 space-y-4">
+            <div className="flex gap-3">
+              <div className="flex-1 rounded-lg bg-muted p-3">
+                <p className="text-xs text-muted-foreground">Compras pagas</p>
+                <p className="text-lg font-bold text-foreground">{data.totalOrders}</p>
+              </div>
+              <div className="flex-1 rounded-lg bg-muted p-3">
+                <p className="text-xs text-muted-foreground">Total gasto</p>
+                <p className="text-lg font-bold text-foreground">{brl(data.totalSpent)}</p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              {data.purchases.map((p) => (
+                <div key={p.id} className="rounded-lg border border-border p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm font-medium text-foreground leading-snug">{p.product_name}</p>
+                    {purchaseStatusBadge(p.status)}
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {fmtDate(p.purchased_at)} · {brl(p.net_amount ?? p.gross_amount)} · {p.platform}
+                    {p.payment_method ? ` · ${p.payment_method}` : ''}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+/* ── Config: produtos que geram envio (catálogo shipping_products) ── */
+function ProductsDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { data: products, isLoading } = useShippingProducts();
+  const add = useAddShippingProduct();
+  const toggle = useToggleShippingProduct();
+  const del = useDeleteShippingProduct();
+  const sync = useSyncShipments();
+  const [pattern, setPattern] = useState('');
+  const [name, setName] = useState('');
+
+  const submit = () => {
+    if (!pattern.trim()) return;
+    add.mutate({ pattern, displayName: name }, { onSuccess: () => { setPattern(''); setName(''); } });
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2"><Boxes className="h-4 w-4 text-primary" /> Produtos que geram envio</DialogTitle>
+          <DialogDescription>
+            Toda venda PAGA cujo nome de produto contenha um destes padrões entra automaticamente
+            na tela de rastreios — mesmo venda manual. Nada é disparado sozinho.
+          </DialogDescription>
+        </DialogHeader>
+
+        {isLoading ? (
+          <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+        ) : (
+          <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+            {(products || []).map((p) => (
+              <div key={p.id} className="flex items-center gap-3 rounded-lg border border-border px-3 py-2">
+                <Switch
+                  checked={p.active}
+                  onCheckedChange={(v) => toggle.mutate({ id: p.id, active: v })}
+                />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-foreground truncate">{p.display_name || p.product_name_contains}</p>
+                  <p className="text-xs text-muted-foreground">
+                    nome contém "<span className="font-mono">{p.product_name_contains}</span>" · {p.matches} venda{p.matches === 1 ? '' : 's'} paga{p.matches === 1 ? '' : 's'}
+                  </p>
+                </div>
+                <button
+                  onClick={() => del.mutate(p.id)}
+                  className="text-muted-foreground hover:text-destructive shrink-0"
+                  title="Remover do catálogo"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            ))}
+            {(products || []).length === 0 && (
+              <p className="py-6 text-center text-sm text-muted-foreground">Nenhum produto no catálogo ainda.</p>
+            )}
+          </div>
+        )}
+
+        <div className="flex items-end gap-2 border-t border-border pt-3">
+          <div className="flex-1">
+            <label className="block text-xs font-medium text-muted-foreground mb-1">Nome contém…</label>
+            <Input value={pattern} onChange={(e) => setPattern(e.target.value)} placeholder="ex.: articulabem" className="h-9" />
+          </div>
+          <div className="flex-1">
+            <label className="block text-xs font-medium text-muted-foreground mb-1">Apelido (opcional)</label>
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="ex.: ArticulaBEM (potes)" className="h-9"
+              onKeyDown={(e) => { if (e.key === 'Enter') submit(); }} />
+          </div>
+          <Button className="h-9" disabled={!pattern.trim() || add.isPending} onClick={submit}>
+            {add.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Adicionar'}
+          </Button>
+        </div>
+
+        <DialogFooter className="sm:justify-between gap-2">
+          <Button
+            variant="outline"
+            className="gap-1.5"
+            disabled={sync.isPending}
+            onClick={() => sync.mutate()}
+            title="Puxa pra tela as vendas pagas que ainda não têm pedido de envio (desde 10/06)"
+          >
+            {sync.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            Puxar vendas pagas agora
+          </Button>
+          <Button variant="ghost" onClick={onClose}>Fechar</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 const Rastreios: React.FC = () => {
   const queryClient = useQueryClient();
   const [status, setStatus] = useState<ShipmentStatusFilter>('pendentes');
@@ -379,6 +561,11 @@ const Rastreios: React.FC = () => {
   const [sortBy, setSortBy] = useState('created_at');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [editing, setEditing] = useState<OrderShipment | null>(null);
+  const [customer, setCustomer] = useState<OrderShipment | null>(null);
+  const [productsOpen, setProductsOpen] = useState(false);
+
+  const { data: myPerms } = useMyPermissions();
+  const canConfigure = !isLogisticaOnly(myPerms);
 
   const onSort = (col: string) => {
     if (sortBy === col) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -504,6 +691,15 @@ const Rastreios: React.FC = () => {
             <LegendContent />
           </HoverCardContent>
         </HoverCard>
+        {canConfigure && (
+          <button
+            onClick={() => setProductsOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground hover:bg-muted transition-colors shrink-0"
+            title="Configurar quais produtos geram envio"
+          >
+            <Boxes className="h-4 w-4" /> Produtos
+          </button>
+        )}
       </div>
 
       {/* Barra de rolagem horizontal no topo (sincronizada com a tabela) */}
@@ -548,7 +744,7 @@ const Rastreios: React.FC = () => {
               </TableHeader>
               <TableBody>
                 {shipments.map((s) => (
-                  <ShipmentRow key={s.id} shipment={s} onEditAddress={setEditing} />
+                  <ShipmentRow key={s.id} shipment={s} onEditAddress={setEditing} onOpenCustomer={setCustomer} />
                 ))}
               </TableBody>
             </Table>
@@ -588,6 +784,8 @@ const Rastreios: React.FC = () => {
       </div>
 
       <AddressDialog shipment={editing} onClose={() => setEditing(null)} />
+      <CustomerDrawer shipment={customer} onClose={() => setCustomer(null)} />
+      {canConfigure && <ProductsDialog open={productsOpen} onClose={() => setProductsOpen(false)} />}
     </div>
   );
 };

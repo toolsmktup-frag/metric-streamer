@@ -198,11 +198,50 @@ Deno.serve(async (req) => {
     instances = candidates.map((i: any) => ({ api_url: i.api_url, api_token: i.api_token }));
   }
 
-  // 3) Dispara com pacing
-  let sent = 0, failed = 0, skipped = 0, i = 0;
+  // 3) Agrupa duplicados do lote: mesmo telefone + mesmo código → 1 mensagem só
+  //    (cliente com 2 pedidos do mesmo envio não recebe texto repetido).
+  const keyOf = (s: Shipment) =>
+    `${brKey(s.customer_phone || "")}|${(s.tracking_code || "").trim().toUpperCase()}`;
+  const groups = new Map<string, Shipment[]>();
   for (const s of shipments as Shipment[]) {
+    const g = groups.get(keyOf(s));
+    if (g) g.push(s);
+    else groups.set(keyOf(s), [s]);
+  }
+  const groupList = [...groups.values()];
+
+  // 4) Dispara com pacing
+  let sent = 0, failed = 0, skipped = 0, deduped = 0, i = 0;
+  for (const group of groupList) {
+    const s = group[0];
     const channel = (s.dispatch_channel || defaultChannel) as "manychat" | "uazapi";
     const link = s.tracking_code ? correiosUrl(s.tracking_code) : "";
+
+    // Dedupe entre lotes/planilha: código já ENVIADO pra este mesmo telefone
+    // (outra linha) → não repete a mensagem, só tira da fila com nota.
+    if (!input.shipment_id && s.tracking_code) {
+      const { data: prev } = await supabase
+        .from("order_shipments")
+        .select("id, customer_phone")
+        .eq("tracking_code", s.tracking_code)
+        .eq("dispatch_status", "enviado");
+      const dup = (prev || []).find(
+        (p: any) =>
+          !group.some((gs) => gs.id === p.id) &&
+          brKey(p.customer_phone || "") === brKey(s.customer_phone || ""),
+      );
+      if (dup) {
+        await supabase
+          .from("order_shipments")
+          .update({
+            dispatch_status: "enviado",
+            notes: `não disparado: código já enviado a este telefone (pedido ${dup.id})`,
+          })
+          .in("id", group.map((g) => g.id));
+        deduped += group.length;
+        continue;
+      }
+    }
 
     let result: { ok: boolean; skip?: boolean; detail?: unknown };
     try {
@@ -214,7 +253,7 @@ Deno.serve(async (req) => {
     }
 
     // skip = canal não configurado → mantém NA FILA, processa quando ligar
-    if (result.skip) { skipped++; continue; }
+    if (result.skip) { skipped += group.length; continue; }
 
     await supabase
       .from("order_shipments")
@@ -226,11 +265,26 @@ Deno.serve(async (req) => {
       })
       .eq("id", s.id);
 
+    if (group.length > 1) {
+      await supabase
+        .from("order_shipments")
+        .update({
+          dispatch_status: result.ok ? "enviado" : "falhou",
+          dispatch_channel: channel,
+          dispatched_at: result.ok ? new Date().toISOString() : null,
+          notes: result.ok
+            ? `agrupado: mesma mensagem do pedido ${s.id}`
+            : `disparo falhou (agrupado c/ pedido ${s.id})`,
+        })
+        .in("id", group.slice(1).map((g) => g.id));
+      deduped += group.length - 1;
+    }
+
     if (result.ok) sent++; else failed++;
     i++;
     // pacing entre envios (não no último)
-    if (i < shipments.length) await sleep(channel === "uazapi" ? delayMs : 600);
+    if (i < groupList.length) await sleep(channel === "uazapi" ? delayMs : 600);
   }
 
-  return jsonResponse({ ok: true, processed: shipments.length, sent, failed, skipped });
+  return jsonResponse({ ok: true, processed: shipments.length, sent, failed, skipped, deduped });
 });
