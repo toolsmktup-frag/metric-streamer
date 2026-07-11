@@ -143,10 +143,14 @@ Deno.serve(async (req) => {
         return "assinatura";
       }
 
+      // Guru manda type="product" pra QUALQUER produto (curso, e-book, pote)
+      // — não é sinal de físico; usar isso enchia a fila de rastreio com
+      // cursos. Físico = payload traz shipment ou o nome indica mercadoria.
       if (
-        explicitType === "product" ||
         !!payload.shipment ||
-        ["pote", "potes", "frasco", "frascos", "cápsula", "capsula", "capsulas", "cápsulas", "kit"].some(term => productText.includes(term))
+        ["pote", "potes", "frasco", "frascos", "cápsula", "capsula", "capsulas", "cápsulas", "kit"].some(term => productText.includes(term)) ||
+        productText.includes("necessaire") ||
+        productText.includes("ecobag")
       ) {
         return "fisico";
       }

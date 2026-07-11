@@ -566,7 +566,9 @@ const Rastreios: React.FC = () => {
   const [debounced, setDebounced] = useState('');
   const [page, setPage] = useState(1);
   const [fromDate, setFromDate] = useState('2026-06-10');
-  const [sortBy, setSortBy] = useState('created_at');
+  // Ordenar pela data da COMPRA, não da inserção: backfills inserem compras
+  // antigas depois e, por created_at, elas apareciam "no meio dos novos".
+  const [sortBy, setSortBy] = useState('purchased_at');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [editing, setEditing] = useState<OrderShipment | null>(null);
   const [customer, setCustomer] = useState<OrderShipment | null>(null);
