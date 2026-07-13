@@ -65,6 +65,12 @@ interface DispatchSettings {
   send_delay_ms: number;
   mc_tag_name: string;
   mc_code_field: string;
+  /** >0 = ritmo espaçado: 1 mensagem a cada N minutos (aquecimento). */
+  send_gap_minutes: number;
+  queue_order: "oldest_first" | "newest_first";
+  /** Janela BRT [start, end); start === end desativa. */
+  send_window_start: number;
+  send_window_end: number;
 }
 
 async function loadSettings(supabase: ReturnType<typeof createClient>): Promise<DispatchSettings> {
@@ -86,7 +92,19 @@ async function loadSettings(supabase: ReturnType<typeof createClient>): Promise<
     send_delay_ms: Number(row.send_delay_ms) || Number(env("TRACKING_SEND_DELAY_MS")) || 4000,
     mc_tag_name: row.mc_tag_name || env("TRACKING_MC_TAG_NAME") || "",
     mc_code_field: row.mc_code_field || env("TRACKING_MC_CODE_FIELD") || "codigo_rastreio",
+    send_gap_minutes: Number(row.send_gap_minutes) || 0,
+    queue_order: row.queue_order === "newest_first" ? "newest_first" : "oldest_first",
+    send_window_start: Number.isFinite(Number(row.send_window_start)) ? Number(row.send_window_start) : 0,
+    send_window_end: Number.isFinite(Number(row.send_window_end)) ? Number(row.send_window_end) : 0,
   };
+}
+
+// Hora atual no fuso de Brasília (o cron do Postgres roda em UTC).
+function brtHour(): number {
+  return Number(
+    new Intl.DateTimeFormat("en-US", { hour: "numeric", hour12: false, timeZone: "America/Sao_Paulo" })
+      .format(new Date()),
+  ) % 24;
 }
 
 // Instâncias UazAPI conectadas, respeitando o número dedicado do painel:
@@ -260,6 +278,32 @@ Deno.serve(async (req) => {
     return jsonResponse({ ok: true, processed: 0, message: "disparo desligado no painel" });
   }
 
+  // Regras de ritmo — só pro processamento da fila via cron
+  // (disparo manual de 1 pedido via shipment_id passa direto).
+  if (!input.shipment_id) {
+    // Janela de horário (BRT): fora dela, a fila espera.
+    if (cfg.send_window_start !== cfg.send_window_end) {
+      const h = brtHour();
+      const inWindow = cfg.send_window_start < cfg.send_window_end
+        ? h >= cfg.send_window_start && h < cfg.send_window_end
+        : h >= cfg.send_window_start || h < cfg.send_window_end; // janela que cruza a meia-noite
+      if (!inWindow) {
+        return jsonResponse({ ok: true, processed: 0, message: `fora da janela ${cfg.send_window_start}h–${cfg.send_window_end}h BRT` });
+      }
+    }
+    // Ritmo espaçado: 1 mensagem a cada N minutos.
+    if (cfg.send_gap_minutes > 0) {
+      const since = new Date(Date.now() - cfg.send_gap_minutes * 60_000).toISOString();
+      const { count } = await supabase
+        .from("order_shipments")
+        .select("id", { count: "exact", head: true })
+        .gte("dispatched_at", since);
+      if ((count || 0) > 0) {
+        return jsonResponse({ ok: true, processed: 0, message: `aguardando intervalo de ${cfg.send_gap_minutes} min` });
+      }
+    }
+  }
+
   // 1) Seleciona pedidos a disparar
   let query = supabase
     .from("order_shipments")
@@ -269,7 +313,12 @@ Deno.serve(async (req) => {
   if (input.shipment_id) {
     query = query.eq("id", input.shipment_id);
   } else {
-    query = query.eq("dispatch_status", "na_fila").order("created_at", { ascending: true }).limit(batchSize);
+    // Ritmo espaçado força 1 por execução; ordem configurável no painel.
+    const effectiveBatch = cfg.send_gap_minutes > 0 ? 1 : batchSize;
+    query = query
+      .eq("dispatch_status", "na_fila")
+      .order("created_at", { ascending: cfg.queue_order !== "newest_first" })
+      .limit(effectiveBatch);
   }
 
   const { data: shipments, error } = await query;

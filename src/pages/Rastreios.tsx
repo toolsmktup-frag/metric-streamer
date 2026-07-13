@@ -578,6 +578,10 @@ function DispatchSettingsDialog({ open, onClose, naFila }: { open: boolean; onCl
   const [templates, setTemplates] = useState<string[]>([]);
   const [mcTag, setMcTag] = useState('');
   const [testPhone, setTestPhone] = useState('');
+  const [gapMinutes, setGapMinutes] = useState(0);
+  const [queueOrder, setQueueOrder] = useState<'oldest_first' | 'newest_first'>('oldest_first');
+  const [windowStart, setWindowStart] = useState(0);
+  const [windowEnd, setWindowEnd] = useState(0);
 
   // Carrega o form quando o painel abre (não sobrescreve enquanto edita)
   useEffect(() => {
@@ -587,6 +591,10 @@ function DispatchSettingsDialog({ open, onClose, naFila }: { open: boolean; onCl
       setPhone(cfg.uazapi_phone || '');
       setTemplates(cfg.templates.length ? cfg.templates : ['']);
       setMcTag(cfg.mc_tag_name || '');
+      setGapMinutes(cfg.send_gap_minutes ?? 0);
+      setQueueOrder(cfg.queue_order || 'oldest_first');
+      setWindowStart(cfg.send_window_start ?? 0);
+      setWindowEnd(cfg.send_window_end ?? 0);
     }
   }, [open, cfg]);
 
@@ -608,10 +616,20 @@ function DispatchSettingsDialog({ open, onClose, naFila }: { open: boolean; onCl
         uazapi_phone: digits(phone) || null,
         templates: tpls as any,
         mc_tag_name: mcTag.trim() || null,
+        send_gap_minutes: Math.max(0, Math.min(240, Math.round(gapMinutes) || 0)),
+        queue_order: queueOrder,
+        send_window_start: Math.max(0, Math.min(23, Math.round(windowStart) || 0)),
+        send_window_end: Math.max(0, Math.min(23, Math.round(windowEnd) || 0)),
       },
       { onSuccess: onClose },
     );
   };
+
+  // Estimativa de esvaziamento da fila no ritmo espaçado
+  const horasJanela = windowStart === windowEnd
+    ? 24
+    : windowStart < windowEnd ? windowEnd - windowStart : 24 - windowStart + windowEnd;
+  const msgsPorDia = gapMinutes > 0 ? Math.floor((horasJanela * 60) / gapMinutes) : 0;
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -650,8 +668,12 @@ function DispatchSettingsDialog({ open, onClose, naFila }: { open: boolean; onCl
             {enabled && !cfg.enabled && naFila > 0 && (
               <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
                 <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-                <span>Ao salvar LIGADO, os {naFila} pedidos represados na fila começam a ser enviados
-                (~10/min, ≈{Math.max(1, Math.ceil(naFila / 10))} min pra esvaziar). Confere os códigos antes!</span>
+                <span>
+                  Ao salvar LIGADO, os {naFila} pedidos represados na fila começam a ser enviados{' '}
+                  {gapMinutes > 0
+                    ? `(1 a cada ${gapMinutes} min${msgsPorDia ? `, ≈${msgsPorDia}/dia` : ''})`
+                    : `(~10/min, ≈${Math.max(1, Math.ceil(naFila / 10))} min pra esvaziar)`}. Confere os códigos antes!
+                </span>
               </div>
             )}
 
@@ -696,6 +718,65 @@ function DispatchSettingsDialog({ open, onClose, naFila }: { open: boolean; onCl
                   <Input value={mcTag} onChange={(e) => setMcTag(e.target.value)} placeholder="ex.: rastreio_enviar" className="h-9" />
                 </div>
               )}
+            </div>
+
+            {/* Ritmo */}
+            <div className="rounded-lg border border-border px-3 py-3 space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">Ritmo</label>
+                  <Select
+                    value={gapMinutes > 0 ? 'espacado' : 'lote'}
+                    onValueChange={(v) => setGapMinutes(v === 'espacado' ? (gapMinutes || 8) : 0)}
+                  >
+                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="espacado">Espaçado (aquecimento) — recomendado</SelectItem>
+                      <SelectItem value="lote">Lote (~10 por minuto)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {gapMinutes > 0 && (
+                  <div>
+                    <label className="block text-xs font-medium text-muted-foreground mb-1">1 mensagem a cada (min)</label>
+                    <Input
+                      type="number" min={1} max={240} value={gapMinutes}
+                      onChange={(e) => setGapMinutes(Number(e.target.value))}
+                      className="h-9"
+                    />
+                  </div>
+                )}
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">Ordem da fila</label>
+                  <Select value={queueOrder} onValueChange={(v) => setQueueOrder(v as 'oldest_first' | 'newest_first')}>
+                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="newest_first">Mais recentes primeiro</SelectItem>
+                      <SelectItem value="oldest_first">Mais antigos primeiro</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="flex items-end gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">Enviar somente entre (hora BRT)</label>
+                  <div className="flex items-center gap-2">
+                    <Input type="number" min={0} max={23} value={windowStart}
+                      onChange={(e) => setWindowStart(Number(e.target.value))} className="h-9 w-20" />
+                    <span className="text-sm text-muted-foreground">h e</span>
+                    <Input type="number" min={0} max={23} value={windowEnd}
+                      onChange={(e) => setWindowEnd(Number(e.target.value))} className="h-9 w-20" />
+                    <span className="text-sm text-muted-foreground">h</span>
+                  </div>
+                </div>
+                <p className="text-[11px] text-muted-foreground pb-1">
+                  {windowStart === windowEnd
+                    ? 'horários iguais = envia o dia todo'
+                    : gapMinutes > 0 && naFila > 0
+                      ? `≈ ${msgsPorDia}/dia → fila atual esvazia em ~${Math.max(1, Math.ceil(naFila / Math.max(1, msgsPorDia)))} dia(s)`
+                      : ''}
+                </p>
+              </div>
             </div>
 
             {/* Templates */}

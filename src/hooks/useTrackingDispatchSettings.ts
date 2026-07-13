@@ -12,6 +12,12 @@ export interface TrackingDispatchSettings {
   send_delay_ms: number;
   mc_tag_name: string | null;
   mc_code_field: string;
+  /** >0 = 1 mensagem a cada N minutos (aquecimento); 0 = modo lote */
+  send_gap_minutes: number;
+  queue_order: 'oldest_first' | 'newest_first';
+  /** janela BRT [start, end); start === end desativa */
+  send_window_start: number;
+  send_window_end: number;
   updated_at: string;
   updated_by: string | null;
 }
