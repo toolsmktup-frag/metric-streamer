@@ -42,6 +42,8 @@ interface NormalizedEvent {
   payment_method: string | null;
   installments: number;
   pix_code: string | null;
+  /** Página de pagamento da plataforma (Ticto: checkout.ticto.app/thanks/{hash} com QR + copia-e-cola). */
+  pix_url: string | null;
   boleto_code: string | null;
   boleto_url: string | null;
   external_event_id: string | null;
@@ -177,6 +179,7 @@ function normalizeTicto(body: Record<string, any>): NormalizedEvent {
     ),
     installments: Number(invoice.installments || transaction.installments || 1),
     pix_code: pixCode,
+    pix_url: transaction.pix_url || invoice.pix_url || body.pix_url || null,
     boleto_code: boletoCode,
     boleto_url: boletoUrl,
     external_event_id: externalEventId,
@@ -245,6 +248,7 @@ function normalizeGuru(body: Record<string, any>): NormalizedEvent {
     payment_method: normalizePaymentMethod(paymentObj.method || body.payment_method),
     installments,
     pix_code: pixCode,
+    pix_url: paymentObj.pix?.qrcode?.url || body.pix_url || null,
     boleto_code: boletoCode,
     boleto_url: boletoUrl,
     external_event_id: externalEventId,
@@ -268,6 +272,7 @@ function normalizeGeneric(body: Record<string, any>): NormalizedEvent {
     payment_method: normalizePaymentMethod(body.payment_method),
     installments: Number(body.installments || 1),
     pix_code: body.pix_code || body.pix_emv || null,
+    pix_url: body.pix_url || null,
     boleto_code: body.digitable_line || body.boleto_code || null,
     boleto_url: body.boleto_url || null,
     external_event_id: String(body.id || body.transaction_id || body.order_id || "").trim() || null,
@@ -652,6 +657,7 @@ Deno.serve(async (req) => {
           installments: event.installments,
           platform: event.platform,
           pix_code: event.pix_code,
+          pix_url: event.pix_url,
           boleto_code: event.boleto_code,
           boleto_url: event.boleto_url,
           external_event_id: event.external_event_id,
