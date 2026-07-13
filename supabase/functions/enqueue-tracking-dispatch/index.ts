@@ -54,7 +54,66 @@ function brKey(v: string): string {
   return d;
 }
 
-function templates(): string[] {
+// Config vinda do painel da tela /rastreios (tabela de 1 linha).
+// Precedência de cada campo: tabela → ENV → default.
+interface DispatchSettings {
+  enabled: boolean;
+  channel: "manychat" | "uazapi";
+  uazapi_phone: string;
+  templates: string[];
+  batch_size: number;
+  send_delay_ms: number;
+  mc_tag_name: string;
+  mc_code_field: string;
+}
+
+async function loadSettings(supabase: ReturnType<typeof createClient>): Promise<DispatchSettings> {
+  const { data } = await supabase
+    .from("tracking_dispatch_settings")
+    .select("*")
+    .eq("id", 1)
+    .maybeSingle();
+  const row: any = data || {};
+  const tplsFromRow = Array.isArray(row.templates) ? row.templates.map(String).filter(Boolean) : [];
+  return {
+    // Sem linha na tabela (migration ainda não aplicada), o ENV segue mandando
+    // — e sem ENV o comportamento antigo se mantém (manychat sem tag = fila espera).
+    enabled: data ? Boolean(row.enabled) : true,
+    channel: (row.channel || env("TRACKING_DISPATCH_CHANNEL") || "manychat") as "manychat" | "uazapi",
+    uazapi_phone: row.uazapi_phone || env("TRACKING_UAZAPI_PHONE") || "",
+    templates: tplsFromRow.length ? tplsFromRow : templatesFromEnv(),
+    batch_size: Number(row.batch_size) || Number(env("TRACKING_BATCH_SIZE")) || 10,
+    send_delay_ms: Number(row.send_delay_ms) || Number(env("TRACKING_SEND_DELAY_MS")) || 4000,
+    mc_tag_name: row.mc_tag_name || env("TRACKING_MC_TAG_NAME") || "",
+    mc_code_field: row.mc_code_field || env("TRACKING_MC_CODE_FIELD") || "codigo_rastreio",
+  };
+}
+
+// Instâncias UazAPI conectadas, respeitando o número dedicado do painel:
+// se uazapi_phone estiver setado, SÓ dispara por ele (match por brKey em
+// phone_number/instance_name). Sem match conectado → lista vazia → skip
+// (fila mantida); nunca cai nos números das vendedoras.
+async function loadUazapiInstances(
+  supabase: ReturnType<typeof createClient>,
+  cfg: DispatchSettings,
+): Promise<Array<{ api_url: string; api_token: string }>> {
+  const { data: inst } = await supabase
+    .from("whatsapp_instances")
+    .select("api_url, api_token, status, phone_number, instance_name")
+    .eq("organization_id", ORG_ID);
+  let candidates = (inst || []).filter(
+    (i: any) => !i.status || ["connected", "open"].includes(String(i.status).toLowerCase()),
+  );
+  const pinned = brKey(cfg.uazapi_phone);
+  if (pinned) {
+    candidates = candidates.filter(
+      (i: any) => brKey(i.phone_number) === pinned || brKey(i.instance_name) === pinned,
+    );
+  }
+  return candidates.map((i: any) => ({ api_url: i.api_url, api_token: i.api_token }));
+}
+
+function templatesFromEnv(): string[] {
   try {
     const raw = env("TRACKING_UAZAPI_TEMPLATES");
     if (raw) {
@@ -77,14 +136,14 @@ interface Shipment {
   dispatch_channel: "manychat" | "uazapi" | null;
 }
 
-async function dispatchManyChat(s: Shipment, link: string): Promise<{ ok: boolean; skip?: boolean; detail?: unknown }> {
-  const tagName = env("TRACKING_MC_TAG_NAME");
+async function dispatchManyChat(s: Shipment, link: string, cfg: DispatchSettings): Promise<{ ok: boolean; skip?: boolean; detail?: unknown }> {
+  const tagName = cfg.mc_tag_name;
   const tagId = env("TRACKING_MC_TAG_ID");
   if (!tagName && !tagId) {
     // Canal ainda não configurado → deixa o pedido NA FILA (não marca falha).
     return { ok: false, skip: true, detail: "ManyChat tag não configurada — aguardando" };
   }
-  const codeField = env("TRACKING_MC_CODE_FIELD") || "codigo_rastreio";
+  const codeField = cfg.mc_code_field;
   const productField = env("TRACKING_MC_PRODUCT_FIELD");
   const fields: Array<Record<string, unknown>> = [{ field_name: codeField, value: s.tracking_code }];
   if (productField && s.product_name) fields.push({ field_name: productField, value: s.product_name });
@@ -113,10 +172,11 @@ async function dispatchUazapi(
   link: string,
   instances: Array<{ api_url: string; api_token: string }>,
   idx: number,
+  cfg: DispatchSettings,
 ): Promise<{ ok: boolean; skip?: boolean; detail?: unknown }> {
   if (!instances.length) return { ok: false, skip: true, detail: "nenhuma instância UazAPI conectada — aguardando" };
   const inst = instances[idx % instances.length];
-  const tpls = templates();
+  const tpls = cfg.templates.length ? cfg.templates : DEFAULT_TEMPLATES;
   const tpl = tpls[Math.floor(Math.random() * tpls.length)];
   const text = fill(tpl, {
     nome: (s.customer_name || "").split(" ")[0] || "",
@@ -145,18 +205,60 @@ Deno.serve(async (req) => {
   const bearer = auth.startsWith("Bearer ") ? auth.slice(7) : "";
   const serviceKey = env("SUPABASE_SERVICE_ROLE_KEY");
   const ownSecret = env("TRACKING_DISPATCH_SECRET");
-  if (!((serviceKey && bearer === serviceKey) || (ownSecret && bearer === ownSecret))) {
-    return jsonResponse({ ok: false, error: "Unauthorized" }, 401);
-  }
+  const isInternal = (serviceKey && bearer === serviceKey) || (ownSecret && bearer === ownSecret);
 
   const supabase = createClient(env("SUPABASE_URL"), serviceKey);
 
   let input: any = {};
   try { input = await req.json(); } catch { /* cron sem corpo */ }
 
-  const defaultChannel = (env("TRACKING_DISPATCH_CHANNEL") || "manychat") as "manychat" | "uazapi";
-  const batchSize = Number(input.limit ?? env("TRACKING_BATCH_SIZE") ?? 10) || 10;
-  const delayMs = Number(env("TRACKING_SEND_DELAY_MS") ?? 4000) || 4000;
+  if (!isInternal) {
+    // Usuário logado no app pode SOMENTE usar o modo teste do painel
+    // (mandar 1 msg pro próprio número) — nunca processar a fila.
+    const isTest = Boolean(input.test?.phone);
+    const { data: userData } = isTest
+      ? await supabase.auth.getUser(bearer)
+      : { data: { user: null } };
+    if (!isTest || !userData?.user) {
+      return jsonResponse({ ok: false, error: "Unauthorized" }, 401);
+    }
+  }
+
+  const cfg = await loadSettings(supabase);
+  const defaultChannel = cfg.channel;
+  const batchSize = Number(input.limit) || cfg.batch_size;
+  const delayMs = cfg.send_delay_ms;
+
+  // Modo TESTE (botão "Enviar teste" do painel): manda 1 mensagem pro
+  // telefone informado pelo canal configurado, SEM tocar na fila.
+  // Funciona mesmo com o disparo desligado — é pra validar antes de ligar.
+  if (input.test?.phone) {
+    const fake: Shipment = {
+      id: "teste",
+      customer_name: String(input.test.name || "Teste"),
+      customer_phone: String(input.test.phone),
+      customer_email: null,
+      product_name: String(input.test.product || "Pedido de teste"),
+      quantity: 1,
+      tracking_code: String(input.test.code || "AA123456785BR"),
+      carrier: "Correios",
+      dispatch_channel: null,
+    };
+    const link = correiosUrl(fake.tracking_code!);
+    let instances: Array<{ api_url: string; api_token: string }> = [];
+    if (defaultChannel === "uazapi") {
+      instances = await loadUazapiInstances(supabase, cfg);
+    }
+    const result = defaultChannel === "uazapi"
+      ? await dispatchUazapi(fake, link, instances, 0, cfg)
+      : await dispatchManyChat(fake, link, cfg);
+    return jsonResponse({ ok: result.ok, test: true, skip: result.skip || false, detail: result.detail });
+  }
+
+  // Chave-geral do painel: desligado → não processa nada, fila acumula.
+  if (!cfg.enabled) {
+    return jsonResponse({ ok: true, processed: 0, message: "disparo desligado no painel" });
+  }
 
   // 1) Seleciona pedidos a disparar
   let query = supabase
@@ -180,22 +282,7 @@ Deno.serve(async (req) => {
     (s: Shipment) => (s.dispatch_channel || defaultChannel) === "uazapi",
   );
   if (needsUazapi) {
-    const { data: inst } = await supabase
-      .from("whatsapp_instances")
-      .select("api_url, api_token, status, phone_number, instance_name")
-      .eq("organization_id", ORG_ID);
-    let candidates = (inst || []).filter(
-      (i: any) => !i.status || ["connected", "open"].includes(String(i.status).toLowerCase()),
-    );
-    // Número dedicado: se TRACKING_UAZAPI_PHONE estiver setado, SÓ dispara por ele.
-    // Sem match conectado → skip (fila mantida); nunca cai nos números das vendedoras.
-    const pinned = brKey(env("TRACKING_UAZAPI_PHONE"));
-    if (pinned) {
-      candidates = candidates.filter(
-        (i: any) => brKey(i.phone_number) === pinned || brKey(i.instance_name) === pinned,
-      );
-    }
-    instances = candidates.map((i: any) => ({ api_url: i.api_url, api_token: i.api_token }));
+    instances = await loadUazapiInstances(supabase, cfg);
   }
 
   // 3) Agrupa duplicados do lote: mesmo telefone + mesmo código → 1 mensagem só
@@ -246,8 +333,8 @@ Deno.serve(async (req) => {
     let result: { ok: boolean; skip?: boolean; detail?: unknown };
     try {
       result = channel === "uazapi"
-        ? await dispatchUazapi(s, link, instances, i)
-        : await dispatchManyChat(s, link);
+        ? await dispatchUazapi(s, link, instances, i, cfg)
+        : await dispatchManyChat(s, link, cfg);
     } catch (e) {
       result = { ok: false, detail: String((e as Error)?.message || e) };
     }

@@ -18,6 +18,12 @@ import {
   useShippingProducts, useAddShippingProduct, useToggleShippingProduct,
   useDeleteShippingProduct, useSyncShipments,
 } from '@/hooks/useShippingProducts';
+import {
+  useTrackingDispatchSettings, useUpdateTrackingDispatchSettings, useSendDispatchTest,
+} from '@/hooks/useTrackingDispatchSettings';
+import { useWhatsAppInstances, getInstanceDisplayName } from '@/hooks/useWhatsApp';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -36,7 +42,7 @@ import {
 import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card';
 import {
   Package, Search, Loader2, FileDown, FileText, Truck, Send, MapPin, ExternalLink, Pencil, HelpCircle,
-  ArrowUp, ArrowDown, ArrowUpDown, Boxes, Trash2, RefreshCw, ShoppingBag,
+  ArrowUp, ArrowDown, ArrowUpDown, Boxes, Trash2, RefreshCw, ShoppingBag, Zap, Plus, AlertTriangle,
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -559,6 +565,214 @@ function ProductsDialog({ open, onClose }: { open: boolean; onClose: () => void 
   );
 }
 
+/* ── Config: disparo automático do rastreio (painel "Disparo") ── */
+function DispatchSettingsDialog({ open, onClose, naFila }: { open: boolean; onClose: () => void; naFila: number }) {
+  const { data: cfg, isLoading } = useTrackingDispatchSettings();
+  const update = useUpdateTrackingDispatchSettings();
+  const sendTest = useSendDispatchTest();
+  const { instances } = useWhatsAppInstances();
+
+  const [enabled, setEnabled] = useState(false);
+  const [channel, setChannel] = useState<'uazapi' | 'manychat'>('uazapi');
+  const [phone, setPhone] = useState('');
+  const [templates, setTemplates] = useState<string[]>([]);
+  const [mcTag, setMcTag] = useState('');
+  const [testPhone, setTestPhone] = useState('');
+
+  // Carrega o form quando o painel abre (não sobrescreve enquanto edita)
+  useEffect(() => {
+    if (open && cfg) {
+      setEnabled(cfg.enabled);
+      setChannel(cfg.channel);
+      setPhone(cfg.uazapi_phone || '');
+      setTemplates(cfg.templates.length ? cfg.templates : ['']);
+      setMcTag(cfg.mc_tag_name || '');
+    }
+  }, [open, cfg]);
+
+  const connected = (instances || []).filter((i) =>
+    ['connected', 'open'].includes(String(i.status || '').toLowerCase()),
+  );
+  const digits = (v: string) => (v || '').replace(/\D/g, '');
+  const phoneMatchesConnected = connected.some(
+    (i) => digits(i.phone_number || '') .includes(digits(phone).slice(-8)) && digits(phone).length >= 10,
+  );
+
+  const save = () => {
+    const tpls = templates.map((t) => t.trim()).filter(Boolean);
+    if (!tpls.length) { return; }
+    update.mutate(
+      {
+        enabled,
+        channel,
+        uazapi_phone: digits(phone) || null,
+        templates: tpls as any,
+        mc_tag_name: mcTag.trim() || null,
+      },
+      { onSuccess: onClose },
+    );
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2"><Zap className="h-4 w-4 text-primary" /> Disparo automático do rastreio</DialogTitle>
+          <DialogDescription>
+            Quando LIGADO, todo código salvo entra na fila e é enviado pelo WhatsApp
+            escalonado (~10 por minuto), sempre pelo número escolhido aqui.
+          </DialogDescription>
+        </DialogHeader>
+
+        {isLoading ? (
+          <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+        ) : !cfg ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">
+            Configuração ainda não instalada no banco — fala com o suporte técnico.
+          </p>
+        ) : (
+          <div className="space-y-4">
+            {/* Chave-geral */}
+            <div className={`flex items-center gap-3 rounded-lg border px-3 py-3 ${enabled ? 'border-primary/50 bg-primary/5' : 'border-border'}`}>
+              <Switch checked={enabled} onCheckedChange={setEnabled} />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-foreground">{enabled ? 'Disparo LIGADO' : 'Disparo desligado'}</p>
+                <p className="text-xs text-muted-foreground">
+                  {enabled
+                    ? 'Códigos salvos são enviados automaticamente.'
+                    : 'Códigos salvos ficam acumulando na fila, nada é enviado.'}
+                </p>
+              </div>
+              {naFila > 0 && (
+                <Badge variant={enabled ? 'default' : 'secondary'} className="shrink-0">{naFila} na fila</Badge>
+              )}
+            </div>
+            {enabled && !cfg.enabled && naFila > 0 && (
+              <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>Ao salvar LIGADO, os {naFila} pedidos represados na fila começam a ser enviados
+                (~10/min, ≈{Math.max(1, Math.ceil(naFila / 10))} min pra esvaziar). Confere os códigos antes!</span>
+              </div>
+            )}
+
+            {/* Canal */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Canal de envio</label>
+                <Select value={channel} onValueChange={(v) => setChannel(v as 'uazapi' | 'manychat')}>
+                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="uazapi">WhatsApp direto (UazAPI) — recomendado</SelectItem>
+                    <SelectItem value="manychat">ManyChat (tag + fluxo oficial)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {channel === 'uazapi' ? (
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">Número que envia (instância conectada)</label>
+                  <Select value={digits(phone)} onValueChange={setPhone}>
+                    <SelectTrigger className="h-9"><SelectValue placeholder="Escolher instância…" /></SelectTrigger>
+                    <SelectContent>
+                      {connected.map((i) => (
+                        <SelectItem key={i.id} value={digits(i.phone_number || i.instance_name)}>
+                          {getInstanceDisplayName(i)} {i.phone_number ? `· ${i.phone_number}` : ''}
+                        </SelectItem>
+                      ))}
+                      {digits(phone) && !connected.some((i) => digits(i.phone_number || i.instance_name) === digits(phone)) && (
+                        <SelectItem value={digits(phone)}>{phone} (fora do ar agora)</SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                  {digits(phone) && !phoneMatchesConnected && (
+                    <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                      <AlertTriangle className="h-3 w-3" /> instância não está conectada — a fila espera, nada falha
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">Tag do ManyChat</label>
+                  <Input value={mcTag} onChange={(e) => setMcTag(e.target.value)} placeholder="ex.: rastreio_enviar" className="h-9" />
+                </div>
+              )}
+            </div>
+
+            {/* Templates */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-medium text-muted-foreground">
+                  Mensagens (o sistema varia entre elas a cada envio)
+                </label>
+                <button
+                  className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                  onClick={() => setTemplates((t) => [...t, ''])}
+                >
+                  <Plus className="h-3 w-3" /> adicionar variação
+                </button>
+              </div>
+              <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                {templates.map((tpl, idx) => (
+                  <div key={idx} className="relative">
+                    <Textarea
+                      value={tpl}
+                      onChange={(e) => setTemplates((t) => t.map((v, i) => (i === idx ? e.target.value : v)))}
+                      rows={4}
+                      className="text-xs font-mono pr-8"
+                    />
+                    {templates.length > 1 && (
+                      <button
+                        onClick={() => setTemplates((t) => t.filter((_, i) => i !== idx))}
+                        className="absolute top-2 right-2 text-muted-foreground hover:text-destructive"
+                        title="Remover variação"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Variáveis: <span className="font-mono">{'{{nome}}'}</span> <span className="font-mono">{'{{codigo}}'}</span>{' '}
+                <span className="font-mono">{'{{produto}}'}</span> <span className="font-mono">{'{{link}}'}</span> (link dos Correios)
+              </p>
+            </div>
+
+            {/* Teste */}
+            <div className="flex items-end gap-2 border-t border-border pt-3">
+              <div className="flex-1">
+                <label className="block text-xs font-medium text-muted-foreground mb-1">
+                  Testar envio (manda 1 mensagem de exemplo, sem mexer na fila)
+                </label>
+                <Input value={testPhone} onChange={(e) => setTestPhone(e.target.value)} placeholder="seu WhatsApp com DDD" className="h-9" />
+              </div>
+              <Button
+                variant="outline"
+                className="h-9 gap-1.5"
+                disabled={sendTest.isPending || digits(testPhone).length < 10}
+                onClick={() => sendTest.mutate({ phone: testPhone })}
+              >
+                {sendTest.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                Enviar teste
+              </Button>
+            </div>
+          </div>
+        )}
+
+        <DialogFooter className="gap-2">
+          <Button variant="ghost" onClick={onClose}>Cancelar</Button>
+          <Button
+            disabled={!cfg || update.isPending || !templates.some((t) => t.trim())}
+            onClick={save}
+          >
+            {update.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Salvar'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 const Rastreios: React.FC = () => {
   const queryClient = useQueryClient();
   const [status, setStatus] = useState<ShipmentStatusFilter>('pendentes');
@@ -573,6 +787,7 @@ const Rastreios: React.FC = () => {
   const [editing, setEditing] = useState<OrderShipment | null>(null);
   const [customer, setCustomer] = useState<OrderShipment | null>(null);
   const [productsOpen, setProductsOpen] = useState(false);
+  const [dispatchOpen, setDispatchOpen] = useState(false);
 
   const { data: myPerms } = useMyPermissions();
   const canConfigure = !isLogisticaOnly(myPerms);
@@ -710,6 +925,15 @@ const Rastreios: React.FC = () => {
             <Boxes className="h-4 w-4" /> Produtos
           </button>
         )}
+        {canConfigure && (
+          <button
+            onClick={() => setDispatchOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground hover:bg-muted transition-colors shrink-0"
+            title="Ligar/desligar e configurar o envio automático do rastreio"
+          >
+            <Zap className="h-4 w-4" /> Disparo
+          </button>
+        )}
       </div>
 
       {/* Barra de rolagem horizontal no topo (sincronizada com a tabela) */}
@@ -796,6 +1020,13 @@ const Rastreios: React.FC = () => {
       <AddressDialog shipment={editing} onClose={() => setEditing(null)} />
       <CustomerDrawer shipment={customer} onClose={() => setCustomer(null)} />
       {canConfigure && <ProductsDialog open={productsOpen} onClose={() => setProductsOpen(false)} />}
+      {canConfigure && (
+        <DispatchSettingsDialog
+          open={dispatchOpen}
+          onClose={() => setDispatchOpen(false)}
+          naFila={counts?.na_fila ?? 0}
+        />
+      )}
     </div>
   );
 };
