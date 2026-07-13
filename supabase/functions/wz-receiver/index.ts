@@ -294,6 +294,11 @@ function normalizeStatus(raw: string): string {
     pix_generated: "pix_generated",
     pix_created: "pix_generated",
     boleto_generated: "boleto_generated",
+    // Ticto manda estes RAW pros boletos (visto ao vivo 13/07 — 18 eventos
+    // sem tradução = nenhuma automação disparava pra boleto):
+    bank_slip_created: "boleto_generated",
+    bank_slip_delayed: "boleto_generated",
+    billet_printed: "boleto_generated",
     pending: "pix_generated",
     expired: "pix_expired",
     pix_expired: "pix_expired",
