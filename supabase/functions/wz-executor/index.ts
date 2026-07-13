@@ -537,6 +537,19 @@ Deno.serve(async (req) => {
             }
           }
 
+          // Mapeamento genérico variável-do-evento → custom field do ManyChat.
+          // nodeData.fieldMappings = [{field_name:"PIX", variable:"pix_code"}, ...]
+          // — variável vazia no evento não sobrescreve o campo no bot.
+          if (Array.isArray(nodeData.fieldMappings)) {
+            const vars = (execution.variables || {}) as Record<string, unknown>;
+            for (const m of nodeData.fieldMappings) {
+              const value = m?.variable ? vars[m.variable] : undefined;
+              if (m?.field_name && value !== undefined && value !== null && String(value) !== "") {
+                fields = [...(fields || []), { field_name: String(m.field_name), value: String(value) }];
+              }
+            }
+          }
+
           try {
             const res = await fetch(`${baseUrl}/functions/v1/manychat-sync`, {
               method: "POST",
