@@ -138,13 +138,18 @@ function normalizeTicto(body: Record<string, any>): NormalizedEvent {
 
   // ─── PIX / Boleto codes ───
   const payment = invoice.payment || body.payment || {};
-  const pixCode = invoice.pix_code || invoice.pix_emv || invoice.pix_qrcode ||
+  // Payload real da Ticto traz o copia-e-cola em transaction.pix_qr_code
+  // (validado 13/07 com pix de verdade — os aliases invoice/payment vinham null).
+  const pixCode = transaction.pix_qr_code || transaction.pix_code || transaction.pix_emv ||
+    invoice.pix_code || invoice.pix_emv || invoice.pix_qrcode ||
     payment.pix_code || payment.pix_emv || payment.pix_qrcode ||
     body.pix_code || body.pix_emv || null;
-  const boletoCode = invoice.digitable_line || invoice.boleto_digitable_line ||
+  const boletoCode = transaction.bank_slip_code ||
+    invoice.digitable_line || invoice.boleto_digitable_line ||
     payment.digitable_line || payment.boleto_digitable_line ||
     body.digitable_line || null;
-  const boletoUrl = invoice.boleto_url || invoice.boleto_link ||
+  const boletoUrl = transaction.bank_slip_url ||
+    invoice.boleto_url || invoice.boleto_link ||
     payment.boleto_url || payment.boleto_link ||
     body.boleto_url || null;
 
