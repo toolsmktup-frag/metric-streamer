@@ -90,10 +90,14 @@ function normalizeTicto(body: Record<string, any>): NormalizedEvent {
   const transaction = body.transaction || {};
 
   // ─── Phone: DDI + DDD + Number (igual ao ticto-webhook) ───
+  // Payload real da Ticto manda customer.phone como OBJETO {ddi, ddd, number}
+  // (validado 13/07 — tratar como string virava "[object Object]" → null).
   let phone: string | null = null;
-  const ddi = customer.phone_local_code || customer.ddi || "";
-  const ddd = customer.phone_prefix || customer.ddd || "";
-  const number = customer.phone_number || customer.phone || "";
+  const phoneObj = (customer.phone && typeof customer.phone === "object") ? customer.phone : null;
+  const ddi = phoneObj?.ddi || customer.phone_local_code || customer.ddi || "";
+  const ddd = phoneObj?.ddd || customer.phone_prefix || customer.ddd || "";
+  const number = phoneObj?.number || customer.phone_number ||
+    (typeof customer.phone === "string" ? customer.phone : "") || "";
   if (number) {
     phone = `${ddi}${ddd}${number}`.replace(/\D/g, "") || null;
   }
