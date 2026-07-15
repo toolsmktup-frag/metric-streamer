@@ -14,7 +14,9 @@ import { Badge } from '@/components/ui/badge';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
-import { Flower2, FileText, SlidersHorizontal, History, Loader2, Save, Rocket, RotateCcw, Eye } from 'lucide-react';
+import { Flower2, FileText, SlidersHorizontal, History, Loader2, Save, Rocket, RotateCcw, Eye, Phone, AlertTriangle } from 'lucide-react';
+import { useWhatsAppInstances, getInstanceDisplayName } from '@/hooks/useWhatsApp';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export default function GirassolConfig() {
   const { data: role, isLoading: roleLoading } = useCurrentUserRole();
@@ -30,6 +32,8 @@ export default function GirassolConfig() {
   const [publishOpen, setPublishOpen] = useState(false);
   const [note, setNote] = useState('');
   const [viewing, setViewing] = useState<GirassolVersion | null>(null);
+  const [instanceId, setInstanceId] = useState<string | null>(null);
+  const { instances } = useWhatsAppInstances();
 
   useEffect(() => {
     if (cfg) {
@@ -37,6 +41,7 @@ export default function GirassolConfig() {
       setStrikeLimit(cfg.strike_limit);
       setHumanPause(cfg.human_pause_minutes);
       setPauseHours(cfg.pause_hours);
+      setInstanceId(cfg.instance_id);
     }
   }, [cfg]);
 
@@ -48,10 +53,14 @@ export default function GirassolConfig() {
   }
 
   const hasDraft = !!cfg && content !== cfg.system_prompt;
+  const hasChanges = !!cfg && (
+    hasDraft || instanceId !== cfg.instance_id || strikeLimit !== cfg.strike_limit ||
+    humanPause !== cfg.human_pause_minutes || pauseHours !== cfg.pause_hours
+  );
 
   const doPublish = () => {
     publish.mutate(
-      { prompt: content, strike_limit: strikeLimit, human_pause_minutes: humanPause, pause_hours: pauseHours, note },
+      { prompt: content, strike_limit: strikeLimit, human_pause_minutes: humanPause, pause_hours: pauseHours, instance_id: instanceId, note },
       { onSuccess: () => { setPublishOpen(false); setNote(''); } },
     );
   };
@@ -124,7 +133,7 @@ export default function GirassolConfig() {
                     {saveDraft.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
                     Salvar rascunho
                   </Button>
-                  <Button disabled={!hasDraft && !cfg?.draft_prompt} onClick={() => setPublishOpen(true)} className="gap-1.5">
+                  <Button disabled={!hasChanges && !cfg?.draft_prompt} onClick={() => setPublishOpen(true)} className="gap-1.5">
                     <Rocket className="h-3.5 w-3.5" /> Publicar
                   </Button>
                 </div>
@@ -133,7 +142,38 @@ export default function GirassolConfig() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="regras">
+        <TabsContent value="regras" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2"><Phone className="h-4 w-4 text-primary" /> Número do agente</CardTitle>
+              <CardDescription>
+                Instância do WhatsApp que o Girassol escuta e usa pra responder. Publica junto com o resto.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <Select value={instanceId || ''} onValueChange={(v) => setInstanceId(v || null)}>
+                <SelectTrigger className="max-w-md"><SelectValue placeholder="Escolher instância…" /></SelectTrigger>
+                <SelectContent>
+                  {(instances || [])
+                    .filter((i) => ['connected', 'open'].includes(String(i.status || '').toLowerCase()) || i.id === instanceId)
+                    .map((i) => (
+                      <SelectItem key={i.id} value={i.id}>
+                        {getInstanceDisplayName(i)} {i.phone_number ? `· ${i.phone_number}` : ''}
+                        {!['connected', 'open'].includes(String(i.status || '').toLowerCase()) ? ' (desconectada)' : ''}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              {instanceId !== cfg?.instance_id && (
+                <p className="text-xs text-amber-600 dark:text-amber-400 flex items-start gap-1.5">
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                  Atenção: ao publicar, o Girassol passa a atender TODAS as conversas desse número
+                  (e para de responder no anterior). Confere se é isso mesmo antes de publicar.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Regras numéricas</CardTitle>

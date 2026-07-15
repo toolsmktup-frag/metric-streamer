@@ -13,6 +13,8 @@ export interface GirassolConfig {
   published_at: string;
   published_by_name: string | null;
   updated_at: string;
+  /** Instância do WhatsApp que o agente escuta e usa pra responder. */
+  instance_id: string | null;
 }
 
 export interface GirassolVersion {
@@ -85,6 +87,7 @@ interface PublishInput {
   strike_limit: number;
   human_pause_minutes: number;
   pause_hours: number;
+  instance_id: string | null;
   note?: string;
 }
 
@@ -92,7 +95,7 @@ interface PublishInput {
 export function usePublishGirassol() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ prompt, strike_limit, human_pause_minutes, pause_hours, note }: PublishInput) => {
+    mutationFn: async ({ prompt, strike_limit, human_pause_minutes, pause_hours, instance_id, note }: PublishInput) => {
       if (prompt.trim().length < 200) {
         throw new Error('Prompt curto demais — isso derrubaria o comportamento do agente. Confere o conteúdo.');
       }
@@ -121,6 +124,7 @@ export function usePublishGirassol() {
           strike_limit,
           human_pause_minutes,
           pause_hours,
+          instance_id,
           active_version: nextVersion,
           published_at: new Date().toISOString(),
           published_by: who.id,
