@@ -51,6 +51,7 @@ import MinhasMetas from "./pages/MinhasMetas";
 import ConfigMetas from "./pages/ConfigMetas";
 import AutoRules from "./pages/AutoRules";
 import SalesCopilotConfig from "./pages/SalesCopilotConfig";
+import GirassolConfig from "./pages/GirassolConfig";
 import Rastreios from "./pages/Rastreios";
 import WhatsAppOficial from "./pages/WhatsAppOficial";
 
@@ -158,6 +159,7 @@ const App = () => (
           {/* Auto-Rules */}
           <Route path="/auto-rules" element={<Protected><AutoRules /></Protected>} />
           <Route path="/configuracoes/copiloto-vendas" element={<Protected><SalesCopilotConfig /></Protected>} />
+          <Route path="/configuracoes/girassol" element={<Protected><GirassolConfig /></Protected>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
         </ErrorBoundary>

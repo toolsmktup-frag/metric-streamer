@@ -30,6 +30,7 @@ import {
   Package,
   Brain,
   Truck,
+  Flower2,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useFunnels } from '@/hooks/useFunnels';
@@ -76,6 +77,7 @@ const CONFIG_ITEMS = [
   { path: '/importar',      label: 'Importar',     icon: Upload },
   { path: '/agente-ia',     label: 'Agente IA',    icon: Bot },
   { path: '/configuracoes/copiloto-vendas', label: 'Copiloto de Vendas', icon: Sparkles },
+  { path: '/configuracoes/girassol', label: 'Agente Girassol', icon: Flower2 },
   { path: '/funis/configurar', label: 'Gerenciar Funis', icon: Settings },
   { path: '/produtos',         label: 'Produtos',        icon: Package },
   { path: '/classificacao-ia', label: 'Classificação IA', icon: Brain },
