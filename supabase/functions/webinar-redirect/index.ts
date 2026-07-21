@@ -32,22 +32,34 @@ Deno.serve(async (req) => {
 
   try {
     const url = new URL(req.url)
-    const phone = (url.searchParams.get('p') || '').replace(/\D/g, '')
-    const dest = url.searchParams.get('d') || ''
+    const token = url.searchParams.get('t') || ''
+    let phone = (url.searchParams.get('p') || '').replace(/\D/g, '')
+    let dest = url.searchParams.get('d') || ''
     const k = url.searchParams.get('k') || ''
     const name = url.searchParams.get('n') || null
     const email = url.searchParams.get('e') || null
 
-    if (!phone || !dest) return new Response('Bad request', { status: 400, headers: corsHeaders })
-
-    // Valida assinatura (evita forjar cliques de terceiros)
-    const expected = await hmacHex(`${phone}|${dest}`)
-    if (k !== expected) {
-      // assinatura inválida: ainda redireciona (não trava o usuário), mas NÃO registra evento
-      return Response.redirect(dest, 302)
-    }
-
     const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
+
+    // Formato CURTO (?t=): usado quando o destino vai numa variável de template
+    // (limite prático de ~150 chars) — o link p/d/k assinado passa de 200 chars.
+    // Busca telefone+destino na tabela de tokens; assinatura é implícita (o token
+    // só existe porque nós o geramos).
+    if (token) {
+      const { data: row } = await supabase
+        .from('webinar_link_tokens').select('phone, dest').eq('token', token).maybeSingle()
+      if (!row) return new Response('Link inválido ou expirado', { status: 404, headers: corsHeaders })
+      phone = row.phone
+      dest = row.dest
+    } else {
+      if (!phone || !dest) return new Response('Bad request', { status: 400, headers: corsHeaders })
+      // Valida assinatura (evita forjar cliques de terceiros)
+      const expected = await hmacHex(`${phone}|${dest}`)
+      if (k !== expected) {
+        // assinatura inválida: ainda redireciona (não trava o usuário), mas NÃO registra evento
+        return Response.redirect(dest, 302)
+      }
+    }
 
     // 1) Marca tag local "assistiu" (defensivo — o flow "assistiu" também marca)
     try {

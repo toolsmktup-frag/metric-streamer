@@ -735,7 +735,9 @@ Deno.serve(async (req) => {
 
 // ─── Node processors ───
 
-// Assina o link rastreável de webinário (mesma fórmula da edge webinar-redirect)
+// Assina o link rastreável de webinário (mesma fórmula da edge webinar-redirect).
+// Formato LONGO (?p&d&k) — ~210 chars, não cabe numa variável de template (~150).
+// Mantido pro modo sessão (texto livre, sem limite de tamanho).
 async function signWebinarLink(phone: string, dest: string): Promise<string> {
   const secret = Deno.env.get("WEBINAR_LINK_SECRET") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "dev-secret";
   const key = await crypto.subtle.importKey(
@@ -744,6 +746,16 @@ async function signWebinarLink(phone: string, dest: string): Promise<string> {
   );
   const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(`${phone}|${dest}`));
   return [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+// Link CURTO rastreável (?t=token) — grava telefone+destino em webinar_link_tokens e
+// devolve uma URL de ~70 chars, cabe numa variável de template. Usado em TODA mensagem
+// do funil de webinário (convite, lembretes, oferta), já que agora tudo vai por template.
+async function shortWebinarLink(supabase: any, phone: string, dest: string): Promise<string> {
+  const token = crypto.randomUUID().replace(/-/g, "").slice(0, 12);
+  await supabase.from("webinar_link_tokens").insert({ token, phone, dest });
+  const base = Deno.env.get("SUPABASE_URL");
+  return `${base}/functions/v1/webinar-redirect?t=${token}`;
 }
 
 // Envio via WhatsApp Cloud API (Meta) — delega para a edge meta-whatsapp-send.
@@ -762,15 +774,23 @@ async function processOfficialWhatsAppNode(
   if (!instanceId) { result.summary = "Sem instância oficial"; return result; }
   if (!phone) { result.summary = "Lead sem telefone"; return result; }
 
-  // Link rastreável do webinário (se configurado no nó): vira a variável {{link_webinario}}
+  // Link rastreável do webinário (se configurado no nó): vira a variável {{link_webinario}}.
+  // Curto (?t=token) por padrão — cabe em variável de template. Só usa o formato longo
+  // (?p&d&k) se o nó pedir explicitamente nodeData.webinarUrlLong (texto livre/sessão,
+  // sem limite de tamanho).
   let localVars = vars;
   if (nodeData.webinarUrl) {
     try {
       const cleanPhone = String(phone).replace(/\D/g, "");
       const dest = String(nodeData.webinarUrl);
-      const sig = await signWebinarLink(cleanPhone, dest);
-      const base = Deno.env.get("SUPABASE_URL");
-      const tracked = `${base}/functions/v1/webinar-redirect?p=${encodeURIComponent(cleanPhone)}&d=${encodeURIComponent(dest)}&k=${sig}`;
+      let tracked: string;
+      if (nodeData.webinarUrlLong) {
+        const sig = await signWebinarLink(cleanPhone, dest);
+        const base = Deno.env.get("SUPABASE_URL");
+        tracked = `${base}/functions/v1/webinar-redirect?p=${encodeURIComponent(cleanPhone)}&d=${encodeURIComponent(dest)}&k=${sig}`;
+      } else {
+        tracked = await shortWebinarLink(supabase, cleanPhone, dest);
+      }
       localVars = { ...vars, link_webinario: tracked };
     } catch (e) {
       console.error("[official] link rastreável falhou:", String(e));
