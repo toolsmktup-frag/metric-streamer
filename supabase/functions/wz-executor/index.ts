@@ -17,7 +17,7 @@ function jsonResponse(body: unknown, status = 200) {
 // ─── Variable substitution ───
 
 function substituteVariables(text: string, vars: Record<string, any>): string {
-  return text
+  let out = text
     .replace(/\{\{nome\}\}/gi, vars._contact_name || "")
     .replace(/\{\{email\}\}/gi, vars._contact_email || "")
     .replace(/\{\{telefone\}\}/gi, vars._contact_phone || "")
@@ -29,8 +29,15 @@ function substituteVariables(text: string, vars: Record<string, any>): string {
     .replace(/\{\{plataforma\}\}/gi, vars.platform || "")
     .replace(/\{\{codigo_pix\}\}/gi, vars.pix_code || "")
     .replace(/\{\{codigo_boleto\}\}/gi, vars.boleto_code || "")
-    .replace(/\{\{link_boleto\}\}/gi, vars.boleto_url || "")
-    .trim();
+    .replace(/\{\{link_boleto\}\}/gi, vars.boleto_url || "");
+  // Fallback genérico: qualquer outra chave presente em `vars` (ex.: link_webinario,
+  // injetado só em runtime pelo nó oficial) — sem isso, {{chave}} desconhecida saía
+  // literal na mensagem em vez de ser substituída.
+  for (const [key, val] of Object.entries(vars)) {
+    if (key.startsWith("_")) continue; // _contact_name etc já tratados acima
+    out = out.replace(new RegExp(`\\{\\{${key}\\}\\}`, "gi"), val == null ? "" : String(val));
+  }
+  return out.trim();
 }
 
 function formatCurrency(value: unknown): string {
@@ -562,6 +569,9 @@ Deno.serve(async (req) => {
                 ...(tagName ? { tag_name: tagName } : {}),
                 ...(tagId ? { tag_id: tagId } : {}),
                 ...(fields ? { fields } : {}),
+                // retag: remove e reaplica a tag pra forçar o gatilho do ManyChat
+                // mesmo em quem já tinha a tag (addTag em tag existente não dispara)
+                ...(nodeData.retag === true ? { retag: true } : {}),
               }),
             });
             const out = await res.json().catch(() => ({}));
@@ -737,6 +747,9 @@ async function signWebinarLink(phone: string, dest: string): Promise<string> {
 }
 
 // Envio via WhatsApp Cloud API (Meta) — delega para a edge meta-whatsapp-send.
+// Dois modos: "template" (default, fora da janela de 24h — exige template aprovado) e
+// "session" (texto livre, só funciona se o lead já respondeu/tocou um botão nas últimas
+// 24h — ver evento "whatsapp_engaged" disparado pelo meta-whatsapp-webhook).
 async function processOfficialWhatsAppNode(
   supabase: any,
   execution: Record<string, any>,
@@ -745,10 +758,8 @@ async function processOfficialWhatsAppNode(
 ): Promise<Record<string, any>> {
   const result: Record<string, any> = { channel: "official" };
   const instanceId = nodeData.officialInstanceId;
-  const templateName = nodeData.templateName;
   const phone = execution.contact_phone;
   if (!instanceId) { result.summary = "Sem instância oficial"; return result; }
-  if (!templateName) { result.summary = "Sem template selecionado"; return result; }
   if (!phone) { result.summary = "Lead sem telefone"; return result; }
 
   // Link rastreável do webinário (se configurado no nó): vira a variável {{link_webinario}}
@@ -766,29 +777,45 @@ async function processOfficialWhatsAppNode(
     }
   }
 
-  // Overrides de variáveis (substitui chips do lead, ex: {{nome}}, {{link_webinario}})
-  const tv = (nodeData.templateVariables || {}) as Record<string, string>;
-  const variables: Record<string, string> = {};
-  for (const [k, val] of Object.entries(tv)) {
-    if (val) variables[k] = substituteVariables(String(val), localVars);
-  }
-
   const baseUrl = Deno.env.get("SUPABASE_URL");
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+  const isSession = nodeData.mode === "session";
+
+  let sendBody: Record<string, unknown>;
+  let summaryLabel: string;
+  if (isSession) {
+    const sessionText = String(nodeData.sessionText || "").trim();
+    if (!sessionText) { result.summary = "Sem texto de sessão configurado"; return result; }
+    const text = substituteVariables(sessionText, localVars);
+    sendBody = { instance_id: instanceId, phone, text };
+    summaryLabel = "Sessão (texto livre) enviada";
+  } else {
+    const templateName = nodeData.templateName;
+    if (!templateName) { result.summary = "Sem template selecionado"; return result; }
+    // Overrides de variáveis (substitui chips do lead, ex: {{nome}}, {{link_webinario}})
+    const tv = (nodeData.templateVariables || {}) as Record<string, string>;
+    const variables: Record<string, string> = {};
+    for (const [k, val] of Object.entries(tv)) {
+      if (val) variables[k] = substituteVariables(String(val), localVars);
+    }
+    sendBody = {
+      instance_id: instanceId,
+      phone,
+      template_name: templateName,
+      variables: Object.keys(variables).length ? variables : undefined,
+    };
+    summaryLabel = `Template "${templateName}" enviado (oficial)`;
+  }
+
   try {
     const res = await fetch(`${baseUrl}/functions/v1/meta-whatsapp-send`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
-      body: JSON.stringify({
-        instance_id: instanceId,
-        phone,
-        template_name: templateName,
-        variables: Object.keys(variables).length ? variables : undefined,
-      }),
+      body: JSON.stringify(sendBody),
     });
     const out = await res.json().catch(() => ({}));
     if (res.ok && out?.success) {
-      result.summary = `Template "${templateName}" enviado (oficial)`;
+      result.summary = summaryLabel;
       result.message_id = out.messageId || null;
       result.phone = String(phone).replace(/\D/g, "");
     } else {

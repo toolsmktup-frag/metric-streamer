@@ -166,6 +166,36 @@ Deno.serve(async (req) => {
             payload_raw: msg,
             sender_name: senderName,
           })
+
+          // Qualquer mensagem inbound (texto ou toque em botão) reabre a janela de 24h
+          // do WhatsApp Oficial. Dispara um evento genérico "whatsapp_engaged" pro motor
+          // de flows (wz-receiver) — um flow pode escutar isso pra liberar mensagens de
+          // sessão (texto livre) que dependem do lead ter acabado de interagir.
+          // Best-effort: nunca derruba a ingestão da mensagem se isso falhar.
+          try {
+            await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/wz-receiver`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+              },
+              body: JSON.stringify({
+                platform: 'meta_whatsapp',
+                status: 'whatsapp_engaged',
+                event: 'whatsapp_engaged',
+                phone: from,
+                name: senderName,
+                metadata: {
+                  source: 'meta-whatsapp-webhook',
+                  instance_id: instance.id,
+                  message_type: msg?.type || 'text',
+                  button_text: msg?.type === 'button' || msg?.type === 'interactive' ? extractBody(msg) : null,
+                },
+              }),
+            })
+          } catch (engagedErr) {
+            console.error('[meta-whatsapp-webhook] whatsapp_engaged forward failed:', engagedErr)
+          }
         }
       }
     }
