@@ -48,8 +48,14 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: "Method not allowed" }, 405);
   }
 
+  const startMs = Date.now();
+
   try {
     const payload = await readJsonBody(req);
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase    = createClient(supabaseUrl, supabaseKey);
 
     // Se não tem os campos mínimos, provavelmente é um ping/teste da plataforma — retorna 200
     const hasSale    = payload.sale    || payload.order;
@@ -90,8 +96,31 @@ Deno.serve(async (req) => {
       pending:         "pending",
       expired:         "canceled",
       canceled:        "canceled",
+      // ── Abandono de carrinho (a Guru manda "abandoned"; variantes por segurança) ──
+      abandoned:          "abandoned_cart",
+      abandoned_cart:     "abandoned_cart",
+      cart_abandoned:     "abandoned_cart",
+      checkout_abandoned: "abandoned_cart",
     };
     const normalizedStatus = statusMap[status];
+
+    // Auditoria (paridade com o ticto-webhook): sem isso a Guru era invisível —
+    // eventos descartados sumiam sem deixar rastro nenhum.
+    const auditGuru = async (errorMessage: string | null = null) => {
+      try {
+        await supabase.from("webhook_audit").insert({
+          source: "guru",
+          webhook_token: new URL(req.url).searchParams.get("token"),
+          product_id: Number(product.id || product.product_id || product.marketplace_id || 0) || null,
+          raw_status: status,
+          normalized_status: normalizedStatus || null,
+          product_name: productName || null,
+          error_message: errorMessage,
+          raw_payload: payload,
+          processing_ms: Date.now() - startMs,
+        });
+      } catch (_) {}
+    };
 
     // ── Forward to wz-receiver BEFORE skipping — automations need pending/pix events ──
     try {
@@ -116,6 +145,7 @@ Deno.serve(async (req) => {
     // Status desconhecido nunca deve quebrar o webhook
     if (!normalizedStatus) {
       console.log(`Skipping unknown Guru transaction status "${status}"`);
+      await auditGuru(`unknown status "${status}" — skipped`);
       return jsonResponse({ success: true, message: `unknown status ${status}, skipping` }, 200);
     }
 
@@ -177,10 +207,6 @@ Deno.serve(async (req) => {
     let fbp    = queryParams.fbp || tracking.fbp || null;
     let fbclid = queryParams.fbclid || tracking.fbclid || null;
     let gclid  = queryParams.gclid || tracking.gclid || null;
-
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase    = createClient(supabaseUrl, supabaseKey);
 
     // Resolve funnel_id: primeiro por token na URL, depois por produto (nome/id).
     // Se nenhum funil for resolvido, a venda é aceita mesmo assim (funnel_id = null)
@@ -311,10 +337,49 @@ Deno.serve(async (req) => {
     // 🔒 Anti-injeção: aceita se (a) token de URL resolveu funil OU (b) api_token bate em guru_accounts.
     if (!funnelId && !guruAccountSlug) {
       console.warn("[guru-webhook] Rejeitado: sem token válido nem api_token reconhecido");
+      await auditGuru("rejected 401: sem token de URL nem api_token reconhecido");
       return new Response(JSON.stringify({ error: "Invalid or missing webhook credentials" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // ── Carrinho abandonado: não é venda — NÃO entra em customer_purchases
+    // (o upsert usa onConflict platform+platform_transaction_id, e abandono não
+    // tem transaction_id: cada um sobrescreveria o anterior). Só sincroniza o
+    // lead — o RPC posiciona no funil do produto e as stage_transition_rules
+    // movem o card (ex.: RECOMPRA-POTES → "Recuperar", Infoprodutos → "Carrinho
+    // Abandonado"). O forward pro wz-receiver (automação) já aconteceu acima.
+    if (normalizedStatus === "abandoned_cart") {
+      if (customerPhone || customer.email) {
+        try {
+          await supabase.rpc("sync_lead_from_sale", {
+            p_phone: customerPhone,
+            p_email: customer.email || null,
+            p_name: customer.name || customer.full_name || null,
+            p_utm_source: finalUtmSource,
+            p_utm_medium: finalUtmMedium,
+            p_utm_campaign: finalUtmCampaign,
+            p_utm_content: finalUtmContent,
+            p_utm_term: finalUtmTerm,
+            p_event_name: "abandoned_cart",
+            p_product_name: productName || null,
+            p_purchased_at: new Date(purchasedAt).toISOString(),
+            p_funnel_id: funnelId,
+            p_metadata: {
+              platform: "guru",
+              guru_account: guruAccountSlug,
+              product_name: productName,
+              status: normalizedStatus,
+              checkout_url: checkoutUrl,
+            },
+          });
+        } catch (leadErr) {
+          console.error("[guru-webhook] Abandoned-cart lead sync error (non-fatal):", leadErr);
+        }
+      }
+      await auditGuru();
+      return jsonResponse({ success: true, message: "abandoned_cart processed (lead synced)" });
     }
 
 
@@ -384,6 +449,7 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Failed to save transaction", detail: error.message }, 500);
     }
 
+    await auditGuru();
     console.log(`Guru webhook processed: ${normalizedStatus} - product "${productName}" - funnel_id: ${funnelId}`);
 
     // ── Sincronizar lead para TODOS os eventos processáveis ──

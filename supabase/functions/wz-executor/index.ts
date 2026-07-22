@@ -54,6 +54,45 @@ function randomDelay(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1) + min) * 1000;
 }
 
+// ─── Lead lookup por contato ───
+// Telefones no CRM existem em vários formatos ("+5571...", "5571...", "71...",
+// com/sem 9º dígito). Igualdade exata perdia o lead ("Lead não encontrado pelo
+// telefone" → vendedora não atribuída, tag não aplicada). Gera as formas BR
+// conhecidas e busca por .in(); fallback por e-mail.
+function brPhoneForms(raw: string): string[] {
+  const digits = String(raw || "").replace(/\D/g, "");
+  if (!digits) return [];
+  const forms = new Set<string>();
+  const add = (d: string) => { if (d) { forms.add(d); forms.add(`+${d}`); } };
+  const national = digits.startsWith("55") && digits.length >= 12 ? digits.slice(2) : digits;
+  add(digits);
+  add(national);
+  add(`55${national}`);
+  if (national.length === 11 && national[2] === "9") {
+    const sem9 = national.slice(0, 2) + national.slice(3);
+    add(sem9); add(`55${sem9}`);
+  } else if (national.length === 10) {
+    const com9 = national.slice(0, 2) + "9" + national.slice(2);
+    add(com9); add(`55${com9}`);
+  }
+  return [...forms];
+}
+
+async function findLeadByContact(supabase: any, phone: string | null, email: string | null, select = "id"): Promise<any | null> {
+  if (phone) {
+    const forms = brPhoneForms(phone);
+    if (forms.length > 0) {
+      const { data } = await supabase.from("leads").select(select).in("phone", forms).limit(1);
+      if (data && data.length > 0) return data[0];
+    }
+  }
+  if (email) {
+    const { data } = await supabase.from("leads").select(select).ilike("email", email).limit(1);
+    if (data && data.length > 0) return data[0];
+  }
+  return null;
+}
+
 // ─── Node Logger ───
 
 async function logNodeStart(supabase: any, executionId: string, nodeId: string, nodeType: string, inputData: any): Promise<string> {
@@ -275,11 +314,7 @@ Deno.serve(async (req) => {
     // Load lead tags from metadata if contact has a phone
     if (execution.contact_phone) {
       try {
-        const { data: leadData } = await supabase
-          .from("leads")
-          .select("metadata")
-          .eq("phone", execution.contact_phone)
-          .maybeSingle();
+        const leadData = await findLeadByContact(supabase, execution.contact_phone, execution.contact_email, "metadata");
         const leadTags: string[] = leadData?.metadata?.tags || [];
         vars._lead_tags = leadTags;
         vars.tag = leadTags.join(", ");
@@ -312,7 +347,15 @@ Deno.serve(async (req) => {
         const result = nodeData.channel === "official"
           ? await processOfficialWhatsAppNode(supabase, execution, nodeData, vars)
           : await processWhatsAppNode(supabase, execution, nodeData, vars);
-        await logNodeEnd(supabase, logId, "success", result);
+        // Nada enviado + houve erro de envio = falha real (antes ficava "success"
+        // com 0 enviados e ninguém percebia — ex.: instância desconectada, HTTP 503)
+        const sentNothing = (result.blocks_sent ?? 0) === 0 && (result.blocks_skipped ?? 0) === 0;
+        const hadErrors = (Array.isArray(result.errors) && result.errors.length > 0) || !!result.error;
+        if (sentNothing && hadErrors) {
+          await logNodeEnd(supabase, logId, "failed", result, String(result.errors?.[0] || result.error || "envio falhou"));
+        } else {
+          await logNodeEnd(supabase, logId, "success", result);
+        }
 
       } else if (nodeType === "timer") {
         const runAt = await processTimerNode(supabase, execution_id, current_node_id, nodeData);
@@ -410,19 +453,14 @@ Deno.serve(async (req) => {
           logExtra = { seller_id: selectedSellerId, seller_name: selectedSellerName, mode: splitMode };
 
           // ─── Assign seller in CRM ───
-          if (selectedSellerId && execution.contact_phone) {
-            const cleanPhone = String(execution.contact_phone).replace(/\D/g, "");
-            const { data: matchedLeads } = await supabase
-              .from("leads")
-              .select("id")
-              .eq("phone", cleanPhone)
-              .limit(1);
-            if (matchedLeads && matchedLeads.length > 0) {
+          if (selectedSellerId && (execution.contact_phone || execution.contact_email)) {
+            const matchedLead = await findLeadByContact(supabase, execution.contact_phone, execution.contact_email, "id");
+            if (matchedLead) {
               await supabase
                 .from("leads")
                 .update({ assigned_to: selectedSellerId, updated_at: new Date().toISOString() })
-                .eq("id", matchedLeads[0].id);
-              logExtra.lead_id = matchedLeads[0].id;
+                .eq("id", matchedLead.id);
+              logExtra.lead_id = matchedLead.id;
               logExtra.assigned = true;
             } else {
               logExtra.assigned = false;
@@ -493,11 +531,9 @@ Deno.serve(async (req) => {
       } else if (nodeType === "tag") {
         const tagName = nodeData.tagName;
         const tagAction = nodeData.tagAction || "add";
-        if (tagName && execution.contact_phone) {
-          const { data: leads } = await supabase
-            .from("leads").select("id, metadata").eq("phone", execution.contact_phone).limit(1);
-          if (leads && leads.length > 0) {
-            const lead = leads[0];
+        if (tagName && (execution.contact_phone || execution.contact_email)) {
+          const lead = await findLeadByContact(supabase, execution.contact_phone, execution.contact_email, "id, metadata");
+          if (lead) {
             const metadata = lead.metadata || {};
             const tags: string[] = metadata.tags || [];
             if (tagAction === "add" && !tags.includes(tagName)) tags.push(tagName);
@@ -610,18 +646,9 @@ Deno.serve(async (req) => {
         if (!funnelId || !stageId) {
           await logNodeEnd(supabase, logId, "skipped", { summary: "Funil/coluna não configurado" });
         } else {
-          // Resolve lead via phone (primary) or email (fallback)
-          let leadId: string | null = null;
-          if (execution.contact_phone) {
-            const { data: leads } = await supabase
-              .from("leads").select("id").eq("phone", execution.contact_phone).limit(1);
-            if (leads && leads.length > 0) leadId = leads[0].id;
-          }
-          if (!leadId && execution.contact_email) {
-            const { data: leads } = await supabase
-              .from("leads").select("id").ilike("email", execution.contact_email).limit(1);
-            if (leads && leads.length > 0) leadId = leads[0].id;
-          }
+          // Resolve lead via phone (multi-formato) ou e-mail (fallback)
+          const foundLead = await findLeadByContact(supabase, execution.contact_phone, execution.contact_email, "id");
+          const leadId: string | null = foundLead?.id || null;
 
           if (!leadId) {
             await logNodeEnd(supabase, logId, "skipped", { summary: "Lead não encontrado" });
