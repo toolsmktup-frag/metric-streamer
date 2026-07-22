@@ -67,7 +67,7 @@ export default function ChatList({ chats, loading, selectedKey, onSelectChat, sh
       (c.sender_name?.toLowerCase().includes(q)) ||
       (c.contact_name?.toLowerCase().includes(q)) ||
       (c.last_message.body?.toLowerCase().includes(q)) ||
-      (isMultiChat(c) && c.instance_name.toLowerCase().includes(q))
+      (isMultiChat(c) && c.instance_name?.toLowerCase().includes(q))
     );
   });
 
