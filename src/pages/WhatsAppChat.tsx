@@ -4,6 +4,7 @@ import type { WhatsAppMessage, ReplyContext } from '@/hooks/useWhatsApp';
 import { MessageCircle, Settings, Plus, Wifi, WifiOff, ArrowLeft } from 'lucide-react';
 import { useWhatsAppInstances, useWhatsAppChats, useWhatsAppMessages, getInstanceDisplayName } from '@/hooks/useWhatsApp';
 import { useWhatsAppMultiChats } from '@/hooks/useWhatsAppMultiChat';
+import { brCanonicalPhone } from '@/lib/phone';
 import InstanceHub from '@/components/whatsapp/InstanceHub';
 import ChatList from '@/components/whatsapp/ChatList';
 import ChatThread from '@/components/whatsapp/ChatThread';
@@ -90,7 +91,9 @@ export default function WhatsAppChat() {
       backRoute.current = fromParam;
     }
     if (phoneParam && !loadingInstances && instances.length > 0) {
-      const cleanPhone = phoneParam.replace(/\D/g, '');
+      // Canoniza (55+DDD+local, corrige DDI espúrio "+1 55...") — o card do lead
+      // passa o telefone cru, que pode estar formatado ou com DDI errado.
+      const cleanPhone = brCanonicalPhone(phoneParam);
       setSelectedPhone(cleanPhone);
       if (instances.length === 1) {
         setSelectedInstanceId(instances[0].id);

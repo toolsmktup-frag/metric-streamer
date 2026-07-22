@@ -6,9 +6,35 @@ export function normalizePhone(phone: string | null | undefined): string {
   return String(phone || '').replace(/\D/g, '');
 }
 
+// Remove DDI espúrio "1" na frente de um número BR (ex.: lead salvo como
+// "+1 5521993486786" → "5521993486786"). Só descasca quando o que sobra é BR
+// válido (55 + DDD + 10/11), pra não estragar número internacional legítimo.
+function stripSpuriousDdi1(digits: string): string {
+  if (digits.startsWith('1') && digits.length >= 13) {
+    const rest = digits.slice(1);
+    if (rest.startsWith('55') && (rest.length === 12 || rest.length === 13)) return rest;
+  }
+  return digits;
+}
+
+/**
+ * Forma canônica única de um telefone BR: só dígitos, "55 + DDD + local".
+ * Cobre formatado ("+55 (21) 99675-1303"), sem DDI (10/11 dígitos → prefixa 55)
+ * e DDI espúrio ("+1 55..."). Número que não parece BR volta só como dígitos.
+ */
+export function brCanonicalPhone(phone: string | null | undefined): string {
+  let d = stripSpuriousDdi1(normalizePhone(phone));
+  if (!d) return '';
+  // Já tem DDI 55 + BR completo
+  if (d.startsWith('55') && (d.length === 12 || d.length === 13)) return d;
+  // Sem DDI: DDD + local (10/11 dígitos) → prefixa 55
+  if (d.length === 10 || d.length === 11) return `55${d}`;
+  return d;
+}
+
 // Descasca o DDI 55 e devolve DDD + local (10 ou 11 dígitos); null se não parecer BR.
 function brDddLocal(phone: string | null | undefined): { ddd: string; local: string } | null {
-  let d = normalizePhone(phone);
+  let d = stripSpuriousDdi1(normalizePhone(phone));
   if (d.startsWith('55') && d.length >= 12) d = d.slice(2);
   if (d.length < 10 || d.length > 11) return null;
   return { ddd: d.slice(0, 2), local: d.slice(2) };
@@ -20,7 +46,7 @@ function brDddLocal(phone: string | null | undefined): { ddd: string; local: str
  * (ex.: 9 dígitos sem DDD), devolve só as variações básicas de DDI.
  */
 export function brPhoneForms(phone: string | null | undefined): string[] {
-  const digits = normalizePhone(phone);
+  const digits = stripSpuriousDdi1(normalizePhone(phone));
   if (!digits) return [];
 
   const parsed = brDddLocal(phone);

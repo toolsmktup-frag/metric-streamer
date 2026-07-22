@@ -23,6 +23,20 @@ function normalizePhone(phone: string) {
   return phone.replace(/\D/g, '')
 }
 
+// Remove DDI espúrio "1" na frente de um número BR (lead salvo como "+1 55...")
+// e prefixa 55 quando vem só DDD+local. Garante que a UAZAPI receba um número
+// válido mesmo se o lead ainda estiver com o telefone torto.
+function brCanonicalPhone(phone: string) {
+  let d = normalizePhone(phone)
+  if (d.startsWith('1') && d.length >= 13 && d.slice(1).startsWith('55') &&
+      (d.slice(1).length === 12 || d.slice(1).length === 13)) {
+    d = d.slice(1)
+  }
+  if (d.startsWith('55') && (d.length === 12 || d.length === 13)) return d
+  if (d.length === 10 || d.length === 11) return `55${d}`
+  return d
+}
+
 function buildHeaders(apiToken: string) {
   return {
     'Content-Type': 'application/json',
@@ -58,7 +72,7 @@ async function parseResponse(res: Response) {
 
 async function tryUazapiSend(apiUrl: string, apiToken: string, phone: string, body: string, messageType: string, mediaUrl?: string, mediaFilename?: string, replyId?: string) {
   const baseUrl = apiUrl.replace(/\/+$/, '')
-  const recipient = normalizePhone(phone) // Use clean phone only — UAZAPI spec uses plain numbers
+  const recipient = brCanonicalPhone(phone) // Use clean phone only — UAZAPI spec uses plain numbers
 
   const payload = messageType !== 'text' && mediaUrl
     ? {
@@ -112,7 +126,7 @@ async function tryUazapiSend(apiUrl: string, apiToken: string, phone: string, bo
 
 async function tryUazapiReact(apiUrl: string, apiToken: string, phone: string, externalMessageId: string, emoji: string) {
   const baseUrl = apiUrl.replace(/\/+$/, '')
-  const recipient = normalizePhone(phone)
+  const recipient = brCanonicalPhone(phone)
   const url = `${baseUrl}/message/react`
   const payload = { number: recipient, id: externalMessageId, text: emoji || '' }
 
@@ -196,7 +210,6 @@ Deno.serve(async (req) => {
       .maybeSingle()
     const role = profile?.role || 'vendedor'
     const isAdmin = role === 'admin' || role === 'gestor'
-    const cleanPhone = normalizePhone(phone)
 
     if (!isAdmin) {
       const { data: instAccess } = await adminClient
@@ -210,16 +223,12 @@ Deno.serve(async (req) => {
           status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
       }
-      const phoneAlt = cleanPhone.startsWith('55') ? cleanPhone.slice(2) : `55${cleanPhone}`
-      const { data: ownedLead } = await adminClient
-        .from('leads')
-        .select('id')
-        .eq('organization_id', orgId)
-        .eq('assigned_to', userData.user.id)
-        .in('phone', [cleanPhone, `+${cleanPhone}`, phoneAlt, `+${phoneAlt}`])
-        .limit(1)
-        .maybeSingle()
-      if (!ownedLead) {
+      // Casa o lead por telefone canônico (cobre formatado/DDI espúrio/9º dígito)
+      // e só então checa se é da vendedora — antes o gate testava 4 formas de
+      // dígitos e barrava (403) quando o lead estava salvo formatado.
+      const { data: lead } = await adminClient.rpc('find_lead_by_phone', { p_phone: phone })
+      const ownedLead = Array.isArray(lead) ? lead[0] : lead
+      if (!ownedLead || ownedLead.assigned_to !== userData.user.id) {
         return new Response(JSON.stringify({ error: 'Forbidden: lead not assigned to you' }), {
           status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
@@ -316,7 +325,7 @@ Deno.serve(async (req) => {
 
     console.log('[whatsapp-send] sending via UAZAPI', {
       api_url: instance.api_url,
-      phone: normalizePhone(phone),
+      phone: brCanonicalPhone(phone),
       message_type,
       reply_to_id: reply_to?.id || null,
     })
@@ -335,7 +344,7 @@ Deno.serve(async (req) => {
     const messageRecord: Record<string, unknown> = {
       organization_id: orgId,
       instance_id,
-      phone: normalizePhone(phone),
+      phone: brCanonicalPhone(phone),
       body: body || '',
       message_type,
       direction: 'outbound',
