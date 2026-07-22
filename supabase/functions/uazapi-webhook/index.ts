@@ -454,13 +454,15 @@ Deno.serve(async (req) => {
     let messageBody: string
     let messageType: string
     let mediaUrl: string | null
-    
+    let isGroupMsg = false
+
     if (isV2) {
       // UAZAPI v2 format
       isFromMe = v2Message.fromMe === true
-      
+
       // Phone from message.chatid or chat.wa_chatid or chat.phone
       const rawJid = v2Message.chatid || chat.wa_chatid || v2Message.sender_pn || chat.phone || ''
+      isGroupMsg = rawJid.endsWith('@g.us')
       phone = rawJid
         .replace('@s.whatsapp.net', '')
         .replace('@c.us', '')
@@ -487,6 +489,7 @@ Deno.serve(async (req) => {
       isFromMe = key.fromMe || false
       
       const remoteJid = key.remoteJid || msg.from || msg.phone || ''
+      isGroupMsg = remoteJid.endsWith('@g.us')
       phone = remoteJid
         .replace('@s.whatsapp.net', '')
         .replace('@c.us', '')
@@ -502,6 +505,14 @@ Deno.serve(async (req) => {
     }
 
     console.log('Extracted - phone:', phone, 'externalId:', externalId, 'fromMe:', isFromMe)
+
+    if (isGroupMsg) {
+      console.log('Ignoring group message - phone:', phone)
+      return new Response(JSON.stringify({ ignored: 'grupo' }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
 
     // Try to find lead by phone
     let leadId: string | null = null
@@ -523,6 +534,27 @@ Deno.serve(async (req) => {
 
     const direction = isFromMe ? 'outbound' : 'inbound'
     const status = isFromMe ? 'sent' : 'delivered'
+
+    // Dedup na origem: a UAZAPI às vezes reenvia o mesmo evento com o telefone
+    // em formatos diferentes (com/sem 9º dígito) → gravava a mesma mensagem 2x
+    // (mesmo message_id_external, phone diferente) e o chat mostrava em dobro.
+    // Se já existe linha com este message_id_external na instância, ignora.
+    if (externalId) {
+      const { data: dupe } = await supabaseAdmin
+        .from('whatsapp_messages')
+        .select('id')
+        .eq('instance_id', instanceId)
+        .eq('message_id_external', externalId)
+        .limit(1)
+        .maybeSingle()
+      if (dupe) {
+        console.log('Duplicate message_id_external ignored:', externalId)
+        return new Response(JSON.stringify({ ignored: 'duplicate', message_id_external: externalId }), {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+    }
 
     // Extract reply/quote context (UAZAPI v2: message.quoted; legacy: contextInfo.quotedMessage)
     let replyTo: { id: string | null; text: string | null; sender_name: string | null } | null = null

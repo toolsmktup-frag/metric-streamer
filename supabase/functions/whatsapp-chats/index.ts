@@ -534,7 +534,19 @@ Deno.serve(async (req) => {
         throw new Error(`messages query failed: ${serializeError(msgErr)}`)
       }
 
-      const messageList = messages || []
+      // Dedup por message_id_external: a mesma mensagem pode estar gravada sob
+      // dois formatos de telefone (com/sem 9º dígito) e a busca por phoneForms
+      // traz as duas → chat mostrava a mensagem em dobro. Mantém a 1ª ocorrência
+      // (ordenadas por created_at asc). Linhas sem message_id_external ficam.
+      const rawMessages = messages || []
+      const seenExternal = new Set<string>()
+      const messageList = rawMessages.filter((m: any) => {
+        const ext = m.message_id_external
+        if (!ext) return true
+        if (seenExternal.has(ext)) return false
+        seenExternal.add(ext)
+        return true
+      })
 
       const unreadInbound = messageList.filter((message: any) => message.direction === 'inbound' && message.status !== 'read' && !message.is_deleted)
       const unreadIds = new Set(unreadInbound.map((message: any) => message.id))
