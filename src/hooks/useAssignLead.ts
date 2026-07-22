@@ -16,6 +16,9 @@ export function useAssignLead() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['leads-by-funnel'] });
       queryClient.invalidateQueries({ queryKey: ['all-leads'] });
+      // Destrava a caixa do chat na hora após "Assumir": o read-only do
+      // ChatInput/ContactPanel depende de lead.assigned_to desta query.
+      queryClient.invalidateQueries({ queryKey: ['lead-by-phone'] });
       toast.success('Vendedor atribuído com sucesso');
     },
     onError: (err: any) => {

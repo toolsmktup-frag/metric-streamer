@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Send, Paperclip, X, Smile, ChevronDown, Reply } from 'lucide-react';
+import { Send, Paperclip, X, Smile, ChevronDown, Reply, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { sendWhatsAppMessage, sendPresence } from '@/hooks/useWhatsApp';
@@ -11,6 +11,10 @@ import EmojiPicker from './EmojiPicker';
 import AudioRecorder from './AudioRecorder';
 import ShortcutMenu from './ShortcutMenu';
 import ShortcutManager from './ShortcutManager';
+import { useQuery } from '@tanstack/react-query';
+import { useLeadByPhone } from '@/hooks/useLeadByPhone';
+import { useCurrentUserRole } from '@/hooks/useCurrentUserRole';
+import { useTeamMembers } from '@/hooks/useTeamMembers';
 
 interface ChatInputProps {
   instanceId: string;
@@ -108,6 +112,27 @@ export default function ChatInput({
 
   // The actual instance to send from: reply selector or prop
   const sendInstanceId = replyInstanceId || instanceId;
+
+  // Read-only quando o lead é de OUTRA vendedora (não-admin): espelha o gate do
+  // whatsapp-send (que devolveria 403 "lead not assigned to you"). Antes a caixa
+  // ficava habilitada e a vendedora tomava um 403 seco ao clicar em enviar.
+  const { data: lead } = useLeadByPhone(phone);
+  const { data: role = 'vendedor' } = useCurrentUserRole();
+  const { data: members = [] } = useTeamMembers();
+  const { data: currentUserId } = useQuery({
+    queryKey: ['auth-user-id'],
+    queryFn: async () => {
+      const { data } = await supabase.auth.getUser();
+      return data?.user?.id || null;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+  const isAdmin = role === 'admin' || role === 'gestor';
+  const isOtherOwner =
+    !!lead?.id && !!lead?.assigned_to && lead.assigned_to !== currentUserId && !isAdmin;
+  const ownerName = lead?.assigned_to
+    ? members.find(m => m.id === lead.assigned_to)?.full_name || 'outra vendedora'
+    : null;
 
   // Consume external prefill (from Sales Copilot)
   useEffect(() => {
@@ -292,6 +317,23 @@ export default function ChatInput({
 
   const hasContent = text.trim() || attachment;
   const showInstanceSelector = instances && instances.length > 1 && replyInstanceId && onReplyInstanceChange;
+
+  // Lead de outra vendedora: caixa somente-leitura, mostrando o dono — em vez de
+  // deixar digitar/enviar e falhar com 403 seco.
+  if (isOtherOwner) {
+    return (
+      <div className="border-t border-border bg-card p-3">
+        <div className="flex items-center gap-2 rounded-md bg-muted px-3 py-2.5 text-xs text-muted-foreground">
+          <Lock className="h-3.5 w-3.5 shrink-0" />
+          <span className="leading-snug">
+            Somente leitura — lead de{' '}
+            <span className="font-semibold text-foreground">{ownerName}</span>. Assuma o lead no
+            painel ao lado para poder enviar.
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="border-t border-border bg-card p-3 relative">
