@@ -24,6 +24,8 @@ export interface WhatsAppInstance {
   display_name: string | null;
   profile_pic_url: string | null;
   status: string;
+  /** 'uazapi' (padrão) ou 'official' (WhatsApp Cloud API / Meta) */
+  channel?: string | null;
 }
 
 /** Returns the best display label for an instance: nickname → display_name → instance_name */
@@ -138,6 +140,8 @@ export function useWhatsAppInstances() {
     statusValidated.current = true;
     const validateStatuses = async () => {
       for (const inst of instances) {
+        // Instância oficial (WhatsApp Cloud API) não existe na UAZAPI — mantém o status do banco.
+        if (inst.channel === 'official') continue;
         try {
           const { data, error } = await supabase.functions.invoke('whatsapp-instance', {
             body: { instance_id: inst.id, action: 'status' },
@@ -308,7 +312,20 @@ export async function sendWhatsAppMessage(params: {
   action?: 'send' | 'edit' | 'delete';
   message_id?: string;
   reply_to?: { id: string; text?: string | null; sender_name?: string | null } | null;
+  /** Canal da instância: 'official' roteia pro Cloud API (meta-whatsapp-send) */
+  channel?: string | null;
 }) {
+  // Instância oficial (WhatsApp Cloud API): roteia pro meta-whatsapp-send.
+  // v1 = texto de sessão (dentro da janela de 24h). Mídia/reply/edit não passam por aqui.
+  if (params.channel === 'official') {
+    const { data, error } = await supabase.functions.invoke('meta-whatsapp-send', {
+      body: { instance_id: params.instance_id, phone: params.phone, text: params.body },
+    });
+    if (error) throw new Error(error.message || 'Falha no envio (oficial)');
+    if (data && data.success === false) throw new Error(data.error || 'Falha no envio (oficial)');
+    return data;
+  }
+
   const { data, error } = await supabase.functions.invoke('whatsapp-send', {
     body: params,
   });

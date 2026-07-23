@@ -35,6 +35,8 @@ interface ChatInputProps {
   replyingTo?: ReplyContext | null;
   /** Cancel the reply quote */
   onCancelReply?: () => void;
+  /** Instância é WhatsApp Oficial (Cloud API) — envio via meta-whatsapp-send; v1 só texto */
+  isOfficial?: boolean;
 }
 
 function InstanceSelector({
@@ -100,6 +102,7 @@ export default function ChatInput({
   onPrefillConsumed,
   replyingTo,
   onCancelReply,
+  isOfficial,
 }: ChatInputProps) {
   const [text, setText] = useState('');
   const [attachment, setAttachment] = useState<File | null>(null);
@@ -112,6 +115,8 @@ export default function ChatInput({
 
   // The actual instance to send from: reply selector or prop
   const sendInstanceId = replyInstanceId || instanceId;
+  // Canal de envio: oficial (Cloud API) roteia pro meta-whatsapp-send e, por ora, só texto.
+  const official = !!isOfficial || instances?.find(i => i.id === sendInstanceId)?.channel === 'official';
 
   // Read-only quando o lead é de OUTRA vendedora (não-admin): espelha o gate do
   // whatsapp-send (que devolveria 403 "lead not assigned to you"). Antes a caixa
@@ -219,7 +224,7 @@ export default function ChatInput({
     let mediaUrl: string | undefined;
     let messageType = 'text';
     let mediaFilename: string | undefined;
-    const currentAttachment = attachment;
+    const currentAttachment = official ? null : attachment; // oficial v1: só texto, sem mídia
 
     const optimisticMsg: WhatsAppMessage = {
       id: tempId,
@@ -284,6 +289,7 @@ export default function ChatInput({
         media_url: mediaUrl,
         media_filename: mediaFilename,
         reply_to: replyForApi,
+        channel: official ? 'official' : undefined,
       });
 
       onOptimisticUpdate?.(tempId, 'sent');
@@ -294,7 +300,7 @@ export default function ChatInput({
     } finally {
       isSending.current = false;
     }
-  }, [text, attachment, sendInstanceId, phone, onOptimisticSend, onOptimisticUpdate, replyingTo, onCancelReply]);
+  }, [text, attachment, official, sendInstanceId, phone, onOptimisticSend, onOptimisticUpdate, replyingTo, onCancelReply]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (showShortcuts) return;
@@ -405,14 +411,16 @@ export default function ChatInput({
           onChange={handleFileSelect}
           accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx"
         />
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-9 w-9 shrink-0"
-          onClick={() => fileRef.current?.click()}
-        >
-          <Paperclip className="h-4 w-4" />
-        </Button>
+        {!official && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9 shrink-0"
+            onClick={() => fileRef.current?.click()}
+          >
+            <Paperclip className="h-4 w-4" />
+          </Button>
+        )}
 
         <ShortcutManager />
 
@@ -427,7 +435,7 @@ export default function ChatInput({
           style={{ overflow: 'auto' }}
         />
 
-        {hasContent ? (
+        {hasContent || official ? (
           <Button
             onClick={handleSend}
             disabled={!hasContent}

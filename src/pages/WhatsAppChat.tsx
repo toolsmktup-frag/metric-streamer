@@ -386,6 +386,7 @@ export default function WhatsAppChat() {
             <ChatInput
               instanceId={effectiveInstanceId}
               phone={selectedPhone}
+              isOfficial={instances.find(i => i.id === effectiveInstanceId)?.channel === 'official'}
               onOptimisticSend={handleOptimisticSend}
               onOptimisticUpdate={handleOptimisticUpdate}
               instances={isAllMode ? instances : undefined}
