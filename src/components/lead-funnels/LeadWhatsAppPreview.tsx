@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink, X } from 'lucide-react';
 import ChatThread from '@/components/whatsapp/ChatThread';
 import ChatInput from '@/components/whatsapp/ChatInput';
 import { useWhatsAppInstances, useWhatsAppMessages, type WhatsAppMessage } from '@/hooks/useWhatsApp';
@@ -76,55 +76,69 @@ export default function LeadWhatsAppPreview({ phone, open, onClose, onOpenFull }
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="max-w-[420px] p-0 gap-0 overflow-hidden">
-        {/* Cabeçalho */}
-        <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3 pr-12">
-          <div className="min-w-0">
-            <DialogTitle className="text-sm truncate">{lead?.name || canonical}</DialogTitle>
-            <p className="text-xs text-muted-foreground truncate">{canonical}</p>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-7 gap-1.5 shrink-0 text-xs"
-            onClick={() => onOpenFull(canonical)}
-          >
-            <ExternalLink className="h-3.5 w-3.5" />
-            Abrir chat
-          </Button>
-        </div>
-
-        {/* Conversa */}
-        <div className="flex flex-col h-[380px]">
-          {!loading && mergedMessages.length === 0 ? (
-            <div className="flex-1 flex items-center justify-center text-center text-sm text-muted-foreground px-6">
-              Sem conversa ainda com este lead.<br />Escreva abaixo pra iniciar.
+      {/* [&>button]:hidden esconde o X pequeno embutido do DialogContent — usamos o nosso, mais óbvio */}
+      <DialogContent className="w-[92vw] max-w-[440px] p-0 gap-0 overflow-hidden [&>button]:hidden">
+        <div className="flex min-w-0 flex-col">
+          {/* Cabeçalho */}
+          <div className="flex min-w-0 items-center gap-2 border-b border-border px-3 py-2.5">
+            <div className="min-w-0 flex-1">
+              <DialogTitle className="truncate text-sm font-semibold">{lead?.name || canonical}</DialogTitle>
+              <p className="truncate text-xs text-muted-foreground">{canonical}</p>
             </div>
-          ) : (
-            <ChatThread
-              messages={mergedMessages}
-              loading={loading}
-              phone={canonical}
-              instances={instances}
-              instanceId={replyInstanceId || undefined}
-              phoneForActions={canonical}
-            />
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 shrink-0 gap-1.5 px-2.5 text-xs"
+              onClick={() => onOpenFull(canonical)}
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              Abrir chat
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
+              onClick={onClose}
+              aria-label="Fechar"
+            >
+              <X className="h-5 w-5" />
+            </Button>
+          </div>
+
+          {/* Conversa */}
+          <div className="flex h-[52vh] max-h-[420px] min-h-[260px] min-w-0 flex-col overflow-hidden">
+            {!loading && mergedMessages.length === 0 ? (
+              <div className="flex flex-1 items-center justify-center px-6 text-center text-sm text-muted-foreground">
+                Sem conversa ainda com este lead.<br />Escreva abaixo pra iniciar.
+              </div>
+            ) : (
+              <ChatThread
+                messages={mergedMessages}
+                loading={loading}
+                phone={canonical}
+                instances={instances}
+                instanceId={replyInstanceId || undefined}
+                phoneForActions={canonical}
+              />
+            )}
+          </div>
+
+          {/* Resposta */}
+          {sendInstanceId && (
+            <div className="min-w-0 overflow-hidden">
+              <ChatInput
+                instanceId={sendInstanceId}
+                phone={canonical}
+                isOfficial={isOfficial}
+                instances={instances}
+                replyInstanceId={replyInstanceId || undefined}
+                onReplyInstanceChange={setReplyInstanceId}
+                onOptimisticSend={handleOptimisticSend}
+                onOptimisticUpdate={handleOptimisticUpdate}
+              />
+            </div>
           )}
         </div>
-
-        {/* Resposta */}
-        {sendInstanceId && (
-          <ChatInput
-            instanceId={sendInstanceId}
-            phone={canonical}
-            isOfficial={isOfficial}
-            instances={instances}
-            replyInstanceId={replyInstanceId || undefined}
-            onReplyInstanceChange={setReplyInstanceId}
-            onOptimisticSend={handleOptimisticSend}
-            onOptimisticUpdate={handleOptimisticUpdate}
-          />
-        )}
       </DialogContent>
     </Dialog>
   );
