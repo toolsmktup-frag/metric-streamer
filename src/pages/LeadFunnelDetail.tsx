@@ -42,6 +42,7 @@ import FunnelWebinarTab from '@/components/lead-funnels/FunnelWebinarTab';
 import { useLeadFunnelAutomations } from '@/hooks/useLeadFunnelAutomations';
 import { isDripFlow } from '@/lib/webinarFlowParser';
 import LeadTimeline from '@/components/lead-funnels/LeadTimeline';
+import LeadWhatsAppPreview from '@/components/lead-funnels/LeadWhatsAppPreview';
 import ImportLeadsDialog from '@/components/lead-funnels/ImportLeadsDialog';
 import ImportFromTrafficFunnelDialog from '@/components/lead-funnels/ImportFromTrafficFunnelDialog';
 import { Lead } from '@/types/leadFunnels';
@@ -161,6 +162,7 @@ const LeadFunnelDetail: React.FC = () => {
   }, [paymentFunnels, catalogItems]);
 
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
+  const [waPreview, setWaPreview] = useState<{ phone: string | null; open: boolean }>({ phone: null, open: false });
   const selectedLead = useMemo(() => {
     if (!selectedLeadId) return null;
     return positions.find(p => p.lead_id === selectedLeadId)?.lead ?? null;
@@ -262,7 +264,9 @@ const LeadFunnelDetail: React.FC = () => {
     }
   };
 
-  const handleWhatsAppClick = (phone: string) => {
+  const handleWhatsAppClick = (phone: string) => setWaPreview({ phone, open: true });
+
+  const openFullChat = (phone: string) => {
     const backPath = `/lead-funnels/${id}`;
     navigate(`/whatsapp?phone=${encodeURIComponent(phone)}&from=${encodeURIComponent(backPath)}`);
   };
@@ -608,6 +612,13 @@ const LeadFunnelDetail: React.FC = () => {
           </TabsContent>
         )}
       </Tabs>
+
+      <LeadWhatsAppPreview
+        phone={waPreview.phone}
+        open={waPreview.open}
+        onClose={() => setWaPreview(p => ({ ...p, open: false }))}
+        onOpenFull={(p) => { setWaPreview(x => ({ ...x, open: false })); openFullChat(p); }}
+      />
 
       <LeadTimeline
         lead={selectedLead}
