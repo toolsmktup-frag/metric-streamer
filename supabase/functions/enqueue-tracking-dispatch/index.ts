@@ -23,9 +23,9 @@ const corsHeaders = {
 const ORG_ID = "00000000-0000-0000-0000-000000000001";
 
 const DEFAULT_TEMPLATES = [
-  "Oi {{nome}}, parabéns pela sua compra! 🌿\n\nSeu pedido da *Soulnaturi* já foi postado nos Correios e está a caminho da sua casa. 📦\n\nSeu código de rastreio é:\n*{{codigo}}*\n\nPra acompanhar a entrega, é só tocar aqui:\n{{link}}\n\nQualquer dúvida, pode chamar por aqui! 💚",
-  "Olá {{nome}}, tudo bem? 😊\n\nPassando pra te dar uma ótima notícia: seu pedido da *Soulnaturi* foi enviado e logo chega até você! 🚚\n\nCódigo de rastreio:\n*{{codigo}}*\n\nAcompanhe sua entrega por aqui:\n{{link}}\n\nObrigado pela confiança! 🌿",
-  "{{nome}}, que alegria! 🎉\n\nSeu pedido da *Soulnaturi* acabou de ser postado nos Correios. 📦\n\nAnota seu código de rastreio:\n*{{codigo}}*\n\nÉ só acompanhar a entrega aqui:\n{{link}}\n\nQualquer coisa, estamos por aqui! 💚",
+  "Oi {{nome}}, parabéns pela sua compra! 🌿\n\nSeu pedido da *{{produto}}* já foi postado nos Correios e está a caminho da sua casa. 📦\n\nSeu código de rastreio é:\n*{{codigo}}*\n\nPra acompanhar a entrega, é só tocar aqui:\n{{link}}\n\nQualquer dúvida, pode chamar por aqui! 💚",
+  "Olá {{nome}}, tudo bem? 😊\n\nPassando pra te dar uma ótima notícia: seu pedido da *{{produto}}* foi enviado e logo chega até você! 🚚\n\nCódigo de rastreio:\n*{{codigo}}*\n\nAcompanhe sua entrega por aqui:\n{{link}}\n\nObrigado pela confiança! 🌿",
+  "{{nome}}, que alegria! 🎉\n\nSeu pedido da *{{produto}}* acabou de ser postado nos Correios. 📦\n\nAnota seu código de rastreio:\n*{{codigo}}*\n\nÉ só acompanhar a entrega aqui:\n{{link}}\n\nQualquer coisa, estamos por aqui! 💚",
 ];
 
 const env = (k: string) => Deno.env.get(k) || "";
@@ -131,6 +131,18 @@ async function loadUazapiInstances(
   return candidates.map((i: any) => ({ api_url: i.api_url, api_token: i.api_token }));
 }
 
+// Marca a citar na mensagem: busca o display_name cadastrado no catálogo
+// shipping_products (mesmo padrão de match de is_shipping_product()); sem
+// bater nenhum padrão, cai pro nome bruto do produto vendido.
+async function getShippingDisplayName(
+  supabase: ReturnType<typeof createClient>,
+  productName: string | null,
+): Promise<string> {
+  if (!productName) return "";
+  const { data } = await supabase.rpc("get_shipping_display_name", { p_name: productName });
+  return (typeof data === "string" && data) || productName;
+}
+
 function templatesFromEnv(): string[] {
   try {
     const raw = env("TRACKING_UAZAPI_TEMPLATES");
@@ -186,6 +198,7 @@ async function dispatchManyChat(s: Shipment, link: string, cfg: DispatchSettings
 }
 
 async function dispatchUazapi(
+  supabase: ReturnType<typeof createClient>,
   s: Shipment,
   link: string,
   instances: Array<{ api_url: string; api_token: string }>,
@@ -199,7 +212,7 @@ async function dispatchUazapi(
   const text = fill(tpl, {
     nome: (s.customer_name || "").split(" ")[0] || "",
     codigo: s.tracking_code || "",
-    produto: s.product_name || "",
+    produto: await getShippingDisplayName(supabase, s.product_name),
     link,
   });
   const number = (s.customer_phone || "").replace(/\D/g, "");
@@ -268,7 +281,7 @@ Deno.serve(async (req) => {
       instances = await loadUazapiInstances(supabase, cfg);
     }
     const result = defaultChannel === "uazapi"
-      ? await dispatchUazapi(fake, link, instances, 0, cfg)
+      ? await dispatchUazapi(supabase, fake, link, instances, 0, cfg)
       : await dispatchManyChat(fake, link, cfg);
     return jsonResponse({ ok: result.ok, test: true, skip: result.skip || false, detail: result.detail });
   }
@@ -382,7 +395,7 @@ Deno.serve(async (req) => {
     let result: { ok: boolean; skip?: boolean; detail?: unknown };
     try {
       result = channel === "uazapi"
-        ? await dispatchUazapi(s, link, instances, i, cfg)
+        ? await dispatchUazapi(supabase, s, link, instances, i, cfg)
         : await dispatchManyChat(s, link, cfg);
     } catch (e) {
       result = { ok: false, detail: String((e as Error)?.message || e) };
