@@ -4,6 +4,7 @@ import type { WhatsAppMessage, ReplyContext } from '@/hooks/useWhatsApp';
 import { MessageCircle, Settings, Plus, Wifi, WifiOff, ArrowLeft } from 'lucide-react';
 import { useWhatsAppInstances, useWhatsAppChats, useWhatsAppMessages, getInstanceDisplayName } from '@/hooks/useWhatsApp';
 import { useWhatsAppMultiChats } from '@/hooks/useWhatsAppMultiChat';
+import { useGirassolConfig } from '@/hooks/useGirassolConfig';
 import { brCanonicalPhone } from '@/lib/phone';
 import InstanceHub from '@/components/whatsapp/InstanceHub';
 import ChatList from '@/components/whatsapp/ChatList';
@@ -31,10 +32,12 @@ export default function WhatsAppChat() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { instances, loading: loadingInstances, refetch: refetchInstances } = useWhatsAppInstances();
-  // Instância onde a IA (Girassol) atende — só nela o status IA↔humano faz sentido.
-  const botInstanceId = instances.find(
-    (i) => (i.instance_name || i.nickname || i.display_name || '').toUpperCase().includes('GIRASSOL'),
-  )?.id;
+  // Instância onde a IA (Girassol) atende — só nela o status IA↔humano faz sentido. Vem da
+  // config do agente (girassol_config.instance_id), não do nome da instância: o Girassol já
+  // foi trocado de instância pela tela (ex.: 15/07, de "GIRASSOL" pra "Cristal") sem que o
+  // nome mudasse, o que deixava o botão Assumir/IA na instância antiga.
+  const { data: girassolConfig } = useGirassolConfig();
+  const botInstanceId = girassolConfig?.instance_id ?? undefined;
   const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null);
   const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
   const [selectedChatInstanceId, setSelectedChatInstanceId] = useState<string | null>(null);
