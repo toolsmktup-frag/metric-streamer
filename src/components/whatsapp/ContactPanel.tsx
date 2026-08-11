@@ -23,11 +23,14 @@ import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { formatCurrency } from '@/lib/formatters';
 import { parseLocalDateTime } from '@/lib/localDate';
+import { ChatScheduledMessages } from './ScheduledMessagesList';
 
 interface ContactPanelProps {
   phone: string | null;
   senderName: string | null;
   contactPicture?: string | null;
+  /** Instância da conversa — usada para listar as mensagens programadas dela */
+  instanceId?: string;
 }
 
 interface EventMapping {
@@ -69,7 +72,7 @@ function getEventDate(ev: { created_at: string; metadata: Record<string, unknown
   return parseLocalDateTime(originalDate) || parseLocalDateTime(ev.created_at) || new Date();
 }
 
-export default function ContactPanel({ phone, senderName, contactPicture }: ContactPanelProps) {
+export default function ContactPanel({ phone, senderName, contactPicture, instanceId }: ContactPanelProps) {
   const { data: role = 'vendedor' } = useCurrentUserRole();
   const isAdmin = role === 'admin' || role === 'gestor';
 
@@ -208,6 +211,9 @@ export default function ContactPanel({ phone, senderName, contactPicture }: Cont
           currentUserId={currentUserId}
         />
       )}
+
+      {/* Mensagens programadas desta conversa */}
+      <ChatScheduledMessages instanceId={instanceId} phone={phone ?? undefined} />
 
       {/* Notes */}
       <div>

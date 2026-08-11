@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Send, Paperclip, X, Smile, ChevronDown, Reply, Lock } from 'lucide-react';
+import { Send, Paperclip, X, Smile, ChevronDown, Reply, Lock, CalendarClock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { sendWhatsAppMessage, sendPresence } from '@/hooks/useWhatsApp';
@@ -11,6 +11,7 @@ import EmojiPicker from './EmojiPicker';
 import AudioRecorder from './AudioRecorder';
 import ShortcutMenu from './ShortcutMenu';
 import ShortcutManager from './ShortcutManager';
+import ScheduleMessageDialog from './ScheduleMessageDialog';
 import { useQuery } from '@tanstack/react-query';
 import { useLeadByPhone } from '@/hooks/useLeadByPhone';
 import { useCurrentUserRole } from '@/hooks/useCurrentUserRole';
@@ -108,6 +109,7 @@ export default function ChatInput({
   const [attachment, setAttachment] = useState<File | null>(null);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const typingTimeout = useRef<ReturnType<typeof setTimeout>>();
@@ -422,6 +424,20 @@ export default function ChatInput({
           </Button>
         )}
 
+        {/* Programar mensagem (follow-up agendado pelo mesmo número) */}
+        {!official && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9 shrink-0"
+            onClick={() => setScheduleOpen(true)}
+            title="Programar mensagem"
+            aria-label="Programar mensagem"
+          >
+            <CalendarClock className="h-4 w-4" />
+          </Button>
+        )}
+
         <ShortcutManager />
 
         <textarea
@@ -453,6 +469,16 @@ export default function ChatInput({
           />
         )}
       </div>
+
+      <ScheduleMessageDialog
+        open={scheduleOpen}
+        onOpenChange={setScheduleOpen}
+        instanceId={sendInstanceId}
+        phone={phone}
+        leadId={lead?.id ?? null}
+        contactName={lead?.name ?? null}
+        initialText={text}
+      />
     </div>
   );
 }
