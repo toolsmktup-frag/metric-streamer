@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { startOfMonth, endOfDay, startOfDay, subDays, format, differenceInDays } from 'date-fns';
+import { localDayOf } from '@/lib/dateUtils';
 
 const COMMISSION_RATE = 0.10;
 
@@ -67,13 +68,16 @@ async function fetchSellerStats(sellerName: string, periodRange?: SellerStatsDat
   const todayStr = format(today, 'yyyy-MM-dd');
   const yesterdayStr = format(yesterday, 'yyyy-MM-dd');
 
-  const todaySales = approved.filter((s: any) => s.purchased_at?.startsWith(todayStr));
-  const yesterdaySales = approved.filter((s: any) => s.purchased_at?.startsWith(yesterdayStr));
+  // Dia LOCAL (Brasília) — startsWith/slice liam o dia em UTC e as vendas de
+  // 21h+ contavam para a meta do dia seguinte (auditoria 11/08).
+  const todaySales = approved.filter((s: any) => s.purchased_at && localDayOf(s.purchased_at) === todayStr);
+  const yesterdaySales = approved.filter((s: any) => s.purchased_at && localDayOf(s.purchased_at) === yesterdayStr);
 
   // Sales by day for streak
   const dayMap = new Map<string, { revenue: number; count: number }>();
   for (const s of approved) {
-    const d = (s.purchased_at || '').slice(0, 10);
+    if (!s.purchased_at) continue;
+    const d = localDayOf(s.purchased_at);
     const entry = dayMap.get(d) || { revenue: 0, count: 0 };
     entry.revenue += toAmount(s.revenue);
     entry.count++;
