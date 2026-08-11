@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import type { WhatsAppMessage, ReplyContext } from '@/hooks/useWhatsApp';
-import { MessageCircle, Settings, Plus, Wifi, WifiOff, ArrowLeft } from 'lucide-react';
+import { MessageCircle, Settings, Plus, Wifi, WifiOff, ArrowLeft, CalendarClock, X } from 'lucide-react';
 import { useWhatsAppInstances, useWhatsAppChats, useWhatsAppMessages, getInstanceDisplayName } from '@/hooks/useWhatsApp';
 import { useWhatsAppMultiChats } from '@/hooks/useWhatsAppMultiChat';
 import { useGirassolConfig } from '@/hooks/useGirassolConfig';
@@ -14,6 +14,7 @@ import BotControlBar from '@/components/whatsapp/BotControlBar';
 import ContactPanel from '@/components/whatsapp/ContactPanel';
 import SalesCopilotPanel from '@/components/whatsapp/SalesCopilotPanel';
 import SalesCopilotButton from '@/components/whatsapp/SalesCopilotButton';
+import ScheduledMessagesList from '@/components/whatsapp/ScheduledMessagesList';
 
 import {
   Select,
@@ -45,6 +46,7 @@ export default function WhatsAppChat() {
   const backRoute = useRef<string | null>(null);
   
   const [hubOpen, setHubOpen] = useState(false);
+  const [scheduledOpen, setScheduledOpen] = useState(false);
   const [optimisticMessages, setOptimisticMessages] = useState<WhatsAppMessage[]>([]);
   const [replyInstanceId, setReplyInstanceId] = useState<string | null>(null);
   const [copilotOpen, setCopilotOpen] = useState(false);
@@ -343,6 +345,15 @@ export default function WhatsAppChat() {
           <Button
             variant="ghost"
             size="icon"
+            className={`h-7 w-7 ${scheduledOpen ? 'bg-accent text-accent-foreground' : ''}`}
+            onClick={() => setScheduledOpen(o => !o)}
+            title="Mensagens programadas"
+          >
+            <CalendarClock className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
             className="h-7 w-7"
             onClick={() => setHubOpen(true)}
             title="Gerenciar Instâncias"
@@ -354,6 +365,27 @@ export default function WhatsAppChat() {
 
       {/* Main 3-column layout */}
       <div className="flex-1 flex min-h-0">
+        {scheduledOpen && (
+          <div className="w-[300px] shrink-0 border-r border-border bg-card flex flex-col min-h-0">
+            <div className="h-11 border-b border-border flex items-center px-3 gap-2 shrink-0">
+              <CalendarClock className="h-4 w-4 text-primary" />
+              <span className="text-sm font-semibold text-foreground">Mensagens programadas</span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 ml-auto"
+                onClick={() => setScheduledOpen(false)}
+                aria-label="Fechar"
+              >
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+            <div className="flex-1 overflow-y-auto min-h-0">
+              <ScheduledMessagesList />
+            </div>
+          </div>
+        )}
+
         <div className="w-[280px] shrink-0">
           <ChatList
             chats={activeChats}
@@ -418,6 +450,7 @@ export default function WhatsAppChat() {
                 phone={selectedPhone}
                 senderName={selectedChat?.contact_name || selectedChat?.sender_name || null}
                 contactPicture={selectedChat?.contact_picture || null}
+                instanceId={effectiveInstanceId}
               />
             </div>
           )
