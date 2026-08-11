@@ -294,7 +294,7 @@ export default function ScheduleMessageDialog({
             </div>
             {hasAudio && text.trim() && (
               <p className="text-[11px] text-muted-foreground">
-                Áudio e texto vão juntos: o áudio é enviado com a legenda.
+                Serão duas mensagens: primeiro o texto, depois o áudio.
               </p>
             )}
           </div>
