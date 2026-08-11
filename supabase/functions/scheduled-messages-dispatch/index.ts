@@ -27,6 +27,11 @@ function mapMediaType(messageType: string): string {
   return messageType
 }
 
+/**
+ * Envia UMA mensagem. Quando a vendedora programa texto + áudio, o carteiro
+ * chama esta função duas vezes (texto e depois áudio) — nota de voz no WhatsApp
+ * não exibe legenda, então mandar junto faria o texto se perder.
+ */
 async function sendViaUazapi(
   apiUrl: string,
   apiToken: string,
@@ -39,7 +44,7 @@ async function sendViaUazapi(
   const isMedia = messageType !== 'text' && !!mediaUrl
 
   const payload = isMedia
-    ? { number: phone, type: mapMediaType(messageType), file: mediaUrl, ...(body ? { text: body } : {}) }
+    ? { number: phone, type: mapMediaType(messageType), file: mediaUrl }
     : { number: phone, text: body }
 
   const url = `${baseUrl}${isMedia ? '/send/media' : '/send/text'}`
@@ -146,49 +151,73 @@ Deno.serve(async (req) => {
       const { data: canonical } = await admin.rpc('br_canonical_phone', { p_phone: row.phone })
       const phone = (typeof canonical === 'string' && canonical) || row.phone
 
-      const sent = await sendViaUazapi(
-        instance.api_url,
-        instance.api_token,
-        phone,
-        row.body || '',
-        row.message_type,
-        row.media_url,
-      )
-
-      if (!sent.ok) throw new Error(sent.error || 'Falha no envio')
-
-      // Grava na conversa para aparecer no chat como qualquer mensagem enviada.
-      const { data: savedMsg } = await admin
-        .from('whatsapp_messages')
-        .insert({
-          organization_id: row.organization_id,
-          instance_id: row.instance_id,
+      /** Envia e registra uma parte na conversa. Devolve o id da linha salva. */
+      const enviarParte = async (
+        parteTipo: 'text' | 'audio',
+        parteBody: string,
+        parteMedia: string | null,
+      ): Promise<string | null> => {
+        const sent = await sendViaUazapi(
+          instance.api_url,
+          instance.api_token,
           phone,
-          body: row.body || '',
-          message_type: row.message_type,
-          direction: 'outbound',
-          status: 'sent',
-          media_url: row.media_url,
-          media_mime_type: row.media_mime_type,
-          message_id_external: sent.externalId,
-          payload_raw: sent.raw,
-          lead_id: row.lead_id,
-        })
-        .select('id')
-        .maybeSingle()
+          parteBody,
+          parteTipo,
+          parteMedia,
+        )
+        if (!sent.ok) throw new Error(sent.error || 'Falha no envio')
+
+        const { data: savedMsg } = await admin
+          .from('whatsapp_messages')
+          .insert({
+            organization_id: row.organization_id,
+            instance_id: row.instance_id,
+            phone,
+            body: parteTipo === 'text' ? parteBody : '',
+            message_type: parteTipo,
+            direction: 'outbound',
+            status: 'sent',
+            media_url: parteMedia,
+            media_mime_type: parteTipo === 'audio' ? row.media_mime_type : null,
+            message_id_external: sent.externalId,
+            payload_raw: sent.raw,
+            lead_id: row.lead_id,
+          })
+          .select('id')
+          .maybeSingle()
+
+        return savedMsg?.id || null
+      }
+
+      const temTexto = !!(row.body && row.body.trim())
+      const temAudio = row.message_type === 'audio' && !!row.media_url
+      let ultimaMsgId: string | null = null
+
+      // Texto primeiro, áudio na sequência — como numa conversa natural.
+      if (temTexto) {
+        ultimaMsgId = await enviarParte('text', row.body!.trim(), null)
+      }
+      if (temAudio) {
+        // Respiro entre as duas para chegarem na ordem certa no aparelho.
+        if (temTexto) await new Promise(r => setTimeout(r, 1200))
+        ultimaMsgId = await enviarParte('audio', '', row.media_url)
+      }
 
       await admin
         .from('scheduled_messages')
         .update({
           status: 'sent',
           sent_at: new Date().toISOString(),
-          sent_message_id: savedMsg?.id || null,
+          sent_message_id: ultimaMsgId,
           last_error: null,
         })
         .eq('id', row.id)
 
       results.enviadas++
-      console.log('[scheduled-dispatch] enviada', row.id, '→', phone)
+      console.log(
+        '[scheduled-dispatch] enviada', row.id, '→', phone,
+        temTexto && temAudio ? '(texto + áudio)' : temAudio ? '(áudio)' : '(texto)',
+      )
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       const esgotou = row.attempts + 1 >= MAX_ATTEMPTS

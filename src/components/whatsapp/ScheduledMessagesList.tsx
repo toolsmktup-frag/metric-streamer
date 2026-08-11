@@ -75,11 +75,15 @@ function ScheduledRow({
 
       <div className="mt-1 flex items-start gap-1.5 text-muted-foreground">
         {msg.message_type === 'audio' && <Mic className="h-3 w-3 mt-0.5 shrink-0" />}
-        <p className="line-clamp-2 leading-snug">
-          {msg.message_type === 'audio' && !msg.body
-            ? `Áudio${msg.audio_duration_seconds ? ` (${msg.audio_duration_seconds}s)` : ''}`
-            : msg.body}
-        </p>
+        <div className="min-w-0">
+          {msg.body && <p className="line-clamp-2 leading-snug">{msg.body}</p>}
+          {msg.message_type === 'audio' && (
+            <p className="leading-snug">
+              {msg.body ? '+ áudio' : 'Áudio'}
+              {msg.audio_duration_seconds ? ` (${msg.audio_duration_seconds}s)` : ''}
+            </p>
+          )}
+        </div>
       </div>
 
       {msg.status === 'failed' && msg.last_error && (
