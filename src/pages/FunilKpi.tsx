@@ -14,7 +14,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useFunnel, type FunnelProduct } from '@/hooks/useFunnels';
 import { avgUnitPrice } from '@/lib/classifyTransaction';
-import { dayStartISO, dayEndISO, toLocalDate } from '@/lib/dateUtils';
+import { dayStartISO, dayEndISO, toLocalDate, localDayOf } from '@/lib/dateUtils';
 import DateRangePicker from '@/components/dashboard/DateRangePicker';
 import { useFilterStore } from '@/stores/filterStore';
 
@@ -349,7 +349,9 @@ export default function FunilKpi() {
 
     return allDays.map(date => {
       const meta = metaByDate[date] || { spend: 0, impressions: 0, link_clicks: 0, landing_page_views: 0, checkouts: 0 };
-      const dayTx = approved.filter((t: any) => t.purchased_at?.startsWith(date));
+      // Dia LOCAL (Brasília): com startsWith (UTC), vendas de 21h+ caíam no dia
+      // seguinte — e as do último dia do mês SUMIAM dos totais (auditoria 11/08).
+      const dayTx = approved.filter((t: any) => t.purchased_at && localDayOf(t.purchased_at) === date);
 
       let vp = 0, vb1 = 0, vu1 = 0, vu2 = 0, vu3 = 0, rp = 0, rb1 = 0, ru1 = 0, ru2 = 0, ru3 = 0;
       for (const tx of dayTx) {

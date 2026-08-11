@@ -29,6 +29,7 @@ import { useAllSales, useAllSalesAggregation, usePrevPeriodAllSales } from '@/ho
 import { supabase } from '@/integrations/supabase/client';
 import { useFilterStore } from '@/stores/filterStore';
 import { formatCurrency, formatNumber, formatPercent, formatRoas, getRoasColor } from '@/lib/formatters';
+import { localDayOf } from '@/lib/dateUtils';
 import PerformanceTable from '@/components/dashboard/PerformanceTable';
 import { SkeletonCard, SkeletonChart, SkeletonTable } from '@/components/dashboard/SkeletonCard';
 import { toast } from 'sonner';
@@ -94,8 +95,11 @@ export default function Resumo() {
     ? approved.reduce((s, t) => s + t.revenue, 0) / approved.length
     : 0;
 
+  // Bucket diário pelo dia LOCAL (Brasília): venda de 21h+ pertence ao dia em
+  // que aconteceu, não ao dia seguinte em UTC — senão o lucro diário do gráfico
+  // diverge dos cards do período (auditoria 11/08).
   const daily = dailyMetrics.map(d => {
-    const dayTx = allSales.filter(t => t.status === 'authorized' && t.purchased_at?.startsWith(d.date));
+    const dayTx = allSales.filter(t => t.status === 'authorized' && t.purchased_at && localDayOf(t.purchased_at) === d.date);
     const dayRevenue = dayTx.reduce((s, t) => s + t.revenue, 0);
     return { ...d, revenue: dayRevenue };
   });
@@ -105,7 +109,7 @@ export default function Resumo() {
     const map: Record<string, number> = {};
     for (const t of prevApproved) {
       if (t.purchased_at) {
-        const d = t.purchased_at.slice(0, 10);
+        const d = localDayOf(t.purchased_at);
         map[d] = (map[d] || 0) + t.revenue;
       }
     }
@@ -404,10 +408,14 @@ export default function Resumo() {
         <div className="rounded-lg border border-border bg-card p-4">
           <h3 className="text-sm font-semibold text-foreground mb-3">Taxa de Aprovação</h3>
           {(() => {
-            const total = allSales.length;
+            // Status reais do banco: authorized / pending / canceled / refused
+            // (+ refunded/chargeback históricos). Carrinho abandonado NÃO é uma
+            // tentativa de pagamento — fica fora da taxa (auditoria 11/08).
+            const attempts = allSales.filter(t => t.status !== 'abandoned_cart');
+            const total = attempts.length;
             const approvedCount = approved.length;
-            const refused = allSales.filter(t => ['refused', 'chargeback', 'refunded'].includes(t.status)).length;
-            const pending = allSales.filter(t => ['waiting_payment', 'pix_created', 'bank_slip_created'].includes(t.status)).length;
+            const refused = attempts.filter(t => ['refused', 'canceled', 'chargeback', 'refunded', 'reclamada'].includes(t.status)).length;
+            const pending = attempts.filter(t => ['pending', 'waiting_payment', 'pix_created', 'bank_slip_created'].includes(t.status)).length;
             const approvalRate = total > 0 ? (approvedCount / total) * 100 : 0;
             return total > 0 ? (
               <div className="space-y-4">
@@ -425,7 +433,7 @@ export default function Resumo() {
                     <span className="font-mono-value font-medium text-kpi-warning">{pending}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Recusadas/Reembolsos</span>
+                    <span className="text-muted-foreground">Recusadas/Canceladas</span>
                     <span className="font-mono-value font-medium text-kpi-negative">{refused}</span>
                   </div>
                 </div>

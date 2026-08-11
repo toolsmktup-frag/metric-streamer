@@ -39,3 +39,15 @@ export function toLocalDate(date: Date): string {
   const d = String(date.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
 }
+
+/**
+ * Dia LOCAL (YYYY-MM-DD) de um timestamp ISO vindo do banco (UTC).
+ *
+ * NUNCA use `timestamp.startsWith(dia)` ou `timestamp.slice(0, 10)` para
+ * agrupar por dia: isso lê o dia em UTC, e toda venda feita das 21:00 às
+ * 23:59 de Brasília "muda de dia" (até 25% das vendas de um dia!). Era isso
+ * que fazia o lucro diário do gráfico/tabela divergir dos cards do período.
+ */
+export function localDayOf(isoTimestamp: string): string {
+  return toLocalDate(new Date(isoTimestamp));
+}

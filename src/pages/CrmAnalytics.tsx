@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { localDayOf } from '@/lib/dateUtils';
 import { formatCurrency, formatNumber, formatPercent } from '@/lib/formatters';
 import { BarChart3, Users, ShoppingCart, DollarSign, Award, Info, UserX, Clock } from 'lucide-react';
 import { startOfDay, endOfDay, subDays, startOfWeek, startOfMonth, differenceInDays, format, parseISO } from 'date-fns';
@@ -124,7 +125,7 @@ export default function CrmAnalytics() {
       for (const p of positions || []) {
         const sellerId = leadSellerMap.get(p.lead_id);
         if (!sellerId) continue;
-        const day = (p.entered_at || '').slice(0, 10);
+        const day = p.entered_at ? localDayOf(p.entered_at) : '';
         const key = `${sellerId}|${p.lead_id}|${day}`;
         if (!seen.has(key)) {
           seen.add(key);
@@ -133,7 +134,7 @@ export default function CrmAnalytics() {
       }
 
       for (const l of assignedLeads || []) {
-        const day = (l.updated_at || '').slice(0, 10);
+        const day = l.updated_at ? localDayOf(l.updated_at) : '';
         const key = `${l.assigned_to}|${l.id}|${day}`;
         if (!seen.has(key)) {
           seen.add(key);
@@ -324,7 +325,7 @@ export default function CrmAnalytics() {
       const sellerId = log.user_id;
       if (!sellers.some(s => s.id === sellerId)) continue;
       sellerMinutes[sellerId] = (sellerMinutes[sellerId] || 0) + 1;
-      const day = (log.active_at || '').slice(0, 10);
+      const day = log.active_at ? localDayOf(log.active_at) : '';
       if (!sellerDayMinutes[sellerId]) sellerDayMinutes[sellerId] = {};
       sellerDayMinutes[sellerId][day] = (sellerDayMinutes[sellerId][day] || 0) + 1;
     }

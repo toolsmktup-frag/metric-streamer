@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { dayStartISO, dayEndISO } from '@/lib/dateUtils';
+import { dayStartISO, dayEndISO, localDayOf } from '@/lib/dateUtils';
 import { formatCurrency, formatNumber, formatPercent } from '@/lib/formatters';
 import { SkeletonCard } from '@/components/dashboard/SkeletonCard';
 import {
@@ -131,7 +131,8 @@ export default function KpiGeral() {
 
     return allDays.map(date => {
       const meta = metaByDate[date] || { spend: 0, impressions: 0, link_clicks: 0, landing_page_views: 0, checkouts: 0 };
-      const dayTx = approved.filter((t: any) => t.purchased_at?.startsWith(date));
+      // Dia LOCAL (Brasília) — startsWith lia o dia em UTC (auditoria 11/08).
+      const dayTx = approved.filter((t: any) => t.purchased_at && localDayOf(t.purchased_at) === date);
 
       let vp = 0, vb1 = 0, vu1 = 0, rp = 0, rb1 = 0, ru1 = 0;
       for (const tx of dayTx) {
