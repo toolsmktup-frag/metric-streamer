@@ -115,6 +115,22 @@ export default function ChatInput({
   const typingTimeout = useRef<ReturnType<typeof setTimeout>>();
   const isSending = useRef(false);
 
+  // Layout compacto quando o container é estreito (ex.: mini-chat do card do
+  // funil): os ícones sobem para uma linha própria e a caixa de texto ganha a
+  // largura toda — senão ela fica espremida entre os botões.
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [compact, setCompact] = useState(false);
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(entries => {
+      const w = entries[0]?.contentRect?.width ?? 0;
+      setCompact(w > 0 && w < 480);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   // The actual instance to send from: reply selector or prop
   const sendInstanceId = replyInstanceId || instanceId;
   // Canal de envio: oficial (Cloud API) roteia pro meta-whatsapp-send e, por ora, só texto.
@@ -344,7 +360,7 @@ export default function ChatInput({
   }
 
   return (
-    <div className="border-t border-border bg-card p-3 relative">
+    <div ref={containerRef} className="border-t border-border bg-card p-3 relative">
       {showShortcuts && (
         <ShortcutMenu
           query={text.slice(1)}
@@ -383,75 +399,87 @@ export default function ChatInput({
         </div>
       )}
 
-      <div className="flex items-end gap-2">
-        {/* Instance selector for unified mode */}
-        {showInstanceSelector && (
+      {/*
+        Layout normal: [seletor] [ícones] [textarea] [enviar/mic] numa linha.
+        Layout compacto (container < 480px, ex.: mini-chat do card do funil):
+        linha 1 = seletor + ícones · linha 2 = textarea larga + enviar/mic.
+      */}
+      {(() => {
+        const iconBtn = compact ? 'h-8 w-8 shrink-0' : 'h-9 w-9 shrink-0';
+
+        const selectorEl = showInstanceSelector ? (
           <InstanceSelector
             instances={instances}
             selectedId={replyInstanceId}
             onChange={onReplyInstanceChange}
           />
-        )}
+        ) : null;
 
-        {/* Emoji picker */}
-        <Popover open={emojiOpen} onOpenChange={setEmojiOpen}>
-          <PopoverTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0">
-              <Smile className="h-4 w-4" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent side="top" align="start" className="p-0 w-auto">
-            <EmojiPicker onSelect={handleEmojiSelect} />
-          </PopoverContent>
-        </Popover>
+        const actionsEl = (
+          <>
+            {/* Emoji picker */}
+            <Popover open={emojiOpen} onOpenChange={setEmojiOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="ghost" size="icon" className={iconBtn}>
+                  <Smile className="h-4 w-4" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent side="top" align="start" className="p-0 w-auto">
+                <EmojiPicker onSelect={handleEmojiSelect} />
+              </PopoverContent>
+            </Popover>
 
-        {/* File attach */}
-        <input
-          ref={fileRef}
-          type="file"
-          className="hidden"
-          onChange={handleFileSelect}
-          accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx"
-        />
-        {!official && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-9 w-9 shrink-0"
-            onClick={() => fileRef.current?.click()}
-          >
-            <Paperclip className="h-4 w-4" />
-          </Button>
-        )}
+            {/* File attach */}
+            <input
+              ref={fileRef}
+              type="file"
+              className="hidden"
+              onChange={handleFileSelect}
+              accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx"
+            />
+            {!official && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className={iconBtn}
+                onClick={() => fileRef.current?.click()}
+              >
+                <Paperclip className="h-4 w-4" />
+              </Button>
+            )}
 
-        {/* Programar mensagem (follow-up agendado pelo mesmo número) */}
-        {!official && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-9 w-9 shrink-0"
-            onClick={() => setScheduleOpen(true)}
-            title="Programar mensagem"
-            aria-label="Programar mensagem"
-          >
-            <CalendarClock className="h-4 w-4" />
-          </Button>
-        )}
+            {/* Programar mensagem (follow-up agendado pelo mesmo número) */}
+            {!official && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className={iconBtn}
+                onClick={() => setScheduleOpen(true)}
+                title="Programar mensagem"
+                aria-label="Programar mensagem"
+              >
+                <CalendarClock className="h-4 w-4" />
+              </Button>
+            )}
 
-        <ShortcutManager />
+            <ShortcutManager />
+          </>
+        );
 
-        <textarea
-          ref={textareaRef}
-          value={text}
-          onChange={e => handleTextChange(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Digite uma mensagem... (/ para atalhos)"
-          rows={1}
-          className="flex-1 min-h-[36px] max-h-[120px] resize-none rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-          style={{ overflow: 'auto' }}
-        />
+        const textareaEl = (
+          <textarea
+            ref={textareaRef}
+            value={text}
+            onChange={e => handleTextChange(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Digite uma mensagem... (/ para atalhos)"
+            rows={1}
+            className="flex-1 min-h-[36px] max-h-[120px] resize-none rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            style={{ overflow: 'auto' }}
+          />
+        );
 
-        {hasContent || official ? (
+        const sendOrMicEl = hasContent || official ? (
           <Button
             onClick={handleSend}
             disabled={!hasContent}
@@ -467,8 +495,33 @@ export default function ChatInput({
             onOptimisticSend={onOptimisticSend}
             onOptimisticUpdate={onOptimisticUpdate}
           />
-        )}
-      </div>
+        );
+
+        if (compact) {
+          return (
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-1">
+                {selectorEl}
+                <div className="flex-1" />
+                {actionsEl}
+              </div>
+              <div className="flex items-end gap-2">
+                {textareaEl}
+                {sendOrMicEl}
+              </div>
+            </div>
+          );
+        }
+
+        return (
+          <div className="flex items-end gap-2">
+            {selectorEl}
+            {actionsEl}
+            {textareaEl}
+            {sendOrMicEl}
+          </div>
+        );
+      })()}
 
       <ScheduleMessageDialog
         open={scheduleOpen}
