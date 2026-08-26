@@ -364,64 +364,63 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
 
-    // Lookup instance: try BaseUrl -> api_url match first, then instanceName fallback
+    // Lookup instance. Ordem importa: várias instâncias compartilham o MESMO
+    // api_url (todas apontam pro mesmo servidor UAZAPI), então URL é o critério
+    // MENOS confiável — só vale quando resolve para exatamente 1 linha. O token
+    // é único por instância; o instanceName vem do UAZAPI às vezes em caixa
+    // diferente da cadastrada ("cristal" vs "Cristal"), então o match precisa
+    // ser case-insensitive e desempatar preferindo a instância conectada.
     const baseUrl = (payload.BaseUrl || payload.baseUrl || '').replace(/\/+$/, '')
     const instanceName = payload.instanceName || payload.instance || ''
     console.log('Looking up instance - BaseUrl:', baseUrl, 'instanceName:', instanceName)
 
     let instanceData: any = null
-    let instanceError: any = null
 
-    // Strategy 1: Match by api_url (most reliable)
-    if (baseUrl) {
-      const { data, error } = await supabaseAdmin
-        .from('whatsapp_instances')
-        .select('id, organization_id, api_url, api_token')
-        .eq('api_url', baseUrl)
-        .maybeSingle()
-      if (data) {
-        instanceData = data
-        console.log('Instance found by api_url match:', baseUrl)
-      } else {
-        console.log('No instance found by api_url:', baseUrl, error)
-        const { data: d2 } = await supabaseAdmin
-          .from('whatsapp_instances')
-          .select('id, organization_id, api_url, api_token')
-          .ilike('api_url', `${baseUrl}%`)
-          .maybeSingle()
-        if (d2) {
-          instanceData = d2
-          console.log('Instance found by api_url ilike match')
-        }
-      }
-    }
+    const pickBest = (rows: any[] | null): any =>
+      (rows || []).find((r) => r.status === 'connected') || (rows || [])[0] || null
 
-    // Strategy 2: Match by instance_name
-    if (!instanceData && instanceName) {
-      const { data, error } = await supabaseAdmin
-        .from('whatsapp_instances')
-        .select('id, organization_id, api_url, api_token')
-        .eq('instance_name', instanceName)
-        .maybeSingle()
-      if (data) {
-        instanceData = data
-        console.log('Instance found by instance_name:', instanceName)
-      } else {
-        instanceError = error
-      }
-    }
-
-    // Strategy 3: Match by token if present in payload
+    // Strategy 1: Match by token (unique per instance)
     const payloadToken = payload.token || ''
-    if (!instanceData && payloadToken) {
+    if (payloadToken) {
       const { data } = await supabaseAdmin
         .from('whatsapp_instances')
-        .select('id, organization_id, api_url, api_token')
+        .select('id, organization_id, api_url, api_token, status')
         .eq('api_token', payloadToken)
-        .maybeSingle()
-      if (data) {
-        instanceData = data
+        .order('updated_at', { ascending: false })
+        .limit(1)
+      if (data?.length) {
+        instanceData = data[0]
         console.log('Instance found by api_token match')
+      }
+    }
+
+    // Strategy 2: Match by instance_name (case-insensitive; prefere conectada)
+    if (!instanceData && instanceName) {
+      const { data } = await supabaseAdmin
+        .from('whatsapp_instances')
+        .select('id, organization_id, api_url, api_token, status')
+        .ilike('instance_name', instanceName)
+        .order('updated_at', { ascending: false })
+      instanceData = pickBest(data)
+      if (instanceData) {
+        console.log('Instance found by instance_name (ci):', instanceName, '→', instanceData.id)
+      } else {
+        console.log('No instance found by instance_name:', instanceName)
+      }
+    }
+
+    // Strategy 3: api_url — só quando o match é inequívoco (1 linha)
+    if (!instanceData && baseUrl) {
+      const { data } = await supabaseAdmin
+        .from('whatsapp_instances')
+        .select('id, organization_id, api_url, api_token, status')
+        .eq('api_url', baseUrl)
+        .limit(2)
+      if (data?.length === 1) {
+        instanceData = data[0]
+        console.log('Instance found by unambiguous api_url match:', baseUrl)
+      } else if (data && data.length > 1) {
+        console.log('api_url ambiguous (multiple instances share it), skipping:', baseUrl)
       }
     }
 
