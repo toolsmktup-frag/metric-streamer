@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useMetaAds, useMetaCampaigns, useMetaAdsets } from '@/hooks/useMetaData';
 import { useAllSalesAggregation } from '@/hooks/useAllSales';
+import { useFunnel } from '@/hooks/useFunnels';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import DateRangePicker from '@/components/dashboard/DateRangePicker';
@@ -98,7 +99,11 @@ export default function Criativos({ embedded = false, funnelId }: { embedded?: b
   const { data: ads = [], isLoading: loadingAds } = useMetaAds(funnelId);
   const { data: campaigns = [] } = useMetaCampaigns(funnelId);
   const { data: adsets = [] } = useMetaAdsets(funnelId);
-  const { byAd } = useAllSalesAggregation(funnelId);
+  const { data: funnel } = useFunnel(funnelId ?? null);
+  // Mesma base do FunilCampanhas: com funnel_products a população vem por
+  // mapped_funnel_id e a herança de atribuição (bump/upsell seguem o front)
+  // enxerga doadores de todos os funis — sem isso os números divergiam entre abas.
+  const { byAd } = useAllSalesAggregation(funnelId, undefined, funnel?.funnel_products || undefined);
   const { data: creatives = [] } = useAdCreatives();
   const upsertCreative = useUpsertAdCreative();
 
