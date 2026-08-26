@@ -398,6 +398,16 @@ export default function FunilCampanhas() {
             </div>
             <div className="text-sm text-muted-foreground">
               {organicSales.sales_count} venda{organicSales.sales_count !== 1 ? 's' : ''} orgânica{organicSales.sales_count !== 1 ? 's' : ''} · {formatCurrency(organicSales.revenue)}
+              {(organicSales.front_sales > 0 || organicSales.bump_sales > 0 || organicSales.upsell_sales > 0) && (
+                <span className="ml-1">
+                  ({[
+                    organicSales.front_sales > 0 ? `${organicSales.front_sales} front` : null,
+                    organicSales.bump_sales > 0 ? `${organicSales.bump_sales} bump` : null,
+                    organicSales.upsell_sales > 0 ? `${organicSales.upsell_sales} upsell` : null,
+                    organicSales.downsell_sales > 0 ? `${organicSales.downsell_sales} downsell` : null,
+                  ].filter(Boolean).join(' · ')})
+                </span>
+              )}
             </div>
           </div>
 
