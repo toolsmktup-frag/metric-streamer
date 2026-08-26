@@ -283,9 +283,13 @@ export function useAllSalesAggregation(funnelId?: string | null, ingestionType?:
       const belongsToFunnel = t.mapped_funnel_id === funnelId;
       if (!belongsToFunnel) return false;
     }
-    if (paidTrafficOnly && !hasMetaAttribution(t)) return false;
     return true;
   });
+  // paidTrafficOnly NÃO pode filtrar `confirmed` inteiro: a aba "Vendas sem
+  // tráfego" nasce justamente das vendas sem atribuição — filtrar antes
+  // deixava organicTransactions sempre vazio. byCampaign/byAdset/byAd já são
+  // naturalmente só-pagas (exigem meta_*_id); o flag afeta apenas totalSales.
+  const confirmedForTotals = paidTrafficOnly ? confirmed.filter(hasMetaAttribution) : confirmed;
 
   const byCampaign: Record<string, SalesAggregation> = {};
   const byAdset: Record<string, SalesAggregation> = {};
@@ -323,7 +327,7 @@ export function useAllSalesAggregation(funnelId?: string | null, ingestionType?:
   }
 
   const totalSales = emptySalesAgg();
-  for (const tx of confirmed) {
+  for (const tx of confirmedForTotals) {
     addToAgg(totalSales, tx.revenue, classifyWithProducts(tx, funnelProducts));
   }
 

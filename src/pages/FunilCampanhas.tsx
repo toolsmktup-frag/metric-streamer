@@ -39,6 +39,7 @@ export default function FunilCampanhas() {
   const [activeTab, setActiveTab] = useState<Tab>('ads');
   const [selectedCampaign, setSelectedCampaign] = useState<{ id: string; name: string } | null>(null);
   const [selectedAdset, setSelectedAdset] = useState<{ id: string; name: string } | null>(null);
+  const [organicSourceFilter, setOrganicSourceFilter] = useState<string | null>(null);
 
   // Merge Ticto sales data into campaigns/adsets/ads
   const campaignsWithSales = useMemo(() => {
@@ -222,15 +223,37 @@ export default function FunilCampanhas() {
     });
   }
 
+  const SEM_UTM = 'Sem UTM';
+  const organicSourceOf = (t: { utm_source?: string | null }) => (t.utm_source || '').trim() || SEM_UTM;
+
+  // Contagem por origem (utm_source ou "Sem UTM") para os chips de resumo/filtro
+  const organicBySource = useMemo(() => {
+    const map = new Map<string, { count: number; revenue: number }>();
+    for (const t of organicTransactions) {
+      const src = organicSourceOf(t);
+      const agg = map.get(src) || { count: 0, revenue: 0 };
+      agg.count++;
+      agg.revenue += t.revenue || 0;
+      map.set(src, agg);
+    }
+    return Array.from(map.entries())
+      .map(([source, agg]) => ({ source, ...agg }))
+      .sort((a, b) => b.count - a.count);
+  }, [organicTransactions]);
+
   const filteredOrganic = useMemo(() => {
-    if (!search) return organicTransactions;
+    let list = organicTransactions;
+    if (organicSourceFilter) {
+      list = list.filter(t => organicSourceOf(t) === organicSourceFilter);
+    }
+    if (!search) return list;
     const s = search.toLowerCase();
-    return organicTransactions.filter(t =>
+    return list.filter(t =>
       t.product_name?.toLowerCase().includes(s) ||
       t.customer_name?.toLowerCase().includes(s) ||
       t.customer_email?.toLowerCase().includes(s)
     );
-  }, [organicTransactions, search]);
+  }, [organicTransactions, search, organicSourceFilter]);
 
   return (
     <div className="space-y-4">
@@ -411,6 +434,40 @@ export default function FunilCampanhas() {
             </div>
           </div>
 
+          {/* Chips por origem: clique filtra a lista */}
+          {organicBySource.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              {organicBySource.map(({ source, count, revenue }) => {
+                const active = organicSourceFilter === source;
+                return (
+                  <button
+                    key={source}
+                    onClick={() => setOrganicSourceFilter(active ? null : source)}
+                    title={`${count} venda${count !== 1 ? 's' : ''} · ${formatCurrency(revenue)}`}
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+                      active
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : source === 'Sem UTM'
+                        ? 'bg-muted text-muted-foreground border-border hover:border-primary/50'
+                        : 'bg-accent text-accent-foreground border-border hover:border-primary/50'
+                    }`}
+                  >
+                    {source}
+                    <span className={`font-semibold ${active ? '' : 'text-foreground'}`}>{count}</span>
+                  </button>
+                );
+              })}
+              {organicSourceFilter && (
+                <button
+                  onClick={() => setOrganicSourceFilter(null)}
+                  className="text-xs text-muted-foreground hover:text-foreground underline"
+                >
+                  limpar filtro
+                </button>
+              )}
+            </div>
+          )}
+
           {filteredOrganic.length > 0 ? (
             <div className="rounded-lg border border-border bg-card overflow-hidden">
               <div className="overflow-x-auto">
@@ -463,7 +520,13 @@ export default function FunilCampanhas() {
                                 tx.utm_medium,
                                 tx.utm_content,
                               ].filter(Boolean);
-                              if (utms.length === 0) return null;
+                              if (utms.length === 0) {
+                                return (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">
+                                    Sem UTM
+                                  </span>
+                                );
+                              }
                               return (
                                 <div className="flex flex-wrap gap-1">
                                   {tx.utm_source && (
