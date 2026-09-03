@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 import { useProductsCatalog, useUpsertProductCatalog, useDeleteProductCatalog, type ProductCatalogItem, type CatalogRole } from '@/hooks/useProductsCatalog';
 import type { PaymentPlatform } from '@/hooks/useFunnels';
 
-const PLATFORMS: PaymentPlatform[] = ['ticto', 'guru', 'kiwify', 'hotmart', 'eduzz', 'outro'];
+const PLATFORMS: PaymentPlatform[] = ['ticto', 'guru', 'kiwify', 'hotmart', 'eduzz', 'youshop', 'outro'];
 const ROLES: { value: CatalogRole; label: string }[] = [
   { value: 'front', label: 'Front-end' },
   { value: 'order_bump', label: 'Order Bump' },

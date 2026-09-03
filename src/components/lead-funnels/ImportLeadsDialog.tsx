@@ -344,6 +344,7 @@ const ImportLeadsDialog: React.FC<ImportLeadsDialogProps> = ({
                 <SelectItem value="guru">Guru</SelectItem>
                 <SelectItem value="ticto">Ticto</SelectItem>
                 <SelectItem value="eduzz">Eduzz</SelectItem>
+                <SelectItem value="youshop">YouShop</SelectItem>
                 <SelectItem value="outro">Outro / Genérico</SelectItem>
               </SelectContent>
             </Select>

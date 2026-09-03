@@ -878,6 +878,7 @@ function ProductsTab() {
                     <option value="guru">Guru</option>
                     <option value="ticto">Ticto</option>
                     <option value="eduzz">Eduzz</option>
+                    <option value="youshop">YouShop</option>
                   </select>
                   <Button size="sm" disabled={(!newMapping.offer_name && !newMapping.external_product_id) || addMappingMutation.isPending}
                     onClick={() => addMappingMutation.mutate(p.id)}>

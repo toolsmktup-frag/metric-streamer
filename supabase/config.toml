@@ -42,6 +42,9 @@ verify_jwt = false
 [functions.eduzz-webhook]
 verify_jwt = false
 
+[functions.youshop-webhook]
+verify_jwt = false
+
 [functions.whatsapp-media]
 verify_jwt = false
 
