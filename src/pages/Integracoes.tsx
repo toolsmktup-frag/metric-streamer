@@ -5,12 +5,13 @@ import { useSyncMeta, useMetaSyncStatus } from '@/hooks/useMetaData';
 
 const BASE_URL = 'https://emfbocpmphtftqcezaib.supabase.co/functions/v1';
 
-type Platform = 'guru' | 'ticto' | 'eduzz';
+type Platform = 'guru' | 'ticto' | 'eduzz' | 'youshop';
 
 const PLATFORMS: { key: Platform; label: string; icon: string }[] = [
   { key: 'guru',  label: 'Guru',  icon: '🟣' },
   { key: 'ticto', label: 'Ticto', icon: '🟢' },
   { key: 'eduzz', label: 'Eduzz', icon: '🔵' },
+  { key: 'youshop', label: 'YouShop', icon: '🟡' },
 ];
 
 const PLATFORM_INFO: Record<Platform, {
@@ -55,6 +56,21 @@ const PLATFORM_INFO: Record<Platform, {
       'Cole a URL abaixo e selecione os eventos: Venda Aprovada, Reembolso, Chargeback',
       'Salve — as próximas vendas aparecem automaticamente no Resumo Geral',
       'Para dados históricos, use também Importar Dados → Eduzz (CSV)',
+    ],
+  },
+  youshop: {
+    hasWebhook: true,
+    endpoint: 'youshop-webhook',
+    globalNote: 'A YouShop exige o token do funil na URL: sem ?token=... o webhook é rejeitado (401). Gere o token em Funis → Configurar → Plataformas → YouShop.',
+    funnelNote: 'Use sempre a URL com ?token=TOKEN_DO_FUNIL (Funis → Configurar). Um webhook por funil.',
+    setupSteps: [
+      'No painel da YouShop, vá em Ferramentas → Webhooks → "Novo webhook"',
+      'Formato do Webhook: YouShop · Tipo de webhook: Produto',
+      'URL: cole a URL do funil com ?token=... (Funis → Configurar → Plataformas)',
+      'Produtos: selecione os produtos do funil (ou "Enviar para todos produtos")',
+      'Eventos: Pedido → Pix Gerado, Pix Pago, Boleto Gerado, Boleto Pago, Cartão de Crédito Pago, Pago (todos), Cancelado · Jornada → Carrinho Abandonado',
+      'Opções: deixe ligados "nome", "telefone" e "e-mail" do cliente',
+      'Salve e use "Testar Webhook" — o payload fica registrado em webhook_audit (source = youshop) para conferência',
     ],
   },
 };

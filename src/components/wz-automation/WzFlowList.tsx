@@ -19,6 +19,8 @@ const platformLabels: Record<string, string> = {
   any: 'Qualquer',
   ticto: 'Ticto',
   guru: 'Guru',
+  eduzz: 'Eduzz',
+  youshop: 'YouShop',
 };
 
 interface FunnelInfo {

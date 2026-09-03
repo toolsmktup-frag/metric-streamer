@@ -39,6 +39,7 @@ const PLATFORM_OPTIONS: { value: PaymentPlatform; label: string }[] = [
   { value: 'kiwify', label: 'Kiwify' },
   { value: 'hotmart', label: 'Hotmart' },
   { value: 'eduzz', label: 'Eduzz' },
+  { value: 'youshop', label: 'YouShop' },
   { value: 'outro', label: 'Outro' },
 ];
 
@@ -46,13 +47,16 @@ const COLORS = ['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#3b82f6'
 
 const SUPABASE_FUNCTIONS_URL = 'https://emfbocpmphtftqcezaib.supabase.co/functions/v1';
 
+/** Edge function que recebe o webhook de cada plataforma. Sem entrada → ticto-webhook (legado). */
+const WEBHOOK_FN: Partial<Record<PaymentPlatform, string>> = {
+  ticto: 'ticto-webhook',
+  guru: 'guru-webhook',
+  eduzz: 'eduzz-webhook',
+  youshop: 'youshop-webhook',
+};
+
 function webhookUrlFor(platform: PaymentPlatform, token: string) {
-  const fn =
-    platform === 'guru'
-      ? 'guru-webhook'
-      : platform === 'eduzz'
-      ? 'eduzz-webhook'
-      : 'ticto-webhook';
+  const fn = WEBHOOK_FN[platform] ?? 'ticto-webhook';
   return `${SUPABASE_FUNCTIONS_URL}/${fn}?token=${token}`;
 }
 
