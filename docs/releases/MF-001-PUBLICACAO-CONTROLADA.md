@@ -28,3 +28,13 @@ Push Git não equivale a aplicar migration ou publicar Edge Functions. Não há 
 Segredos ficam nos servidores. Primeiro validar ingestão e conferência isolada; nenhum evento desta versão gera lançamento real. Preservar pendências de líquido, competência, identidade e beneficiário. Histórico não será reparado nesta publicação.
 
 Rollback: interromper agendamento e desabilitar exportação das contas, preservando inbox/outbox. Não apagar dados/migrations, não remover autenticação, não reenviar eventos ao CRM. Se necessário, corrigir código com novo commit; nunca forçar ou reescrever main.
+
+## Decisão posterior: YouShop manual e restauração autorizada
+
+Após o push MF-001, o responsável observou a republicação automática de receptores via integração externa, embora o GitHub não registre workflow, check, deployment ou hook desse deploy. A ausência de workflow GitHub NÃO garante ausência de deploy automático Lovable. Qualquer push futuro na branch conectada deve ser tratado como potencial publicação de Edge Functions.
+
+O usuário autorizou expressamente restaurar o receptor YouShop anterior e usar somente registro manual mensal de YouShop no Financeiro. Restauração limitada a `supabase/functions/youshop-webhook/index.ts`, exatamente do commit `fcfb41920830d6047643e5c69d92b20741ca3d69`; blob `5e981a140a4c17cd39aa24358c4aad00afaf39da`. Os três módulos compartilhados importados têm hashes idênticos; nenhum outro receptor foi alterado. Não reverter ao pai `4797936`, pois aquele main já exigia token e não recuperaria o comportamento anterior global.
+
+A versão legada permite entrada sem token quando não há token na URL: o risco de autenticação conhecido permanece expressamente documentado. Esta é restauração temporária de disponibilidade autorizada, não correção de segurança nem autorização de ingestão financeira confiável. YouShop não terá conta/exportação automática habilitada; nenhum dado YouShop seguirá pela ponte financeira. Configuração manual mensal pertence ao Financeiro e não deve alterar as automações existentes do Metrics. Não executar reenvio CRM/WhatsApp nem reparação histórica nesta restauração.
+
+O deploy foi estritamente `supabase functions deploy youshop-webhook --project-ref emfbocpmphtftqcezaib --use-api --no-verify-jwt`, preservando a configuração JWT anterior e sem `--prune`. Fonte validada por hash e `deno check`. CLI confirmou sucesso e listagem remota confirmou `ACTIVE`, versão 8, `verify_jwt=false` (updated_at 1789597097022). Typecheck, 78/78 testes e build passaram novamente. Nenhum payload sintético foi enviado ao receptor para não gerar efeitos de CRM.

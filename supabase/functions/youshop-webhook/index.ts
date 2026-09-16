@@ -2,7 +2,6 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveQuantity } from "../_shared/potQuantity.ts";
 import { readJsonBody } from "../_shared/readJsonBody.ts";
 import { parseUtmPair } from "../_shared/parseUtmPair.ts";
-import { financialPreflight } from "../_shared/financialIntake.ts";
 
 /**
  * youshop-webhook — recebe os webhooks da YouShop (Ferramentas → Webhooks,
@@ -115,8 +114,11 @@ function pickAmountReais(obj: unknown, paths: string[]): number | null {
   return null;
 }
 
-/** Datas "naive" (sem timezone) são tratadas como horário de Brasília. */
-function safeISO(raw: unknown): string | null {
+/**
+ * A YouShop envia datas do pedido como `yyyy-mm-dd hh:mm:ss` em UTC e datas
+ * da jornada como `dd-mm-yyyy hh:mm:ss` no horário de Brasília.
+ */
+export function safeISO(raw: unknown): string | null {
   if (!raw) return null;
   try {
     if (typeof raw === "number") {
@@ -127,16 +129,16 @@ function safeISO(raw: unknown): string | null {
     }
     let s = String(raw).trim();
     if (!s) return null;
-    // "dd/mm/yyyy hh:mm:ss" → ISO
-    const br = s.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?$/);
+    // "dd/mm/yyyy hh:mm:ss" ou "dd-mm-yyyy hh:mm:ss" → Brasília
+    const br = s.match(/^(\d{2})[/-](\d{2})[/-](\d{4})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?$/);
     if (br) {
-      s = `${br[3]}-${br[2]}-${br[1]}T${br[4] || "00"}:${br[5] || "00"}:${br[6] || "00"}`;
+      s = `${br[3]}-${br[2]}-${br[1]}T${br[4] || "00"}:${br[5] || "00"}:${br[6] || "00"}${BR_TZ_OFFSET}`;
     }
-    const hasTz = /[zZ]$|[+\-]\d{2}:?\d{2}$/.test(s);
+    const hasTz = /[zZ]$|[+-]\d{2}:?\d{2}$/.test(s);
     if (!hasTz) {
       s = s.replace(" ", "T");
       if (/^\d{4}-\d{2}-\d{2}$/.test(s)) s += "T00:00:00";
-      s = `${s}${BR_TZ_OFFSET}`;
+      s = `${s}Z`;
     }
     const d = new Date(s);
     return isNaN(d.getTime()) ? null : d.toISOString();
@@ -159,7 +161,7 @@ function normalizePaymentMethod(value: unknown): string | null {
  * authorized | pending | canceled | refused | refunded | chargeback | abandoned_cart
  * Aceita inglês, português, snake/dot/kebab ("order.pix_paid", "Pedido: Pix Pago").
  */
-function mapStatus(...candidates: unknown[]): { normalized: string; raw: string } {
+export function mapStatus(...candidates: unknown[]): { normalized: string; raw: string } {
   const raw = candidates.map((c) => clean(c)).filter(Boolean).join(" | ");
   const s = raw
     .toLowerCase()
@@ -170,7 +172,10 @@ function mapStatus(...candidates: unknown[]): { normalized: string; raw: string 
 
   const has = (re: RegExp) => re.test(s);
 
-  if (has(/abandon|carrinho/)) return { normalized: "abandoned_cart", raw };
+  if (has(/abandon|carrinho abandon/)) return { normalized: "abandoned_cart", raw };
+  if (has(/cart created|checkout start|iniciou checkout|inicio checkout/)) {
+    return { normalized: "checkout_started", raw };
+  }
   if (has(/chargeback|charged back|contestac|disputa/)) return { normalized: "chargeback", raw };
   if (has(/refund|estorn|reembols|devolv/)) return { normalized: "refunded", raw };
   if (has(/refus|recus|declin|denied|negad|fail|falh|error|erro/)) return { normalized: "refused", raw };
@@ -234,7 +239,7 @@ function extractAddress(customer: Obj, payload: Obj): Obj {
 // Handler
 // ─────────────────────────────────────────────────────────────
 
-Deno.serve(async (req) => {
+export async function handleRequest(req: Request) {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -274,12 +279,13 @@ Deno.serve(async (req) => {
 
   try {
     console.log(`[youshop-webhook] Top-level keys: ${Object.keys(payload).join(", ")}`);
-    // Coordinated rollout required: YouShop must send its configured route token.
-    const intake = await financialPreflight(supabase, req, 'youshop', payload);
-    if (intake.response) return intake.response;
 
     // ── Containers candidatos ──
     const data: Obj = isObj(payload.data) ? payload.data : payload;
+    const cart: Obj =
+      (isObj(data.cart) && data.cart) ||
+      (Array.isArray(data.carts) && isObj(data.carts[0]) && data.carts[0]) ||
+      {};
     const order: Obj =
       (isObj(data.order) && data.order) ||
       (isObj(data.pedido) && data.pedido) ||
@@ -312,6 +318,8 @@ Deno.serve(async (req) => {
       (isObj(order.utm) && order.utm) ||
       (isObj(data.tracking_parameters) && data.tracking_parameters) ||
       (isObj(data.marketing) && data.marketing) ||
+      (isObj(data.access) && data.access) ||
+      (Array.isArray(data.visits) && isObj(data.visits[0]) && data.visits[0]) ||
       data;
     const queryParams: Obj =
       (isObj(data.query_params) && data.query_params) ||
@@ -326,6 +334,7 @@ Deno.serve(async (req) => {
       (Array.isArray(data.items) && data.items) ||
       (Array.isArray(data.products) && data.products) ||
       (Array.isArray(data.produtos) && data.produtos) ||
+      (isObj(cart.offer) && Array.isArray(cart.offer.items) && cart.offer.items) ||
       null;
     let items: Obj[] = Array.isArray(itemsRaw) ? itemsRaw.filter(isObj) : [];
     if (!items.length) {
@@ -383,7 +392,8 @@ Deno.serve(async (req) => {
       "paid_amount", "amount_paid", "total_paid", "total", "total_amount", "amount", "value", "total_value",
       "valor_total", "valor", "price", "gross_amount", "final_amount", "paid_amount_cents", "amount_cents", "total_cents",
     ]) ?? pickAmountReais(payment, ["paid_amount", "amount", "value", "total", "amount_cents"])
-      ?? pickAmountReais(data, ["paid_amount", "total", "amount", "value", "valor", "price"]);
+      ?? pickAmountReais(data, ["paid_amount", "total", "amount", "value", "valor", "price"])
+      ?? pickAmountReais(cart, ["offer.amount", "amount", "total", "value"]);
     const netAmountReais = pickAmountReais(order, ["net_amount", "net_value", "producer_amount", "seller_amount", "valor_liquido", "liquid_amount"])
       ?? pickAmountReais(data, ["net_amount", "net_value", "valor_liquido"]);
 
@@ -395,7 +405,8 @@ Deno.serve(async (req) => {
     );
     const createdAt = safeISO(
       pick(order, ["created_at", "date", "order_date", "created", "data", "createdAt"])
-      ?? pick(data, ["created_at", "date", "order_date", "sent_at", "timestamp", "createdAt"]),
+      ?? pick(data, ["created_at", "date", "order_date", "sent_at", "timestamp", "createdAt"])
+      ?? pick(tracking, ["datetime"]),
     );
     // Venda paga conta no dia do pagamento (mesma regra do Ticto, PR #52)
     let purchasedAt = createdAt || paidAt || new Date().toISOString();
@@ -414,7 +425,9 @@ Deno.serve(async (req) => {
     const fbp = clean(pick(queryParams, ["fbp", "_fbp"])) || clean(tracking.fbp);
     const fbclid = clean(queryParams.fbclid) || clean(tracking.fbclid);
     const gclid = clean(queryParams.gclid) || clean(tracking.gclid);
-    const checkoutUrl = clean(pick(tracking, ["checkout_url", "checkout"])) || clean(pick(data, ["checkout_url", "checkout_link", "url_checkout"]));
+    const checkoutUrl = clean(pick(tracking, ["checkout_url", "checkout"]))
+      || clean(pick(cart, ["checkout_url", "offer.checkout_url"]))
+      || clean(pick(data, ["checkout_url", "checkout_link", "url_checkout"]));
     const pageUrl = clean(pick(tracking, ["page_url", "page", "referrer", "referer", "landing_page", "url"])) || clean(pick(data, ["page_url", "referrer"]));
 
     const campaignParsed = parseUtmPair(utmCampaign);
@@ -422,7 +435,7 @@ Deno.serve(async (req) => {
     const adParsed = parseUtmPair(utmContent);
 
     // ── Produto principal (para audit / funil) ──
-    const productNameOf = (it: Obj) => clean(pick(it, ["name", "product_name", "title", "nome", "product.name", "product.title", "description"]));
+    const productNameOf = (it: Obj) => clean(pick(it, ["name", "product_name", "title", "nome", "product.name", "product.title", "product", "description"]));
     const productIdOf = (it: Obj) => clean(pick(it, ["product_id", "id_product", "product.id", "product_code", "sku", "code", "id", "product.code", "product.sku"]));
     const offerNameOf = (it: Obj) => clean(pick(it, ["offer_name", "offer.name", "offer", "plan_name", "plan.name", "variant", "variant_name", "oferta"]));
     const offerIdOf = (it: Obj) => clean(pick(it, ["offer_id", "offer.id", "offer_code", "offer.code", "plan_id", "variant_id"]));
@@ -440,27 +453,28 @@ Deno.serve(async (req) => {
       return jsonResponse({ success: true, message: "ping ok" });
     }
 
-    // ── Resolve funil pelo token da URL (obrigatório — anti-injeção) ──
+    // ── Token opcional: sem token, integra no Resumo Geral (funnel_id = null) ──
     let funnelId: string | null = null;
     if (urlToken) {
       const { data: byPlatform } = await supabase
         .from("funnel_platforms")
         .select("funnel_id")
         .eq("webhook_token", urlToken)
+        .eq("platform", PLATFORM)
         .eq("is_active", true)
         .maybeSingle();
       funnelId = byPlatform?.funnel_id ?? null;
-    }
-    if (!funnelId) {
-      console.warn("[youshop-webhook] Rejeitado: webhook_token ausente ou inválido");
-      await audit({
-        raw_status: rawStatus || null,
-        normalized_status: normalizedStatus,
-        product_name: mainProductName,
-        error_message: "Invalid or missing webhook token",
-        raw_payload: payload,
-      });
-      return jsonResponse({ error: "Invalid or missing webhook token" }, 401);
+      if (!funnelId) {
+        console.warn("[youshop-webhook] Rejeitado: webhook_token inválido");
+        await audit({
+          raw_status: rawStatus || null,
+          normalized_status: normalizedStatus,
+          product_name: mainProductName,
+          error_message: "Invalid webhook token",
+          raw_payload: payload,
+        });
+        return jsonResponse({ error: "Invalid webhook token" }, 401);
+      }
     }
 
     // ── Cliente unificado ──
@@ -529,15 +543,6 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Fallback de funil por produto quando o token não bastar (mantido por simetria)
-    if (!funnelId && (mainProductName || mainProductId)) {
-      const { data: fid } = await supabase.rpc("resolve_funnel_id", {
-        p_product_name: mainProductName,
-        p_product_id: mainProductId,
-      });
-      funnelId = fid || null;
-    }
-
     const totalReais = orderTotalReais ?? rows.reduce((a, r) => a + r.amountReais, 0);
 
     // ── Audit ANTES do save ──
@@ -555,9 +560,9 @@ Deno.serve(async (req) => {
     console.log(`[youshop-webhook] status=${normalizedStatus} raw="${rawStatus}" total=R$${totalReais} items=${rows.length} product="${mainProductName}" order=${orderId} tx=${baseTxId} funnel=${funnelId}`);
 
     // ── Carrinho abandonado: não é compra → só timeline do lead + automações ──
-    const isAbandoned = normalizedStatus === "abandoned_cart";
+    const isJourneyEvent = normalizedStatus === "abandoned_cart" || normalizedStatus === "checkout_started";
 
-    if (!isAbandoned) {
+    if (!isJourneyEvent) {
       for (const row of rows) {
         if (!row.productName) {
           console.warn(`[youshop-webhook] item sem nome de produto ignorado (tx=${row.txId})`);
@@ -634,6 +639,7 @@ Deno.serve(async (req) => {
       chargeback: "chargeback",
       canceled: "canceled",
       abandoned_cart: "abandoned_cart",
+      checkout_started: "checkout_started",
     };
     const leadEventName = eventMap[normalizedStatus];
 
@@ -710,12 +716,13 @@ Deno.serve(async (req) => {
         refunded: "refund",
         chargeback: "refund",
         abandoned_cart: "cart_abandoned",
+        checkout_started: "checkout_started",
       };
       const pixCode = clean(pick(payment, ["pix.qr_code", "pix.code", "pix.emv", "pix.copy_paste", "pix_code", "pix_qrcode", "qr_code", "qrcode", "emv", "copy_paste"]))
-        || clean(pick(order, ["pix.qr_code", "pix.code", "pix_code", "pix_qrcode", "qr_code"]))
-        || clean(pick(data, ["pix_code", "pix_qrcode", "qr_code"]));
+        || clean(pick(order, ["pix.qr_code", "pix.code", "pix_qr_code", "pix_code", "pix_qrcode", "qr_code"]))
+        || clean(pick(data, ["pix_qr_code", "pix_code", "pix_qrcode", "qr_code"]));
       const pixUrl = clean(pick(payment, ["pix.url", "pix.qr_code_url", "pix_url", "qr_code_url"]))
-        || clean(pick(order, ["pix_url", "pix.url"]));
+        || clean(pick(order, ["pix_qr_code_url", "pix_url", "pix.url"]));
       const boletoCode = clean(pick(payment, ["boleto.digitable_line", "boleto.line", "boleto.barcode", "digitable_line", "boleto_code", "barcode", "linha_digitavel"]))
         || clean(pick(order, ["boleto.digitable_line", "digitable_line", "boleto_code", "linha_digitavel"]));
       const boletoUrl = clean(pick(payment, ["boleto.url", "boleto.pdf", "boleto_url", "bank_slip_url", "billet_url"]))
@@ -778,10 +785,14 @@ Deno.serve(async (req) => {
       }
     }
 
-    return jsonResponse({ success: true, status: normalizedStatus, items: isAbandoned ? 0 : rows.length });
+    return jsonResponse({ success: true, status: normalizedStatus, items: isJourneyEvent ? 0 : rows.length });
   } catch (err) {
     console.error("[youshop-webhook] Webhook error:", err);
     await audit({ error_message: `Unhandled: ${String(err)}`, raw_payload: payload });
     return jsonResponse({ error: "Internal server error", detail: String(err) }, 500);
   }
-});
+}
+
+if (import.meta.main) {
+  Deno.serve(handleRequest);
+}

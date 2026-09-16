@@ -2,6 +2,10 @@
 
 Implementação local. Não considerar ativa antes de provisionamento e teste ponta a ponta. Não toca transações financeiras, caixa ou CRM no replay. Líquidos são informados/não confirmados; não há conciliação oficial de beneficiário/taxas nesta versão.
 
+**Atualização autorizada de 16/09/2026:** YouShop fica exclusivamente manual mensal no Financeiro. Seu receptor Metrics foi destinado à restauração exata de `fcfb419` para preservar o fluxo anterior; não recebe `financialPreflight` e não pode ter exportação financeira habilitada. A autenticação opcional legada é risco conhecido, não garantia de origem. As instruções de publicação autenticada YouShop abaixo descrevem um eventual rollout futuro e NÃO devem ser executadas agora.
+
+Push na branch conectada pode disparar deploy externo Lovable mesmo sem workflow GitHub. Inspecionar efeitos de sincronização antes de mudanças em receptores; não presumir que publicação Git é apenas preview.
+
 ## Ordem obrigatória
 
 1. Revisar e aplicar somente `20260916120000_financial_bridge_shadow.sql` no projeto Metrics. Não aplicar em lote migrações do checkout nem alterar recompra/tracking.
