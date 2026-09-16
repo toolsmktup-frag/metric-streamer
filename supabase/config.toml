@@ -1,5 +1,8 @@
 project_id = "emfbocpmphtftqcezaib"
 
+[functions.financial-bridge]
+verify_jwt = false
+
 [functions.recontact-cron]
 verify_jwt = false
 

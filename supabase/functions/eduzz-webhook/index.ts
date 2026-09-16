@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveQuantity } from "../_shared/potQuantity.ts";
 import { readJsonBody } from "../_shared/readJsonBody.ts";
+import { financialPreflight } from "../_shared/financialIntake.ts";
 import { parseUtmPair } from "../_shared/parseUtmPair.ts";
 
 const corsHeaders = {
@@ -78,10 +79,15 @@ Deno.serve(async (req) => {
 
   try {
     const payload = await readJsonBody(req);
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    const intake = await financialPreflight(supabase, req, 'eduzz', payload);
+    if (intake.response) return intake.response;
 
     // Ping/teste
     if (payload.event === "ping" || payload.data?.message === "ping") {
-      console.log("Ping payload, ignoring:", JSON.stringify(payload).slice(0, 200));
+      console.log("Authenticated ping payload");
       return jsonResponse({ success: true, message: "ping ok" });
     }
 
@@ -138,17 +144,13 @@ Deno.serve(async (req) => {
     const adParsed       = parseUtmPair(utmContent);
 
     if (!invoiceId) {
-      console.log("No invoice_id, ignoring event:", payload.event, JSON.stringify(payload).slice(0, 200));
+      console.log("No legacy invoice_id; original retained in financial inbox");
       return jsonResponse({ success: true, message: "event ignored" });
     }
 
     const transactionHash = String(invoiceId);
     const normalizedStatus = mapStatus(rawStatus);
     const paidAmountCentavos = Math.round(amountReais * 100);
-
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase    = createClient(supabaseUrl, supabaseKey);
 
     // Resolve funnel_id
     const urlToken = new URL(req.url).searchParams.get("token");

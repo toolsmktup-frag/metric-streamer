@@ -2,6 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveQuantity } from "../_shared/potQuantity.ts";
 import { readJsonBody } from "../_shared/readJsonBody.ts";
 import { parseUtmPair } from "../_shared/parseUtmPair.ts";
+import { financialPreflight } from "../_shared/financialIntake.ts";
 
 /**
  * youshop-webhook — recebe os webhooks da YouShop (Ferramentas → Webhooks,
@@ -273,6 +274,9 @@ Deno.serve(async (req) => {
 
   try {
     console.log(`[youshop-webhook] Top-level keys: ${Object.keys(payload).join(", ")}`);
+    // Coordinated rollout required: YouShop must send its configured route token.
+    const intake = await financialPreflight(supabase, req, 'youshop', payload);
+    if (intake.response) return intake.response;
 
     // ── Containers candidatos ──
     const data: Obj = isObj(payload.data) ? payload.data : payload;

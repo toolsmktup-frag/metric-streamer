@@ -2,6 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveQuantity } from "../_shared/potQuantity.ts";
 import { readJsonBody } from "../_shared/readJsonBody.ts";
 import { parseUtmPair } from "../_shared/parseUtmPair.ts";
+import { financialPreflight } from "../_shared/financialIntake.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -57,12 +58,16 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase    = createClient(supabaseUrl, supabaseKey);
 
+    // Mandatory authentication + durable financial intake BEFORE any CRM/forward/ping.
+    const intake = await financialPreflight(supabase, req, 'guru', payload);
+    if (intake.response) return intake.response;
+
     // Se não tem os campos mínimos, provavelmente é um ping/teste da plataforma — retorna 200
     const hasSale    = payload.sale    || payload.order;
     const hasProduct = payload.product || payload.item || payload.product_name;
     const hasEvent   = payload.event   || payload.status;
     if (!hasSale && !hasProduct && !hasEvent) {
-      console.log("Ping or test payload received, ignoring:", JSON.stringify(payload).slice(0, 200));
+      console.log("Authenticated ping or test payload received");
       return jsonResponse({ success: true, message: "ping ok" });
     }
 
@@ -90,9 +95,12 @@ Deno.serve(async (req) => {
       sale_refused:    "refused",
       sale_refunded:   "refunded",
       sale_chargeback: "chargeback",
+      refunded:        "refunded",
+      chargeback:      "chargeback",
       approved:        "authorized",
       paid:            "authorized",
       waiting_payment: "pending",
+      billet_printed:  "pending",
       pending:         "pending",
       expired:         "canceled",
       canceled:        "canceled",
@@ -235,7 +243,7 @@ Deno.serve(async (req) => {
       }
 
       if (!urlToken || !funnelId) {
-        console.warn(`[guru-webhook] token "${urlToken}" não casou com nenhum funil — seguindo sem funnel_id`);
+        console.warn("[guru-webhook] Token de rota não reconhecido; conta validada no preflight");
       }
     }
 
@@ -305,14 +313,14 @@ Deno.serve(async (req) => {
     }
 
     const transactionId = sale.transaction_id || payment.marketplace_id || sale.id || payload.id || sale.order_id || null;
-    const purchasedAt   = sale.approved_date || sale.created_at || dates.ordered_at || dates.created_at || payload.created_at || new Date().toISOString();
+    const purchasedAt   = dates.confirmed_at || sale.approved_date || sale.created_at || dates.ordered_at || dates.created_at || payload.created_at || new Date().toISOString();
 
     const totalAmount = parseAmount(payment.total ?? sale.total_amount ?? sale.total);
     const grossAmount = parseAmount(
       payment.total ?? sale.amount ?? sale.paid_amount ?? sale.value ?? payment.gross ?? sale.total_amount
     );
-    const parsedNetAmount = parseAmount(sale.net_amount ?? sale.commission ?? payment.net ?? null);
-    const netAmount = parsedNetAmount > grossAmount ? grossAmount : parsedNetAmount;
+    const rawNetAmount = payment.net ?? sale.net_amount ?? null;
+    const netAmount = rawNetAmount !== null && rawNetAmount !== '' && Number.isFinite(Number(rawNetAmount)) && Number(rawNetAmount) >= 0 ? Number(rawNetAmount) : null;
 
     // ── Extrair checkout_url e page_url ──
     const checkoutUrl = tracking.checkout_url || sale.checkout_url || payload.checkout_url || queryParams.checkout_url || null;
@@ -383,6 +391,11 @@ Deno.serve(async (req) => {
     }
 
 
+    if (!transactionId) {
+      await auditGuru('missing stable transaction identity; retained in financial inbox');
+      return jsonResponse({ success: true, message: 'retained for identity review' });
+    }
+
     const { quantity: potQty, source: potQtySource } = resolveQuantity({
       offerName: product.offer?.name || product.offer_name || product.plan_name || null,
       productName,
@@ -402,7 +415,7 @@ Deno.serve(async (req) => {
       offer_id:               String(product.offer?.id || product.offer_id || product.plan_id || ""),
       product_type:           inferProductType(),
       gross_amount:           grossAmount || totalAmount || 0,
-      net_amount:             netAmount || null,
+      net_amount:             netAmount,
       payment_method:         normalizePaymentMethod(sale.payment_method || payment.method || payload.payment_method),
       installments:           clampInstallments(payment.installments?.qty || sale.installments_count || 1),
       status:                 normalizedStatus,

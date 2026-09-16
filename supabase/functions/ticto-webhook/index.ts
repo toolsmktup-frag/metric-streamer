@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { readJsonBody } from "../_shared/readJsonBody.ts";
+import { financialPreflight } from "../_shared/financialIntake.ts";
 import { parseUtmPair } from "../_shared/parseUtmPair.ts";
 
 const corsHeaders = {
@@ -129,6 +130,8 @@ Deno.serve(async (req) => {
 
   try {
     const topKeys = Object.keys(payload).join(", ");
+    const intake = await financialPreflight(supabase, req, 'ticto', payload);
+    if (intake.response) return intake.response;
     console.log(`[ticto-webhook] Top-level keys: ${topKeys}`);
 
     // ── Normalizar payload de abandono (estrutura alternativa da Ticto) ──
@@ -415,7 +418,7 @@ Deno.serve(async (req) => {
         .limit(1)
         .maybeSingle();
       const bumpProductId = ob?.product_id ? Number(ob.product_id) : 0;
-      if (bumpProductId && bumpProductId !== productId) {
+      if (ob && bumpProductId && bumpProductId !== productId) {
         splitBump = {
           productId: bumpProductId,
           name: ob.display_name || ob.product_name_contains || "Order Bump",
