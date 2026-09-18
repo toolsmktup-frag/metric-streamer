@@ -1,6 +1,7 @@
 // v2.2.0 - funnel scope filter resolve LEAD funnels (fix: automações mortas desde 2026-06-10) + respeita trigger.disabled
 // v2.1.0 - atomic dedup by external event id + improved Guru parsing
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { detectUpsellContext, isPreSaleTrigger } from "../_shared/upsellContext.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -599,6 +600,41 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ─── Contexto de upsell: comprou AGORA outro produto? ──────────────────────
+    // Caso real (17/09/2026): cliente comprou o Guia (46342), recebeu o acesso e
+    // 3 min depois gerou o Pix do Curso Mestre (47629), o order bump da página de
+    // obrigado. Como são produtos diferentes, o auto-cancel acima (que só olha o
+    // MESMO produto) não se aplica — e o fluxo disparou uma mensagem de "pedido
+    // não concluído" para quem tinha acabado de comprar. Aqui marcamos o contexto
+    // para que o fluxo possa usar outro texto, em vez de tratar como pendência.
+    let isUpsell = false;
+    let recentPurchaseProductName: string | null = null;
+    if (isPreSaleTrigger(event.status) && event.contact_phone) {
+      const thirtyMinAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+      const { data: recentBuys } = await supabase
+        .from("wz_executions")
+        .select("variables, started_at")
+        .eq("contact_phone", event.contact_phone)
+        .eq("trigger_event", "purchase_approved")
+        .gte("started_at", thirtyMinAgo)
+        .order("started_at", { ascending: false })
+        .limit(5);
+
+      const ctx = detectUpsellContext(
+        event.product_id,
+        (recentBuys || []).map((ex: any) => ({
+          productId: ex.variables?.product_id,
+          productName: ex.variables?.product_name ?? null,
+          at: ex.started_at,
+        })),
+      );
+      isUpsell = ctx.isUpsell;
+      recentPurchaseProductName = ctx.recentPurchaseProductName;
+      if (isUpsell) {
+        console.log(`[wz-receiver] UPSELL CONTEXT: phone=${event.contact_phone} acabou de comprar "${recentPurchaseProductName}" e agora gerou ${event.status} de ${event.product_id}`);
+      }
+    }
+
     // Check each flow for matching triggers
     let matched = 0;
     const executionIds: string[] = [];
@@ -666,6 +702,8 @@ Deno.serve(async (req) => {
           boleto_code: event.boleto_code,
           boleto_url: event.boleto_url,
           external_event_id: event.external_event_id,
+          is_upsell: isUpsell,
+          recent_purchase_product_name: recentPurchaseProductName,
           address_street: event.address.street,
           address_number: event.address.number,
           address_complement: event.address.complement,
