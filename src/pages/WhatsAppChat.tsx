@@ -12,6 +12,7 @@ import ChatThread from '@/components/whatsapp/ChatThread';
 import ChatInput from '@/components/whatsapp/ChatInput';
 import BotControlBar from '@/components/whatsapp/BotControlBar';
 import ContactPanel from '@/components/whatsapp/ContactPanel';
+import StageQuickMove from '@/components/whatsapp/StageQuickMove';
 import SalesCopilotPanel from '@/components/whatsapp/SalesCopilotPanel';
 import SalesCopilotButton from '@/components/whatsapp/SalesCopilotButton';
 import ScheduledMessagesList from '@/components/whatsapp/ScheduledMessagesList';
@@ -399,6 +400,11 @@ export default function WhatsAppChat() {
         </div>
 
         <div className="flex-1 flex flex-col min-w-0 border-r border-border">
+          {selectedPhone && (
+            <div className="flex items-center gap-2 px-3 py-1.5 border-b border-border bg-card/50 shrink-0">
+              <StageQuickMove phone={selectedPhone} variant="chip" enableShortcut />
+            </div>
+          )}
           <ChatThread
             messages={mergedMessages}
             loading={loadingMessages}
