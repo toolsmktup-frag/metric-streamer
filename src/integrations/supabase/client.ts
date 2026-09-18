@@ -8,10 +8,20 @@ const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiO
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
+// NÃO REMOVER o `fetch` abaixo. Em 17/09/2026 uma resposta de erro do PostgREST
+// (HTTP 300, por ambiguidade de relação) foi guardada no cache de disco do Chrome
+// e servida por horas: a tela de funis ficou vazia para todo mundo, em qualquer
+// login, e nem F5 nem Ctrl+Shift+R resolviam — só limpar o cache do navegador.
+// Resposta de API depende do JWT e nunca deveria ser cacheada, então `no-store`
+// não custa nada e torna o app imune a esse tipo de envenenamento de cache.
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
     storage: localStorage,
     persistSession: true,
     autoRefreshToken: true,
-  }
+  },
+  global: {
+    fetch: (input: RequestInfo | URL, init?: RequestInit) =>
+      fetch(input, { ...init, cache: 'no-store' }),
+  },
 });

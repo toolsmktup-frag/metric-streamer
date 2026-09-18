@@ -9,13 +9,15 @@ interface MoveLeadParams {
   fromStageId: string;
   toStageId: string;
   toStageName?: string;
+  /** de onde partiu o movimento; entra no metadata do evento, para métricas */
+  via?: string;
 }
 
 export function useMoveLeadStage() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ positionId, leadId, funnelId, fromStageId, toStageId }: MoveLeadParams) => {
+    mutationFn: async ({ positionId, leadId, funnelId, fromStageId, toStageId, via }: MoveLeadParams) => {
       // Update stage position
       const { error: updateError } = await (supabase as any)
         .from('lead_stage_positions')
@@ -30,7 +32,10 @@ export function useMoveLeadStage() {
           lead_id: leadId,
           funnel_id: funnelId,
           event_name: 'stage_change',
-          metadata: { from_stage_id: fromStageId, to_stage_id: toStageId },
+          // sem `triggered_by`: é movimento humano, e é isso que faz o
+          // trg_protect_human_stage_moves blindar a etapa por 7 dias contra
+          // webhook e cron. Não adicionar triggered_by aqui.
+          metadata: { from_stage_id: fromStageId, to_stage_id: toStageId, ...(via ? { via } : {}) },
         });
       if (eventError) throw eventError;
     },
@@ -40,6 +45,8 @@ export function useMoveLeadStage() {
       queryClient.invalidateQueries({ queryKey: ['leads-by-funnel', variables.funnelId] });
       queryClient.invalidateQueries({ queryKey: ['funnel-lead-counts', variables.funnelId] });
       queryClient.invalidateQueries({ queryKey: ['lead-events'] });
+      queryClient.invalidateQueries({ queryKey: ['lead-funnel-journey'] });
+      queryClient.invalidateQueries({ queryKey: ['leads-by-funnel'] });
     },
     onError: () => {
       toast.error('Erro ao mover lead');

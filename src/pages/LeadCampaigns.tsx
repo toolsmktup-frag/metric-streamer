@@ -16,7 +16,7 @@ import { toast } from 'sonner';
 const LeadCampaignsPage: React.FC = () => {
   const navigate = useNavigate();
   const { data: campaigns = [], isLoading, isError: campaignsError } = useLeadCampaigns();
-  const { data: allFunnels = [], isError: funnelsError } = useLeadFunnels();
+  const { data: allFunnels = [], isError: funnelsError, error: funnelsErrorObj, refetch: refetchFunnels } = useLeadFunnels();
   const { data: trafficFunnels = [] } = useFunnels();
   const { data: userRole = 'vendedor', isError: roleError } = useCurrentUserRole();
   const { data: myAccess = [], isError: accessError } = useMyFunnelAccess();
@@ -167,12 +167,23 @@ const LeadCampaignsPage: React.FC = () => {
   }
 
   if (hasError) {
+    // O botão tenta de novo pela API (refetch), não `window.location.reload()`:
+    // recarregar a página não adianta quando a resposta veio do cache do navegador.
+    const detalhe = (funnelsErrorObj as { message?: string } | null)?.message;
     return (
       <div className="p-6 text-center py-20 text-muted-foreground">
-        <p className="text-lg font-medium text-foreground">Erro ao carregar dados</p>
-        <p className="text-sm mt-1">Não foi possível carregar os funis. Tente recarregar a página.</p>
-        <button onClick={() => window.location.reload()} className="mt-4 px-4 py-2 rounded-md border border-border text-sm hover:bg-muted transition-colors">
-          Recarregar
+        <p className="text-lg font-medium text-foreground">Não foi possível carregar os funis</p>
+        <p className="text-sm mt-1">
+          Seus funis e leads estão salvos — o que falhou foi a consulta. Tente de novo.
+        </p>
+        {detalhe && (
+          <p className="text-xs mt-2 font-mono text-muted-foreground/70 max-w-lg mx-auto break-words">{detalhe}</p>
+        )}
+        <button
+          onClick={() => refetchFunnels()}
+          className="mt-4 px-4 py-2 rounded-md border border-border text-sm hover:bg-muted transition-colors"
+        >
+          Tentar de novo
         </button>
       </div>
     );
