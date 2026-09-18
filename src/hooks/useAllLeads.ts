@@ -43,7 +43,7 @@ export function useAllLeads() {
       const [leads, positions, funnels] = await Promise.all([
         fetchAllRows<Lead>('leads', '*', { column: 'created_at', ascending: false }),
         fetchAllRows<LeadStagePosition>('lead_stage_positions', '*'),
-        fetchAllRows<LeadFunnel>('lead_funnels', '*, lead_funnel_stages(*)'),
+        fetchAllRows<LeadFunnel>('lead_funnels', '*, lead_funnel_stages!lead_funnel_stages_funnel_id_fkey(*)'),
       ]);
 
       const funnelMap = new Map(funnels.map(f => [f.id, f]));
@@ -98,7 +98,7 @@ function useLeadStatsBase() {
       const [leads, positions, funnels] = await Promise.all([
         fetchAllRows<Pick<Lead, 'id' | 'created_at' | 'utm_source' | 'utm_medium'>>('leads', 'id, created_at, utm_source, utm_medium'),
         fetchAllRows<Pick<LeadStagePosition, 'lead_id' | 'funnel_id' | 'stage_id' | 'entered_at'>>('lead_stage_positions', 'lead_id, funnel_id, stage_id, entered_at'),
-        fetchAllRows<LeadFunnel>('lead_funnels', 'id, name, color, lead_funnel_stages(id, name, sort_order)'),
+        fetchAllRows<LeadFunnel>('lead_funnels', 'id, name, color, lead_funnel_stages!lead_funnel_stages_funnel_id_fkey(id, name, sort_order)'),
       ]);
       return { leads, positions, funnels };
     },

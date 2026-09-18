@@ -12,24 +12,23 @@ async function fetchOrgId(): Promise<string> {
 export function useLeadFunnels(campaignId?: string | null) {
   return useQuery({
     queryKey: ['lead-funnels', campaignId],
+    // Um erro aqui precisa CHEGAR na tela. Antes devolvíamos [] e a interface
+    // mostrava "Nenhum funil nesta campanha" — em 17/09/2026 isso escondeu uma
+    // falha real da API por horas, e todo mundo achou que os dados tinham sumido.
     queryFn: async () => {
-      try {
-        let query = (supabase as any)
-          .from('lead_funnels')
-          .select('*, lead_funnel_stages(*), stage_transition_rules(*), lead_funnel_campaigns(lead_campaign_id), lead_funnel_traffic_funnels(traffic_funnel_id)')
-          .order('sort_order', { ascending: true });
-        if (campaignId) query = query.eq('campaign_id', campaignId);
-        const { data, error } = await query;
-        if (error) {
-          console.warn('[useLeadFunnels] query error:', error.message);
-          return [];
-        }
-        return (data || []) as LeadFunnel[];
-      } catch (err) {
-        console.warn('[useLeadFunnels] unexpected error:', err);
-        return [];
+      let query = (supabase as any)
+        .from('lead_funnels')
+        .select('*, lead_funnel_stages!lead_funnel_stages_funnel_id_fkey(*), stage_transition_rules!stage_transition_rules_funnel_id_fkey(*), lead_funnel_campaigns(lead_campaign_id), lead_funnel_traffic_funnels(traffic_funnel_id)')
+        .order('sort_order', { ascending: true });
+      if (campaignId) query = query.eq('campaign_id', campaignId);
+      const { data, error } = await query;
+      if (error) {
+        console.error('[useLeadFunnels] query error:', error.message);
+        throw error;
       }
+      return (data || []) as LeadFunnel[];
     },
+    retry: 2,
   });
 }
 
@@ -38,23 +37,19 @@ export function useLeadFunnel(id: string | null) {
     queryKey: ['lead-funnel', id],
     queryFn: async () => {
       if (!id) return null;
-      try {
-        const { data, error } = await (supabase as any)
-          .from('lead_funnels')
-          .select('*, lead_funnel_stages(*), stage_transition_rules(*), lead_funnel_campaigns(lead_campaign_id), lead_funnel_traffic_funnels(traffic_funnel_id)')
-          .eq('id', id)
-          .single();
-        if (error) {
-          console.warn('[useLeadFunnel] query error:', error.message);
-          return null;
-        }
-        return data as LeadFunnel;
-      } catch (err) {
-        console.warn('[useLeadFunnel] unexpected error:', err);
-        return null;
+      const { data, error } = await (supabase as any)
+        .from('lead_funnels')
+        .select('*, lead_funnel_stages!lead_funnel_stages_funnel_id_fkey(*), stage_transition_rules!stage_transition_rules_funnel_id_fkey(*), lead_funnel_campaigns(lead_campaign_id), lead_funnel_traffic_funnels(traffic_funnel_id)')
+        .eq('id', id)
+        .single();
+      if (error) {
+        console.error('[useLeadFunnel] query error:', error.message);
+        throw error;
       }
+      return data as LeadFunnel;
     },
     enabled: !!id,
+    retry: 2,
   });
 }
 
